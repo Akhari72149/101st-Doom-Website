@@ -20,7 +20,18 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #0a0f0a;
+  color: #e6ffe6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.02em;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(0, 255, 102, 0.06), transparent 70%),
+              radial-gradient(circle at 70% 70%, rgba(0, 39, 0, 0.08), transparent 70%);
+  pointer-events: none;
+  z-index: -1;
 }

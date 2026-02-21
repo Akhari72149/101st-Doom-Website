@@ -73,7 +73,183 @@ export const structure = [
           { role: "Medic", count: 1, slotId: "tomahawk1-1-1b-medic" },
         ],
       },
+	  {
+        type: "sub-header",
+        title: "1-2A",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "tomahawk1-1-2a-squadlead" },
+          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-2a-teamlead" },
+          { role: "RTO", count: 1, slotId: "tomahawk1-1-2a-rto" },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-2a-trooper" },
+          { role: "Medic", count: 1, slotId: "tomahawk1-1-2a-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "1-2B",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-2b-teamlead" },
+          { role: "Trooper", count: 2, slotId: "tomahawk1-1-2b-trooper" },
+          { role: "Medic", count: 1, slotId: "tomahawk1-1-2b-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "1-3A",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "tomahawk1-1-3a-squadlead" },
+          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-3a-teamlead" },
+          { role: "RTO", count: 1, slotId: "tomahawk1-1-3a-rto" },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-3a-trooper" },
+          { role: "Medic", count: 1, slotId: "tomahawk1-1-3a-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "1-3B",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-3b-teamlead" },
+          { role: "Trooper", count: 2, slotId: "tomahawk1-1-3b-trooper" },
+          { role: "Medic", count: 1, slotId: "tomahawk1-1-3b-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "Scimitar",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-1b-teamlead" },
+          { role: "Trooper", count: 2, slotId: "tomahawk1-1-1b-trooper" },
+          { role: "Medic", count: 1, slotId: "tomahawk1-1-1b-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "Scimitar 1-1",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "scimitar1-1-1-teamlead" },
+          { role: "Trooper", count: 2, slotId: "scimitar1-1-1-trooper" },
+          { role: "Medic", count: 1, slotId: "scimitar1-1-1-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "Scimitar 1-2",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "scimitar1-1-2-teamlead" },
+          { role: "Trooper", count: 2, slotId: "scimitar1-1-2-trooper" },
+          { role: "Medic", count: 1, slotId: "scimitar1-1-2-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "Scimitar 1-3",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "scimitar1-3-teamlead" },
+          { role: "Trooper", count: 2, slotId: "scimitar1-3-trooper" },
+          { role: "Medic", count: 1, slotId: "scimitar1-3-medic" },
+        ],
+      },
     ],
   },
-
+  {
+    type: "header",
+    title: "Broadsword 3",
+    children: [
+      {
+        type: "sub-header",
+        title: "Platoon Command",
+        roles: [
+          { role: "Platoon Commander", count: 1, slotId: "Broadsword3-platoon-commander" },
+          { role: "Platoon Sergeant Major", count: 1, slotId: "Broadsword3-platoon-sgm" },
+          { role: "Platoon Warrant Officer", count: 1, slotId: "Broadsword3-platoon-wo" },
+          { role: "Platoon RTO", count: 1, slotId: "Broadsword3-platoon-rto" },
+          { role: "Platoon Medic", count: 1, slotId: "Broadsword3-platoon-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "3-1",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Broadsword3-1-1a-squadlead" },
+          { role: "ASL", count: 1, slotId: "Broadsword3-1-1a-ASL" },
+		  { role: "RTO", count: 1, slotId: "Broadsword3-1-1a-RTO" },
+		  { role: "Trooper", count: 5, slotId: "Broadsword3-1-1a-Trooper" },
+		  { role: "Medic", count: 2, slotId: "Broadsword3-1-1a-Medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "3-2",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Broadsword3-2-1a-squadlead" },
+          { role: "ASL", count: 1, slotId: "Broadsword3-2-1a-ASL" },
+		  { role: "RTO", count: 1, slotId: "Broadsword3-2-1a-RTO" },
+		  { role: "Trooper", count: 5, slotId: "Broadsword3-2-1a-Trooper" },
+		  { role: "Medic", count: 2, slotId: "Broadsword3-2-1a-Medic" },
+        ],
+      },
+		  {
+        type: "sub-header",
+        title: "3-3",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Broadsword3-3-1a-squadlead" },
+          { role: "ASL", count: 1, slotId: "Broadsword3-3-1a-ASL" },
+		  { role: "RTO", count: 1, slotId: "Broadsword3-3-1a-RTO" },
+		  { role: "Trooper", count: 5, slotId: "Broadsword3-3-1a-Trooper" },
+		  { role: "Medic", count: 2, slotId: "Broadsword3-3-1a-Medic" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "header",
+    title: "Dagger",
+    children: [
+      {
+        type: "sub-header",
+        title: "Dagger Command",
+        roles: [
+          { role: "Platoon Commander", count: 1, slotId: "Dagger-platoon-commander" },
+          { role: "Platoon Sergeant Major", count: 1, slotId: "Dagger-platoon-sgm" },
+          { role: "Platoon Warrant Officer", count: 1, slotId: "Dagger-platoon-wo" },
+          { role: "Platoon RTO", count: 1, slotId: "Dagger-platoon-rto" },
+          { role: "Platoon Medic", count: 1, slotId: "Dagger-platoon-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "1-1",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Dagger1-1-1a-squadlead" },
+          { role: "ASL", count: 1, slotId: "Dagger1-1-1a-ASL" },
+		  { role: "RTO", count: 1, slotId: "Dagger1-1-1a-RTO" },
+		  { role: "Trooper", count: 3, slotId: "Dagger1-1-1a-Trooper" },
+		  { role: "Medic", count: 2, slotId: "Dagger1-1-1a-Medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "1-2",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Dagger1-2-1a-squadlead" },
+          { role: "ASL", count: 1, slotId: "Dagger1-2-1a-ASL" },
+		  { role: "RTO", count: 1, slotId: "Dagger1-2-1a-RTO" },
+		  { role: "Trooper", count: 3, slotId: "Dagger1-2-1a-Trooper" },
+		  { role: "Medic", count: 2, slotId: "Dagger1-2-1a-Medic" },
+        ],
+      },
+		  {
+        type: "sub-header",
+        title: "1-3",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Dagger1-3-1a-squadlead" },
+          { role: "ASL", count: 1, slotId: "Dagger1-3-1a-ASL" },
+		  { role: "RTO", count: 1, slotId: "Dagger1-3-1a-RTO" },
+		  { role: "Trooper", count: 3, slotId: "Dagger1-3-1a-Trooper" },
+		  { role: "Medic", count: 2, slotId: "Dagger1-3-1a-Medic" },
+        ],
+      },
+    ],
+  },
+  
 ];

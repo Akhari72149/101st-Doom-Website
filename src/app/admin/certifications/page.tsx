@@ -39,13 +39,14 @@ export default function ManageCertifications() {
     };
 
     checkAdmin();
-  }, [router]);
+  }, []);
 
   /* =====================================================
      🔥 STATE
   ======================================================*/
 
   const [personnel, setPersonnel] = useState<any[]>([]);
+  const [ranks, setRanks] = useState<any[]>([]);
   const [certifications, setCertifications] = useState<any[]>([]);
   const [personCerts, setPersonCerts] = useState<any[]>([]);
   const [selectedPerson, setSelectedPerson] = useState("");
@@ -77,12 +78,18 @@ export default function ManageCertifications() {
       .select("*")
       .order("name");
 
+    const { data: rankData } = await supabase
+      .from("ranks")
+      .select("*")
+      .order("rank_level", { ascending: true });
+
     const { data: certs } = await supabase
       .from("certifications")
       .select("*")
       .order("name");
 
     setPersonnel(people || []);
+    setRanks(rankData || []);
     setCertifications(certs || []);
   };
 
@@ -161,6 +168,15 @@ export default function ManageCertifications() {
   };
 
   /* =====================================================
+     🔥 HELPERS (RANK RESOLUTION)
+  ======================================================*/
+
+  const getRankName = (person: any) => {
+    const rank = ranks.find((r) => r.id === person.rank_id);
+    return rank ? rank.name : "Unranked";
+  };
+
+  /* =====================================================
      🛑 LOADING
   ======================================================*/
 
@@ -173,11 +189,11 @@ export default function ManageCertifications() {
   }
 
   /* =====================================================
-     🔎 FILTERED PERSONNEL
+     🔎 FILTER PERSONNEL
   ======================================================*/
 
   const filteredPersonnel = personnel.filter((p) =>
-    `${p.Clone_Rank} ${p.name}`
+    `${getRankName(p)} ${p.name}`
       .toLowerCase()
       .includes(searchPerson.toLowerCase())
   );
@@ -188,18 +204,20 @@ export default function ManageCertifications() {
 
   return (
     <div className="p-8 text-white">
-	<button
-    onClick={() => router.push("/")}
-    className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00] transition"
-  >
-    ← Back to Dashboard
-  </button>
+
+      <button
+        onClick={() => router.push("/")}
+        className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
+      >
+        ← Back to Dashboard
+      </button>
+
       <h1 className="text-3xl font-bold mb-6">
         Certification Management
       </h1>
 
       {/* =====================================================
-         🔎 PERSON SEARCH (NEW — REPLACES DROPDOWN)
+         🔎 PERSON SEARCH
       ======================================================*/}
 
       <div className="mb-6">
@@ -231,7 +249,7 @@ export default function ManageCertifications() {
                   }}
                   className="p-3 border-b border-[#002700] cursor-pointer hover:bg-[#002700]"
                 >
-                  {p.Clone_Rank} {p.name}
+                  {getRankName(p)} {p.name}
                 </div>
               ))
             )}
@@ -274,7 +292,7 @@ export default function ManageCertifications() {
       )}
 
       {/* =====================================================
-         ➕ ASSIGN CERTIFICATION
+         ➕ ASSIGN CERT
       ======================================================*/}
 
       <div className="mb-6">
@@ -304,6 +322,7 @@ export default function ManageCertifications() {
       >
         {loading ? "Assigning..." : "Assign Certification"}
       </button>
+
     </div>
   );
 }

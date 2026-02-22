@@ -77,7 +77,31 @@ export default function Home() {
           🔥 BUTTON GRID
       ======================================================*/}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl px-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl px-4">
+
+        <Link
+          href="/personnel-profile"
+          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
+        >
+          <h2 className="text-2xl font-bold mb-2">
+            Personnel Profile
+          </h2>
+          <p className="text-gray-400">
+            View your service record.
+          </p>
+        </Link>
+		
+        <Link
+          href="/roster"
+          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
+        >
+          <h2 className="text-2xl font-bold mb-2">
+            Slotted Roster
+          </h2>
+          <p className="text-gray-400">
+            View the live roster with assigned positions.
+          </p>
+        </Link>
 
         <Link
           href="/admin/positions"
@@ -127,17 +151,6 @@ export default function Home() {
           </p>
         </Link>
 
-        <Link
-          href="/roster"
-          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
-        >
-          <h2 className="text-2xl font-bold mb-2">
-            Slotted Roster
-          </h2>
-          <p className="text-gray-400">
-            View the live roster with assigned positions.
-          </p>
-        </Link>
 
       </div>
     </div>

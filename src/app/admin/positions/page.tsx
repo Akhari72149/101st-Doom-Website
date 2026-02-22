@@ -1,5 +1,3 @@
-// Slotting Management (PROTECTED + HOOK SAFE)
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -10,7 +8,7 @@ import { useRouter } from "next/navigation";
 type Personnel = {
   id: string;
   name: string;
-  Clone_Rank: string;
+  rank_id: string | null;
   slotted_position: string | null;
 };
 
@@ -18,10 +16,11 @@ export default function PositionEditor() {
   const router = useRouter();
 
   /* =====================================================
-     🔐 AUTH STATE
+     AUTH STATE
   ======================================================*/
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [ranks, setRanks] = useState<any[]>([]);
   const [selectedPerson, setSelectedPerson] =
     useState<Personnel | null>(null);
 
@@ -29,73 +28,68 @@ export default function PositionEditor() {
   const [selectedSubHeader, setSelectedSubHeader] = useState<string>("");
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
 
-  const [newRank, setNewRank] = useState<string>("");
+  const [selectedRankId, setSelectedRankId] = useState<string>("");
 
   /* =====================================================
-     🔐 ROLE PROTECTION (SAFE — NO HOOK BREAK)
+     AUTH CHECK
   ======================================================*/
   useEffect(() => {
-  const checkAdmin = async () => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const checkAdmin = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-  console.log("USER:", user);
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
 
-  if (!user) {
-    router.replace("/login");
-    return;
-  }
+      const { data: role } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-  const { data: role } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
+      if (!role || role.role !== "admin") {
+        router.replace("/");
+        return;
+      }
 
-  console.log("ROLE QUERY RESULT:", role);
+      setLoadingAuth(false);
+    };
 
-  if (!role || role.role !== "admin") {
-    router.replace("/");
-    return;
-  }
-
-  setLoadingAuth(false);
-};
-
-  checkAdmin();
-
-  const { data: listener } = supabase.auth.onAuthStateChange(() => {
     checkAdmin();
-  });
-
-  return () => {
-    listener.subscription.unsubscribe();
-  };
-}, []);
+  }, []);
 
   /* =====================================================
-     🔥 FETCH PERSONNEL
+     FETCH DATA
   ======================================================*/
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-    const { data } = await supabase
+    const { data: personnelData } = await supabase
       .from("personnel")
       .select("*")
       .order("name", { ascending: true });
 
-    setPersonnel(data || []);
+    const { data: rankData } = await supabase
+      .from("ranks")
+      .select("*")
+      .order("rank_level", { ascending: true });
+
+    setPersonnel(personnelData || []);
+    setRanks(rankData || []);
   };
 
   /* =====================================================
-     🔥 STRUCTURE DATA
+     STRUCTURE
   ======================================================*/
-  const headers = useMemo(() => {
-    return structure.map((section: any) => section.title);
-  }, []);
+  const headers = useMemo(
+    () => structure.map((section: any) => section.title),
+    []
+  );
 
   const subHeaders = useMemo(() => {
     const section = structure.find(
@@ -117,7 +111,37 @@ export default function PositionEditor() {
   }, [selectedHeader, selectedSubHeader]);
 
   /* =====================================================
-     🔥 UPDATE POSITION
+     HELPERS
+  ======================================================*/
+
+  const formatSlotToBillet = (slotId: string | null) => {
+    if (!slotId) return "Unassigned";
+
+    for (const section of structure) {
+      for (const sub of section.children || []) {
+        for (const role of sub.roles || []) {
+          if (role.slotId === slotId) {
+            return `${section.title} — ${role.role}`;
+          }
+        }
+      }
+    }
+
+    return slotId;
+  };
+
+  const getRankName = (rankId: string | null) => {
+    const rank = ranks.find((r) => r.id === rankId);
+    return rank ? rank.name : "Unranked";
+  };
+
+  const getRankLevel = (rankId: string | null) => {
+    const rank = ranks.find((r) => r.id === rankId);
+    return rank ? rank.rank_level : 1;
+  };
+
+  /* =====================================================
+     UPDATE POSITION
   ======================================================*/
   const updatePosition = async () => {
     if (!selectedPerson || !selectedSlotId) return;
@@ -154,12 +178,11 @@ export default function PositionEditor() {
     }
 
     alert("✅ Position Updated!");
-    resetSelections();
     fetchData();
   };
 
   /* =====================================================
-     🔥 UNASSIGN
+     UNASSIGN
   ======================================================*/
   const unassign = async () => {
     if (!selectedPerson) return;
@@ -175,39 +198,50 @@ export default function PositionEditor() {
     }
 
     alert("✅ Person Unassigned!");
-    resetSelections();
     fetchData();
   };
 
   /* =====================================================
-     🔥 UPDATE RANK
+     UPDATE RANK (NOW USES rank_id)
   ======================================================*/
   const updateRank = async () => {
-    if (!selectedPerson) return;
+    if (!selectedPerson || !selectedRankId) return;
 
-    const { error } = await supabase
-      .from("personnel")
-      .update({ Clone_Rank: newRank })
-      .eq("id", selectedPerson.id);
-
-    if (error) {
-      alert("Rank update failed: " + error.message);
+    if (selectedRankId === selectedPerson.rank_id) {
+      alert("No rank change detected.");
       return;
     }
 
-    alert("✅ Rank Updated!");
+    const { error: updateError } = await supabase
+      .from("personnel")
+      .update({ rank_id: selectedRankId })
+      .eq("id", selectedPerson.id);
+
+    if (updateError) {
+      alert("Rank update failed: " + updateError.message);
+      return;
+    }
+
+    await supabase.from("rank_history").insert({
+      personnel_id: selectedPerson.id,
+      rank: selectedRankId,
+    });
+
+    alert("✅ Rank Updated & Logged!");
     fetchData();
   };
+
 
   const resetSelections = () => {
     setSelectedPerson(null);
     setSelectedHeader("");
     setSelectedSubHeader("");
     setSelectedSlotId("");
+    setSelectedRankId("");
   };
 
   /* =====================================================
-     🔥 LOADING SCREEN (SAFE PLACE)
+     LOADING
   ======================================================*/
   if (loadingAuth) {
     return (
@@ -218,21 +252,24 @@ export default function PositionEditor() {
   }
 
   /* =====================================================
-     🔥 UI
+     UI
   ======================================================*/
+
   return (
     <div className="p-8 text-white">
-<button
-    onClick={() => router.push("/")}
-    className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00] transition"
-  >
-    ← Back to Dashboard
-  </button>
+
+      <button
+        onClick={() => router.push("/")}
+        className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
+      >
+        ← Back
+      </button>
+
       <h1 className="text-3xl font-bold mb-6">
         Slotting Management
       </h1>
 
-      {/* ================= PERSON SELECT ================= */}
+      {/* PERSON SELECT */}
       <div className="mb-6">
         <label className="block mb-2">Select Person</label>
 
@@ -245,42 +282,39 @@ export default function PositionEditor() {
 
             setSelectedPerson(person || null);
             setSelectedSlotId(person?.slotted_position || "");
-            setNewRank(person?.Clone_Rank || "");
+            setSelectedRankId(person?.rank_id || "");
           }}
         >
           <option value="">-- Choose Person --</option>
 
           {personnel.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.Clone_Rank} {p.name} — (
-              {p.slotted_position || "Unassigned"})
+              {getRankName(p.rank_id)} {p.name}
             </option>
           ))}
         </select>
       </div>
 
-      {/* ================= RANK ================= */}
+      {/* RANK DROPDOWN */}
       {selectedPerson && (
         <div className="mb-10 border-b border-[#002700] pb-8">
           <h2 className="text-2xl font-bold mb-4">
             Rank Management
           </h2>
 
-          <div className="mb-4 p-4 border border-[#002700] bg-[#0f1a0f]">
-            <p>
-              Current Rank:{" "}
-              <span className="font-bold text-[#00ff66]">
-                {selectedPerson.Clone_Rank}
-              </span>
-            </p>
-          </div>
-
-          <input
-            type="text"
-            value={newRank}
-            onChange={(e) => setNewRank(e.target.value)}
+          <select
             className="bg-[#0f1a0f] border border-[#002700] p-2 w-full mb-4"
-          />
+            value={selectedRankId}
+            onChange={(e) => setSelectedRankId(e.target.value)}
+          >
+            <option value="">-- Select Rank --</option>
+
+            {ranks.map((rank) => (
+              <option key={rank.id} value={rank.id}>
+                {rank.name}
+              </option>
+            ))}
+          </select>
 
           <button
             onClick={updateRank}
@@ -291,20 +325,21 @@ export default function PositionEditor() {
         </div>
       )}
 
-      {/* ================= SLOT SYSTEM ================= */}
+      {/* POSITION SYSTEM */}
       {selectedPerson && (
         <div className="space-y-4">
 
           <div className="p-4 border border-[#002700] bg-[#0f1a0f]">
-            <p>
-              Current Position:{" "}
-              <span className="font-bold text-[#00ff66]">
-                {selectedPerson.slotted_position || "Unassigned"}
-              </span>
+            <p className="text-xs text-gray-400 mb-2">
+              CURRENT POSITION
+            </p>
+
+            <p className="text-lg font-semibold text-[#00ff66]">
+              {formatSlotToBillet(selectedPerson.slotted_position)}
             </p>
           </div>
 
-          {/* HEADER */}
+          {/* HEADER / SUBHEADER / ROLE */}
           <select
             className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
             value={selectedHeader}
@@ -322,7 +357,6 @@ export default function PositionEditor() {
             ))}
           </select>
 
-          {/* SUB HEADER */}
           {selectedHeader && (
             <select
               className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
@@ -341,7 +375,6 @@ export default function PositionEditor() {
             </select>
           )}
 
-          {/* ROLE */}
           {selectedSubHeader && (
             <select
               className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
@@ -358,7 +391,6 @@ export default function PositionEditor() {
             </select>
           )}
 
-          {/* ACTIONS */}
           {selectedSlotId && (
             <div className="flex gap-4">
               <button
@@ -376,6 +408,7 @@ export default function PositionEditor() {
               </button>
             </div>
           )}
+
         </div>
       )}
     </div>

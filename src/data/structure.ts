@@ -251,5 +251,51 @@ export const structure = [
       },
     ],
   },
+  {
+    type: "header",
+    title: "Hammer",
+    children: [
+      {
+        type: "sub-header",
+        title: "Hammer 1",
+        roles: [
+          { role: "Hammer 1A", count: 1, slotId: "Hammer-1A" },
+          { role: "Hammer 1B", count: 1, slotId: "Hammer-1B" },
+          { role: "Hammer 1C", count: 1, slotId: "Hammer-1C" },
+          { role: "Hammer 1D", count: 1, slotId: "Hammer-1D" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "Hammer 2",
+        roles: [
+          { role: "Hammer 2A", count: 1, slotId: "Hammer-2A" },
+          { role: "Hammer 2B", count: 1, slotId: "Hammer-2B" },
+          { role: "Hammer 2C", count: 1, slotId: "Hammer-2C" },
+          { role: "Hammer 2D", count: 1, slotId: "Hammer-2D" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "Hammer 3",
+        roles: [
+          { role: "Hammer 3A", count: 1, slotId: "Hammer-3A" },
+          { role: "Hammer 3B", count: 1, slotId: "Hammer-3B" },
+          { role: "Hammer 3C", count: 1, slotId: "Hammer-3C" },
+          { role: "Hammer 3D", count: 1, slotId: "Hammer-3D" },
+        ],
+      },
+		  {
+        type: "sub-header",
+        title: "Hammer 4",
+        roles: [
+          { role: "Hammer 4A", count: 1, slotId: "Hammer-4A" },
+          { role: "Hammer 4B", count: 1, slotId: "Hammer-4B" },
+          { role: "Hammer 4C", count: 1, slotId: "Hammer-4C" },
+          { role: "Hammer 4D", count: 1, slotId: "Hammer-4D" },
+        ],
+      },
+    ],
+  },
   
 ];

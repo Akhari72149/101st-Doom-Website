@@ -6,29 +6,41 @@ import { useRouter } from "next/navigation";
 
 export default function CertificationByPerson() {
   const [personnel, setPersonnel] = useState<any[]>([]);
+  const [ranks, setRanks] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [selectedPerson, setSelectedPerson] = useState<any>(null);
   const [certifications, setCertifications] = useState<any[]>([]);
   const router = useRouter();
 
+  /* =====================================================
+     🔥 FETCH PERSONNEL + RANKS
+  ======================================================*/
+
   useEffect(() => {
-    fetchPersonnel();
+    fetchData();
   }, []);
 
-  const fetchPersonnel = async () => {
-    const { data } = await supabase
+  const fetchData = async () => {
+
+    const { data: people } = await supabase
       .from("personnel")
       .select("*")
       .order("name");
 
-    setPersonnel(data || []);
+    const { data: rankData } = await supabase
+      .from("ranks")
+      .select("*");
+
+    setPersonnel(people || []);
+    setRanks(rankData || []);
   };
 
   /* =====================================================
-     🔥 FETCH CERTIFICATIONS (AWARDED_BY REMOVED)
+     🔥 FETCH CERTIFICATIONS
   ======================================================*/
+
   const fetchCertifications = async (personId: string) => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("personnel_certifications")
       .select(`
         id,
@@ -38,31 +50,47 @@ export default function CertificationByPerson() {
       .eq("personnel_id", personId)
       .order("awarded_at", { ascending: false });
 
-    console.log("CERT DATA:", data);
-    console.log("ERROR:", error);
-
     setCertifications(data || []);
   };
 
+  /* =====================================================
+     🔥 HELPERS (RANK RESOLUTION)
+  ======================================================*/
+
+  const getRankName = (person: any) => {
+    const rank = ranks.find((r) => r.id === person.rank_id);
+    return rank ? rank.name : "Unranked";
+  };
+
+  /* =====================================================
+     🔎 FILTER
+  ======================================================*/
+
   const filteredPersonnel = personnel.filter((p) =>
-    `${p.Clone_Rank} ${p.name}`
+    `${getRankName(p)} ${p.name}`
       .toLowerCase()
       .includes(search.toLowerCase())
   );
 
+  /* =====================================================
+     ✅ UI
+  ======================================================*/
+
   return (
     <div className="p-8 text-white">
-	<button
-    onClick={() => router.push("/")}
-    className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00] transition"
-  >
-    ← Back to Dashboard
-  </button>
+
+      <button
+        onClick={() => router.push("/")}
+        className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
+      >
+        ← Back to Dashboard
+      </button>
+
       <h1 className="text-3xl font-bold mb-6">
         Certification Lookup
       </h1>
 
-      {/* Search Bar */}
+      {/* SEARCH */}
       <div className="mb-6">
         <input
           type="text"
@@ -73,7 +101,7 @@ export default function CertificationByPerson() {
         />
       </div>
 
-      {/* Search Results */}
+      {/* SEARCH RESULTS */}
       {search && (
         <div className="mb-8 border border-[#002700] bg-[#0f1a0f]">
           {filteredPersonnel.length === 0 ? (
@@ -91,18 +119,18 @@ export default function CertificationByPerson() {
                 }}
                 className="p-3 border-b border-[#002700] cursor-pointer hover:bg-[#002700]"
               >
-                {p.Clone_Rank} {p.name}
+                {getRankName(p)} {p.name}
               </div>
             ))
           )}
         </div>
       )}
 
-      {/* Selected Person Certifications */}
+      {/* SELECTED PERSON */}
       {selectedPerson && (
         <div className="border border-[#002700] p-6 bg-[#0f1a0f]">
           <h2 className="text-2xl font-bold mb-4">
-            {selectedPerson.Clone_Rank} {selectedPerson.name}
+            {getRankName(selectedPerson)} {selectedPerson.name}
           </h2>
 
           {certifications.length === 0 ? (

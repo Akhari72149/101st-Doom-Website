@@ -7,11 +7,21 @@ import { useRouter } from "next/navigation";
 export default function CreatePersonnel() {
   const router = useRouter();
 
-  /* =====================================================
-     🔐 ADMIN PROTECTION (BUILT-IN — NO HOOK)
-  ======================================================*/
+  /* ================= AUTH ================= */
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [ranks, setRanks] = useState<any[]>([]);
+
+  /* ================= STATES ================= */
+
+  const [rankId, setRankId] = useState("");
+  const [birthNumber, setBirthNumber] = useState("");
+  const [name, setName] = useState("");
+  const [discordId, setDiscordId] = useState("");
+  const [skipRoleSync, setSkipRoleSync] = useState(false);
+  const [importFromDiscord, setImportFromDiscord] = useState(false);
+
+  /* ================= AUTH + LOAD RANKS ================= */
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -35,23 +45,104 @@ export default function CreatePersonnel() {
         return;
       }
 
+      const { data: rankData } = await supabase
+        .from("ranks")
+        .select("*")
+        .order("rank_level", { ascending: true });
+
+      setRanks(rankData || []);
       setLoadingAuth(false);
     };
 
     checkAdmin();
   }, [router]);
 
-  /* =====================================================
-     🔥 STATES
-  ======================================================*/
+  /* ================= CREATE USER ================= */
 
-  const [rank, setRank] = useState("");
-  const [birthNumber, setBirthNumber] = useState("");
-  const [name, setName] = useState("");
+  const createUser = async () => {
+    if (!birthNumber || !name) {
+      alert("Birth Number and Name are required!");
+      return;
+    }
 
-  /* =====================================================
-     🔥 LOADING SCREEN (PREVENT HOOK FLASH)
-  ======================================================*/
+    /* ---- Duplicate Checks ---- */
+
+    const { data: nameCheck } = await supabase
+      .from("personnel")
+      .select("id")
+      .eq("name", name)
+      .maybeSingle();
+
+    if (nameCheck) {
+      alert("❌ Name already exists");
+      return;
+    }
+
+    const { data: birthCheck } = await supabase
+      .from("personnel")
+      .select("id")
+      .eq("birth_number", birthNumber)
+      .maybeSingle();
+
+    if (birthCheck) {
+      alert("❌ Birth number already exists");
+      return;
+    }
+
+    /* ---- Insert Person ---- */
+
+    const { data, error } = await supabase
+      .from("personnel")
+      .insert([
+        {
+          rank_id: rankId || null,
+          birth_number: birthNumber,
+          name: name,
+          discord_id: discordId || null,
+          auto_role_sync: !skipRoleSync && !importFromDiscord,
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      alert("Creation failed: " + error.message);
+      return;
+    }
+
+    /* =====================================================
+       🔥 IMPORT FROM DISCORD (IF SELECTED)
+    ======================================================*/
+
+    if (importFromDiscord && discordId) {
+  const { error: importError } = await supabase.functions.invoke(
+    "discord-full-import",
+    {
+      body: {
+        discord_id: discordId,
+        personnel_id: data.id,
+      },
+    }
+  );
+
+  if (importError) {
+    alert("Discord import failed: " + importError.message);
+    return;
+  }
+}
+
+alert("✅ Personnel Created");
+
+setRankId("");
+setBirthNumber("");
+setName("");
+setDiscordId("");
+setSkipRoleSync(false);
+setImportFromDiscord(false);
+  };
+
+  /* ================= LOADING ================= */
 
   if (loadingAuth) {
     return (
@@ -61,101 +152,79 @@ export default function CreatePersonnel() {
     );
   }
 
-  /* =====================================================
-     🔥 CREATE USER
-  ======================================================*/
-
-  const createUser = async () => {
-    if (!rank || !birthNumber || !name) {
-      alert("Rank, Birth Number and Name are required!");
-      return;
-    }
-
-    /* ================= DUPLICATE CHECK ================= */
-
-    const { data: nameCheck, error: nameError } = await supabase
-      .from("personnel")
-      .select("id")
-      .eq("name", name)
-      .maybeSingle();
-
-    if (nameError) {
-      alert("Validation error: " + nameError.message);
-      return;
-    }
-
-    if (nameCheck) {
-      alert("❌ Name is already taken!");
-      return;
-    }
-
-    const { data: birthCheck, error: birthError } = await supabase
-      .from("personnel")
-      .select("id")
-      .eq("birth_number", birthNumber)
-      .maybeSingle();
-
-    if (birthError) {
-      alert("Validation error: " + birthError.message);
-      return;
-    }
-
-    if (birthCheck) {
-      alert("❌ Birth Number is already taken!");
-      return;
-    }
-
-    /* ================= INSERT ================= */
-
-    const { error } = await supabase.from("personnel").insert([
-      {
-        Clone_Rank: rank,
-        birth_number: birthNumber,
-        name: name,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-
-    if (error) {
-      alert("Creation failed: " + error.message);
-      return;
-    }
-
-    alert("✅ Personnel Created Successfully!");
-
-    setRank("");
-    setBirthNumber("");
-    setName("");
-  };
-
-  /* =====================================================
-     🔥 UI
-  ======================================================*/
+  /* ================= UI ================= */
 
   return (
     <div className="p-8 text-white">
-	<button
-    onClick={() => router.push("/")}
-    className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00] transition"
-  >
-    ← Back to Dashboard
-  </button>
+
+      <button
+        onClick={() => router.push("/")}
+        className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
+      >
+        ← Back
+      </button>
+
       <h1 className="text-3xl font-bold mb-6">
         Create New Personnel
       </h1>
 
-      {/* ================= RANK ================= */}
+      {/* ================= DISCORD ID ================= */}
+
       <div className="mb-4">
-        <label className="block mb-2">Rank</label>
+        <label className="block mb-2">
+          Discord ID
+        </label>
         <input
           type="text"
-          value={rank}
-          onChange={(e) => setRank(e.target.value)}
+          value={discordId}
+          onChange={(e) => setDiscordId(e.target.value)}
+          placeholder="Enter Discord User ID"
           className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
         />
       </div>
 
+      {/* ================= SKIP ROLE SYNC ================= */}
+
+      <div className="mb-4 flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={skipRoleSync}
+          onChange={(e) => setSkipRoleSync(e.target.checked)}
+        />
+        <label>Skip Discord Role Assignment</label>
+      </div>
+
+      {/* ================= IMPORT FROM DISCORD ================= */}
+
+      <div className="mb-4 flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={importFromDiscord}
+          onChange={(e) => setImportFromDiscord(e.target.checked)}
+        />
+        <label>Import Rank + Certifications From Discord</label>
+      </div>
+
+      {/* ================= RANK ================= */}
+
+      <div className="mb-4">
+        <label className="block mb-2">Rank (Optional if importing)</label>
+        <select
+          value={rankId}
+          onChange={(e) => setRankId(e.target.value)}
+          className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+        >
+          <option value="">-- Select Rank --</option>
+          {ranks.map((rank) => (
+            <option key={rank.id} value={rank.id}>
+              {rank.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* ================= BIRTH NUMBER ================= */}
+
       <div className="mb-4">
         <label className="block mb-2">Birth Number</label>
         <input
@@ -167,6 +236,7 @@ export default function CreatePersonnel() {
       </div>
 
       {/* ================= NAME ================= */}
+
       <div className="mb-4">
         <label className="block mb-2">Name</label>
         <input
@@ -178,12 +248,14 @@ export default function CreatePersonnel() {
       </div>
 
       {/* ================= CREATE BUTTON ================= */}
+
       <button
         onClick={createUser}
         className="bg-[#002700] px-6 py-2 hover:bg-[#004d00]"
       >
         Create Personnel
       </button>
+
     </div>
   );
 }

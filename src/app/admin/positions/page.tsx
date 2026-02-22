@@ -131,7 +131,48 @@ export default function PositionEditor() {
   };
 
   /* =====================================================
-     UI
+     UPDATE POSITION
+  ======================================================*/
+
+  const updatePosition = async () => {
+    if (!selectedPerson || !selectedSlotId) {
+      alert("Select a position first.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("personnel")
+      .update({ slotted_position: selectedSlotId })
+      .eq("id", selectedPerson.id);
+
+    if (error) {
+      alert("Update failed: " + error.message);
+      return;
+    }
+
+    alert("✅ Position Updated!");
+    fetchData();
+  };
+
+  const unassignPosition = async () => {
+    if (!selectedPerson) return;
+
+    const { error } = await supabase
+      .from("personnel")
+      .update({ slotted_position: null })
+      .eq("id", selectedPerson.id);
+
+    if (error) {
+      alert("Unassign failed: " + error.message);
+      return;
+    }
+
+    alert("✅ Position Unassigned!");
+    fetchData();
+  };
+
+  /* =====================================================
+     LOADING
   ======================================================*/
 
   if (loadingAuth) {
@@ -142,12 +183,18 @@ export default function PositionEditor() {
     );
   }
 
+  /* =====================================================
+     UI
+  ======================================================*/
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10 font-orbitron">
 
       <button
         onClick={() => router.push("/")}
-        className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-lg hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+        className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-lg 
+        hover:bg-[#00e5ff] hover:text-black transition 
+        shadow-[0_0_15px_rgba(0,229,255,0.4)]"
       >
         ← Back
       </button>
@@ -184,9 +231,11 @@ export default function PositionEditor() {
         </select>
       </div>
 
-      {/* RANK */}
+      {/* RANK SECTION */}
       {selectedPerson && (
-        <div className="mb-10 border border-[#00e5ff] p-6 rounded-2xl bg-black/60 shadow-[0_0_30px_rgba(0,229,255,0.2)]">
+        <div className="mb-10 border border-[#00e5ff] p-6 rounded-2xl bg-black/60 
+        shadow-[0_0_30px_rgba(0,229,255,0.2)]">
+
           <h2 className="text-2xl text-[#00e5ff] mb-4">
             Rank Management
           </h2>
@@ -205,13 +254,15 @@ export default function PositionEditor() {
             ))}
           </select>
 
-          <button className="border border-[#00e5ff] px-4 py-2 rounded-lg hover:bg-[#00e5ff] hover:text-black transition">
+          <button className="border border-[#00e5ff] px-4 py-2 rounded-lg 
+          hover:bg-[#00e5ff] hover:text-black transition">
             Save Rank
           </button>
+
         </div>
       )}
 
-      {/* POSITION */}
+      {/* POSITION SECTION */}
       {selectedPerson && (
         <div className="space-y-6">
 
@@ -275,6 +326,28 @@ export default function PositionEditor() {
                 </option>
               ))}
             </select>
+          )}
+
+          {selectedSlotId && (
+            <div className="flex gap-4">
+
+              <button
+                onClick={updatePosition}
+                className="border border-[#00e5ff] px-4 py-2 rounded-lg 
+                hover:bg-[#00e5ff] hover:text-black transition"
+              >
+                Save Position
+              </button>
+
+              <button
+                onClick={unassignPosition}
+                className="border border-red-500 px-4 py-2 rounded-lg 
+                hover:bg-red-500 hover:text-black transition"
+              >
+                Unassign
+              </button>
+
+            </div>
           )}
 
         </div>

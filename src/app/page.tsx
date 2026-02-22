@@ -75,7 +75,7 @@ export default function Home() {
         {[
           { href: "/personnel-profile", title: "Personnel Profile", desc: "View service record" },
           { href: "/roster", title: "Slotted Roster", desc: "Live position overview" },
-          { href: "/admin/positions", title: "Position Management", desc: "Assign & manage slots" },
+          { href: "/admin/positions", title: "Slotting & Rank", desc: "Slotting & Rank Management" },
           { href: "/admin/create", title: "User Creation", desc: "Add new personnel" },
           { href: "/admin/certifications", title: "Certification Management", desc: "Assign or revoke certifications" },
           { href: "/certifications", title: "Certification Lookup", desc: "Search certifications" },

@@ -151,6 +151,103 @@ export const structure = [
       },
     ],
   },
+  
+  {
+    type: "header",
+    title: "Claymore 2",
+    children: [
+      {
+        type: "sub-header",
+        title: "Platoon Command",
+        roles: [
+          { role: "Platoon Commander", count: 1, slotId: "Claymore2-platoon-commander" },
+          { role: "Platoon Sergeant Major", count: 1, slotId: "Claymore2-platoon-sgm" },
+          { role: "Platoon Warrant Officer", count: 1, slotId: "Claymore2-platoon-wo" },
+          { role: "Platoon RTO", count: 1, slotId: "Claymore2-platoon-rto" },
+          { role: "Platoon Medic", count: 1, slotId: "Claymore2-platoon-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-1",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Claymore2-1-1a-squadlead" },
+          { role: "RTO", count: 1, slotId: "Claymore2-1-1a-teamlead" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-1A",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Claymore2-1-1b-teamlead" },
+          { role: "Trooper", count: 3, slotId: "Claymore2-1-1b-trooper" },
+          { role: "Medic", count: 2, slotId: "Claymore2-1-1b-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-1B",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Claymore2-1-2a-squadlead" },
+          { role: "Trooper", count: 3, slotId: "Claymore2-1-2a-teamlead" },
+          { role: "Medic", count: 1, slotId: "Claymore2-1-2a-rto" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-2",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Claymore2-2-1a-squadlead" },
+          { role: "RTO", count: 1, slotId: "Claymore2-2-1a-teamlead" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-2A",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Claymore2-2-1b-teamlead" },
+          { role: "Trooper", count: 3, slotId: "Claymore2-2-1b-trooper" },
+          { role: "Medic", count: 2, slotId: "Claymore2-2-1b-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-2B",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Claymore2-2-2a-squadlead" },
+          { role: "Trooper", count: 3, slotId: "Claymore2-2-2a-teamlead" },
+          { role: "Medic", count: 1, slotId: "Claymore2-2-2a-rto" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-3",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Claymore2-3-1a-squadlead" },
+          { role: "RTO", count: 1, slotId: "Claymore2-3-1a-teamlead" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-3A",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Claymore2-3-1b-teamlead" },
+          { role: "Trooper", count: 3, slotId: "Claymore2-3-1b-trooper" },
+          { role: "Medic", count: 2, slotId: "Claymore2-3-1b-medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "2-3B",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Claymore2-3-2a-squadlead" },
+          { role: "Trooper", count: 3, slotId: "Claymore2-3-2a-teamlead" },
+          { role: "Medic", count: 1, slotId: "Claymore2-3-2a-rto" },
+        ],
+      },
+    ],
+  },
+  
   {
     type: "header",
     title: "Broadsword 3",
@@ -197,6 +294,17 @@ export const structure = [
 		  { role: "RTO", count: 1, slotId: "Broadsword3-3-1a-RTO" },
 		  { role: "Trooper", count: 5, slotId: "Broadsword3-3-1a-Trooper" },
 		  { role: "Medic", count: 2, slotId: "Broadsword3-3-1a-Medic" },
+        ],
+      },
+	  {
+        type: "sub-header",
+        title: "Halberd",
+        roles: [
+          { role: "Squad Lead", count: 1, slotId: "Halberd3-3-1a-squadlead" },
+          { role: "ASL", count: 1, slotId: "Halberd3-3-1a-ASL" },
+		  { role: "RTO", count: 1, slotId: "Halberd3-3-1a-RTO" },
+		  { role: "Trooper", count: 5, slotId: "Halberd3-3-1a-Trooper" },
+		  { role: "Medic", count: 2, slotId: "Halberd3-3-1a-Medic" },
         ],
       },
     ],

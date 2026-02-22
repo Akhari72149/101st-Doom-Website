@@ -1,37 +1,60 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #05080f;
+  --foreground: #e6faff;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #05080f;
+    --foreground: #e6faff;
   }
 }
 
 body {
-  background-color: #0a0f0a;
-  color: #e6ffe6;
+  background: linear-gradient(
+    to bottom right,
+    #05080f,
+    #0b0f1a,
+    #000000
+  );
+  color: #e6faff;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
 }
 
+/* Subtle blue holographic glow overlay */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at 30% 30%, rgba(0, 255, 102, 0.06), transparent 70%),
-              radial-gradient(circle at 70% 70%, rgba(0, 39, 0, 0.08), transparent 70%);
+  background:
+    radial-gradient(circle at 25% 25%, rgba(0, 229, 255, 0.08), transparent 70%),
+    radial-gradient(circle at 75% 75%, rgba(0, 229, 255, 0.05), transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Subtle scanline effect */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 229, 255, 0.03),
+    rgba(0, 229, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
   pointer-events: none;
   z-index: -1;
 }

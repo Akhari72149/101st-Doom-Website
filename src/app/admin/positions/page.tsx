@@ -15,9 +15,6 @@ type Personnel = {
 export default function PositionEditor() {
   const router = useRouter();
 
-  /* =====================================================
-     AUTH STATE
-  ======================================================*/
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [ranks, setRanks] = useState<any[]>([]);
@@ -27,12 +24,12 @@ export default function PositionEditor() {
   const [selectedHeader, setSelectedHeader] = useState<string>("");
   const [selectedSubHeader, setSelectedSubHeader] = useState<string>("");
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
-
   const [selectedRankId, setSelectedRankId] = useState<string>("");
 
   /* =====================================================
      AUTH CHECK
   ======================================================*/
+
   useEffect(() => {
     const checkAdmin = async () => {
       const {
@@ -61,9 +58,6 @@ export default function PositionEditor() {
     checkAdmin();
   }, []);
 
-  /* =====================================================
-     FETCH DATA
-  ======================================================*/
   useEffect(() => {
     fetchData();
   }, []);
@@ -86,6 +80,7 @@ export default function PositionEditor() {
   /* =====================================================
      STRUCTURE
   ======================================================*/
+
   const headers = useMemo(
     () => structure.map((section: any) => section.title),
     []
@@ -135,146 +130,40 @@ export default function PositionEditor() {
     return rank ? rank.name : "Unranked";
   };
 
-  const getRankLevel = (rankId: string | null) => {
-    const rank = ranks.find((r) => r.id === rankId);
-    return rank ? rank.rank_level : 1;
-  };
-
-  /* =====================================================
-     UPDATE POSITION
-  ======================================================*/
-  const updatePosition = async () => {
-    if (!selectedPerson || !selectedSlotId) return;
-
-    const roleInfo = roles.find(
-      (r: any) => r.slotId === selectedSlotId
-    );
-
-    if (!roleInfo) {
-      alert("Invalid role selected");
-      return;
-    }
-
-    const { data: slotUsers } = await supabase
-      .from("personnel")
-      .select("id")
-      .like("slotted_position", `${selectedSlotId}%`);
-
-    const occupied = slotUsers?.length || 0;
-
-    if (occupied >= roleInfo.count) {
-      alert("❌ Slot is already full!");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("personnel")
-      .update({ slotted_position: selectedSlotId })
-      .eq("id", selectedPerson.id);
-
-    if (error) {
-      alert("Update failed: " + error.message);
-      return;
-    }
-
-    alert("✅ Position Updated!");
-    fetchData();
-  };
-
-  /* =====================================================
-     UNASSIGN
-  ======================================================*/
-  const unassign = async () => {
-    if (!selectedPerson) return;
-
-    const { error } = await supabase
-      .from("personnel")
-      .update({ slotted_position: null })
-      .eq("id", selectedPerson.id);
-
-    if (error) {
-      alert("Unassign failed: " + error.message);
-      return;
-    }
-
-    alert("✅ Person Unassigned!");
-    fetchData();
-  };
-
-  /* =====================================================
-     UPDATE RANK (NOW USES rank_id)
-  ======================================================*/
-  const updateRank = async () => {
-    if (!selectedPerson || !selectedRankId) return;
-
-    if (selectedRankId === selectedPerson.rank_id) {
-      alert("No rank change detected.");
-      return;
-    }
-
-    const { error: updateError } = await supabase
-      .from("personnel")
-      .update({ rank_id: selectedRankId })
-      .eq("id", selectedPerson.id);
-
-    if (updateError) {
-      alert("Rank update failed: " + updateError.message);
-      return;
-    }
-
-    await supabase.from("rank_history").insert({
-      personnel_id: selectedPerson.id,
-      rank: selectedRankId,
-    });
-
-    alert("✅ Rank Updated & Logged!");
-    fetchData();
-  };
-
-
-  const resetSelections = () => {
-    setSelectedPerson(null);
-    setSelectedHeader("");
-    setSelectedSubHeader("");
-    setSelectedSlotId("");
-    setSelectedRankId("");
-  };
-
-  /* =====================================================
-     LOADING
-  ======================================================*/
-  if (loadingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-white">
-        <p>Checking permissions...</p>
-      </div>
-    );
-  }
-
   /* =====================================================
      UI
   ======================================================*/
 
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-[#00e5ff] font-orbitron">
+        Checking permissions...
+      </div>
+    );
+  }
+
   return (
-    <div className="p-8 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10 font-orbitron">
 
       <button
         onClick={() => router.push("/")}
-        className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
+        className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-lg hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
       >
         ← Back
       </button>
 
-      <h1 className="text-3xl font-bold mb-6">
+      <h1 className="text-4xl tracking-widest text-[#00e5ff] mb-8">
         Slotting Management
       </h1>
 
       {/* PERSON SELECT */}
       <div className="mb-6">
-        <label className="block mb-2">Select Person</label>
+        <label className="block mb-2 text-[#00e5ff]">
+          Select Person
+        </label>
 
         <select
-          className="bg-[#0f1a0f] border border-[#002700] p-2"
+          className="bg-black border border-[#00e5ff] p-2 rounded-lg w-full text-white"
           onChange={(e) => {
             const person = personnel.find(
               (p) => p.id === e.target.value
@@ -295,15 +184,15 @@ export default function PositionEditor() {
         </select>
       </div>
 
-      {/* RANK DROPDOWN */}
+      {/* RANK */}
       {selectedPerson && (
-        <div className="mb-10 border-b border-[#002700] pb-8">
-          <h2 className="text-2xl font-bold mb-4">
+        <div className="mb-10 border border-[#00e5ff] p-6 rounded-2xl bg-black/60 shadow-[0_0_30px_rgba(0,229,255,0.2)]">
+          <h2 className="text-2xl text-[#00e5ff] mb-4">
             Rank Management
           </h2>
 
           <select
-            className="bg-[#0f1a0f] border border-[#002700] p-2 w-full mb-4"
+            className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg mb-4"
             value={selectedRankId}
             onChange={(e) => setSelectedRankId(e.target.value)}
           >
@@ -316,32 +205,29 @@ export default function PositionEditor() {
             ))}
           </select>
 
-          <button
-            onClick={updateRank}
-            className="bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
-          >
+          <button className="border border-[#00e5ff] px-4 py-2 rounded-lg hover:bg-[#00e5ff] hover:text-black transition">
             Save Rank
           </button>
         </div>
       )}
 
-      {/* POSITION SYSTEM */}
+      {/* POSITION */}
       {selectedPerson && (
-        <div className="space-y-4">
+        <div className="space-y-6">
 
-          <div className="p-4 border border-[#002700] bg-[#0f1a0f]">
+          <div className="p-4 border border-[#00e5ff] rounded-xl bg-black/60">
             <p className="text-xs text-gray-400 mb-2">
               CURRENT POSITION
             </p>
 
-            <p className="text-lg font-semibold text-[#00ff66]">
+            <p className="text-lg text-[#00e5ff]">
               {formatSlotToBillet(selectedPerson.slotted_position)}
             </p>
           </div>
 
-          {/* HEADER / SUBHEADER / ROLE */}
+          {/* STRUCTURE SELECTORS */}
           <select
-            className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+            className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg"
             value={selectedHeader}
             onChange={(e) => {
               setSelectedHeader(e.target.value);
@@ -359,7 +245,7 @@ export default function PositionEditor() {
 
           {selectedHeader && (
             <select
-              className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+              className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg"
               value={selectedSubHeader}
               onChange={(e) => {
                 setSelectedSubHeader(e.target.value);
@@ -377,7 +263,7 @@ export default function PositionEditor() {
 
           {selectedSubHeader && (
             <select
-              className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+              className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg"
               value={selectedSlotId}
               onChange={(e) => setSelectedSlotId(e.target.value)}
             >
@@ -389,24 +275,6 @@ export default function PositionEditor() {
                 </option>
               ))}
             </select>
-          )}
-
-          {selectedSlotId && (
-            <div className="flex gap-4">
-              <button
-                onClick={updatePosition}
-                className="bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
-              >
-                Save Position
-              </button>
-
-              <button
-                onClick={unassign}
-                className="bg-red-800 px-4 py-2 hover:bg-red-600"
-              >
-                Unassign
-              </button>
-            </div>
           )}
 
         </div>

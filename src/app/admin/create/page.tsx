@@ -7,12 +7,8 @@ import { useRouter } from "next/navigation";
 export default function CreatePersonnel() {
   const router = useRouter();
 
-  /* ================= AUTH ================= */
-
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [ranks, setRanks] = useState<any[]>([]);
-
-  /* ================= STATES ================= */
 
   const [rankId, setRankId] = useState("");
   const [birthNumber, setBirthNumber] = useState("");
@@ -65,8 +61,6 @@ export default function CreatePersonnel() {
       return;
     }
 
-    /* ---- Duplicate Checks ---- */
-
     const { data: nameCheck } = await supabase
       .from("personnel")
       .select("id")
@@ -89,8 +83,6 @@ export default function CreatePersonnel() {
       return;
     }
 
-    /* ---- Insert Person ---- */
-
     const { data, error } = await supabase
       .from("personnel")
       .insert([
@@ -111,108 +103,108 @@ export default function CreatePersonnel() {
       return;
     }
 
-    /* =====================================================
-       🔥 IMPORT FROM DISCORD (IF SELECTED)
-    ======================================================*/
-
     if (importFromDiscord && discordId) {
-  const { error: importError } = await supabase.functions.invoke(
-    "discord-full-import",
-    {
-      body: {
-        discord_id: discordId,
-        personnel_id: data.id,
-      },
+      const { error: importError } = await supabase.functions.invoke(
+        "discord-full-import",
+        {
+          body: {
+            discord_id: discordId,
+            personnel_id: data.id,
+          },
+        }
+      );
+
+      if (importError) {
+        alert("Discord import failed: " + importError.message);
+        return;
+      }
     }
-  );
 
-  if (importError) {
-    alert("Discord import failed: " + importError.message);
-    return;
-  }
-}
+    alert("✅ Personnel Created");
 
-alert("✅ Personnel Created");
-
-setRankId("");
-setBirthNumber("");
-setName("");
-setDiscordId("");
-setSkipRoleSync(false);
-setImportFromDiscord(false);
+    setRankId("");
+    setBirthNumber("");
+    setName("");
+    setDiscordId("");
+    setSkipRoleSync(false);
+    setImportFromDiscord(false);
   };
-
-  /* ================= LOADING ================= */
 
   if (loadingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-white">
-        <p>Checking permissions...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#05080f] text-[#00e5ff] font-orbitron">
+        Checking permissions...
       </div>
     );
   }
 
-  /* ================= UI ================= */
+  /* ================= UI (BLUE + ORBITRON) ================= */
 
   return (
-    <div className="p-8 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-[#e6faff] p-10 font-orbitron tracking-wide">
 
       <button
         onClick={() => router.push("/")}
-        className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
+        className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-xl hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
       >
         ← Back
       </button>
 
-      <h1 className="text-3xl font-bold mb-6">
+      <h1 className="text-4xl font-bold mb-8 text-[#00e5ff] tracking-widest">
         Create New Personnel
       </h1>
 
       {/* ================= DISCORD ID ================= */}
 
-      <div className="mb-4">
-        <label className="block mb-2">
+      <div className="mb-6">
+        <label className="block mb-2 text-sm tracking-widest text-gray-300">
           Discord ID
         </label>
+
         <input
           type="text"
           value={discordId}
           onChange={(e) => setDiscordId(e.target.value)}
           placeholder="Enter Discord User ID"
-          className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff] shadow-[0_0_15px_rgba(0,229,255,0.2)]"
         />
       </div>
 
-      {/* ================= SKIP ROLE SYNC ================= */}
+      {/* ================= CHECKBOXES ================= */}
 
-      <div className="mb-4 flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={skipRoleSync}
-          onChange={(e) => setSkipRoleSync(e.target.checked)}
-        />
-        <label>Skip Discord Role Assignment</label>
-      </div>
+      <div className="mb-4 flex flex-col gap-3">
 
-      {/* ================= IMPORT FROM DISCORD ================= */}
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={skipRoleSync}
+            onChange={(e) => setSkipRoleSync(e.target.checked)}
+          />
+          Skip Discord Role Assignment
+        </label>
 
-      <div className="mb-4 flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={importFromDiscord}
-          onChange={(e) => setImportFromDiscord(e.target.checked)}
-        />
-        <label>Import Rank + Certifications From Discord</label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={importFromDiscord}
+            onChange={(e) => setImportFromDiscord(e.target.checked)}
+          />
+          Import Rank + Certifications From Discord
+        </label>
+
       </div>
 
       {/* ================= RANK ================= */}
 
-      <div className="mb-4">
-        <label className="block mb-2">Rank (Optional if importing)</label>
+      <div className="mb-6">
+        <label className="block mb-2 text-sm tracking-widest text-gray-300">
+          Rank (Optional)
+        </label>
+
         <select
           value={rankId}
           onChange={(e) => setRankId(e.target.value)}
-          className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
         >
           <option value="">-- Select Rank --</option>
           {ranks.map((rank) => (
@@ -225,25 +217,31 @@ setImportFromDiscord(false);
 
       {/* ================= BIRTH NUMBER ================= */}
 
-      <div className="mb-4">
-        <label className="block mb-2">Birth Number</label>
+      <div className="mb-6">
+        <label className="block mb-2 text-sm tracking-widest text-gray-300">
+          Birth Number
+        </label>
+
         <input
           type="text"
           value={birthNumber}
           onChange={(e) => setBirthNumber(e.target.value)}
-          className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
         />
       </div>
 
       {/* ================= NAME ================= */}
 
-      <div className="mb-4">
-        <label className="block mb-2">Name</label>
+      <div className="mb-6">
+        <label className="block mb-2 text-sm tracking-widest text-gray-300">
+          Name
+        </label>
+
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
         />
       </div>
 
@@ -251,7 +249,7 @@ setImportFromDiscord(false);
 
       <button
         onClick={createUser}
-        className="bg-[#002700] px-6 py-2 hover:bg-[#004d00]"
+        className="px-8 py-3 border border-[#00e5ff] text-[#00e5ff] rounded-xl hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_20px_rgba(0,229,255,0.4)]"
       >
         Create Personnel
       </button>

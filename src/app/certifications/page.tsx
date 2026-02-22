@@ -21,7 +21,6 @@ export default function CertificationByPerson() {
   }, []);
 
   const fetchData = async () => {
-
     const { data: people } = await supabase
       .from("personnel")
       .select("*")
@@ -62,10 +61,6 @@ export default function CertificationByPerson() {
     return rank ? rank.name : "Unranked";
   };
 
-  /* =====================================================
-     🔎 FILTER
-  ======================================================*/
-
   const filteredPersonnel = personnel.filter((p) =>
     `${getRankName(p)} ${p.name}`
       .toLowerCase()
@@ -73,20 +68,20 @@ export default function CertificationByPerson() {
   );
 
   /* =====================================================
-     ✅ UI
+     ✅ UI (BLUE HOLO + ORBITRON)
   ======================================================*/
 
   return (
-    <div className="p-8 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-[#e6faff] p-10 font-orbitron tracking-wide">
 
       <button
         onClick={() => router.push("/")}
-        className="mb-6 bg-[#002700] px-4 py-2 hover:bg-[#004d00]"
+        className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
       >
         ← Back to Dashboard
       </button>
 
-      <h1 className="text-3xl font-bold mb-6">
+      <h1 className="text-4xl font-bold mb-8 text-[#00e5ff] tracking-widest">
         Certification Lookup
       </h1>
 
@@ -97,13 +92,13 @@ export default function CertificationByPerson() {
           placeholder="Search by name or rank..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="bg-[#0f1a0f] border border-[#002700] p-2 w-full"
+          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff] shadow-[0_0_15px_rgba(0,229,255,0.2)]"
         />
       </div>
 
       {/* SEARCH RESULTS */}
       {search && (
-        <div className="mb-8 border border-[#002700] bg-[#0f1a0f]">
+        <div className="mb-8 border border-[#00e5ff] bg-black/60 rounded-xl">
           {filteredPersonnel.length === 0 ? (
             <p className="p-4 text-gray-400">
               No personnel found.
@@ -117,7 +112,7 @@ export default function CertificationByPerson() {
                   fetchCertifications(p.id);
                   setSearch("");
                 }}
-                className="p-3 border-b border-[#002700] cursor-pointer hover:bg-[#002700]"
+                className="p-3 border-b border-[#00e5ff] cursor-pointer hover:bg-[#00e5ff] hover:text-black transition"
               >
                 {getRankName(p)} {p.name}
               </div>
@@ -128,8 +123,8 @@ export default function CertificationByPerson() {
 
       {/* SELECTED PERSON */}
       {selectedPerson && (
-        <div className="border border-[#002700] p-6 bg-[#0f1a0f]">
-          <h2 className="text-2xl font-bold mb-4">
+        <div className="border border-[#00e5ff] p-6 bg-black/60 rounded-2xl shadow-[0_0_40px_rgba(0,229,255,0.2)]">
+          <h2 className="text-2xl font-bold mb-6 text-[#00e5ff]">
             {getRankName(selectedPerson)} {selectedPerson.name}
           </h2>
 
@@ -138,8 +133,8 @@ export default function CertificationByPerson() {
               No certifications assigned.
             </p>
           ) : (
-            <table className="w-full border border-[#002700]">
-              <thead className="bg-[#002700]">
+            <table className="w-full border border-[#00e5ff]">
+              <thead className="bg-[#00e5ff] text-black">
                 <tr>
                   <th className="px-4 py-2 text-left">
                     Certification
@@ -154,13 +149,13 @@ export default function CertificationByPerson() {
                 {certifications.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-t border-[#002700]"
+                    className="border-t border-[#00e5ff] hover:bg-[#00e5ff]/10 transition"
                   >
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-3">
                       {c.certification?.name || "Unknown"}
                     </td>
 
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-3">
                       {c.awarded_at
                         ? new Date(c.awarded_at).toLocaleDateString()
                         : "N/A"}

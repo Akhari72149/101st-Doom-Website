@@ -8,10 +8,6 @@ import { useRouter } from "next/navigation";
 export default function Home() {
   const router = useRouter();
 
-  /* =====================================================
-     🔐 AUTH STATE
-  ======================================================*/
-
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -26,10 +22,6 @@ export default function Home() {
     getUser();
   }, []);
 
-  /* =====================================================
-     🔥 LOGOUT
-  ======================================================*/
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -37,28 +29,29 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-start bg-[#0b140b] text-white py-12">
+    <div className="min-h-screen w-full flex flex-col items-center justify-start 
+      bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black 
+      text-white py-12 font-orbitron">
 
-      {/* =====================================================
-          🔥 TOP BAR — USER INFO + LOGOUT
-      ======================================================*/}
+      {/* TOP BAR */}
+      <div className="w-full max-w-5xl flex justify-between items-center px-6 mb-12">
 
-      <div className="w-full max-w-4xl flex justify-between items-center px-6 mb-8">
-
-        <h1 className="text-4xl font-bold text-[#00ff66]">
-          Personnel Management System
+        <h1 className="text-4xl tracking-widest text-[#00e5ff] 
+          drop-shadow-[0_0_15px_rgba(0,229,255,0.6)]">
+          PERSONNEL COMMAND SYSTEM
         </h1>
 
-        {/* SHOW USER EMAIL IF LOGGED IN */}
         {user ? (
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-300">
-              Logged in as: {user.email}
+              {user.email}
             </span>
 
             <button
               onClick={handleLogout}
-              className="bg-red-700 px-4 py-2 rounded hover:bg-red-600"
+              className="border border-[#00e5ff] px-4 py-2 rounded-lg 
+              hover:bg-[#00e5ff] hover:text-black transition 
+              shadow-[0_0_15px_rgba(0,229,255,0.5)]"
             >
               Logout
             </button>
@@ -66,91 +59,51 @@ export default function Home() {
         ) : (
           <Link
             href="/login"
-            className="bg-[#002700] px-4 py-2 rounded hover:bg-[#004d00]"
+            className="border border-[#00e5ff] px-4 py-2 rounded-lg 
+            hover:bg-[#00e5ff] hover:text-black transition 
+            shadow-[0_0_15px_rgba(0,229,255,0.5)]"
           >
             Login
           </Link>
         )}
       </div>
 
-      {/* =====================================================
-          🔥 BUTTON GRID
-      ======================================================*/}
+      {/* BUTTON GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 
+        gap-8 w-full max-w-6xl px-6">
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl px-4">
+        {[
+          { href: "/personnel-profile", title: "Personnel Profile", desc: "View service record" },
+          { href: "/roster", title: "Slotted Roster", desc: "Live position overview" },
+          { href: "/admin/positions", title: "Position Management", desc: "Assign & manage slots" },
+          { href: "/admin/create", title: "User Creation", desc: "Add new personnel" },
+          { href: "/admin/certifications", title: "Certification Management", desc: "Assign or revoke certifications" },
+          { href: "/certifications", title: "Certification Lookup", desc: "Search certifications" },
+          { href: "/servers", title: "Server Booking", desc: "Book server time" }
+        ].map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="group relative border border-[#00e5ff] 
+            bg-black/60 backdrop-blur-xl 
+            p-8 rounded-2xl 
+            hover:scale-105 transition-all duration-300
+            shadow-[0_0_20px_rgba(0,229,255,0.2)] 
+            hover:shadow-[0_0_40px_rgba(0,229,255,0.6)]"
+          >
+            <h2 className="text-2xl mb-3 text-[#00e5ff] tracking-wide">
+              {item.title}
+            </h2>
 
-        <Link
-          href="/personnel-profile"
-          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
-        >
-          <h2 className="text-2xl font-bold mb-2">
-            Personnel Profile
-          </h2>
-          <p className="text-gray-400">
-            View your service record.
-          </p>
-        </Link>
-		
-        <Link
-          href="/roster"
-          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
-        >
-          <h2 className="text-2xl font-bold mb-2">
-            Slotted Roster
-          </h2>
-          <p className="text-gray-400">
-            View the live roster with assigned positions.
-          </p>
-        </Link>
+            <p className="text-gray-400 text-sm">
+              {item.desc}
+            </p>
 
-        <Link
-          href="/admin/positions"
-          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
-        >
-          <h2 className="text-2xl font-bold mb-2">
-            Position Management
-          </h2>
-          <p className="text-gray-400">
-            Assign and manage personnel slots.
-          </p>
-        </Link>
-
-        <Link
-          href="/admin/create"
-          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
-        >
-          <h2 className="text-2xl font-bold mb-2">
-            User Creation
-          </h2>
-          <p className="text-gray-400">
-            Add new personnel to the system.
-          </p>
-        </Link>
-
-        <Link
-          href="/admin/certifications"
-          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
-        >
-          <h2 className="text-2xl font-bold mb-2">
-            Certification Management
-          </h2>
-          <p className="text-gray-400">
-            Assign or revoke certifications.
-          </p>
-        </Link>
-
-        <Link
-          href="/certifications"
-          className="border border-[#002700] bg-[#0f1a0f] p-6 hover:bg-[#002700] transition text-center"
-        >
-          <h2 className="text-2xl font-bold mb-2">
-            Certification Lookup
-          </h2>
-          <p className="text-gray-400">
-            Search and view certifications by person.
-          </p>
-        </Link>
-
+            {/* Glow line animation */}
+            <div className="absolute bottom-0 left-0 h-[2px] w-0 
+              bg-[#00e5ff] group-hover:w-full transition-all duration-500" />
+          </Link>
+        ))}
 
       </div>
     </div>

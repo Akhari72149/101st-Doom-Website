@@ -17,12 +17,12 @@ export default function PersonnelProfile() {
   /* =====================================================
      FETCH PERSONNEL + RANKS
   ======================================================*/
+
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-
     const { data: rankData } = await supabase
       .from("ranks")
       .select("*");
@@ -125,10 +125,6 @@ export default function PersonnelProfile() {
     return "Unassigned";
   };
 
-  /* =====================================================
-     FILTER
-  ======================================================*/
-
   const filteredPersonnel = personnel.filter((p) =>
     `${getRankName(p.rank_id)} ${p.name}`
       .toLowerCase()
@@ -136,20 +132,20 @@ export default function PersonnelProfile() {
   );
 
   /* =====================================================
-     UI
+     ✅ UI (BLUE HOLO + ORBITRON)
   ======================================================*/
 
   return (
-    <div className="p-10 text-white max-w-4xl mx-auto font-mono">
+    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-[#e6faff] p-10 font-orbitron tracking-wide">
 
       <button
         onClick={() => router.push("/")}
-        className="mb-6 border border-[#004d00] px-4 py-2 hover:bg-[#002700] transition"
+        className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
       >
         ← Return to Dashboard
       </button>
 
-      <h1 className="text-2xl tracking-widest mb-6 border-b border-[#004d00] pb-4">
+      <h1 className="text-4xl font-bold mb-8 text-[#00e5ff] tracking-widest">
         PERSONNEL DOSSIER
       </h1>
 
@@ -159,12 +155,12 @@ export default function PersonnelProfile() {
         placeholder="Search by rank or name..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="bg-black border border-[#004d00] p-3 w-full mb-6"
+        className="bg-black border border-[#00e5ff] p-3 w-full mb-6 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff] shadow-[0_0_15px_rgba(0,229,255,0.2)]"
       />
 
       {/* SEARCH RESULTS */}
       {search && (
-        <div className="border border-[#004d00] bg-black max-h-60 overflow-y-auto mb-6">
+        <div className="border border-[#00e5ff] bg-black/60 rounded-xl max-h-60 overflow-y-auto mb-6">
           {filteredPersonnel.map((p) => (
             <div
               key={p.id}
@@ -172,7 +168,7 @@ export default function PersonnelProfile() {
                 setSearch("");
                 loadProfile(p);
               }}
-              className="p-3 border-b border-[#002700] cursor-pointer hover:bg-[#002700]"
+              className="p-3 border-b border-[#00e5ff] cursor-pointer hover:bg-[#00e5ff] hover:text-black transition"
             >
               {getRankName(p.rank_id)} {p.name}
             </div>
@@ -185,9 +181,8 @@ export default function PersonnelProfile() {
         <div className="space-y-10">
 
           {/* MAIN CARD */}
-          <div className="border border-[#004d00] p-8 bg-black">
+          <div className="border border-[#00e5ff] p-8 bg-black/60 rounded-2xl shadow-[0_0_40px_rgba(0,229,255,0.2)]">
 
-            {/* RANK NAME */}
             <p className="text-sm tracking-[0.4em] text-gray-400 uppercase">
               {getRankName(selectedPerson.rank_id)}
             </p>
@@ -197,15 +192,15 @@ export default function PersonnelProfile() {
               {Array.from({
                 length: getRankBars(selectedPerson.rank_id),
               }).map((_, i) => (
-                <div key={i} className="h-1 w-10 bg-[#00ff66]" />
+                <div key={i} className="h-1 w-10 bg-[#00e5ff]" />
               ))}
             </div>
 
-            <h2 className="text-4xl font-bold tracking-wide">
+            <h2 className="text-4xl font-bold tracking-wide text-[#00e5ff]">
               {selectedPerson.name}
             </h2>
 
-            <div className="border-t border-[#004d00] my-6"></div>
+            <div className="border-t border-[#00e5ff] my-6"></div>
 
             {/* SERVICE */}
             <div>
@@ -213,9 +208,9 @@ export default function PersonnelProfile() {
                 YEARS OF SERVICE
               </p>
 
-              <div className="w-full bg-[#001a00] h-4">
+              <div className="w-full bg-[#0a1a1f] h-4 rounded">
                 <div
-                  className="bg-[#00ff66] h-4"
+                  className="bg-[#00e5ff] h-4 rounded"
                   style={{
                     width: `${Math.min(
                       calculateServiceYears(selectedPerson.created_at) * 10,
@@ -230,7 +225,7 @@ export default function PersonnelProfile() {
               </p>
             </div>
 
-            <div className="border-t border-[#004d00] my-6"></div>
+            <div className="border-t border-[#00e5ff] my-6"></div>
 
             {/* DETAILS */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -268,24 +263,22 @@ export default function PersonnelProfile() {
           </div>
 
           {/* PROMOTION RECORD */}
-          <div className="border border-[#004d00] p-8 bg-black">
-            <h3 className="text-lg tracking-widest border-b border-[#004d00] pb-2 mb-4">
+          <div className="border border-[#00e5ff] p-8 bg-black/60 rounded-2xl shadow-[0_0_40px_rgba(0,229,255,0.2)]">
+            <h3 className="text-lg tracking-widest border-b border-[#00e5ff] pb-2 mb-4">
               PROMOTION RECORD
             </h3>
 
             {rankHistory.length === 0 ? (
-              <p className="text-gray-500">
+              <p className="text-gray-400">
                 No promotion history recorded.
               </p>
             ) : (
               rankHistory.map((r) => (
                 <div
                   key={r.id}
-                  className="flex justify-between py-2 border-b border-[#002700]"
+                  className="flex justify-between py-2 border-b border-[#00e5ff]"
                 >
-                  <span>
-                    {getRankName(r.rank)}
-                  </span>
+                  <span>{getRankName(r.rank)}</span>
                   <span className="text-gray-400">
                     {formatDate(r.changed_at)}
                   </span>
@@ -295,13 +288,13 @@ export default function PersonnelProfile() {
           </div>
 
           {/* CERTIFICATIONS */}
-          <div className="border border-[#004d00] p-8 bg-black">
-            <h3 className="text-lg tracking-widest border-b border-[#004d00] pb-2 mb-4">
+          <div className="border border-[#00e5ff] p-8 bg-black/60 rounded-2xl shadow-[0_0_40px_rgba(0,229,255,0.2)]">
+            <h3 className="text-lg tracking-widest border-b border-[#00e5ff] pb-2 mb-4">
               QUALIFICATIONS
             </h3>
 
             {certifications.length === 0 ? (
-              <p className="text-gray-500">
+              <p className="text-gray-400">
                 No certifications recorded.
               </p>
             ) : (
@@ -309,7 +302,7 @@ export default function PersonnelProfile() {
                 {certifications.map((c, index) => (
                   <div
                     key={index}
-                    className="border-b border-[#002700] py-1"
+                    className="border-b border-[#00e5ff] py-1"
                   >
                     {c.certification?.name}
                   </div>

@@ -19,24 +19,21 @@ export default function Home() {
   /* =====================================================
      FETCH DATA
   ======================================================*/
+
   useEffect(() => {
     async function fetchData() {
-      /* 🔥 Load ranks first */
       const { data: rankData } = await supabase
         .from("ranks")
         .select("*");
 
       setRanks(rankData || []);
 
-      /* 🔥 Fetch personnel + join rank table */
       const { data, error } = await supabase
         .from("personnel")
         .select("*, ranks(name, rank_level)")
         .order("rank_id", { ascending: true });
 
-      if (error) {
-        console.error("Supabase Error:", error.message);
-      } else {
+      if (!error) {
         setPersonnel(data || []);
       }
     }
@@ -44,17 +41,13 @@ export default function Home() {
     fetchData();
   }, []);
 
-  /* =====================================================
-     RESOLVE RANK NAME
-  ======================================================*/
-
   const getRankName = (rankId: string | null) => {
     const rank = ranks.find((r) => r.id === rankId);
     return rank ? rank.name : "Unranked";
   };
 
   /* =====================================================
-     RENDER STRUCTURE
+     UI (BLUE HOLO + ORBITRON)
   ======================================================*/
 
   const renderStructure = () => {
@@ -62,10 +55,10 @@ export default function Home() {
       if (section.type !== "header") return null;
 
       return (
-        <div key={index} className="mt-8">
+        <div key={index} className="mt-10 font-orbitron">
 
           {/* HEADER */}
-          <div className="bg-[#002700] text-white px-4 py-3 text-xl font-bold">
+          <div className="bg-[#05080f] border border-[#00e5ff] text-[#00e5ff] px-6 py-4 text-2xl font-bold tracking-widest rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)]">
             {section.title}
           </div>
 
@@ -73,10 +66,10 @@ export default function Home() {
             if (child.type !== "sub-header") return null;
 
             return (
-              <div key={childIndex} className="ml-6 mt-4">
+              <div key={childIndex} className="ml-6 mt-6">
 
                 {/* SUB HEADER */}
-                <div className="bg-[#003d00] text-white px-3 py-2 text-lg font-semibold">
+                <div className="bg-[#05080f] border border-[#00e5ff] text-[#00e5ff] px-4 py-3 text-lg font-semibold rounded-lg shadow-[0_0_15px_rgba(0,229,255,0.3)]">
                   {child.title}
                 </div>
 
@@ -89,9 +82,9 @@ export default function Home() {
                   return (
                     <div
                       key={roleIndex}
-                      className="ml-6 mt-3 border border-[#002700] p-3"
+                      className="ml-6 mt-4 border border-[#00e5ff] bg-black/60 p-4 rounded-2xl shadow-[0_0_30px_rgba(0,229,255,0.15)]"
                     >
-                      <div className="font-bold text-[#00ff66] mb-2">
+                      <div className="font-bold text-[#00e5ff] mb-3 tracking-wide">
                         {role.role}
 
                         {role.count > 1 && (
@@ -109,14 +102,16 @@ export default function Home() {
                           return (
                             <div
                               key={slotIndex}
-                              className="border border-[#002700] bg-[#0f1a0f] px-3 py-2 mt-2"
+                              className="border border-[#00e5ff]/40 bg-[#05080f] px-4 py-3 mt-3 rounded-xl hover:border-[#00e5ff] transition"
                             >
                               {person ? (
                                 <>
-                                  <span className="font-bold">
+                                  <span className="font-bold text-[#00e5ff]">
                                     {getRankName(person.rank_id)}
                                   </span>{" "}
-                                  {person.name}
+                                  <span className="text-white">
+                                    {person.name}
+                                  </span>
                                 </>
                               ) : (
                                 <span className="text-gray-400">
@@ -138,17 +133,15 @@ export default function Home() {
     });
   };
 
-  /* =====================================================
-     UI
-  ======================================================*/
-
   return (
-    <main className="p-8">
-      <h1 className="text-4xl font-bold tracking-widest text-[#002700] mb-6">
+    <main className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10">
+
+      <h1 className="text-5xl font-bold tracking-widest text-[#00e5ff] mb-8 font-orbitron">
         101st Doom Battalion Roster
       </h1>
 
       <div>{renderStructure()}</div>
+
     </main>
   );
 }

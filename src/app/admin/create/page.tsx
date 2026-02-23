@@ -147,7 +147,7 @@ export default function CreatePersonnel() {
     <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-[#e6faff] p-10 font-orbitron tracking-wide">
 
       <button
-        onClick={() => router.push("/")}
+        onClick={() => router.push("/pcs")}
         className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-xl hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
       >
         ← Back

@@ -14,9 +14,20 @@ type Event = {
   }[];
 };
 
+type Server = {
+  id: number;
+  host: string;
+  port: number;
+  online: boolean;
+  players: number;
+  playerList: string[];
+};
+
 export default function HomePage() {
   const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
+  const [servers, setServers] = useState<Server[]>([]);
+  const [expandedServer, setExpandedServer] = useState<number | null>(null);
 
   /* ================= FETCH TODAY EVENTS ================= */
 
@@ -44,14 +55,91 @@ export default function HomePage() {
       .lt("start_time", tomorrow.toISOString())
       .order("start_time", { ascending: true });
 
-    // ✅ Fix: Cast safely and avoid TypeScript error
     setEvents((bookings as unknown as Event[]) || []);
+  };
+
+  /* ================= FETCH SERVER STATUS ================= */
+
+  useEffect(() => {
+    fetchServers();
+    const interval = setInterval(fetchServers, 10000); // refresh every 10 sec
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchServers = async () => {
+    try {
+      const res = await fetch("/api/server-status");
+      const data = await res.json();
+      setServers(data);
+    } catch (err) {
+      console.error("Server fetch failed", err);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white font-orbitron flex">
 
-      {/* ================= LEFT SIDE — BRANDING ================= */}
+      {/* ================= LEFT SIDE — SERVER STATUS ================= */}
+      <div className="w-[320px] border-r border-[#00e5ff]/30 p-6 bg-black/40 backdrop-blur-xl overflow-y-auto">
+
+        <h2 className="text-xl text-[#00e5ff] mb-6 tracking-widest">
+          Server Status
+        </h2>
+
+        {servers.map((server) => (
+          <div
+            key={server.id}
+            className="mb-4 border border-[#00e5ff]/40 rounded-xl p-4 bg-black/60
+                       shadow-[0_0_12px_rgba(0,229,255,0.2)]"
+          >
+            <div
+              onClick={() =>
+                setExpandedServer(
+                  expandedServer === server.id ? null : server.id
+                )
+              }
+              className="flex justify-between items-center cursor-pointer"
+            >
+              <span className="font-semibold">
+                Server {server.id}
+              </span>
+
+              <span
+                className={`text-xs font-bold ${
+                  server.online
+                    ? "text-green-400"
+                    : "text-red-500"
+                }`}
+              >
+                {server.online ? "ONLINE" : "OFFLINE"}
+              </span>
+            </div>
+
+            {expandedServer === server.id && (
+              <div className="mt-3 text-sm text-gray-300 space-y-1">
+                <div>
+                  IP: {server.host}:{server.port}
+                </div>
+
+                <div>
+                  Players: {server.players}
+                </div>
+
+                {server.playerList.length > 0 && (
+                  <ul className="mt-2 text-xs text-gray-400 space-y-1">
+                    {server.playerList.map((player) => (
+                      <li key={player}>• {player}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+      </div>
+
+      {/* ================= CENTER — BRANDING ================= */}
       <div className="flex-1 flex flex-col items-center pt-16">
 
         <h1 className="text-3xl md:text-5xl font-bold tracking-[0.3em] text-[#00e5ff] text-center">
@@ -80,7 +168,6 @@ export default function HomePage() {
       {/* ================= RIGHT SIDE — EVENTS + CONNECTIONS ================= */}
       <div className="w-[380px] border-l border-[#00e5ff]/30 p-6 bg-black/40 backdrop-blur-xl flex flex-col">
 
-        {/* ===== EVENTS ===== */}
         <h2 className="text-xl text-[#00e5ff] mb-4 tracking-widest">
           Upcoming Events Today
         </h2>
@@ -119,38 +206,25 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ===== CONNECTION LINKS ===== */}
+        {/* CONNECTIONS */}
         <div className="mt-6 border-t border-[#00e5ff]/30 pt-6">
 
           <h3 className="text-[#00e5ff] tracking-widest mb-4">
             Unit Connections
           </h3>
 
-          {/* DISCORD */}
           <a
-  href="https://discord.gg/dZhRghrDfX"
-  target="_blank"
-  className="flex items-center justify-center gap-3 mb-4 px-4 py-3 rounded-xl
-             border border-[#00e5ff]/40
-             hover:bg-[#00e5ff] hover:text-black
-             transition-all duration-300
-             shadow-[0_0_15px_rgba(0,229,255,0.4)] group"
->
+            href="https://discord.gg/dZhRghrDfX"
+            target="_blank"
+            className="flex items-center justify-center gap-3 mb-4 px-4 py-3 rounded-xl
+                       border border-[#00e5ff]/40
+                       hover:bg-[#00e5ff] hover:text-black
+                       transition-all duration-300
+                       shadow-[0_0_15px_rgba(0,229,255,0.4)] group"
+          >
+            <span>Join Our Discord</span>
+          </a>
 
-  {/* Discord SVG Icon */}
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    className="w-6 h-6 fill-current text-[#00e5ff] group-hover:text-black transition"
-  >
-    <path d="M20.317 4.369a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.078.037c-.21.375-.444.864-.608 1.249a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.249.077.077 0 00-.078-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.054 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.027c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.201 13.201 0 01-1.872-.89.077.077 0 01-.008-.128c.126-.094.252-.192.372-.29a.074.074 0 01.077-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 01.078.009c.12.098.246.196.372.29a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.89.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.031-.054c.5-5.177-.838-9.674-3.548-13.661a.061.061 0 00-.031-.028z" />
-  </svg>
-
-  <span>Join Our Discord</span>
-
-</a>
-
-          {/* TEAMSPEAK */}
           <div className="px-4 py-3 rounded-xl border border-[#00e5ff]/40 text-center">
             <div className="text-sm text-gray-400">
               TeamSpeak Server

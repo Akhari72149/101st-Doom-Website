@@ -204,7 +204,7 @@ export default function ServersPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10">
       <button
-        onClick={() => router.push("/")}
+        onClick={() => router.push("/pcs")}
         className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition"
       >
         ← Return to Dashboard

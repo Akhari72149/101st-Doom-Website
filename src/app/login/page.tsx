@@ -30,7 +30,7 @@ export default function Login() {
 
       {/* BACK BUTTON */}
       <button
-        onClick={() => router.push("/")}
+        onClick={() => router.push("/pcs")}
         className="mb-8 border border-[#00e5ff] px-5 py-2 rounded-lg 
         hover:bg-[#00e5ff] hover:text-black transition 
         shadow-[0_0_15px_rgba(0,229,255,0.5)]"

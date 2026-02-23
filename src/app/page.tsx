@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { FaDiscord } from "react-icons/fa";
 
 type Event = {
   id: string;
@@ -12,7 +11,7 @@ type Event = {
   start_time: string;
   personnel?: {
     name: string;
-  };
+  }[];
 };
 
 export default function HomePage() {
@@ -45,7 +44,8 @@ export default function HomePage() {
       .lt("start_time", tomorrow.toISOString())
       .order("start_time", { ascending: true });
 
-    setEvents((bookings as Event[]) || []);
+    // ✅ Fix: Cast safely and avoid TypeScript error
+    setEvents((bookings as unknown as Event[]) || []);
   };
 
   return (
@@ -102,7 +102,9 @@ export default function HomePage() {
                 </div>
 
                 <div className="font-semibold mt-1">
-                  {event.personnel?.name || "Unknown"}
+                  {event.personnel && event.personnel.length > 0
+                    ? event.personnel[0].name
+                    : "Unknown"}
                 </div>
 
                 <div className="text-gray-400 text-sm">
@@ -126,17 +128,27 @@ export default function HomePage() {
 
           {/* DISCORD */}
           <a
-            href="https://discord.gg/dZhRghrDfX"
-            target="_blank"
-            className="flex items-center justify-center gap-3 mb-4 px-4 py-3 rounded-xl
-                       border border-[#00e5ff]/40
-                       hover:bg-[#00e5ff] hover:text-black
-                       transition-all duration-300
-                       shadow-[0_0_15px_rgba(0,229,255,0.4)]"
-          >
-            <FaDiscord className="text-2xl animate-pulse" />
-            Join Our Discord
-          </a>
+  href="https://discord.gg/dZhRghrDfX"
+  target="_blank"
+  className="flex items-center justify-center gap-3 mb-4 px-4 py-3 rounded-xl
+             border border-[#00e5ff]/40
+             hover:bg-[#00e5ff] hover:text-black
+             transition-all duration-300
+             shadow-[0_0_15px_rgba(0,229,255,0.4)] group"
+>
+
+  {/* Discord SVG Icon */}
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className="w-6 h-6 fill-current text-[#00e5ff] group-hover:text-black transition"
+  >
+    <path d="M20.317 4.369a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.078.037c-.21.375-.444.864-.608 1.249a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.249.077.077 0 00-.078-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.054 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.027c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.201 13.201 0 01-1.872-.89.077.077 0 01-.008-.128c.126-.094.252-.192.372-.29a.074.074 0 01.077-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 01.078.009c.12.098.246.196.372.29a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.89.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.031-.054c.5-5.177-.838-9.674-3.548-13.661a.061.061 0 00-.031-.028z" />
+  </svg>
+
+  <span>Join Our Discord</span>
+
+</a>
 
           {/* TEAMSPEAK */}
           <div className="px-4 py-3 rounded-xl border border-[#00e5ff]/40 text-center">

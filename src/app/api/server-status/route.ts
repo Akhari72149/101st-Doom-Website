@@ -1,13 +1,6 @@
 import { NextResponse } from "next/server";
 import dgram from "dgram";
 
-/*
-  BattleMetrics-style raw UDP Steam query
-  - Send A2S_INFO packet
-  - Wait for response
-  - Parse server name + players
-*/
-
 const SERVERS = [
   { id: 1, host: "199.33.118.13", basePort: 2000 },
   { id: 2, host: "199.33.118.13", basePort: 2100 },
@@ -17,22 +10,25 @@ const SERVERS = [
   { id: 6, host: "199.33.118.13", basePort: 2500 },
 ];
 
+/* ===================================================== */
+/* ================== UDP QUERY ======================== */
+/* ===================================================== */
+
 function queryServer(host: string, port: number): Promise<any> {
   return new Promise((resolve) => {
     const socket = dgram.createSocket("udp4");
 
-    // Steam A2S_INFO request
     const request = Buffer.from([
-      0xFF, 0xFF, 0xFF, 0xFF,
+      0xff, 0xff, 0xff, 0xff,
       0x54,
       ...Buffer.from("Source Engine Query"),
-      0x00
+      0x00,
     ]);
 
     const timeout = setTimeout(() => {
       socket.close();
       resolve(null);
-    }, 4000);
+    }, 3000);
 
     socket.send(request, port, host);
 
@@ -40,9 +36,60 @@ function queryServer(host: string, port: number): Promise<any> {
       clearTimeout(timeout);
       socket.close();
 
-      resolve({
-        raw: msg,
-      });
+      try {
+        const type = msg[4];
+
+        // If it's an INFO response
+        if (type === 0x49) {
+          let offset = 5;
+
+          // skip protocol
+          offset += 1;
+
+          const readString = () => {
+            const end = msg.indexOf(0x00, offset);
+            const str = msg.toString("utf8", offset, end);
+            offset = end + 1;
+            return str;
+          };
+
+          // server name
+          readString();
+          // map
+          readString();
+          // folder
+          readString();
+          // game
+          readString();
+
+          offset += 2; // app id
+
+          const players = msg[offset];
+          offset += 1;
+
+          const maxPlayers = msg[offset];
+          offset += 1;
+
+          resolve({
+            online: true,
+            players,
+            maxPlayers,
+            playerList: [],
+          });
+
+          return;
+        }
+
+        resolve({
+          online: true,
+          players: 0,
+          maxPlayers: 0,
+          playerList: [],
+        });
+
+      } catch {
+        resolve(null);
+      }
     });
 
     socket.on("error", () => {
@@ -53,33 +100,34 @@ function queryServer(host: string, port: number): Promise<any> {
   });
 }
 
+/* ===================================================== */
+/* ===================== API =========================== */
+/* ===================================================== */
+
 export async function GET() {
   const results = await Promise.all(
     SERVERS.map(async (server) => {
-      const portsToTry = [server.basePort, server.basePort + 1];
+      const ports = [server.basePort, server.basePort + 1];
 
-      for (const port of portsToTry) {
-        const response = await queryServer(server.host, port);
+      for (const port of ports) {
+        const data = await queryServer(server.host, port);
 
-        if (response) {
-          // Server responded → Mark online
+        if (data) {
           return {
             id: server.id,
             host: server.host,
-            online: true,
-            queryPort: port,
-            players: 1, // We will improve this next
-            playerList: [],
+            port,
+            ...data,
           };
         }
       }
 
-      // If nothing responded
       return {
         id: server.id,
         host: server.host,
         online: false,
         players: 0,
+        maxPlayers: 0,
         playerList: [],
       };
     })

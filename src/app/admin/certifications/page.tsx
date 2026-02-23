@@ -17,9 +17,9 @@ export default function ManageCertifications() {
   const [selectedCert, setSelectedCert] = useState("");
   const [loading, setLoading] = useState(false);
 
-  /* =====================================================
-     🔐 UPDATED ROLE PROTECTION
-  ======================================================*/
+  /* ===================================================== */
+  /* ================= AUTH ============================== */
+  /* ===================================================== */
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -56,14 +56,8 @@ export default function ManageCertifications() {
     checkAccess();
   }, [router]);
 
-  /* =====================================================
-     🔄 FETCH DATA
-  ======================================================*/
-
   useEffect(() => {
-    if (!loadingAuth) {
-      fetchData();
-    }
+    if (!loadingAuth) fetchData();
   }, [loadingAuth]);
 
   useEffect(() => {
@@ -104,10 +98,6 @@ export default function ManageCertifications() {
     setPersonCerts(data || []);
   };
 
-  /* =====================================================
-     ➕ ASSIGN
-  ======================================================*/
-
   const assignCertification = async () => {
     if (!selectedPerson || !selectedCert) return;
 
@@ -143,10 +133,6 @@ export default function ManageCertifications() {
     fetchPersonCerts();
   };
 
-  /* =====================================================
-     ❌ REVOKE
-  ======================================================*/
-
   const revokeCertification = async (recordId: string) => {
     if (!confirm("Revoke this certification?")) return;
 
@@ -170,7 +156,11 @@ export default function ManageCertifications() {
 
   if (loadingAuth) {
     return (
-      <div className="min-h-screen bg-[#05080f] text-[#00e5ff] flex items-center justify-center font-orbitron">
+      <div className="
+        min-h-screen flex items-center justify-center
+        bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
+        text-[#00ff4c] font-orbitron
+      ">
         Checking Permissions...
       </div>
     );
@@ -182,21 +172,39 @@ export default function ManageCertifications() {
       .includes(searchPerson.toLowerCase())
   );
 
-  /* =====================================================
-     ✅ UI
-  ======================================================*/
+  /* ===================================================== */
+  /* ================= UI ================================ */
+  /* ===================================================== */
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-[#e6faff] p-8 font-orbitron tracking-wide">
+    <div className="
+      min-h-screen
+      bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
+      text-white
+      p-8
+      font-orbitron
+      tracking-wide
+    ">
 
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition"
+        className="
+          mb-6
+          border border-[#00ff4c]
+          px-4 py-2
+          rounded-xl
+          transition-all duration-300
+          shadow-[0_0_15px_rgba(0,255,80,0.3)]
+          hover:bg-[#003d14]
+          hover:text-[#00ff4c]
+          hover:scale-105
+          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
+        "
       >
         ← Back to Dashboard
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00e5ff]">
+      <h1 className="text-4xl font-bold mb-8 text-[#00ff4c]">
         Certification Management
       </h1>
 
@@ -209,11 +217,25 @@ export default function ManageCertifications() {
           placeholder="Search by rank or name..."
           value={searchPerson}
           onChange={(e) => setSearchPerson(e.target.value)}
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl"
+          className="
+            bg-black
+            border border-[#00ff4c]
+            p-3
+            w-full
+            rounded-xl
+            focus:ring-2 focus:ring-[#00ff4c]
+            transition-all
+          "
         />
 
         {searchPerson && (
-          <div className="mt-2 border border-[#00e5ff] bg-black/60 rounded-xl max-h-60 overflow-y-auto">
+          <div className="
+            mt-2
+            border border-[#00ff4c]
+            bg-black/60
+            rounded-xl
+            max-h-60 overflow-y-auto
+          ">
             {filteredPersonnel.length === 0 ? (
               <p className="p-3 text-gray-400">No personnel found.</p>
             ) : (
@@ -224,7 +246,14 @@ export default function ManageCertifications() {
                     setSelectedPerson(p.id);
                     setSearchPerson("");
                   }}
-                  className="p-3 border-b border-[#00e5ff] cursor-pointer hover:bg-[#00e5ff] hover:text-black transition"
+                  className="
+                    p-3
+                    border-b border-[#00ff4c]/30
+                    cursor-pointer
+                    hover:bg-[#003d14]
+                    hover:text-[#00ff4c]
+                    transition
+                  "
                 >
                   {getRankName(p)} {p.name}
                 </div>
@@ -236,8 +265,15 @@ export default function ManageCertifications() {
 
       {/* CURRENT CERTS */}
       {selectedPerson && (
-        <div className="mb-8 border border-[#00e5ff] p-6 bg-black/60 rounded-2xl">
-          <h2 className="text-2xl font-bold mb-6 text-[#00e5ff]">
+        <div className="
+          mb-8
+          border border-[#00ff4c]
+          p-6
+          bg-black/60
+          rounded-2xl
+          shadow-[0_0_40px_rgba(0,255,80,0.2)]
+        ">
+          <h2 className="text-2xl mb-6 text-[#00ff4c]">
             Current Certifications
           </h2>
 
@@ -255,7 +291,14 @@ export default function ManageCertifications() {
 
                 <button
                   onClick={() => revokeCertification(pc.id)}
-                  className="bg-red-600 px-3 py-1 rounded hover:bg-red-500 transition"
+                  className="
+                    px-3 py-1
+                    rounded-lg
+                    bg-red-700
+                    hover:bg-red-600
+                    hover:scale-105
+                    transition
+                  "
                 >
                   Revoke
                 </button>
@@ -272,12 +315,19 @@ export default function ManageCertifications() {
         </label>
 
         <select
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl"
+          className="
+            bg-black
+            border border-[#00ff4c]
+            p-3
+            w-full
+            rounded-xl
+            focus:ring-2 focus:ring-[#00ff4c]
+            transition-all
+          "
           value={selectedCert}
           onChange={(e) => setSelectedCert(e.target.value)}
         >
           <option value="">-- Select Certification --</option>
-
           {certifications.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -289,7 +339,18 @@ export default function ManageCertifications() {
       <button
         onClick={assignCertification}
         disabled={loading}
-        className="px-6 py-3 border border-[#00e5ff] text-[#00e5ff] rounded-xl hover:bg-[#00e5ff] hover:text-black transition disabled:opacity-50"
+        className="
+          px-6 py-3
+          border border-[#00ff4c]
+          text-[#00ff4c]
+          rounded-xl
+          transition-all duration-300
+          hover:bg-[#003d14]
+          hover:text-black
+          hover:scale-105
+          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
+          disabled:opacity-50
+        "
       >
         {loading ? "Assigning..." : "Assign Certification"}
       </button>

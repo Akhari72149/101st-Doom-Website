@@ -53,7 +53,7 @@ export default function CertificationByPerson() {
   };
 
   /* =====================================================
-     🔥 HELPERS (RANK RESOLUTION)
+     🔥 HELPERS
   ======================================================*/
 
   const getRankName = (person: any) => {
@@ -68,20 +68,39 @@ export default function CertificationByPerson() {
   );
 
   /* =====================================================
-     ✅ UI (BLUE HOLO + ORBITRON)
+     ✅ UI — GREEN TACTICAL THEME
   ======================================================*/
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-[#e6faff] p-10 font-orbitron tracking-wide">
+    <div className="
+      min-h-screen
+      bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
+      text-[#eafff2]
+      p-10
+      font-orbitron
+      tracking-wide
+    ">
 
+      {/* BACK BUTTON */}
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+        className="
+          mb-6
+          border border-[#00ff4c]
+          px-4 py-2
+          rounded-lg
+          transition-all duration-300
+          shadow-[0_0_15px_rgba(0,255,80,0.3)]
+          hover:bg-[#003d14]
+          hover:text-[#00ff4c]
+          hover:scale-105
+          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
+        "
       >
         ← Back to Dashboard
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00e5ff] tracking-widest">
+      <h1 className="text-4xl font-bold mb-8 text-[#00ff4c] tracking-widest">
         Certification Lookup
       </h1>
 
@@ -92,13 +111,24 @@ export default function CertificationByPerson() {
           placeholder="Search by name or rank..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff] shadow-[0_0_15px_rgba(0,229,255,0.2)]"
+          className="
+            bg-black
+            border border-[#00ff4c]
+            p-3 w-full
+            rounded-xl
+            text-white
+            placeholder-gray-400
+            focus:outline-none
+            focus:ring-2 focus:ring-[#00ff4c]
+            transition-all duration-300
+            shadow-[0_0_15px_rgba(0,255,80,0.2)]
+          "
         />
       </div>
 
       {/* SEARCH RESULTS */}
       {search && (
-        <div className="mb-8 border border-[#00e5ff] bg-black/60 rounded-xl">
+        <div className="mb-8 border border-[#00ff4c] bg-black/60 rounded-xl">
           {filteredPersonnel.length === 0 ? (
             <p className="p-4 text-gray-400">
               No personnel found.
@@ -112,7 +142,15 @@ export default function CertificationByPerson() {
                   fetchCertifications(p.id);
                   setSearch("");
                 }}
-                className="p-3 border-b border-[#00e5ff] cursor-pointer hover:bg-[#00e5ff] hover:text-black transition"
+                className="
+                  p-3
+                  border-b border-[#00ff4c]
+                  cursor-pointer
+                  transition-all duration-300
+                  hover:bg-[#003d14]
+                  hover:text-[#00ff4c]
+                  hover:pl-6
+                "
               >
                 {getRankName(p)} {p.name}
               </div>
@@ -123,8 +161,14 @@ export default function CertificationByPerson() {
 
       {/* SELECTED PERSON */}
       {selectedPerson && (
-        <div className="border border-[#00e5ff] p-6 bg-black/60 rounded-2xl shadow-[0_0_40px_rgba(0,229,255,0.2)]">
-          <h2 className="text-2xl font-bold mb-6 text-[#00e5ff]">
+        <div className="
+          border border-[#00ff4c]
+          p-6
+          bg-black/60
+          rounded-2xl
+          shadow-[0_0_40px_rgba(0,255,80,0.2)]
+        ">
+          <h2 className="text-2xl font-bold mb-6 text-[#00ff4c]">
             {getRankName(selectedPerson)} {selectedPerson.name}
           </h2>
 
@@ -133,8 +177,8 @@ export default function CertificationByPerson() {
               No certifications assigned.
             </p>
           ) : (
-            <table className="w-full border border-[#00e5ff]">
-              <thead className="bg-[#00e5ff] text-black">
+            <table className="w-full border border-[#00ff4c]">
+              <thead className="bg-[#00ff4c] text-black">
                 <tr>
                   <th className="px-4 py-2 text-left">
                     Certification
@@ -149,7 +193,12 @@ export default function CertificationByPerson() {
                 {certifications.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-t border-[#00e5ff] hover:bg-[#00e5ff]/10 transition"
+                    className="
+                      border-t border-[#00ff4c]
+                      transition-all duration-300
+                      hover:bg-[#003d14]
+                      hover:text-[#00ff4c]
+                    "
                   >
                     <td className="px-4 py-3">
                       {c.certification?.name || "Unknown"}

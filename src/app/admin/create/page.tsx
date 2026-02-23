@@ -18,7 +18,7 @@ export default function CreatePersonnel() {
   const [skipRoleSync, setSkipRoleSync] = useState(false);
   const [importFromDiscord, setImportFromDiscord] = useState(false);
 
-  /* ================= AUTH + ROLE CHECK ================= */
+  /* ================= AUTH ================= */
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -31,7 +31,6 @@ export default function CreatePersonnel() {
         return;
       }
 
-      // Fetch ALL roles for this user
       const { data: roles } = await supabase
         .from("user_roles")
         .select("role")
@@ -39,13 +38,11 @@ export default function CreatePersonnel() {
 
       const roleList = roles?.map((r) => r.role) || [];
 
-      // Allow Admin OR Recruiter
       if (!hasRole(roleList, ["recruiter", "di", "nco"])) {
         router.replace("/");
         return;
       }
 
-      // Load ranks
       const { data: rankData } = await supabase
         .from("ranks")
         .select("*")
@@ -135,7 +132,11 @@ export default function CreatePersonnel() {
 
   if (loadingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#05080f] text-[#00e5ff] font-orbitron">
+      <div className="
+        min-h-screen flex items-center justify-center
+        bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
+        text-[#00ff4c] font-orbitron
+      ">
         Checking permissions...
       </div>
     );
@@ -144,20 +145,39 @@ export default function CreatePersonnel() {
   /* ================= UI ================= */
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-[#e6faff] p-10 font-orbitron tracking-wide">
+    <div className="
+      min-h-screen
+      bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
+      text-white
+      p-10
+      font-orbitron
+      tracking-wide
+    ">
 
+      {/* BACK */}
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-xl hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+        className="
+          mb-6
+          border border-[#00ff4c]
+          px-4 py-2
+          rounded-xl
+          transition-all duration-300
+          shadow-[0_0_15px_rgba(0,255,80,0.3)]
+          hover:bg-[#003d14]
+          hover:text-[#00ff4c]
+          hover:scale-105
+          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
+        "
       >
         ← Back
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00e5ff] tracking-widest">
+      <h1 className="text-4xl font-bold mb-8 text-[#00ff4c] tracking-widest">
         Create New Personnel
       </h1>
 
-      {/* Discord ID */}
+      {/* DISCORD ID */}
       <div className="mb-6">
         <label className="block mb-2 text-sm tracking-widest text-gray-300">
           Discord ID
@@ -168,32 +188,45 @@ export default function CreatePersonnel() {
           value={discordId}
           onChange={(e) => setDiscordId(e.target.value)}
           placeholder="Enter Discord User ID"
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+          className="
+            bg-black
+            border border-[#00ff4c]
+            p-3
+            w-full
+            rounded-xl
+            focus:ring-2 focus:ring-[#00ff4c]
+            transition-all
+            shadow-[0_0_15px_rgba(0,255,80,0.2)]
+          "
         />
       </div>
 
-      {/* Checkboxes */}
-      <div className="mb-4 flex flex-col gap-3">
-        <label className="flex items-center gap-2">
+      {/* CHECKBOXES */}
+      <div className="mb-6 flex flex-col gap-4">
+
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={skipRoleSync}
             onChange={(e) => setSkipRoleSync(e.target.checked)}
+            className="accent-[#00ff4c]"
           />
-          Skip Discord Role Assignment
+          <span>Skip Discord Role Assignment</span>
         </label>
 
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={importFromDiscord}
             onChange={(e) => setImportFromDiscord(e.target.checked)}
+            className="accent-[#00ff4c]"
           />
-          Import Rank + Certifications From Discord
+          <span>Import Rank + Certifications From Discord</span>
         </label>
+
       </div>
 
-      {/* Rank */}
+      {/* RANK */}
       <div className="mb-6">
         <label className="block mb-2 text-sm tracking-widest text-gray-300">
           Rank (Optional)
@@ -202,7 +235,15 @@ export default function CreatePersonnel() {
         <select
           value={rankId}
           onChange={(e) => setRankId(e.target.value)}
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl"
+          className="
+            bg-black
+            border border-[#00ff4c]
+            p-3
+            w-full
+            rounded-xl
+            focus:ring-2 focus:ring-[#00ff4c]
+            transition-all
+          "
         >
           <option value="">-- Select Rank --</option>
           {ranks.map((rank) => (
@@ -213,7 +254,7 @@ export default function CreatePersonnel() {
         </select>
       </div>
 
-      {/* Birth Number */}
+      {/* BIRTH NUMBER */}
       <div className="mb-6">
         <label className="block mb-2 text-sm tracking-widest text-gray-300">
           Birth Number
@@ -223,11 +264,19 @@ export default function CreatePersonnel() {
           type="text"
           value={birthNumber}
           onChange={(e) => setBirthNumber(e.target.value)}
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl"
+          className="
+            bg-black
+            border border-[#00ff4c]
+            p-3
+            w-full
+            rounded-xl
+            focus:ring-2 focus:ring-[#00ff4c]
+            transition-all
+          "
         />
       </div>
 
-      {/* Name */}
+      {/* NAME */}
       <div className="mb-6">
         <label className="block mb-2 text-sm tracking-widest text-gray-300">
           Name
@@ -237,14 +286,32 @@ export default function CreatePersonnel() {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl"
+          className="
+            bg-black
+            border border-[#00ff4c]
+            p-3
+            w-full
+            rounded-xl
+            focus:ring-2 focus:ring-[#00ff4c]
+            transition-all
+          "
         />
       </div>
 
-      {/* Create Button */}
+      {/* CREATE BUTTON */}
       <button
         onClick={createUser}
-        className="px-8 py-3 border border-[#00e5ff] text-[#00e5ff] rounded-xl hover:bg-[#00e5ff] hover:text-black transition"
+        className="
+          px-8 py-3
+          border border-[#00ff4c]
+          text-[#00ff4c]
+          rounded-xl
+          transition-all duration-300
+          hover:bg-[#003d14]
+          hover:text-black
+          hover:scale-105
+          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
+        "
       >
         Create Personnel
       </button>

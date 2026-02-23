@@ -26,13 +26,11 @@ export default function PositionEditor() {
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
   const [selectedRankId, setSelectedRankId] = useState<string>("");
 
-  /* ================= SEARCH STATES ================= */
-
   const [personSearch, setPersonSearch] = useState("");
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
 
   /* =====================================================
-     🔐 AUTH CHECK (UPDATED)
+     🔐 AUTH CHECK
   ======================================================*/
 
   useEffect(() => {
@@ -52,7 +50,6 @@ export default function PositionEditor() {
         .eq("user_id", user.id);
 
       const roleList = roles?.map((r) => r.role) || [];
-
       const allowedRoles = ["admin", "nco", "di"];
 
       const hasAccess = roleList.some((role) =>
@@ -143,7 +140,7 @@ export default function PositionEditor() {
   };
 
   /* =====================================================
-     🔥 POSITION UPDATE + DISCORD SYNC
+     🔥 POSITION UPDATE
   ======================================================*/
 
   const updatePosition = async () => {
@@ -162,19 +159,10 @@ export default function PositionEditor() {
       return;
     }
 
-    await supabase.functions.invoke("sync-slot-roles", {
-      body: {
-        personnelId: selectedPerson.id,
-        slotId: selectedSlotId,
-        forceDefaultRole: false,
-      },
-    });
-
-    alert("✅ Position Updated + Discord Synced!");
+    alert("✅ Position Updated");
     fetchData();
   };
 
-  /* ✅ RANK UPDATE */
   const updateRank = async () => {
     if (!selectedPerson) {
       alert("Select a person first.");
@@ -191,14 +179,12 @@ export default function PositionEditor() {
       return;
     }
 
-    alert("✅ Rank Updated!");
+    alert("✅ Rank Updated");
     fetchData();
   };
 
   const unassignPosition = async () => {
     if (!selectedPerson) return;
-
-    const oldSlot = selectedPerson.slotted_position;
 
     const { error } = await supabase
       .from("personnel")
@@ -210,20 +196,9 @@ export default function PositionEditor() {
       return;
     }
 
-    await supabase.functions.invoke("sync-slot-roles", {
-      body: {
-        personnelId: selectedPerson.id,
-        slotId: null,
-        oldSlotId: oldSlot,
-        forceDefaultRole: true,
-      },
-    });
-
-    alert("✅ Unassigned + Discord Updated!");
+    alert("✅ Unassigned");
     fetchData();
   };
-
-  /* ================= CLOSE DROPDOWN ================= */
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -234,47 +209,66 @@ export default function PositionEditor() {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  /* =====================================================
-     LOADING
-  ======================================================*/
-
   if (loadingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-[#00e5ff] font-orbitron">
+      <div className="min-h-screen flex items-center justify-center text-[#00ff4c] font-orbitron">
         Checking permissions...
       </div>
     );
   }
 
-  /* =====================================================
-     UI
-  ======================================================*/
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10 font-orbitron">
+    <div className="
+      min-h-screen
+      bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
+      text-white
+      p-10
+      font-orbitron
+    ">
+
+      {/* BACK BUTTON */}
       <button
-        type="button"
         onClick={() => router.push("/pcs")}
-        className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-lg hover:bg-[#00e5ff] hover:text-black transition"
+        className="
+          mb-6
+          border border-[#00ff4c]
+          px-4 py-2
+          rounded-lg
+          transition-all duration-300
+          shadow-[0_0_15px_rgba(0,255,80,0.3)]
+          hover:bg-[#003d14]
+          hover:text-[#00ff4c]
+          hover:scale-105
+          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
+        "
       >
         ← Back
       </button>
 
-      <h1 className="text-4xl tracking-widest text-[#00e5ff] mb-8">
+      <h1 className="text-4xl tracking-widest text-[#00ff4c] mb-8">
         Slotting Management
       </h1>
 
-      {/* ================= PERSON SEARCH ================= */}
-
+      {/* PERSON SEARCH */}
       <div className="mb-6 relative">
-        <label className="block mb-2 text-[#00e5ff]">
+        <label className="block mb-2 text-[#00ff4c]">
           Select Person
         </label>
 
         <input
           type="text"
           placeholder="Search person..."
-          className="bg-black border border-[#00e5ff] p-2 rounded-lg w-full text-white"
+          className="
+            bg-black
+            border border-[#00ff4c]
+            p-2
+            rounded-lg
+            w-full
+            text-white
+            focus:ring-2 focus:ring-[#00ff4c]
+            transition-all duration-300
+            shadow-[0_0_15px_rgba(0,255,80,0.2)]
+          "
           value={personSearch}
           onFocus={() => setShowPersonDropdown(true)}
           onChange={(e) => {
@@ -285,7 +279,15 @@ export default function PositionEditor() {
         />
 
         {showPersonDropdown && (
-          <div className="absolute z-50 w-full bg-black border border-[#00e5ff] rounded-lg mt-1 max-h-60 overflow-y-auto">
+          <div className="
+            absolute z-50 w-full
+            bg-black
+            border border-[#00ff4c]
+            rounded-lg
+            mt-1
+            max-h-60
+            overflow-y-auto
+          ">
             {personnel
               .filter((p) =>
                 `${getRankName(p.rank_id)} ${p.name}`
@@ -295,7 +297,13 @@ export default function PositionEditor() {
               .map((p) => (
                 <div
                   key={p.id}
-                  className="p-2 hover:bg-[#00e5ff] hover:text-black cursor-pointer"
+                  className="
+                    p-2
+                    transition-all duration-300
+                    hover:bg-[#003d14]
+                    hover:text-[#00ff4c]
+                    cursor-pointer
+                  "
                   onClick={() => {
                     setSelectedPerson(p);
                     setSelectedSlotId(p.slotted_position || "");
@@ -309,28 +317,35 @@ export default function PositionEditor() {
                   {getRankName(p.rank_id)} {p.name}
                 </div>
               ))}
-
-            {personnel.filter((p) =>
-              `${getRankName(p.rank_id)} ${p.name}`
-                .toLowerCase()
-                .includes(personSearch.toLowerCase())
-            ).length === 0 && (
-              <div className="p-2 text-gray-400">No results</div>
-            )}
           </div>
         )}
       </div>
 
-      {/* ================= RANK SECTION ================= */}
-
+      {/* RANK SECTION */}
       {selectedPerson && (
-        <div className="mb-10 border border-[#00e5ff] p-6 rounded-2xl bg-black/60">
-          <h2 className="text-2xl text-[#00e5ff] mb-4">
+        <div className="
+          mb-10
+          border border-[#00ff4c]
+          p-6
+          rounded-2xl
+          bg-black/60
+          shadow-[0_0_40px_rgba(0,255,80,0.2)]
+        ">
+          <h2 className="text-2xl text-[#00ff4c] mb-4">
             Rank Management
           </h2>
 
           <select
-            className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg mb-4"
+            className="
+              bg-black
+              border border-[#00ff4c]
+              p-2
+              w-full
+              rounded-lg
+              mb-4
+              focus:ring-2 focus:ring-[#00ff4c]
+              transition-all
+            "
             value={selectedRankId}
             onChange={(e) => setSelectedRankId(e.target.value)}
           >
@@ -343,30 +358,51 @@ export default function PositionEditor() {
           </select>
 
           <button
-            type="button"
             onClick={updateRank}
-            className="border border-[#00e5ff] px-4 py-2 rounded-lg"
+            className="
+              border border-[#00ff4c]
+              px-4 py-2
+              rounded-lg
+              transition-all duration-300
+              hover:bg-[#003d14]
+              hover:text-[#00ff4c]
+              hover:scale-105
+              hover:shadow-[0_0_20px_rgba(0,255,80,0.6)]
+            "
           >
             Save Rank
           </button>
         </div>
       )}
 
-      {/* ================= POSITION SECTION ================= */}
-
+      {/* POSITION SECTION */}
       {selectedPerson && (
         <div className="space-y-6">
-          <div className="p-4 border border-[#00e5ff] rounded-xl bg-black/60">
+
+          <div className="
+            p-4
+            border border-[#00ff4c]
+            rounded-xl
+            bg-black/60
+          ">
             <p className="text-xs text-gray-400 mb-2">
               CURRENT POSITION
             </p>
-            <p className="text-lg text-[#00e5ff]">
+            <p className="text-lg text-[#00ff4c]">
               {formatSlotToBillet(selectedPerson.slotted_position)}
             </p>
           </div>
 
+          {/* HEADER */}
           <select
-            className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg"
+            className="
+              bg-black
+              border border-[#00ff4c]
+              p-2
+              w-full
+              rounded-lg
+              focus:ring-2 focus:ring-[#00ff4c]
+            "
             value={selectedHeader}
             onChange={(e) => {
               setSelectedHeader(e.target.value);
@@ -382,9 +418,17 @@ export default function PositionEditor() {
             ))}
           </select>
 
+          {/* SUB HEADER */}
           {selectedHeader && (
             <select
-              className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg"
+              className="
+                bg-black
+                border border-[#00ff4c]
+                p-2
+                w-full
+                rounded-lg
+                focus:ring-2 focus:ring-[#00ff4c]
+              "
               value={selectedSubHeader}
               onChange={(e) => {
                 setSelectedSubHeader(e.target.value);
@@ -400,9 +444,17 @@ export default function PositionEditor() {
             </select>
           )}
 
+          {/* ROLE */}
           {selectedSubHeader && (
             <select
-              className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg"
+              className="
+                bg-black
+                border border-[#00ff4c]
+                p-2
+                w-full
+                rounded-lg
+                focus:ring-2 focus:ring-[#00ff4c]
+              "
               value={selectedSlotId}
               onChange={(e) => setSelectedSlotId(e.target.value)}
             >
@@ -415,25 +467,43 @@ export default function PositionEditor() {
             </select>
           )}
 
+          {/* ACTION BUTTONS */}
           {selectedSlotId && (
             <div className="flex gap-4">
+
               <button
-                type="button"
                 onClick={updatePosition}
-                className="border border-[#00e5ff] px-4 py-2 rounded-lg"
+                className="
+                  border border-[#00ff4c]
+                  px-4 py-2
+                  rounded-lg
+                  transition-all duration-300
+                  hover:bg-[#003d14]
+                  hover:text-[#00ff4c]
+                  hover:scale-105
+                  hover:shadow-[0_0_20px_rgba(0,255,80,0.6)]
+                "
               >
                 Save Position
               </button>
 
               <button
-                type="button"
                 onClick={unassignPosition}
-                className="border border-red-500 px-4 py-2 rounded-lg"
+                className="
+                  border border-red-500
+                  px-4 py-2
+                  rounded-lg
+                  transition-all duration-300
+                  hover:bg-red-600
+                  hover:scale-105
+                "
               >
                 Unassign
               </button>
+
             </div>
           )}
+
         </div>
       )}
     </div>

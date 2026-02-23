@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 
 export default function Home() {
   const router = useRouter();
-
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -29,15 +28,22 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-start 
-      bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black 
-      text-white py-12 font-orbitron">
+    <div className="
+      min-h-screen w-full
+      flex flex-col items-center justify-start
+      bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
+      text-white py-12
+      font-orbitron
+    ">
 
       {/* TOP BAR */}
       <div className="w-full max-w-5xl flex justify-between items-center px-6 mb-12">
 
-        <h1 className="text-4xl tracking-widest text-[#00e5ff] 
-          drop-shadow-[0_0_15px_rgba(0,229,255,0.6)]">
+        <h1 className="
+          text-4xl tracking-widest
+          text-[#00ff4c]
+          drop-shadow-[0_0_15px_rgba(0,255,80,0.6)]
+        ">
           PERSONNEL COMMAND SYSTEM
         </h1>
 
@@ -49,9 +55,17 @@ export default function Home() {
 
             <button
               onClick={handleLogout}
-              className="border border-[#00e5ff] px-4 py-2 rounded-lg 
-              hover:bg-[#00e5ff] hover:text-black transition 
-              shadow-[0_0_15px_rgba(0,229,255,0.5)]"
+              className="
+                border border-[#00ff4c]
+                px-4 py-2
+                rounded-lg
+                transition-all duration-300
+                shadow-[0_0_15px_rgba(0,255,80,0.4)]
+                hover:bg-[#003d14]
+                hover:text-[#00ff4c]
+                hover:scale-105
+                hover:shadow-[0_0_30px_rgba(0,255,80,0.7)]
+              "
             >
               Logout
             </button>
@@ -59,9 +73,17 @@ export default function Home() {
         ) : (
           <Link
             href="/login"
-            className="border border-[#00e5ff] px-4 py-2 rounded-lg 
-            hover:bg-[#00e5ff] hover:text-black transition 
-            shadow-[0_0_15px_rgba(0,229,255,0.5)]"
+            className="
+              border border-[#00ff4c]
+              px-4 py-2
+              rounded-lg
+              transition-all duration-300
+              shadow-[0_0_15px_rgba(0,255,80,0.4)]
+              hover:bg-[#003d14]
+              hover:text-[#00ff4c]
+              hover:scale-105
+              hover:shadow-[0_0_30px_rgba(0,255,80,0.7)]
+            "
           >
             Login
           </Link>
@@ -69,8 +91,10 @@ export default function Home() {
       </div>
 
       {/* BUTTON GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 
-        gap-8 w-full max-w-6xl px-6">
+      <div className="
+        grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3
+        gap-8 w-full max-w-6xl px-6
+      ">
 
         {[
           { href: "/personnel-profile", title: "Personnel Profile", desc: "View service record" },
@@ -84,24 +108,34 @@ export default function Home() {
           <Link
             key={item.href}
             href={item.href}
-            className="group relative border border-[#00e5ff] 
-            bg-black/60 backdrop-blur-xl 
-            p-8 rounded-2xl 
-            hover:scale-105 transition-all duration-300
-            shadow-[0_0_20px_rgba(0,229,255,0.2)] 
-            hover:shadow-[0_0_40px_rgba(0,229,255,0.6)]"
+            className="
+              group relative
+              border border-[#00ff4c]
+              bg-black/60 backdrop-blur-xl
+              p-8 rounded-2xl
+              transition-all duration-300
+              shadow-[0_0_20px_rgba(0,255,80,0.2)]
+              hover:scale-105
+              hover:shadow-[0_0_40px_rgba(0,255,80,0.6)]
+              hover:bg-[#003d14]
+            "
           >
-            <h2 className="text-2xl mb-3 text-[#00e5ff] tracking-wide">
+            <h2 className="text-2xl mb-3 text-[#00ff4c] tracking-wide">
               {item.title}
             </h2>
 
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-300 text-sm">
               {item.desc}
             </p>
 
             {/* Glow line animation */}
-            <div className="absolute bottom-0 left-0 h-[2px] w-0 
-              bg-[#00e5ff] group-hover:w-full transition-all duration-500" />
+            <div className="
+              absolute bottom-0 left-0
+              h-[2px] w-0
+              bg-[#00ff4c]
+              group-hover:w-full
+              transition-all duration-500
+            " />
           </Link>
         ))}
 

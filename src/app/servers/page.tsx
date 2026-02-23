@@ -43,7 +43,8 @@ export default function ServersPage() {
     person.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // 🔐 Load user + roles
+  /* ================= AUTH ================= */
+
   useEffect(() => {
     const loadUser = async () => {
       const {
@@ -202,32 +203,36 @@ export default function ServersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10">
+    <div className="min-h-screen bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00] text-white p-10">
+
+      {/* BACK BUTTON */}
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition"
+        className="mb-6 border border-[#00ff4c] px-4 py-2 hover:bg-[#00ff4c] hover:text-black transition"
       >
         ← Return to Dashboard
       </button>
 
+      {/* DATE */}
       <div className="mb-8">
         <input
           type="date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
-          className="bg-black border border-[#00e5ff] p-3 rounded-xl"
+          className="bg-black border border-[#00ff4c] p-3 rounded-xl"
         />
       </div>
 
+      {/* SERVER SELECT */}
       <div className="flex gap-4 mb-8 flex-wrap">
         {[1, 2, 3, 4, 5, 6].map((server) => (
           <div
             key={server}
             onClick={() => setActiveServer(server)}
-            className={`px-6 py-3 cursor-pointer border border-[#00e5ff] rounded-md ${
+            className={`px-6 py-3 cursor-pointer border border-[#00ff4c] rounded-md ${
               activeServer === server
-                ? "bg-[#00e5ff] text-black"
-                : "text-[#00e5ff] hover:bg-[#00e5ff] hover:text-black"
+                ? "bg-[#003d14] border border-[#00ff4c] text-[#00ff4c] scale-105 shadow-[0_0_15px_rgba(0,255,80,0.3)]"
+                : "text-[#00ff4c] hover:bg-[#00ff4c] hover:text-black"
             }`}
           >
             SERVER-{server}
@@ -235,6 +240,7 @@ export default function ServersPage() {
         ))}
       </div>
 
+      {/* SLOTS */}
       <div className="max-w-3xl grid gap-5">
         {slots.map((slot, index) => {
           const blocked = isBlocked(slot);
@@ -253,10 +259,10 @@ export default function ServersPage() {
               }}
               className={`p-6 rounded-2xl transition-all ${
                 blocked
-                  ? "bg-black/40 border border-[#00e5ff]"
+                  ? "bg-black/40 border border-[#00ff4c]"
                   : isSelected
-                  ? "bg-[#00e5ff] text-black scale-105"
-                  : "bg-black/40 border border-[#00e5ff]/40 hover:border-[#00e5ff] hover:scale-105"
+                  ? "bg-[#003d14] border border-[#00ff4c] text-[#00ff4c] scale-105 shadow-[0_0_15px_rgba(0,255,80,0.3)]"
+                  : "bg-black/40 border border-[#00ff4c]/40 hover:border-[#00ff4c] hover:scale-105"
               } ${!canBook ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="text-xl font-bold">
@@ -276,9 +282,9 @@ export default function ServersPage() {
                 .map((b) => (
                   <div
                     key={b.id}
-                    className="mt-3 p-4 rounded-xl bg-black/60 border border-[#00e5ff]"
+                    className="mt-3 p-4 rounded-xl bg-black/60 border border-[#00ff4c]"
                   >
-                    <div className="text-[#00e5ff] font-semibold text-lg">
+                    <div className="text-[#00ff4c] font-semibold text-lg">
                       {b.personnel?.name}
                     </div>
                     <div className="text-gray-300">{b.title}</div>
@@ -298,11 +304,12 @@ export default function ServersPage() {
         })}
       </div>
 
+      {/* CONFIRM PANEL */}
       {selectedStartIndex !== null && canBook && (
-        <div className="fixed bottom-10 right-10 z-50 bg-black/90 backdrop-blur-xl border border-[#00e5ff] p-6 rounded-2xl w-96">
+        <div className="fixed bottom-10 right-10 z-50 bg-black/90 backdrop-blur-xl border border-[#00ff4c] p-6 rounded-2xl w-96">
           <div className="text-lg mb-4">
             Booking from{" "}
-            <span className="text-[#00e5ff] font-bold">
+            <span className="text-[#00ff4c] font-bold">
               {slots[selectedStartIndex].toLocaleTimeString()} →
               {slots[selectedStartIndex + 3]?.toLocaleTimeString()}
             </span>
@@ -312,7 +319,7 @@ export default function ServersPage() {
             placeholder="Booking Title"
             value={bookingTitle}
             onChange={(e) => setBookingTitle(e.target.value)}
-            className="w-full bg-black border border-[#00e5ff] p-3 rounded-xl mb-4 text-white"
+            className="w-full bg-black border border-[#00ff4c] p-3 rounded-xl mb-4 text-white"
           />
 
           <div className="relative mb-4">
@@ -324,11 +331,11 @@ export default function ServersPage() {
                 setSearchQuery(e.target.value);
                 setShowResults(true);
               }}
-              className="w-full bg-black border border-[#00e5ff] p-3 rounded-xl text-white"
+              className="w-full bg-black border border-[#00ff4c] p-3 rounded-xl text-white"
             />
 
             {showResults && searchQuery && (
-              <div className="absolute z-[9999] w-full bg-black border border-[#00e5ff] rounded-xl mt-2 max-h-60 overflow-y-auto">
+              <div className="absolute z-[9999] w-full bg-black border border-[#00ff4c] rounded-xl mt-2 max-h-60 overflow-y-auto">
                 {filteredPersonnel.length === 0 && (
                   <div className="p-3 text-gray-400">No results</div>
                 )}
@@ -340,7 +347,7 @@ export default function ServersPage() {
                       setSearchQuery(person.name);
                       setShowResults(false);
                     }}
-                    className="p-3 hover:bg-[#00e5ff] hover:text-black cursor-pointer transition"
+                    className="p-3 hover:bg-[#00ff4c] hover:text-black cursor-pointer transition"
                   >
                     {person.name}
                   </div>
@@ -352,7 +359,7 @@ export default function ServersPage() {
           <div className="flex gap-3">
             <button
               onClick={handleConfirmBooking}
-              className="px-6 py-3 border border-[#00e5ff] text-[#00e5ff] rounded-xl hover:bg-[#00e5ff] hover:text-black transition"
+              className="px-6 py-3 border border-[#00ff4c] text-[#00ff4c] rounded-xl hover:bg-[#00ff4c] hover:text-black transition"
             >
               Confirm
             </button>

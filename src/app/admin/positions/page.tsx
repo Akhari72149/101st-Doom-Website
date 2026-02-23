@@ -26,6 +26,11 @@ export default function PositionEditor() {
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
   const [selectedRankId, setSelectedRankId] = useState<string>("");
 
+  /* ================= SEARCH STATES ================= */
+
+  const [personSearch, setPersonSearch] = useState("");
+  const [showPersonDropdown, setShowPersonDropdown] = useState(false);
+
   /* =====================================================
      AUTH CHECK
   ======================================================*/
@@ -131,7 +136,7 @@ export default function PositionEditor() {
   };
 
   /* =====================================================
-     UPDATE POSITION
+     🔥 POSITION UPDATE + DISCORD SYNC
   ======================================================*/
 
   const updatePosition = async () => {
@@ -150,12 +155,22 @@ export default function PositionEditor() {
       return;
     }
 
-    alert("✅ Position Updated!");
+    await supabase.functions.invoke("sync-slot-roles", {
+      body: {
+        personnelId: selectedPerson.id,
+        slotId: selectedSlotId,
+        forceDefaultRole: false,
+      },
+    });
+
+    alert("✅ Position Updated + Discord Synced!");
     fetchData();
   };
 
   const unassignPosition = async () => {
     if (!selectedPerson) return;
+
+    const oldSlot = selectedPerson.slotted_position;
 
     const { error } = await supabase
       .from("personnel")
@@ -167,9 +182,29 @@ export default function PositionEditor() {
       return;
     }
 
-    alert("✅ Position Unassigned!");
+    await supabase.functions.invoke("sync-slot-roles", {
+      body: {
+        personnelId: selectedPerson.id,
+        slotId: null,
+        oldSlotId: oldSlot,
+        forceDefaultRole: true,
+      },
+    });
+
+    alert("✅ Unassigned + Discord Updated!");
     fetchData();
   };
+
+  /* ================= CLOSE DROPDOWN ON OUTSIDE CLICK ================= */
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowPersonDropdown(false);
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   /* =====================================================
      LOADING
@@ -189,12 +224,10 @@ export default function PositionEditor() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10 font-orbitron">
-
       <button
+        type="button"
         onClick={() => router.push("/")}
-        className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-lg 
-        hover:bg-[#00e5ff] hover:text-black transition 
-        shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+        className="mb-6 border border-[#00e5ff] px-4 py-2 rounded-lg hover:bg-[#00e5ff] hover:text-black transition"
       >
         ← Back
       </button>
@@ -203,39 +236,67 @@ export default function PositionEditor() {
         Slotting Management
       </h1>
 
-      {/* PERSON SELECT */}
-      <div className="mb-6">
+      {/* ================= PERSON SEARCH ================= */}
+
+      <div className="mb-6 relative">
         <label className="block mb-2 text-[#00e5ff]">
           Select Person
         </label>
 
-        <select
+        <input
+          type="text"
+          placeholder="Search person..."
           className="bg-black border border-[#00e5ff] p-2 rounded-lg w-full text-white"
+          value={personSearch}
+          onFocus={() => setShowPersonDropdown(true)}
           onChange={(e) => {
-            const person = personnel.find(
-              (p) => p.id === e.target.value
-            );
-
-            setSelectedPerson(person || null);
-            setSelectedSlotId(person?.slotted_position || "");
-            setSelectedRankId(person?.rank_id || "");
+            setPersonSearch(e.target.value);
+            setShowPersonDropdown(true);
           }}
-        >
-          <option value="">-- Choose Person --</option>
+          onClick={(e) => e.stopPropagation()}
+        />
 
-          {personnel.map((p) => (
-            <option key={p.id} value={p.id}>
-              {getRankName(p.rank_id)} {p.name}
-            </option>
-          ))}
-        </select>
+        {showPersonDropdown && (
+          <div className="absolute z-50 w-full bg-black border border-[#00e5ff] rounded-lg mt-1 max-h-60 overflow-y-auto">
+            {personnel
+              .filter((p) =>
+                `${getRankName(p.rank_id)} ${p.name}`
+                  .toLowerCase()
+                  .includes(personSearch.toLowerCase())
+              )
+              .map((p) => (
+                <div
+                  key={p.id}
+                  className="p-2 hover:bg-[#00e5ff] hover:text-black cursor-pointer"
+                  onClick={() => {
+                    setSelectedPerson(p);
+                    setSelectedSlotId(p.slotted_position || "");
+                    setSelectedRankId(p.rank_id || "");
+                    setPersonSearch(
+                      `${getRankName(p.rank_id)} ${p.name}`
+                    );
+                    setShowPersonDropdown(false);
+                  }}
+                >
+                  {getRankName(p.rank_id)} {p.name}
+                </div>
+              ))}
+
+            {personnel.filter((p) =>
+              `${getRankName(p.rank_id)} ${p.name}`
+                .toLowerCase()
+                .includes(personSearch.toLowerCase())
+            ).length === 0 && (
+              <div className="p-2 text-gray-400">No results</div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* RANK SECTION */}
-      {selectedPerson && (
-        <div className="mb-10 border border-[#00e5ff] p-6 rounded-2xl bg-black/60 
-        shadow-[0_0_30px_rgba(0,229,255,0.2)]">
+      {/* ================= RANK SECTION ================= */}
 
+      {selectedPerson && (
+        <div className="mb-10 border border-[#00e5ff] p-6 rounded-2xl bg-black/60">
           <h2 className="text-2xl text-[#00e5ff] mb-4">
             Rank Management
           </h2>
@@ -246,7 +307,6 @@ export default function PositionEditor() {
             onChange={(e) => setSelectedRankId(e.target.value)}
           >
             <option value="">-- Select Rank --</option>
-
             {ranks.map((rank) => (
               <option key={rank.id} value={rank.id}>
                 {rank.name}
@@ -254,29 +314,28 @@ export default function PositionEditor() {
             ))}
           </select>
 
-          <button className="border border-[#00e5ff] px-4 py-2 rounded-lg 
-          hover:bg-[#00e5ff] hover:text-black transition">
+          <button
+            type="button"
+            className="border border-[#00e5ff] px-4 py-2 rounded-lg"
+          >
             Save Rank
           </button>
-
         </div>
       )}
 
-      {/* POSITION SECTION */}
+      {/* ================= POSITION SECTION ================= */}
+
       {selectedPerson && (
         <div className="space-y-6">
-
           <div className="p-4 border border-[#00e5ff] rounded-xl bg-black/60">
             <p className="text-xs text-gray-400 mb-2">
               CURRENT POSITION
             </p>
-
             <p className="text-lg text-[#00e5ff]">
               {formatSlotToBillet(selectedPerson.slotted_position)}
             </p>
           </div>
 
-          {/* STRUCTURE SELECTORS */}
           <select
             className="bg-black border border-[#00e5ff] p-2 w-full rounded-lg"
             value={selectedHeader}
@@ -319,7 +378,6 @@ export default function PositionEditor() {
               onChange={(e) => setSelectedSlotId(e.target.value)}
             >
               <option value="">-- Select Role --</option>
-
               {roles.map((role: any) => (
                 <option key={role.slotId} value={role.slotId}>
                   {role.role}
@@ -330,26 +388,23 @@ export default function PositionEditor() {
 
           {selectedSlotId && (
             <div className="flex gap-4">
-
               <button
+                type="button"
                 onClick={updatePosition}
-                className="border border-[#00e5ff] px-4 py-2 rounded-lg 
-                hover:bg-[#00e5ff] hover:text-black transition"
+                className="border border-[#00e5ff] px-4 py-2 rounded-lg"
               >
                 Save Position
               </button>
 
               <button
+                type="button"
                 onClick={unassignPosition}
-                className="border border-red-500 px-4 py-2 rounded-lg 
-                hover:bg-red-500 hover:text-black transition"
+                className="border border-red-500 px-4 py-2 rounded-lg"
               >
                 Unassign
               </button>
-
             </div>
           )}
-
         </div>
       )}
     </div>

@@ -1,111 +1,157 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { FaDiscord } from "react-icons/fa";
 
-export default function Home() {
+type Event = {
+  id: string;
+  server_id: number;
+  title: string;
+  start_time: string;
+  personnel?: {
+    name: string;
+  };
+};
+
+export default function HomePage() {
   const router = useRouter();
+  const [events, setEvents] = useState<Event[]>([]);
 
-  const [user, setUser] = useState<any>(null);
+  /* ================= FETCH TODAY EVENTS ================= */
 
   useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      setUser(user);
-    };
-
-    getUser();
+    fetchEvents();
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    router.push("/login");
+  const fetchEvents = async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const { data: bookings } = await supabase
+      .from("server_bookings")
+      .select(`
+        id,
+        server_id,
+        title,
+        start_time,
+        personnel:booked_for ( name )
+      `)
+      .gte("start_time", today.toISOString())
+      .lt("start_time", tomorrow.toISOString())
+      .order("start_time", { ascending: true });
+
+    setEvents((bookings as Event[]) || []);
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-start 
-      bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black 
-      text-white py-12 font-orbitron">
+    <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white font-orbitron flex">
 
-      {/* TOP BAR */}
-      <div className="w-full max-w-5xl flex justify-between items-center px-6 mb-12">
+      {/* ================= LEFT SIDE — BRANDING ================= */}
+      <div className="flex-1 flex flex-col items-center pt-16">
 
-        <h1 className="text-4xl tracking-widest text-[#00e5ff] 
-          drop-shadow-[0_0_15px_rgba(0,229,255,0.6)]">
-          PERSONNEL COMMAND SYSTEM
+        <h1 className="text-3xl md:text-5xl font-bold tracking-[0.3em] text-[#00e5ff] text-center">
+          101ST<br />
+          DOOM BATTALION
         </h1>
 
-        {user ? (
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-300">
-              {user.email}
-            </span>
+        <p className="mt-4 text-gray-400 text-sm md:text-base text-center tracking-wide">
+          Operational Command & Personnel Management System
+        </p>
 
-            <button
-              onClick={handleLogout}
-              className="border border-[#00e5ff] px-4 py-2 rounded-lg 
-              hover:bg-[#00e5ff] hover:text-black transition 
-              shadow-[0_0_15px_rgba(0,229,255,0.5)]"
-            >
-              Logout
-            </button>
+        <div className="mt-8">
+          <button
+            onClick={() => router.push("/pcs")}
+            className="px-8 py-3 text-sm md:text-lg border border-[#00e5ff]
+                       rounded-lg hover:bg-[#00e5ff] hover:text-black
+                       transition-all duration-300
+                       shadow-[0_0_20px_rgba(0,229,255,0.3)]"
+          >
+            Enter Personnel Command
+          </button>
+        </div>
+
+      </div>
+
+      {/* ================= RIGHT SIDE — EVENTS + CONNECTIONS ================= */}
+      <div className="w-[380px] border-l border-[#00e5ff]/30 p-6 bg-black/40 backdrop-blur-xl flex flex-col">
+
+        {/* ===== EVENTS ===== */}
+        <h2 className="text-xl text-[#00e5ff] mb-4 tracking-widest">
+          Upcoming Events Today
+        </h2>
+
+        {events.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+            No events scheduled today.
           </div>
         ) : (
-          <Link
-            href="/login"
-            className="border border-[#00e5ff] px-4 py-2 rounded-lg 
-            hover:bg-[#00e5ff] hover:text-black transition 
-            shadow-[0_0_15px_rgba(0,229,255,0.5)]"
-          >
-            Login
-          </Link>
+          <div className="space-y-4 flex-1 overflow-y-auto">
+            {events.map((event) => (
+              <div
+                key={event.id}
+                className="border border-[#00e5ff]/40 rounded-xl p-4 bg-black/60
+                           shadow-[0_0_15px_rgba(0,229,255,0.2)]"
+              >
+                <div className="text-sm text-[#00e5ff]">
+                  SERVER {event.server_id}
+                </div>
+
+                <div className="font-semibold mt-1">
+                  {event.personnel?.name || "Unknown"}
+                </div>
+
+                <div className="text-gray-400 text-sm">
+                  {event.title}
+                </div>
+
+                <div className="text-xs text-gray-500 mt-2">
+                  {new Date(event.start_time).toLocaleTimeString()}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
-      </div>
 
-      {/* BUTTON GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 
-        gap-8 w-full max-w-6xl px-6">
+        {/* ===== CONNECTION LINKS ===== */}
+        <div className="mt-6 border-t border-[#00e5ff]/30 pt-6">
 
-        {[
-          { href: "/personnel-profile", title: "Personnel Profile", desc: "View service record" },
-          { href: "/roster", title: "Slotted Roster", desc: "Live position overview" },
-          { href: "/admin/positions", title: "Slotting & Rank", desc: "Slotting & Rank Management" },
-          { href: "/admin/create", title: "User Creation", desc: "Add new personnel" },
-          { href: "/admin/certifications", title: "Certification Management", desc: "Assign or revoke certifications" },
-          { href: "/certifications", title: "Certification Lookup", desc: "Search certifications" },
-          { href: "/servers", title: "Server Booking", desc: "Book server time" }
-        ].map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="group relative border border-[#00e5ff] 
-            bg-black/60 backdrop-blur-xl 
-            p-8 rounded-2xl 
-            hover:scale-105 transition-all duration-300
-            shadow-[0_0_20px_rgba(0,229,255,0.2)] 
-            hover:shadow-[0_0_40px_rgba(0,229,255,0.6)]"
+          <h3 className="text-[#00e5ff] tracking-widest mb-4">
+            Unit Connections
+          </h3>
+
+          {/* DISCORD */}
+          <a
+            href="https://discord.gg/dZhRghrDfX"
+            target="_blank"
+            className="flex items-center justify-center gap-3 mb-4 px-4 py-3 rounded-xl
+                       border border-[#00e5ff]/40
+                       hover:bg-[#00e5ff] hover:text-black
+                       transition-all duration-300
+                       shadow-[0_0_15px_rgba(0,229,255,0.4)]"
           >
-            <h2 className="text-2xl mb-3 text-[#00e5ff] tracking-wide">
-              {item.title}
-            </h2>
+            <FaDiscord className="text-2xl animate-pulse" />
+            Join Our Discord
+          </a>
 
-            <p className="text-gray-400 text-sm">
-              {item.desc}
-            </p>
+          {/* TEAMSPEAK */}
+          <div className="px-4 py-3 rounded-xl border border-[#00e5ff]/40 text-center">
+            <div className="text-sm text-gray-400">
+              TeamSpeak Server
+            </div>
+            <div className="text-[#00e5ff] mt-1 font-semibold">
+              199.33.118.13
+            </div>
+          </div>
 
-            {/* Glow line animation */}
-            <div className="absolute bottom-0 left-0 h-[2px] w-0 
-              bg-[#00e5ff] group-hover:w-full transition-all duration-500" />
-          </Link>
-        ))}
+        </div>
 
       </div>
+
     </div>
   );
 }

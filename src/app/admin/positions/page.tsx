@@ -32,11 +32,11 @@ export default function PositionEditor() {
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
 
   /* =====================================================
-     AUTH CHECK
+     🔐 AUTH CHECK (UPDATED)
   ======================================================*/
 
   useEffect(() => {
-    const checkAdmin = async () => {
+    const checkAccess = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -46,13 +46,20 @@ export default function PositionEditor() {
         return;
       }
 
-      const { data: role } = await supabase
+      const { data: roles } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .eq("user_id", user.id);
 
-      if (!role || role.role !== "admin") {
+      const roleList = roles?.map((r) => r.role) || [];
+
+      const allowedRoles = ["admin", "nco", "di"];
+
+      const hasAccess = roleList.some((role) =>
+        allowedRoles.includes(role)
+      );
+
+      if (!hasAccess) {
         router.replace("/");
         return;
       }
@@ -60,8 +67,8 @@ export default function PositionEditor() {
       setLoadingAuth(false);
     };
 
-    checkAdmin();
-  }, []);
+    checkAccess();
+  }, [router]);
 
   useEffect(() => {
     fetchData();
@@ -167,7 +174,7 @@ export default function PositionEditor() {
     fetchData();
   };
 
-  /* ✅ ADDED RANK UPDATE FUNCTION */
+  /* ✅ RANK UPDATE */
   const updateRank = async () => {
     if (!selectedPerson) {
       alert("Select a person first.");
@@ -216,7 +223,7 @@ export default function PositionEditor() {
     fetchData();
   };
 
-  /* ================= CLOSE DROPDOWN ON OUTSIDE CLICK ================= */
+  /* ================= CLOSE DROPDOWN ================= */
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -335,7 +342,6 @@ export default function PositionEditor() {
             ))}
           </select>
 
-          {/* ✅ FIXED BUTTON */}
           <button
             type="button"
             onClick={updateRank}

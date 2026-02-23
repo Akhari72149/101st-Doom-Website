@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { hasRole } from "@/lib/permissions";
 
 type Booking = {
   id: string;
@@ -20,6 +21,8 @@ export default function ServersPage() {
   const router = useRouter();
 
   const [user, setUser] = useState<any>(null);
+  const [canBook, setCanBook] = useState(false);
+
   const [activeServer, setActiveServer] = useState(1);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [selectedDate, setSelectedDate] = useState(
@@ -40,8 +43,30 @@ export default function ServersPage() {
     person.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // 🔐 Load user + roles
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      setUser(user);
+
+      if (!user) return;
+
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      const roleList = roles?.map((r) => r.role) || [];
+
+      if (hasRole(roleList, ["zeus"])) {
+        setCanBook(true);
+      }
+    };
+
+    loadUser();
   }, []);
 
   useEffect(() => {
@@ -104,6 +129,7 @@ export default function ServersPage() {
   }
 
   async function handleConfirmBooking() {
+    if (!canBook) return;
     if (!user || selectedStartIndex === null || !selectedPerson) return;
 
     const start = slots[selectedStartIndex];
@@ -145,10 +171,13 @@ export default function ServersPage() {
       setSelectedPerson("");
       setSearchQuery("");
       setBookingTitle("");
+      setShowResults(false);
     }
   }
 
   async function handleDelete(id: string) {
+    if (!canBook) return;
+
     const old = bookings;
     setBookings((prev) => prev.filter((b) => b.id !== id));
 
@@ -174,7 +203,6 @@ export default function ServersPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10">
-
       <button
         onClick={() => router.push("/")}
         className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition"
@@ -187,7 +215,7 @@ export default function ServersPage() {
           type="date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
-          className="bg-black border border-[#00e5ff] p-3 rounded-xl shadow-[0_0_15px_rgba(0,229,255,0.6)]"
+          className="bg-black border border-[#00e5ff] p-3 rounded-xl"
         />
       </div>
 
@@ -196,7 +224,7 @@ export default function ServersPage() {
           <div
             key={server}
             onClick={() => setActiveServer(server)}
-            className={`px-6 py-3 cursor-pointer border border-[#00e5ff] rounded-md transition-all shadow-[0_0_15px_rgba(0,229,255,0.4)] ${
+            className={`px-6 py-3 cursor-pointer border border-[#00e5ff] rounded-md ${
               activeServer === server
                 ? "bg-[#00e5ff] text-black"
                 : "text-[#00e5ff] hover:bg-[#00e5ff] hover:text-black"
@@ -210,7 +238,6 @@ export default function ServersPage() {
       <div className="max-w-3xl grid gap-5">
         {slots.map((slot, index) => {
           const blocked = isBlocked(slot);
-
           const isSelected =
             selectedStartIndex !== null &&
             index >= selectedStartIndex &&
@@ -219,14 +246,18 @@ export default function ServersPage() {
           return (
             <div
               key={slot.toISOString()}
-              onClick={() => !blocked && setSelectedStartIndex(index)}
-              className={`p-6 rounded-2xl cursor-pointer transition-all ${
+              onClick={() => {
+                if (!blocked && canBook) {
+                  setSelectedStartIndex(index);
+                }
+              }}
+              className={`p-6 rounded-2xl transition-all ${
                 blocked
-                  ? "bg-black/40 border border-[#00e5ff] shadow-[0_0_20px_rgba(0,229,255,0.3)]"
+                  ? "bg-black/40 border border-[#00e5ff]"
                   : isSelected
                   ? "bg-[#00e5ff] text-black scale-105"
                   : "bg-black/40 border border-[#00e5ff]/40 hover:border-[#00e5ff] hover:scale-105"
-              }`}
+              } ${!canBook ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="text-xl font-bold">
                 {slot.toLocaleTimeString([], {
@@ -245,18 +276,21 @@ export default function ServersPage() {
                 .map((b) => (
                   <div
                     key={b.id}
-                    className="mt-3 p-4 rounded-xl bg-black/60 border border-[#00e5ff] shadow-[0_0_20px_rgba(0,229,255,0.5)]"
+                    className="mt-3 p-4 rounded-xl bg-black/60 border border-[#00e5ff]"
                   >
                     <div className="text-[#00e5ff] font-semibold text-lg">
                       {b.personnel?.name}
                     </div>
                     <div className="text-gray-300">{b.title}</div>
-                    <button
-                      onClick={() => handleDelete(b.id)}
-                      className="mt-2 text-sm text-red-400 hover:text-red-300"
-                    >
-                      Cancel
-                    </button>
+
+                    {canBook && (
+                      <button
+                        onClick={() => handleDelete(b.id)}
+                        className="mt-2 text-sm text-red-400 hover:text-red-300"
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 ))}
             </div>
@@ -264,9 +298,8 @@ export default function ServersPage() {
         })}
       </div>
 
-      {selectedStartIndex !== null && (
-        <div className="fixed bottom-10 right-10 z-50 bg-black/90 backdrop-blur-xl border border-[#00e5ff] p-6 rounded-2xl w-96 shadow-[0_0_40px_rgba(0,229,255,0.5)]">
-
+      {selectedStartIndex !== null && canBook && (
+        <div className="fixed bottom-10 right-10 z-50 bg-black/90 backdrop-blur-xl border border-[#00e5ff] p-6 rounded-2xl w-96">
           <div className="text-lg mb-4">
             Booking from{" "}
             <span className="text-[#00e5ff] font-bold">
@@ -295,7 +328,7 @@ export default function ServersPage() {
             />
 
             {showResults && searchQuery && (
-              <div className="absolute z-[9999] w-full bg-black border border-[#00e5ff] rounded-xl mt-2 max-h-60 overflow-y-auto shadow-[0_0_20px_rgba(0,229,255,0.5)]">
+              <div className="absolute z-[9999] w-full bg-black border border-[#00e5ff] rounded-xl mt-2 max-h-60 overflow-y-auto">
                 {filteredPersonnel.length === 0 && (
                   <div className="p-3 text-gray-400">No results</div>
                 )}
@@ -325,7 +358,13 @@ export default function ServersPage() {
             </button>
 
             <button
-              onClick={() => setSelectedStartIndex(null)}
+              onClick={() => {
+                setSelectedStartIndex(null);
+                setSelectedPerson("");
+                setSearchQuery("");
+                setBookingTitle("");
+                setShowResults(false);
+              }}
               className="px-6 py-3 border border-red-500 text-red-400 rounded-xl hover:bg-red-500 hover:text-black transition"
             >
               Cancel

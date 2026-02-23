@@ -18,11 +18,11 @@ export default function ManageCertifications() {
   const [loading, setLoading] = useState(false);
 
   /* =====================================================
-     🔐 ADMIN PROTECTION
+     🔐 UPDATED ROLE PROTECTION
   ======================================================*/
 
   useEffect(() => {
-    const checkAdmin = async () => {
+    const checkAccess = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -32,13 +32,20 @@ export default function ManageCertifications() {
         return;
       }
 
-      const { data: role } = await supabase
+      const { data: roles } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .eq("user_id", user.id);
 
-      if (!role || role.role !== "admin") {
+      const roleList = roles?.map((r) => r.role) || [];
+
+      const allowedRoles = ["admin", "trainer"];
+
+      const hasAccess = roleList.some((role) =>
+        allowedRoles.includes(role)
+      );
+
+      if (!hasAccess) {
         router.replace("/");
         return;
       }
@@ -46,8 +53,8 @@ export default function ManageCertifications() {
       setLoadingAuth(false);
     };
 
-    checkAdmin();
-  }, []);
+    checkAccess();
+  }, [router]);
 
   /* =====================================================
      🔄 FETCH DATA
@@ -176,7 +183,7 @@ export default function ManageCertifications() {
   );
 
   /* =====================================================
-     ✅ UI (BLUE + ORBITRON)
+     ✅ UI
   ======================================================*/
 
   return (
@@ -184,12 +191,12 @@ export default function ManageCertifications() {
 
       <button
         onClick={() => router.push("/")}
-        className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+        className="mb-6 border border-[#00e5ff] px-4 py-2 hover:bg-[#00e5ff] hover:text-black transition"
       >
         ← Back to Dashboard
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00e5ff] tracking-widest">
+      <h1 className="text-4xl font-bold mb-8 text-[#00e5ff]">
         Certification Management
       </h1>
 
@@ -202,7 +209,7 @@ export default function ManageCertifications() {
           placeholder="Search by rank or name..."
           value={searchPerson}
           onChange={(e) => setSearchPerson(e.target.value)}
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff] shadow-[0_0_15px_rgba(0,229,255,0.2)]"
+          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl"
         />
 
         {searchPerson && (
@@ -229,13 +236,15 @@ export default function ManageCertifications() {
 
       {/* CURRENT CERTS */}
       {selectedPerson && (
-        <div className="mb-8 border border-[#00e5ff] p-6 bg-black/60 rounded-2xl shadow-[0_0_40px_rgba(0,229,255,0.2)]">
+        <div className="mb-8 border border-[#00e5ff] p-6 bg-black/60 rounded-2xl">
           <h2 className="text-2xl font-bold mb-6 text-[#00e5ff]">
             Current Certifications
           </h2>
 
           {personCerts.length === 0 ? (
-            <p className="text-gray-400">No certifications assigned.</p>
+            <p className="text-gray-400">
+              No certifications assigned.
+            </p>
           ) : (
             personCerts.map((pc) => (
               <div
@@ -258,10 +267,12 @@ export default function ManageCertifications() {
 
       {/* ASSIGN CERT */}
       <div className="mb-6">
-        <label className="block mb-2">Select Certification</label>
+        <label className="block mb-2">
+          Select Certification
+        </label>
 
         <select
-          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+          className="bg-black border border-[#00e5ff] p-3 w-full rounded-xl"
           value={selectedCert}
           onChange={(e) => setSelectedCert(e.target.value)}
         >
@@ -278,7 +289,7 @@ export default function ManageCertifications() {
       <button
         onClick={assignCertification}
         disabled={loading}
-        className="px-6 py-3 border border-[#00e5ff] text-[#00e5ff] rounded-xl hover:bg-[#00e5ff] hover:text-black transition shadow-[0_0_15px_rgba(0,229,255,0.4)] disabled:opacity-50"
+        className="px-6 py-3 border border-[#00e5ff] text-[#00e5ff] rounded-xl hover:bg-[#00e5ff] hover:text-black transition disabled:opacity-50"
       >
         {loading ? "Assigning..." : "Assign Certification"}
       </button>

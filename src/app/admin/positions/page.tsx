@@ -167,6 +167,27 @@ export default function PositionEditor() {
     fetchData();
   };
 
+  /* ✅ ADDED RANK UPDATE FUNCTION */
+  const updateRank = async () => {
+    if (!selectedPerson) {
+      alert("Select a person first.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("personnel")
+      .update({ rank_id: selectedRankId || null })
+      .eq("id", selectedPerson.id);
+
+    if (error) {
+      alert("Rank update failed: " + error.message);
+      return;
+    }
+
+    alert("✅ Rank Updated!");
+    fetchData();
+  };
+
   const unassignPosition = async () => {
     if (!selectedPerson) return;
 
@@ -314,8 +335,10 @@ export default function PositionEditor() {
             ))}
           </select>
 
+          {/* ✅ FIXED BUTTON */}
           <button
             type="button"
+            onClick={updateRank}
             className="border border-[#00e5ff] px-4 py-2 rounded-lg"
           >
             Save Rank

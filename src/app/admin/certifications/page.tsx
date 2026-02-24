@@ -17,9 +17,7 @@ export default function ManageCertifications() {
   const [selectedCert, setSelectedCert] = useState("");
   const [loading, setLoading] = useState(false);
 
-  /* ===================================================== */
-  /* ================= AUTH ============================== */
-  /* ===================================================== */
+  /* ================= AUTH ================= */
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -38,7 +36,6 @@ export default function ManageCertifications() {
         .eq("user_id", user.id);
 
       const roleList = roles?.map((r) => r.role) || [];
-
       const allowedRoles = ["admin", "trainer"];
 
       const hasAccess = roleList.some((role) =>
@@ -156,11 +153,7 @@ export default function ManageCertifications() {
 
   if (loadingAuth) {
     return (
-      <div className="
-        min-h-screen flex items-center justify-center
-        bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
-        text-[#00ff4c] font-orbitron
-      ">
+      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#00ff66]">
         Checking Permissions...
       </div>
     );
@@ -172,189 +165,122 @@ export default function ManageCertifications() {
       .includes(searchPerson.toLowerCase())
   );
 
-  /* ===================================================== */
-  /* ================= UI ================================ */
-  /* ===================================================== */
+  /* ================= UI ================= */
 
   return (
-    <div className="
-      min-h-screen
-      bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
-      text-white
-      p-8
-      font-orbitron
-      tracking-wide
-    ">
+    <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
 
       <button
         onClick={() => router.push("/pcs")}
-        className="
-          mb-6
-          border border-[#00ff4c]
-          px-4 py-2
-          rounded-xl
-          transition-all duration-300
-          shadow-[0_0_15px_rgba(0,255,80,0.3)]
-          hover:bg-[#003d14]
-          hover:text-[#00ff4c]
-          hover:scale-105
-          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
-        "
+        className="mb-8 px-5 py-2 rounded-xl border border-[#00ff66]/50 text-[#00ff66] hover:bg-[#00ff66]/10 transition shadow-[0_0_15px_rgba(0,255,100,0.2)]"
       >
-        ← Back to Dashboard
+        ← Back
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00ff4c]">
-        Certification Management
-      </h1>
+      <div className="max-w-6xl mx-auto p-8 rounded-3xl border border-[#00ff66]/20 bg-black/60 backdrop-blur-xl shadow-[0_0_60px_rgba(0,255,100,0.15)]">
 
-      {/* SEARCH PERSONNEL */}
-      <div className="mb-6">
-        <label className="block mb-2">Search Personnel</label>
+        <h1 className="text-3xl font-bold mb-10 text-[#00ff66] tracking-wide">
+          Certification Management
+        </h1>
 
-        <input
-          type="text"
-          placeholder="Search by rank or name..."
-          value={searchPerson}
-          onChange={(e) => setSearchPerson(e.target.value)}
-          className="
-            bg-black
-            border border-[#00ff4c]
-            p-3
-            w-full
-            rounded-xl
-            focus:ring-2 focus:ring-[#00ff4c]
-            transition-all
-          "
-        />
+        {/* SEARCH */}
+        <div className="mb-8">
+          <label className="block mb-2 text-sm text-gray-400">
+            Search Personnel
+          </label>
 
-        {searchPerson && (
-          <div className="
-            mt-2
-            border border-[#00ff4c]
-            bg-black/60
-            rounded-xl
-            max-h-60 overflow-y-auto
-          ">
-            {filteredPersonnel.length === 0 ? (
-              <p className="p-3 text-gray-400">No personnel found.</p>
+          <input
+            type="text"
+            placeholder="Search by rank or name..."
+            value={searchPerson}
+            onChange={(e) => setSearchPerson(e.target.value)}
+            className="bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66] transition"
+          />
+
+          {searchPerson && (
+            <div className="mt-3 border border-[#00ff66]/30 bg-black/80 rounded-xl max-h-60 overflow-y-auto shadow-lg">
+              {filteredPersonnel.length === 0 ? (
+                <p className="p-4 text-gray-400">No personnel found.</p>
+              ) : (
+                filteredPersonnel.map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      setSelectedPerson(p.id);
+                      setSearchPerson("");
+                    }}
+                    className="p-4 border-b border-[#00ff66]/10 cursor-pointer hover:bg-[#00ff66]/10 hover:text-[#00ff66] transition"
+                  >
+                    {getRankName(p)} {p.name}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* CURRENT CERTS */}
+        {selectedPerson && (
+          <div className="mb-10 p-6 rounded-2xl border border-[#00ff66]/20 bg-black/50 shadow-[0_0_40px_rgba(0,255,100,0.1)]">
+            <h2 className="text-xl mb-6 text-[#00ff66] font-semibold">
+              Current Certifications
+            </h2>
+
+            {personCerts.length === 0 ? (
+              <p className="text-gray-400">
+                No certifications assigned.
+              </p>
             ) : (
-              filteredPersonnel.map((p) => (
+              personCerts.map((pc) => (
                 <div
-                  key={p.id}
-                  onClick={() => {
-                    setSelectedPerson(p.id);
-                    setSearchPerson("");
-                  }}
-                  className="
-                    p-3
-                    border-b border-[#00ff4c]/30
-                    cursor-pointer
-                    hover:bg-[#003d14]
-                    hover:text-[#00ff4c]
-                    transition
-                  "
+                  key={pc.id}
+                  className="flex justify-between items-center mb-4"
                 >
-                  {getRankName(p)} {p.name}
+                  <span className="text-gray-200">
+                    {pc.certification?.name}
+                  </span>
+
+                  <button
+                    onClick={() => revokeCertification(pc.id)}
+                    className="px-4 py-1 rounded-lg border border-red-600 text-red-500 hover:bg-red-600 hover:text-black transition"
+                  >
+                    Revoke
+                  </button>
                 </div>
               ))
             )}
           </div>
         )}
-      </div>
 
-      {/* CURRENT CERTS */}
-      {selectedPerson && (
-        <div className="
-          mb-8
-          border border-[#00ff4c]
-          p-6
-          bg-black/60
-          rounded-2xl
-          shadow-[0_0_40px_rgba(0,255,80,0.2)]
-        ">
-          <h2 className="text-2xl mb-6 text-[#00ff4c]">
-            Current Certifications
-          </h2>
+        {/* ASSIGN */}
+        <div className="mb-6">
+          <label className="block mb-2 text-sm text-gray-400">
+            Select Certification
+          </label>
 
-          {personCerts.length === 0 ? (
-            <p className="text-gray-400">
-              No certifications assigned.
-            </p>
-          ) : (
-            personCerts.map((pc) => (
-              <div
-                key={pc.id}
-                className="flex justify-between items-center mb-3"
-              >
-                <span>{pc.certification?.name}</span>
-
-                <button
-                  onClick={() => revokeCertification(pc.id)}
-                  className="
-                    px-3 py-1
-                    rounded-lg
-                    bg-red-700
-                    hover:bg-red-600
-                    hover:scale-105
-                    transition
-                  "
-                >
-                  Revoke
-                </button>
-              </div>
-            ))
-          )}
+          <select
+            className="bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl focus:border-[#00ff66] transition"
+            value={selectedCert}
+            onChange={(e) => setSelectedCert(e.target.value)}
+          >
+            <option value="">-- Select Certification --</option>
+            {certifications.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </div>
-      )}
 
-      {/* ASSIGN CERT */}
-      <div className="mb-6">
-        <label className="block mb-2">
-          Select Certification
-        </label>
-
-        <select
-          className="
-            bg-black
-            border border-[#00ff4c]
-            p-3
-            w-full
-            rounded-xl
-            focus:ring-2 focus:ring-[#00ff4c]
-            transition-all
-          "
-          value={selectedCert}
-          onChange={(e) => setSelectedCert(e.target.value)}
+        <button
+          onClick={assignCertification}
+          disabled={loading}
+          className="px-6 py-3 rounded-xl border border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10 hover:shadow-[0_0_25px_rgba(0,255,100,0.5)] transition disabled:opacity-50"
         >
-          <option value="">-- Select Certification --</option>
-          {certifications.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          {loading ? "Assigning..." : "Assign Certification"}
+        </button>
+
       </div>
-
-      <button
-        onClick={assignCertification}
-        disabled={loading}
-        className="
-          px-6 py-3
-          border border-[#00ff4c]
-          text-[#00ff4c]
-          rounded-xl
-          transition-all duration-300
-          hover:bg-[#003d14]
-          hover:text-black
-          hover:scale-105
-          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
-          disabled:opacity-50
-        "
-      >
-        {loading ? "Assigning..." : "Assign Certification"}
-      </button>
-
     </div>
   );
 }

@@ -28,7 +28,21 @@ export default function GrandOrbat() {
         .select("*")
         .order("order_index", { ascending: true });
 
-      setOrgTree(buildTree(data || []));
+      const tree = buildTree(data || []);
+      setOrgTree(tree);
+
+      /* ✅ AUTO EXPAND EVERYTHING ON LOAD */
+      const map: Record<string, boolean> = {};
+
+      const expand = (nodes: any[]) => {
+        nodes.forEach((node) => {
+          map[node.id] = true;
+          if (node.children?.length) expand(node.children);
+        });
+      };
+
+      expand(tree);
+      setOpenNodes(map);
 
       const { data: personnelData } = await supabase
         .from("personnel")
@@ -59,34 +73,7 @@ export default function GrandOrbat() {
   }, [personnel]);
 
   /* ===================================================== */
-  /* TREE CONTROLS */
-  /* ===================================================== */
-
-  const toggleTreeNode = (id: string) => {
-    setOpenNodes((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  const expandAll = () => {
-    const map: Record<string, boolean> = {};
-
-    const expand = (nodes: any[]) => {
-      nodes.forEach((node) => {
-        map[node.id] = true;
-        if (node.children?.length) expand(node.children);
-      });
-    };
-
-    expand(orgTree);
-    setOpenNodes(map);
-  };
-
-  const collapseAll = () => setOpenNodes({});
-
-  /* ===================================================== */
-  /* SEARCH FILTER */
+  /* TREE FILTER */
   /* ===================================================== */
 
   const filteredTree = useMemo(() => {
@@ -112,22 +99,6 @@ export default function GrandOrbat() {
     return filter(orgTree);
   }, [search, orgTree]);
 
-  useEffect(() => {
-    if (!search) return;
-
-    const map: Record<string, boolean> = {};
-
-    const expand = (nodes: any[]) => {
-      nodes.forEach((node) => {
-        map[node.id] = true;
-        if (node.children?.length) expand(node.children);
-      });
-    };
-
-    expand(filteredTree);
-    setOpenNodes(map);
-  }, [search]);
-
   /* ===================================================== */
   /* TREE NODE */
   /* ===================================================== */
@@ -140,6 +111,7 @@ export default function GrandOrbat() {
     const [lineStyle, setLineStyle] = useState<any>({});
     const childrenRef = useRef<HTMLDivElement>(null);
 
+    /* ✅ CLICK TOGGLE SLOT PANEL */
     const handleClick = (e: React.MouseEvent) => {
       e.stopPropagation();
       setShowSlots((prev) => !prev);
@@ -177,7 +149,6 @@ export default function GrandOrbat() {
         <div
           onClick={handleClick}
           className="
-            relative
             px-6 py-3 min-w-[240px] text-center rounded-2xl cursor-pointer
             bg-gradient-to-br from-[#001a0f] to-[#000f08]
             border border-[#00ff66]/40
@@ -217,15 +188,10 @@ export default function GrandOrbat() {
                   <div
                     key={i}
                     className="
-                      relative
                       w-[220px]
                       px-4 py-2 mb-2 rounded-xl text-center
                       bg-[#000f08]/80
-                      backdrop-blur-sm
                       border border-[#00ff66]/20
-                      hover:border-[#00ff66]/50
-                      hover:shadow-[0_0_15px_rgba(0,255,100,0.2)]
-                      transition-all duration-200
                     "
                   >
                     <span className="text-[#00ff66] font-bold">
@@ -259,10 +225,10 @@ export default function GrandOrbat() {
           })}
         </div>
 
-        {/* TREE CHILDREN */}
+        {/* CHILDREN */}
         {isTreeOpen && hasChildren && (
           <>
-            <div className="w-[2px] h-6 bg-[#00ff66] shadow-[0_0_8px_rgba(0,255,100,0.6)]" />
+            <div className="w-[2px] h-6 bg-[#00ff66]" />
 
             <div
               ref={childrenRef}
@@ -270,7 +236,7 @@ export default function GrandOrbat() {
             >
               {node.children.length > 1 && (
                 <div
-                  className="absolute top-0 h-[2px] bg-[#00ff66] shadow-[0_0_8px_rgba(0,255,100,0.6)]"
+                  className="absolute top-0 h-[2px] bg-[#00ff66]"
                   style={lineStyle}
                 />
               )}
@@ -280,7 +246,7 @@ export default function GrandOrbat() {
                   key={child.id}
                   className="child-node flex flex-col items-center px-8"
                 >
-                  <div className="w-[2px] h-6 bg-[#00ff66] shadow-[0_0_8px_rgba(0,255,100,0.6)]" />
+                  <div className="w-[2px] h-6 bg-[#00ff66]" />
                   <TreeNode node={child} />
                 </div>
               ))}
@@ -296,9 +262,12 @@ export default function GrandOrbat() {
   /* ===================================================== */
 
   return (
-    <main className="min-h-screen p-10 text-white
-      bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]
-    ">
+    <main
+      className="
+        min-h-screen p-10 text-white
+        bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]
+      "
+    >
       {/* BACK BUTTON */}
       <button
         onClick={() => router.push("/pcs")}
@@ -319,8 +288,8 @@ export default function GrandOrbat() {
         Grand ORBAT
       </h1>
 
-      {/* CONTROLS */}
-      <div className="mb-6 flex gap-4 flex-wrap">
+      {/* SEARCH */}
+      <div className="mb-6">
         <input
           type="text"
           placeholder="Search..."
@@ -337,41 +306,13 @@ export default function GrandOrbat() {
             transition-all duration-300
           "
         />
-
-        <button
-          onClick={expandAll}
-          className="
-            px-4 py-2 rounded-lg
-            bg-gradient-to-r from-[#00ff66] to-[#00cc44]
-            text-black font-semibold
-            shadow-md hover:shadow-xl
-            hover:scale-105
-            transition-all duration-200
-          "
-        >
-          Expand All
-        </button>
-
-        <button
-          onClick={collapseAll}
-          className="
-            px-4 py-2 rounded-lg
-            border border-[#00ff66]/50
-            text-[#00ff66]
-            hover:bg-[#00ff66]/10
-            hover:scale-105
-            transition-all duration-200
-          "
-        >
-          Collapse All
-        </button>
       </div>
 
       {/* TREE CONTAINER */}
       <div className="overflow-hidden border border-[#00ff66]/40 rounded-3xl shadow-[0_0_40px_rgba(0,255,100,0.08)]">
         <TransformWrapper
           limitToBounds={false}
-          smooth={true}
+          smooth
           minScale={0.3}
           maxScale={3}
           wheel={{ step: 0.15 }}

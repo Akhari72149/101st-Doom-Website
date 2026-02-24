@@ -50,11 +50,7 @@ export default function PositionEditor() {
       const roleList = roles?.map((r) => r.role) || [];
       const allowedRoles = ["admin", "nco", "di"];
 
-      const hasAccess = roleList.some((role) =>
-        allowedRoles.includes(role)
-      );
-
-      if (!hasAccess) {
+      if (!roleList.some((role) => allowedRoles.includes(role))) {
         router.replace("/");
         return;
       }
@@ -112,6 +108,23 @@ export default function PositionEditor() {
 
   /* ================= HELPERS ================= */
 
+  const resolveSlotMetadata = (slotId: string) => {
+    for (const section of structure) {
+      for (const sub of section.children || []) {
+        for (const role of sub.roles || []) {
+          if (role.slotId === slotId) {
+            return {
+              label: role.role,
+              section: section.title,
+              subsection: sub.title,
+            };
+          }
+        }
+      }
+    }
+    return null;
+  };
+
   const formatSlotToBillet = (slotId: string | null) => {
     if (!slotId) return "Unassigned";
 
@@ -136,37 +149,36 @@ export default function PositionEditor() {
   /* ================= ACTIONS ================= */
 
   const updatePosition = async () => {
-  if (!selectedPerson || !selectedSlotId) {
-    alert("Select a position first.");
-    return;
-  }
+    if (!selectedPerson || !selectedSlotId) {
+      alert("Select a position first.");
+      return;
+    }
 
-  // 1️⃣ Update position + remove rank at the same time
-  const { error } = await supabase
-    .from("personnel")
-    .update({
-      slotted_position: selectedSlotId,
-      rank_id: null, // ✅ REMOVE DEFAULT RANK ON ASSIGN
-    })
-    .eq("id", selectedPerson.id);
+    const metadata = resolveSlotMetadata(selectedSlotId);
 
-  if (error) {
-    alert("Update failed: " + error.message);
-    return;
-  }
+    const { error } = await supabase
+      .from("personnel")
+      .update({
+        slotted_position: selectedSlotId,
+      })
+      .eq("id", selectedPerson.id);
 
-  // 2️⃣ Sync with Discord AFTER DB update
-  await supabase.functions.invoke("sync-slot-roles", {
-    body: {
-      personnelId: selectedPerson.id,
-      slotId: selectedSlotId,
-      forceDefaultRole: false,
-    },
-  });
+    if (error) {
+      alert("Update failed: " + error.message);
+      return;
+    }
 
-  alert("✅ Position Assigned + Rank Cleared + Discord Synced!");
-  fetchData();
-};
+    await supabase.functions.invoke("sync-slot-roles", {
+      body: {
+        personnelId: selectedPerson.id,
+        slotId: selectedSlotId,
+        forceDefaultRole: false,
+      },
+    });
+
+    alert("✅ Position Assigned + Logged");
+    fetchData();
+  };
 
   const updateRank = async () => {
     if (!selectedPerson) {
@@ -212,7 +224,7 @@ export default function PositionEditor() {
       },
     });
 
-    alert("✅ Unassigned + Discord Updated!");
+    alert("✅ Unassigned + Logged");
     fetchData();
   };
 
@@ -229,17 +241,11 @@ export default function PositionEditor() {
   /* ================= UI ================= */
 
   return (
-    <div className="min-h-screen p-10
-      bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]
-      text-white
-    ">
+    <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
+
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-6 px-5 py-2 rounded-xl
-          border border-[#00ff66]/50
-          text-[#00ff66]
-          hover:bg-[#00ff66]/10
-          transition"
+        className="mb-6 px-5 py-2 rounded-xl border border-[#00ff66]/50 text-[#00ff66] hover:bg-[#00ff66]/10 transition"
       >
         ← Back
       </button>
@@ -248,8 +254,7 @@ export default function PositionEditor() {
         Slotting Management
       </h1>
 
-      {/* ================= PERSON SEARCH ================= */}
-
+      {/* PERSON SEARCH */}
       <div className="mb-8 relative">
         <label className="block mb-2 text-[#00ff66]">
           Select Person
@@ -258,26 +263,17 @@ export default function PositionEditor() {
         <input
           type="text"
           placeholder="Search person..."
-          className="w-full px-4 py-3 rounded-2xl
-            bg-black/50 border border-[#00ff66]/40
-            text-[#00ff66]
-            backdrop-blur-md
-            focus:border-[#00ff66]
-            transition"
+          className="w-full px-4 py-3 rounded-2xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
           value={personSearch}
           onFocus={() => setShowPersonDropdown(true)}
           onChange={(e) => {
             setPersonSearch(e.target.value);
             setShowPersonDropdown(true);
           }}
-          onClick={(e) => e.stopPropagation()}
         />
 
         {showPersonDropdown && (
-          <div className="absolute w-full mt-2 bg-black/80
-            border border-[#00ff66]/40
-            rounded-2xl max-h-60 overflow-y-auto z-50"
-          >
+          <div className="absolute w-full mt-2 bg-black/80 border border-[#00ff66]/40 rounded-2xl max-h-60 overflow-y-auto z-50">
             {personnel
               .filter((p) =>
                 `${getRankName(p.rank_id)} ${p.name}`
@@ -305,21 +301,15 @@ export default function PositionEditor() {
         )}
       </div>
 
-      {/* ================= RANK ================= */}
-
+      {/* RANK */}
       {selectedPerson && (
-        <div className="mb-10 p-8 rounded-3xl
-          border border-[#00ff66]/30
-          bg-black/60 backdrop-blur-lg"
-        >
+        <div className="mb-10 p-8 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg">
           <h2 className="text-2xl text-[#00ff66] mb-6">
             Rank Management
           </h2>
 
           <select
-            className="w-full p-3 mb-5 rounded-xl
-              bg-black/50 border border-[#00ff66]/40
-              text-[#00ff66]"
+            className="w-full p-3 mb-5 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
             value={selectedRankId}
             onChange={(e) => setSelectedRankId(e.target.value)}
           >
@@ -333,24 +323,19 @@ export default function PositionEditor() {
 
           <button
             onClick={updateRank}
-            className="px-6 py-2 rounded-xl
-              bg-gradient-to-r from-[#00ff66] to-[#00cc44]
-              text-black font-semibold
-              hover:scale-105 transition"
+            className="px-6 py-2 rounded-xl bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black font-semibold hover:scale-105 transition"
           >
             Save Rank
           </button>
         </div>
       )}
 
-      {/* ================= POSITION ================= */}
-
+      {/* POSITION */}
       {selectedPerson && (
         <div className="space-y-6">
-          <div className="p-6 rounded-3xl
-            border border-[#00ff66]/30
-            bg-black/60 backdrop-blur-md"
-          >
+
+          {/* Position Display */}
+          <div className="p-6 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-md">
             <p className="text-xs text-gray-400 mb-2">
               CURRENT POSITION
             </p>
@@ -359,10 +344,9 @@ export default function PositionEditor() {
             </p>
           </div>
 
+          {/* Slot Selection */}
           <select
-            className="w-full p-3 rounded-xl
-              bg-black/50 border border-[#00ff66]/40
-              text-[#00ff66]"
+            className="w-full p-3 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
             value={selectedHeader}
             onChange={(e) => {
               setSelectedHeader(e.target.value);
@@ -380,9 +364,7 @@ export default function PositionEditor() {
 
           {selectedHeader && (
             <select
-              className="w-full p-3 rounded-xl
-                bg-black/50 border border-[#00ff66]/40
-                text-[#00ff66]"
+              className="w-full p-3 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
               value={selectedSubHeader}
               onChange={(e) => {
                 setSelectedSubHeader(e.target.value);
@@ -400,9 +382,7 @@ export default function PositionEditor() {
 
           {selectedSubHeader && (
             <select
-              className="w-full p-3 rounded-xl
-                bg-black/50 border border-[#00ff66]/40
-                text-[#00ff66]"
+              className="w-full p-3 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
               value={selectedSlotId}
               onChange={(e) => setSelectedSlotId(e.target.value)}
             >
@@ -415,30 +395,33 @@ export default function PositionEditor() {
             </select>
           )}
 
-          {selectedSlotId && (
+          {/* ✅ BUTTONS FIXED */}
+          {selectedPerson && (
             <div className="flex gap-4">
-              <button
-                onClick={updatePosition}
-                className="px-6 py-2 rounded-xl
-                  bg-gradient-to-r from-[#00ff66] to-[#00cc44]
-                  text-black font-semibold
-                  hover:scale-105 transition"
-              >
-                Save Position
-              </button>
 
-              <button
-                onClick={unassignPosition}
-                className="px-6 py-2 rounded-xl
-                  border border-red-500
-                  text-red-400
-                  hover:bg-red-500/20
-                  transition"
-              >
-                Unassign
-              </button>
+              {/* Save ONLY if unassigned + slot selected */}
+              {!selectedPerson.slotted_position && selectedSlotId && (
+                <button
+                  onClick={updatePosition}
+                  className="px-6 py-2 rounded-xl bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black font-semibold hover:scale-105 transition"
+                >
+                  Save Position
+                </button>
+              )}
+
+              {/* Unassign ONLY if assigned */}
+              {selectedPerson.slotted_position && (
+                <button
+                  onClick={unassignPosition}
+                  className="px-6 py-2 rounded-xl border border-red-500 text-red-400 hover:bg-red-500/20 transition"
+                >
+                  Unassign
+                </button>
+              )}
+
             </div>
           )}
+
         </div>
       )}
     </div>

@@ -142,7 +142,7 @@ export const structure = [
         type: "sub-header",
         title: "Logistics",
         roles: [
-          { role: "Trooper", count: 2, slotId: "Logi1-1-1Trooper", discordRoleIds: ["840037756642263081", "1259512490300276756"] },
+          { role: "Trooper", count: 2, slotId: "logi1-1-1trooper", discordRoleIds: ["840037756642263081", "1259512490300276756"] },
         ],
       },
 

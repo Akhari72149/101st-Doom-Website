@@ -18,7 +18,8 @@ export default function PositionEditor() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [ranks, setRanks] = useState<any[]>([]);
-  const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
+  const [selectedPerson, setSelectedPerson] =
+    useState<Personnel | null>(null);
 
   const [selectedHeader, setSelectedHeader] = useState<string>("");
   const [selectedSubHeader, setSelectedSubHeader] = useState<string>("");
@@ -28,9 +29,7 @@ export default function PositionEditor() {
   const [personSearch, setPersonSearch] = useState("");
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
 
-  /* ===================================================== */
-  /* AUTH */
-  /* ===================================================== */
+  /* ================= AUTH ================= */
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -48,9 +47,11 @@ export default function PositionEditor() {
         .select("role")
         .eq("user_id", user.id);
 
-      const allowed = ["admin", "nco", "di"];
-      const hasAccess = roles?.some((r) =>
-        allowed.includes(r.role)
+      const roleList = roles?.map((r) => r.role) || [];
+      const allowedRoles = ["admin", "nco", "di"];
+
+      const hasAccess = roleList.some((role) =>
+        allowedRoles.includes(role)
       );
 
       if (!hasAccess) {
@@ -83,9 +84,7 @@ export default function PositionEditor() {
     setRanks(rankData || []);
   };
 
-  /* ===================================================== */
-  /* STRUCTURE */
-  /* ===================================================== */
+  /* ================= STRUCTURE ================= */
 
   const headers = useMemo(
     () => structure.map((section: any) => section.title),
@@ -96,7 +95,7 @@ export default function PositionEditor() {
     const section = structure.find(
       (s: any) => s.title === selectedHeader
     );
-    return section?.children?.map((c: any) => c.title) || [];
+    return section?.children?.map((child: any) => child.title) || [];
   }, [selectedHeader]);
 
   const roles = useMemo(() => {
@@ -111,14 +110,7 @@ export default function PositionEditor() {
     return sub?.roles || [];
   }, [selectedHeader, selectedSubHeader]);
 
-  /* ===================================================== */
-  /* HELPERS */
-  /* ===================================================== */
-
-  const getRankName = (rankId: string | null) => {
-    const rank = ranks.find((r) => r.id === rankId);
-    return rank ? rank.name : "Unranked";
-  };
+  /* ================= HELPERS ================= */
 
   const formatSlotToBillet = (slotId: string | null) => {
     if (!slotId) return "Unassigned";
@@ -136,110 +128,142 @@ export default function PositionEditor() {
     return slotId;
   };
 
-  /* ===================================================== */
-  /* ACTIONS */
-  /* ===================================================== */
+  const getRankName = (rankId: string | null) => {
+    const rank = ranks.find((r) => r.id === rankId);
+    return rank ? rank.name : "Unranked";
+  };
+
+  /* ================= ACTIONS ================= */
 
   const updatePosition = async () => {
-    if (!selectedPerson || !selectedSlotId) {
-      alert("Select a position first.");
+  if (!selectedPerson || !selectedSlotId) {
+    alert("Select a position first.");
+    return;
+  }
+
+  // 1️⃣ Update position + remove rank at the same time
+  const { error } = await supabase
+    .from("personnel")
+    .update({
+      slotted_position: selectedSlotId,
+      rank_id: null, // ✅ REMOVE DEFAULT RANK ON ASSIGN
+    })
+    .eq("id", selectedPerson.id);
+
+  if (error) {
+    alert("Update failed: " + error.message);
+    return;
+  }
+
+  // 2️⃣ Sync with Discord AFTER DB update
+  await supabase.functions.invoke("sync-slot-roles", {
+    body: {
+      personnelId: selectedPerson.id,
+      slotId: selectedSlotId,
+      forceDefaultRole: false,
+    },
+  });
+
+  alert("✅ Position Assigned + Rank Cleared + Discord Synced!");
+  fetchData();
+};
+
+  const updateRank = async () => {
+    if (!selectedPerson) {
+      alert("Select a person first.");
       return;
     }
 
-    await supabase
-      .from("personnel")
-      .update({ slotted_position: selectedSlotId })
-      .eq("id", selectedPerson.id);
-
-    fetchData();
-  };
-
-  const updateRank = async () => {
-    if (!selectedPerson) return;
-
-    await supabase
+    const { error } = await supabase
       .from("personnel")
       .update({ rank_id: selectedRankId || null })
       .eq("id", selectedPerson.id);
 
+    if (error) {
+      alert("Rank update failed: " + error.message);
+      return;
+    }
+
+    alert("✅ Rank Updated!");
     fetchData();
   };
 
   const unassignPosition = async () => {
     if (!selectedPerson) return;
 
-    await supabase
+    const oldSlot = selectedPerson.slotted_position;
+
+    const { error } = await supabase
       .from("personnel")
       .update({ slotted_position: null })
       .eq("id", selectedPerson.id);
 
+    if (error) {
+      alert("Unassign failed: " + error.message);
+      return;
+    }
+
+    await supabase.functions.invoke("sync-slot-roles", {
+      body: {
+        personnelId: selectedPerson.id,
+        slotId: null,
+        oldSlotId: oldSlot,
+        forceDefaultRole: true,
+      },
+    });
+
+    alert("✅ Unassigned + Discord Updated!");
     fetchData();
   };
 
+  /* ================= LOADING ================= */
+
   if (loadingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-[#00ff66]">
+      <div className="min-h-screen flex items-center justify-center text-[#00ff66] bg-black">
         Checking permissions...
       </div>
     );
   }
 
-  /* ===================================================== */
-  /* UI */
-  /* ===================================================== */
+  /* ================= UI ================= */
 
   return (
-    <div className="
-      min-h-screen
-      bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
+    <div className="min-h-screen p-10
+      bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]
       text-white
-      p-10
     ">
-
-      {/* BACK */}
       <button
         onClick={() => router.push("/pcs")}
-        className="
-          mb-8 px-4 py-2 rounded-lg
+        className="mb-6 px-5 py-2 rounded-xl
           border border-[#00ff66]/50
           text-[#00ff66]
-          backdrop-blur-md
-          transition-all duration-200
           hover:bg-[#00ff66]/10
-          hover:scale-105
-        "
+          transition"
       >
         ← Back
       </button>
 
-      <h1 className="
-        text-4xl font-bold mb-10
-        text-[#00ff66]
-        tracking-[0.4em]
-      ">
-        SLOT MANAGEMENT
+      <h1 className="text-4xl font-bold text-[#00ff66] mb-10">
+        Slotting Management
       </h1>
 
-      {/* ================= PERSON SELECT ================= */}
+      {/* ================= PERSON SEARCH ================= */}
 
-      <div className="relative mb-8">
-
-        <label className="text-xs text-gray-400 tracking-widest">
-          SELECT PERSON
+      <div className="mb-8 relative">
+        <label className="block mb-2 text-[#00ff66]">
+          Select Person
         </label>
 
         <input
-          className="
-            w-full p-4 mt-2 rounded-xl
-            bg-black/40 backdrop-blur-md
-            border border-[#00ff66]/40
+          type="text"
+          placeholder="Search person..."
+          className="w-full px-4 py-3 rounded-2xl
+            bg-black/50 border border-[#00ff66]/40
             text-[#00ff66]
-            placeholder:text-[#00ff66]/40
+            backdrop-blur-md
             focus:border-[#00ff66]
-            focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]
-            transition-all duration-300
-          "
-          placeholder="Search personnel..."
+            transition"
           value={personSearch}
           onFocus={() => setShowPersonDropdown(true)}
           onChange={(e) => {
@@ -250,13 +274,10 @@ export default function PositionEditor() {
         />
 
         {showPersonDropdown && (
-          <div className="
-            absolute z-50 w-full mt-2
-            max-h-64 overflow-y-auto
-            rounded-xl
-            bg-black/60 backdrop-blur-xl
-            border border-[#00ff66]/30
-          ">
+          <div className="absolute w-full mt-2 bg-black/80
+            border border-[#00ff66]/40
+            rounded-2xl max-h-60 overflow-y-auto z-50"
+          >
             {personnel
               .filter((p) =>
                 `${getRankName(p.rank_id)} ${p.name}`
@@ -266,6 +287,7 @@ export default function PositionEditor() {
               .map((p) => (
                 <div
                   key={p.id}
+                  className="px-4 py-3 hover:bg-[#00ff66]/20 cursor-pointer"
                   onClick={() => {
                     setSelectedPerson(p);
                     setSelectedSlotId(p.slotted_position || "");
@@ -275,15 +297,6 @@ export default function PositionEditor() {
                     );
                     setShowPersonDropdown(false);
                   }}
-                  className="
-                    px-4 py-3
-                    cursor-pointer
-                    border-b border-[#00ff66]/10
-                    hover:bg-[#00ff66]/10
-                    hover:text-[#00ff66]
-                    hover:pl-6
-                    transition-all duration-200
-                  "
                 >
                   {getRankName(p.rank_id)} {p.name}
                 </div>
@@ -292,181 +305,140 @@ export default function PositionEditor() {
         )}
       </div>
 
-      {/* ================= EDIT PANELS ================= */}
+      {/* ================= RANK ================= */}
 
       {selectedPerson && (
-        <div className="space-y-8">
+        <div className="mb-10 p-8 rounded-3xl
+          border border-[#00ff66]/30
+          bg-black/60 backdrop-blur-lg"
+        >
+          <h2 className="text-2xl text-[#00ff66] mb-6">
+            Rank Management
+          </h2>
 
-          {/* CURRENT POSITION */}
-          <div className="
-            p-6 rounded-2xl
-            bg-black/50 backdrop-blur-xl
+          <select
+            className="w-full p-3 mb-5 rounded-xl
+              bg-black/50 border border-[#00ff66]/40
+              text-[#00ff66]"
+            value={selectedRankId}
+            onChange={(e) => setSelectedRankId(e.target.value)}
+          >
+            <option value="">-- Select Rank --</option>
+            {ranks.map((rank) => (
+              <option key={rank.id} value={rank.id}>
+                {rank.name}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={updateRank}
+            className="px-6 py-2 rounded-xl
+              bg-gradient-to-r from-[#00ff66] to-[#00cc44]
+              text-black font-semibold
+              hover:scale-105 transition"
+          >
+            Save Rank
+          </button>
+        </div>
+      )}
+
+      {/* ================= POSITION ================= */}
+
+      {selectedPerson && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-3xl
             border border-[#00ff66]/30
-            shadow-[0_0_40px_rgba(0,255,100,0.15)]
-          ">
-            <p className="text-xs text-gray-400 tracking-widest">
+            bg-black/60 backdrop-blur-md"
+          >
+            <p className="text-xs text-gray-400 mb-2">
               CURRENT POSITION
             </p>
-
-            <p className="text-lg text-[#00ff66] mt-2">
+            <p className="text-xl text-[#00ff66]">
               {formatSlotToBillet(selectedPerson.slotted_position)}
             </p>
           </div>
 
-          {/* RANK */}
-          <div className="
-            p-6 rounded-2xl
-            bg-black/50 backdrop-blur-xl
-            border border-[#00ff66]/30
-            shadow-[0_0_40px_rgba(0,255,100,0.15)]
-          ">
-            <h2 className="text-xl text-[#00ff66] mb-4">
-              Rank Management
-            </h2>
+          <select
+            className="w-full p-3 rounded-xl
+              bg-black/50 border border-[#00ff66]/40
+              text-[#00ff66]"
+            value={selectedHeader}
+            onChange={(e) => {
+              setSelectedHeader(e.target.value);
+              setSelectedSubHeader("");
+              setSelectedSlotId("");
+            }}
+          >
+            <option value="">-- Select Header --</option>
+            {headers.map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
 
+          {selectedHeader && (
             <select
-              className="
-                w-full p-3 rounded-lg
-                bg-black/40
-                border border-[#00ff66]/40
-                text-[#00ff66]
-                focus:border-[#00ff66]
-              "
-              value={selectedRankId}
-              onChange={(e) => setSelectedRankId(e.target.value)}
-            >
-              <option value="">-- Select Rank --</option>
-              {ranks.map((rank) => (
-                <option key={rank.id} value={rank.id}>
-                  {rank.name}
-                </option>
-              ))}
-            </select>
-
-            <button
-              onClick={updateRank}
-              className="
-                mt-4 px-4 py-2 rounded-lg
-                border border-[#00ff66]
-                text-[#00ff66]
-                hover:bg-[#00ff66]/10
-                transition-all duration-200
-              "
-            >
-              Save Rank
-            </button>
-          </div>
-
-          {/* POSITION SELECT */}
-          <div className="
-            p-6 rounded-2xl
-            bg-black/50 backdrop-blur-xl
-            border border-[#00ff66]/30
-            shadow-[0_0_40px_rgba(0,255,100,0.15)]
-          ">
-            <h2 className="text-xl text-[#00ff66] mb-4">
-              Position Assignment
-            </h2>
-
-            <select
-              className="
-                w-full p-3 rounded-lg
-                bg-black/40
-                border border-[#00ff66]/40
-                text-[#00ff66]
-              "
-              value={selectedHeader}
+              className="w-full p-3 rounded-xl
+                bg-black/50 border border-[#00ff66]/40
+                text-[#00ff66]"
+              value={selectedSubHeader}
               onChange={(e) => {
-                setSelectedHeader(e.target.value);
-                setSelectedSubHeader("");
+                setSelectedSubHeader(e.target.value);
                 setSelectedSlotId("");
               }}
             >
-              <option value="">-- Select Header --</option>
-              {headers.map((h) => (
-                <option key={h} value={h}>
-                  {h}
+              <option value="">-- Select Sub Header --</option>
+              {subHeaders.map((s) => (
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>
+          )}
 
-            {selectedHeader && (
-              <select
-                className="
-                  w-full p-3 mt-3 rounded-lg
-                  bg-black/40
-                  border border-[#00ff66]/40
-                  text-[#00ff66]
-                "
-                value={selectedSubHeader}
-                onChange={(e) => {
-                  setSelectedSubHeader(e.target.value);
-                  setSelectedSlotId("");
-                }}
+          {selectedSubHeader && (
+            <select
+              className="w-full p-3 rounded-xl
+                bg-black/50 border border-[#00ff66]/40
+                text-[#00ff66]"
+              value={selectedSlotId}
+              onChange={(e) => setSelectedSlotId(e.target.value)}
+            >
+              <option value="">-- Select Role --</option>
+              {roles.map((r: any) => (
+                <option key={r.slotId} value={r.slotId}>
+                  {r.role}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {selectedSlotId && (
+            <div className="flex gap-4">
+              <button
+                onClick={updatePosition}
+                className="px-6 py-2 rounded-xl
+                  bg-gradient-to-r from-[#00ff66] to-[#00cc44]
+                  text-black font-semibold
+                  hover:scale-105 transition"
               >
-                <option value="">-- Select Sub Header --</option>
-                {subHeaders.map((s: string) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            )}
+                Save Position
+              </button>
 
-            {selectedSubHeader && (
-              <select
-                className="
-                  w-full p-3 mt-3 rounded-lg
-                  bg-black/40
-                  border border-[#00ff66]/40
-                  text-[#00ff66]
-                "
-                value={selectedSlotId}
-                onChange={(e) => setSelectedSlotId(e.target.value)}
+              <button
+                onClick={unassignPosition}
+                className="px-6 py-2 rounded-xl
+                  border border-red-500
+                  text-red-400
+                  hover:bg-red-500/20
+                  transition"
               >
-                <option value="">-- Select Role --</option>
-                {roles.map((role: any) => (
-                  <option key={role.slotId} value={role.slotId}>
-                    {role.role}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {selectedSlotId && (
-              <div className="flex gap-4 mt-4">
-
-                <button
-                  onClick={updatePosition}
-                  className="
-                    px-4 py-2 rounded-lg
-                    border border-[#00ff66]
-                    text-[#00ff66]
-                    hover:bg-[#00ff66]/10
-                    transition-all duration-200
-                  "
-                >
-                  Save Position
-                </button>
-
-                <button
-                  onClick={unassignPosition}
-                  className="
-                    px-4 py-2 rounded-lg
-                    border border-red-500
-                    text-red-500
-                    hover:bg-red-500/10
-                    transition-all duration-200
-                  "
-                >
-                  Unassign
-                </button>
-
-              </div>
-            )}
-
-          </div>
-
+                Unassign
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

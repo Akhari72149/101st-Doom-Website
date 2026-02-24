@@ -32,9 +32,9 @@ export default function HomePage() {
 
   const newsItems = [
     "Weekly Unit Stats - 150 clone casualties this week, 256 lost during Yoabos GC",
-	"Weekly Kill Stats - 600+ clankers taken out, 2100+ destroyed during GC",
-	"Company Medic Applications closed",
-	"Fkin CWOS"
+    "Weekly Kill Stats - 600+ clankers taken out, 2100+ destroyed during GC",
+    "Company Medic Applications closed",
+    "Fkin CWO's"
   ];
 
   const slides = [
@@ -119,12 +119,8 @@ export default function HomePage() {
     }
   };
 
-  /* ================= STATUS ================= */
-
   const onlineCount = servers.filter((s) => s.online).length;
   const offlineCount = servers.length - onlineCount;
-
-  /* ================= UI ================= */
 
   return (
     <div className="relative min-h-screen flex text-white font-orbitron pb-16">
@@ -154,7 +150,6 @@ export default function HomePage() {
             Servers
           </h2>
 
-          {/* STATUS SUMMARY */}
           <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 text-sm">
             <div>🟢 Online: {onlineCount}</div>
             <div>🔴 Offline: {offlineCount}</div>
@@ -264,13 +259,44 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* UNIT CONNECTIONS */}
+          <div className="mt-6 border-t border-[#00ff66]/30 pt-6">
+            <h3 className="text-[#00ff66] tracking-widest mb-4">
+              Unit Connections
+            </h3>
+
+            {[
+              {
+                label: "Join Our Discord",
+                href: "https://discord.gg/dZhRghrDfX",
+              },
+              {
+                label: "Download TeamSpeak",
+                href: "https://files.teamspeak-services.com/releases/client/3.6.2/TeamSpeak3-Client-win64-3.6.2.exe",
+              },
+              {
+                label: "Join TeamSpeak Server",
+                href: "ts3server://199.33.118.13",
+              },
+            ].map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                className="block mb-4 px-4 py-3 text-center rounded-xl border border-[#00ff66]/30 transition-all duration-200 hover:bg-[#00ff66]/10 hover:scale-105 hover:shadow-[0_0_20px_rgba(0,255,100,0.5)]"
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+
         </div>
       </div>
 
       {/* ================= NEWS REEL ================= */}
 
       <div className="fixed bottom-0 left-0 w-full bg-black/70 backdrop-blur-xl border-t border-[#00ff66]/30 overflow-hidden z-50">
-        <div className="flex animate-[tickerScroll_20s_linear_infinite] gap-16 px-8 py-3 text-[#00ff66] whitespace-nowrap">
+        <div className="flex w-max animate-ticker gap-16 px-8 py-3 text-[#00ff66] whitespace-nowrap">
           {[...newsItems, ...newsItems].map((item, index) => (
             <span key={index} className="mr-16">
               {item}
@@ -278,6 +304,22 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+
+      {/* TICKER ANIMATION */}
+      <style jsx global>{`
+        @keyframes ticker {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+
+        .animate-ticker {
+          animation: ticker 30s linear infinite;
+        }
+      `}</style>
 
     </div>
   );

@@ -56,32 +56,11 @@ export default function Home() {
           PERSONNEL COMMAND SYSTEM
         </h1>
 
-        {user ? (
-          <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
 
-            <span className="text-sm text-gray-300">
-              {user.email}
-            </span>
-
-            <button
-              onClick={handleLogout}
-              className="
-                px-4 py-2 rounded-xl
-                border border-[#00ff66]/50
-                text-[#00ff66]
-                transition-all duration-200
-                hover:bg-[#00ff66]/10
-                hover:scale-105
-                hover:shadow-[0_0_20px_rgba(0,255,100,0.6)]
-              "
-            >
-              Logout
-            </button>
-
-          </div>
-        ) : (
-          <Link
-            href="/login"
+          {/* ✅ BACK TO HOME BUTTON */}
+          <button
+            onClick={() => router.push("/")}
             className="
               px-4 py-2 rounded-xl
               border border-[#00ff66]/50
@@ -92,9 +71,47 @@ export default function Home() {
               hover:shadow-[0_0_20px_rgba(0,255,100,0.6)]
             "
           >
-            Login
-          </Link>
-        )}
+            Home
+          </button>
+
+          {user ? (
+            <>
+              <span className="text-sm text-gray-300">
+                {user.email}
+              </span>
+
+              <button
+                onClick={handleLogout}
+                className="
+                  px-4 py-2 rounded-xl
+                  border border-[#00ff66]/50
+                  text-[#00ff66]
+                  transition-all duration-200
+                  hover:bg-[#00ff66]/10
+                  hover:scale-105
+                  hover:shadow-[0_0_20px_rgba(0,255,100,0.6)]
+                "
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <Link
+              href="/login"
+              className="
+                px-4 py-2 rounded-xl
+                border border-[#00ff66]/50
+                text-[#00ff66]
+                transition-all duration-200
+                hover:bg-[#00ff66]/10
+                hover:scale-105
+                hover:shadow-[0_0_20px_rgba(0,255,100,0.6)]
+              "
+            >
+              Login
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* ================= GRID ================= */}
@@ -169,11 +186,7 @@ export default function Home() {
             "
           >
 
-            <h2 className="
-              text-2xl mb-3
-              text-[#00ff66]
-              font-semibold
-            ">
+            <h2 className="text-2xl mb-3 text-[#00ff66] font-semibold">
               {item.title}
             </h2>
 
@@ -181,7 +194,6 @@ export default function Home() {
               {item.desc}
             </p>
 
-            {/* Animated bottom glow line */}
             <div className="
               absolute bottom-0 left-0
               h-[3px] w-0

@@ -59,7 +59,7 @@ body::after {
   z-index: -1;
 }
 
-@keyframes tickerScroll {
+@keyframes ticker {
   0% {
     transform: translateX(0);
   }
@@ -69,7 +69,5 @@ body::after {
 }
 
 .animate-ticker {
-  display: flex;
-  width: max-content;
-  animation: tickerScroll 20s linear infinite;
+  animation: ticker 30s linear infinite;
 }

@@ -38,8 +38,7 @@ export default function HomePage() {
     "Weekly Unit Stats - 150 clone casualties this week, 256 lost during Yoabos GC",
     "Weekly Kill Stats - 600+ clankers taken out, 2100+ destroyed during GC",
     "Company Medic Applications closed",
-    "Player count added to server status",
-	
+    "ARF Sideop this Thursday, Longbow Omegon and Longbow Epsilon to make Planet Fall and scout the region",
   ];
 
   const slides = [
@@ -197,8 +196,6 @@ export default function HomePage() {
 
                   return (
                     <div key={server.id}>
-
-                      {/* SERVER CARD */}
                       <div
                         onClick={() => toggleServer(server.id)}
                         className="cursor-pointer p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 flex justify-between items-center transition-all duration-200 hover:border-[#00ff66] hover:scale-[1.03]"
@@ -221,7 +218,6 @@ export default function HomePage() {
                         </div>
                       </div>
 
-                      {/* EXPANDED SECTION (PLAYER COUNT ONLY) */}
                       {isOpen && server.online && (
                         <div className="ml-4 mt-2 p-4 rounded-xl border border-[#00ff66]/20 bg-black/40 text-sm">
                           <div className="text-[#00ff66]">
@@ -229,7 +225,6 @@ export default function HomePage() {
                           </div>
                         </div>
                       )}
-
                     </div>
                   );
                 })}
@@ -258,7 +253,6 @@ export default function HomePage() {
             Enter Personnel Command
           </button>
 
-          {/* SLIDESHOW */}
           <div className="mt-20 w-[95%] max-w-4xl h-[500px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
             {slides.map((slide, index) => (
               <img
@@ -288,7 +282,7 @@ export default function HomePage() {
               No events scheduled today.
             </div>
           ) : (
-            <div className="space-y-4 flex-1 overflow-y-auto">
+            <div className="space-y-4">
               {events.map((event) => (
                 <div
                   key={event.id}
@@ -310,6 +304,37 @@ export default function HomePage() {
               ))}
             </div>
           )}
+
+          {/* ================= WEEKLY EVENTS ================= */}
+          <div className="mt-8 border-t border-[#00ff66]/30 pt-6">
+            <h2 className="text-xl text-[#00ff66] mb-4 tracking-widest">
+              Weekly Events
+            </h2>
+
+            <div className="space-y-4">
+              {[
+                { name: "Tomahawk 1", day: "Sunday", time: "3:00 PM" },
+                { name: "Claymore 2", day: "Friday", time: "7:00 PM" },
+                { name: "Broadsword 3", day: "Friday", time: "9:00 PM" },
+                { name: "Dagger", day: "Friday", time: "6:00 PM" },
+              ].map((event) => (
+                <div
+                  key={event.name}
+                  className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
+                >
+                  <div className="text-[#00ff66] font-semibold">
+                    {event.name}
+                  </div>
+                  <div className="text-sm text-gray-300 mt-1">
+                    {event.day}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {event.time}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* UNIT CONNECTIONS */}
           <div className="mt-6 border-t border-[#00ff66]/30 pt-6">
@@ -345,29 +370,27 @@ export default function HomePage() {
         </div>
       </div>
 
-{/* ================= NEWS TICKER ================= */}
-<div className="fixed bottom-0 left-0 w-full bg-black/70 backdrop-blur-xl border-t border-[#00ff66]/30 overflow-hidden z-50">
+      {/* ================= NEWS TICKER ================= */}
+      <div className="fixed bottom-0 left-0 w-full bg-black/70 backdrop-blur-xl border-t border-[#00ff66]/30 overflow-hidden z-50">
+        <div className="flex w-max animate-ticker gap-16 px-8 py-3 text-[#00ff66] whitespace-nowrap">
+          {[...newsItems, ...newsItems].map((item, index) => (
+            <span key={index} className="mr-16">
+              {item}
+            </span>
+          ))}
+        </div>
 
-  <div className="flex w-max animate-ticker gap-16 px-8 py-3 text-[#00ff66] whitespace-nowrap">
-    {[...newsItems, ...newsItems].map((item, index) => (
-      <span key={index} className="mr-16">
-        {item}
-      </span>
-    ))}
-  </div>
+        <style jsx global>{`
+          @keyframes ticker {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+          }
 
-  <style jsx global>{`
-    @keyframes ticker {
-      0% { transform: translateX(0); }
-      100% { transform: translateX(-50%); }
-    }
-
-    .animate-ticker {
-      animation: ticker 30s linear infinite;
-    }
-  `}</style>
-
-</div>
+          .animate-ticker {
+            animation: ticker 30s linear infinite;
+          }
+        `}</style>
+      </div>
 
     </div>
   );

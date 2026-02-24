@@ -14,9 +14,9 @@ export default function PersonnelProfile() {
   const [rankHistory, setRankHistory] = useState<any[]>([]);
   const router = useRouter();
 
-  /* =====================================================
-     FETCH PERSONNEL + RANKS
-  ======================================================*/
+  /* ===================================================== */
+  /* DATA */
+  /* ===================================================== */
 
   useEffect(() => {
     fetchData();
@@ -33,10 +33,6 @@ export default function PersonnelProfile() {
 
     setPersonnel(data || []);
   };
-
-  /* =====================================================
-     LOAD PROFILE
-  ======================================================*/
 
   const loadProfile = async (person: any) => {
     setSelectedPerson(person);
@@ -57,9 +53,9 @@ export default function PersonnelProfile() {
     setRankHistory(history || []);
   };
 
-  /* =====================================================
-     HELPERS
-  ======================================================*/
+  /* ===================================================== */
+  /* HELPERS */
+  /* ===================================================== */
 
   const getRankName = (rankId: string | null) => {
     const rank = ranks.find((r) => r.id === rankId);
@@ -71,32 +67,27 @@ export default function PersonnelProfile() {
     return rank ? rank.rank_level : 1;
   };
 
-  const getRankBars = (rankId: string | null) => {
-    const level = getRankLevel(rankId);
-    return Math.max(level, 1);
-  };
+  const getRankBars = (rankId: string | null) =>
+    Math.max(getRankLevel(rankId), 1);
 
-  const formatDate = (date: string | null) => {
-    if (!date) return "N/A";
-    return new Date(date).toLocaleDateString();
-  };
+  const formatDate = (date: string | null) =>
+    date ? new Date(date).toLocaleDateString() : "N/A";
 
   const calculateServiceYears = (date: string | null) => {
     if (!date) return 0;
     const now = new Date();
     const then = new Date(date);
     return Math.floor(
-      (now.getTime() - then.getTime()) / (1000 * 60 * 60 * 24 * 365)
+      (now.getTime() - then.getTime()) /
+        (1000 * 60 * 60 * 24 * 365)
     );
   };
 
   const timeSince = (date: string | null) => {
     if (!date) return "N/A";
-
     const now = new Date();
     const then = new Date(date);
     const diffMs = now.getTime() - then.getTime();
-
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const months = Math.floor(days / 30);
     const years = Math.floor(days / 365);
@@ -128,33 +119,30 @@ export default function PersonnelProfile() {
       .includes(search.toLowerCase())
   );
 
-  /* =====================================================
-     UI — GREEN MILITARY THEME
-  ======================================================*/
+  /* ===================================================== */
+  /* UI */
+  /* ===================================================== */
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00] text-[#eafff2] p-10 font-orbitron tracking-wide">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#eafff2] p-10">
 
-      {/* BACK BUTTON */}
+      {/* BACK */}
       <button
         onClick={() => router.push("/pcs")}
         className="
-          mb-6
-          border border-[#00ff4c]
-          px-4 py-2
-          rounded-lg
-          transition-all duration-300
-          shadow-[0_0_15px_rgba(0,255,80,0.3)]
-          hover:bg-[#003d14]
-          hover:text-[#00ff4c]
+          mb-6 px-4 py-2 rounded-lg
+          border border-[#00ff66]/50
+          text-[#00ff66]
+          font-semibold
+          transition-all duration-200
+          hover:bg-[#00ff66]/10
           hover:scale-105
-          hover:shadow-[0_0_25px_rgba(0,255,80,0.5)]
         "
       >
         ← Return to Dashboard
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00ff4c] tracking-widest">
+      <h1 className="text-4xl font-bold mb-8 text-[#00ff66] tracking-widest">
         PERSONNEL DOSSIER
       </h1>
 
@@ -165,20 +153,24 @@ export default function PersonnelProfile() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="
-          bg-black
-          border border-[#00ff4c]
-          p-3 w-full mb-6
-          rounded-xl
-          focus:outline-none
-          focus:ring-2 focus:ring-[#00ff4c]
-          shadow-[0_0_15px_rgba(0,255,80,0.2)]
+          w-full mb-6 p-4 rounded-xl
+          bg-black/40 backdrop-blur-md
+          border border-[#00ff66]/40
+          text-[#00ff66]
+          placeholder:text-[#00ff66]/40
+          focus:border-[#00ff66]
+          focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]
+          transition-all duration-300
         "
       />
 
       {/* SEARCH RESULTS */}
       {search && (
-        <div className="border border-[#00ff4c] bg-black/60 rounded-xl max-h-60 overflow-y-auto mb-6">
-
+        <div className="
+          border border-[#00ff66]/40
+          bg-black/50 backdrop-blur-md
+          rounded-xl max-h-60 overflow-y-auto mb-6
+        ">
           {filteredPersonnel.map((p) => (
             <div
               key={p.id}
@@ -187,18 +179,17 @@ export default function PersonnelProfile() {
                 loadProfile(p);
               }}
               className="
-                p-3 border-b border-[#00ff4c]
+                p-3 border-b border-[#00ff66]/20
                 cursor-pointer
-                transition-all duration-300
-                hover:bg-[#003d14]
-                hover:text-[#00ff4c]
-                hover:scale-[1.02]
+                hover:bg-[#00ff66]/10
+                hover:text-[#00ff66]
+                hover:pl-6
+                transition-all duration-200
               "
             >
               {getRankName(p.rank_id)} {p.name}
             </div>
           ))}
-
         </div>
       )}
 
@@ -206,11 +197,12 @@ export default function PersonnelProfile() {
       {selectedPerson && (
         <div className="space-y-10">
 
-          {/* MAIN CARD */}
+          {/* MAIN PROFILE CARD */}
           <div className="
-            border border-[#00ff4c]
-            p-8 bg-black/60 rounded-2xl
-            shadow-[0_0_40px_rgba(0,255,80,0.2)]
+            p-10 rounded-3xl
+            bg-black/50 backdrop-blur-xl
+            border border-[#00ff66]/30
+            shadow-[0_0_60px_rgba(0,255,100,0.15)]
           ">
 
             <p className="text-sm tracking-[0.4em] text-gray-400 uppercase">
@@ -222,15 +214,18 @@ export default function PersonnelProfile() {
               {Array.from({
                 length: getRankBars(selectedPerson.rank_id),
               }).map((_, i) => (
-                <div key={i} className="h-1 w-10 bg-[#00ff4c]" />
+                <div
+                  key={i}
+                  className="h-1 w-10 bg-[#00ff66] shadow-[0_0_8px_rgba(0,255,100,0.8)]"
+                />
               ))}
             </div>
 
-            <h2 className="text-4xl font-bold tracking-wide text-[#00ff4c]">
+            <h2 className="text-5xl font-bold text-[#00ff66]">
               {selectedPerson.name}
             </h2>
 
-            <div className="border-t border-[#00ff4c] my-6" />
+            <div className="border-t border-[#00ff66]/40 my-8" />
 
             {/* SERVICE */}
             <div>
@@ -238,9 +233,9 @@ export default function PersonnelProfile() {
                 YEARS OF SERVICE
               </p>
 
-              <div className="w-full bg-[#001a0a] h-4 rounded">
+              <div className="w-full bg-[#001a0a] h-5 rounded-xl overflow-hidden">
                 <div
-                  className="bg-[#00ff4c] h-4 rounded"
+                  className="bg-[#00ff66] h-full shadow-[0_0_10px_rgba(0,255,100,0.8)]"
                   style={{
                     width: `${Math.min(
                       calculateServiceYears(selectedPerson.created_at) * 10,
@@ -250,15 +245,15 @@ export default function PersonnelProfile() {
                 />
               </div>
 
-              <p className="text-sm mt-2">
+              <p className="text-sm mt-2 text-[#00ff66]">
                 {calculateServiceYears(selectedPerson.created_at)} Years
               </p>
             </div>
 
-            <div className="border-t border-[#00ff4c] my-6" />
+            <div className="border-t border-[#00ff66]/40 my-8" />
 
-            {/* DETAILS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* DETAILS GRID */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
               <div>
                 <p className="text-xs text-gray-400 tracking-widest">
@@ -284,7 +279,7 @@ export default function PersonnelProfile() {
                 <p className="text-xs text-gray-400 tracking-widest">
                   CURRENT BILLET
                 </p>
-                <p className="text-lg">
+                <p className="text-lg text-[#00ff66]">
                   {getBilletFromSlot(selectedPerson.slotted_position)}
                 </p>
               </div>
@@ -292,62 +287,57 @@ export default function PersonnelProfile() {
             </div>
           </div>
 
-          {/* PROMOTION RECORD */}
-          <div className="
-            border border-[#00ff4c]
-            p-8 bg-black/60 rounded-2xl
-            shadow-[0_0_40px_rgba(0,255,80,0.2)]
-          ">
-            <h3 className="text-lg tracking-widest border-b border-[#00ff4c] pb-2 mb-4">
-              PROMOTION RECORD
-            </h3>
-
-            {rankHistory.length === 0 ? (
-              <p className="text-gray-400">
-                No promotion history recorded.
-              </p>
-            ) : (
-              rankHistory.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex justify-between py-2 border-b border-[#00ff4c]"
-                >
+          {/* PROMOTION + CERT CARDS */}
+          {[
+            {
+              title: "PROMOTION RECORD",
+              data: rankHistory,
+              empty: "No promotion history recorded.",
+              render: (r: any) => (
+                <>
                   <span>{getRankName(r.rank)}</span>
                   <span className="text-gray-400">
                     {formatDate(r.changed_at)}
                   </span>
+                </>
+              ),
+            },
+            {
+              title: "QUALIFICATIONS",
+              data: certifications,
+              empty: "No certifications recorded.",
+              render: (c: any) => <span>{c.certification?.name}</span>,
+            },
+          ].map((section, idx) => (
+            <div
+              key={idx}
+              className="
+                p-8 rounded-2xl
+                bg-black/50 backdrop-blur-xl
+                border border-[#00ff66]/30
+                shadow-[0_0_40px_rgba(0,255,100,0.15)]
+              "
+            >
+              <h3 className="text-lg tracking-widest border-b border-[#00ff66]/40 pb-3 mb-4">
+                {section.title}
+              </h3>
+
+              {section.data.length === 0 ? (
+                <p className="text-gray-400">{section.empty}</p>
+              ) : (
+                <div className="space-y-3">
+                  {section.data.map((item: any, i: number) => (
+                    <div
+                      key={i}
+                      className="flex justify-between border-b border-[#00ff66]/20 py-2"
+                    >
+                      {section.render(item)}
+                    </div>
+                  ))}
                 </div>
-              ))
-            )}
-          </div>
-
-          {/* CERTIFICATIONS */}
-          <div className="
-            border border-[#00ff4c]
-            p-8 bg-black/60 rounded-2xl
-            shadow-[0_0_40px_rgba(0,255,80,0.2)]
-          ">
-            <h3 className="text-lg tracking-widest border-b border-[#00ff4c] pb-2 mb-4">
-              QUALIFICATIONS
-            </h3>
-
-            {certifications.length === 0 ? (
-              <p className="text-gray-400">
-                No certifications recorded.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {certifications.map((c, index) => (
-                  <div
-                    key={index}
-                    className="border-b border-[#00ff4c] py-1"
-                  >
-                    {c.certification?.name}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ))}
 
         </div>
       )}

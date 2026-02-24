@@ -55,7 +55,7 @@ export default function CreatePersonnel() {
     checkAccess();
   }, [router]);
 
-  /* ================= CREATE USER ================= */
+  /* ================= CREATE ================= */
 
   const createUser = async () => {
     if (!birthNumber || !name) {
@@ -91,7 +91,7 @@ export default function CreatePersonnel() {
         {
           rank_id: rankId || null,
           birth_number: birthNumber,
-          name: name,
+          name,
           discord_id: discordId || null,
           auto_role_sync: !skipRoleSync && !importFromDiscord,
           created_at: new Date().toISOString(),
@@ -101,7 +101,7 @@ export default function CreatePersonnel() {
       .single();
 
     if (error) {
-      alert("Creation failed: " + error.message);
+      alert(error.message);
       return;
     }
 
@@ -115,7 +115,7 @@ export default function CreatePersonnel() {
         });
 
       if (importError) {
-        alert("Discord import failed: " + importError.message);
+        alert(importError.message);
         return;
       }
     }
@@ -132,11 +132,7 @@ export default function CreatePersonnel() {
 
   if (loadingAuth) {
     return (
-      <div className="
-        min-h-screen flex items-center justify-center
-        bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
-        text-[#00ff4c] font-orbitron
-      ">
+      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#00ff66]">
         Checking permissions...
       </div>
     );
@@ -145,177 +141,176 @@ export default function CreatePersonnel() {
   /* ================= UI ================= */
 
   return (
-    <div className="
-      min-h-screen
-      bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
-      text-white
-      p-10
-      font-orbitron
-      tracking-wide
-    ">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#eafff2] p-10">
 
       {/* BACK */}
       <button
         onClick={() => router.push("/pcs")}
         className="
-          mb-6
-          border border-[#00ff4c]
-          px-4 py-2
-          rounded-xl
-          transition-all duration-300
-          shadow-[0_0_15px_rgba(0,255,80,0.3)]
-          hover:bg-[#003d14]
-          hover:text-[#00ff4c]
+          mb-10 px-5 py-2 rounded-lg
+          border border-[#00ff66]/50
+          text-[#00ff66]
+          font-semibold
+          transition-all duration-200
+          hover:bg-[#00ff66]/10
           hover:scale-105
-          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
         "
       >
         ← Back
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00ff4c] tracking-widest">
-        Create New Personnel
-      </h1>
+      {/* MAIN CARD */}
+      <div className="
+        max-w-3xl mx-auto
+        p-10 rounded-3xl
+        bg-black/50 backdrop-blur-xl
+        border border-[#00ff66]/30
+        shadow-[0_0_60px_rgba(0,255,100,0.15)]
+      ">
 
-      {/* DISCORD ID */}
-      <div className="mb-6">
-        <label className="block mb-2 text-sm tracking-widest text-gray-300">
-          Discord ID
-        </label>
+        <h1 className="text-3xl font-bold text-[#00ff66] mb-8 tracking-widest">
+          Create New Personnel
+        </h1>
 
-        <input
-          type="text"
-          value={discordId}
-          onChange={(e) => setDiscordId(e.target.value)}
-          placeholder="Enter Discord User ID"
-          className="
-            bg-black
-            border border-[#00ff4c]
-            p-3
-            w-full
-            rounded-xl
-            focus:ring-2 focus:ring-[#00ff4c]
-            transition-all
-            shadow-[0_0_15px_rgba(0,255,80,0.2)]
-          "
-        />
-      </div>
+        {/* DISCORD */}
+        <div className="mb-6">
+          <label className="block mb-2 text-sm text-gray-300">
+            Discord ID
+          </label>
 
-      {/* CHECKBOXES */}
-      <div className="mb-6 flex flex-col gap-4">
-
-        <label className="flex items-center gap-2 cursor-pointer">
           <input
-            type="checkbox"
-            checked={skipRoleSync}
-            onChange={(e) => setSkipRoleSync(e.target.checked)}
-            className="accent-[#00ff4c]"
+            type="text"
+            value={discordId}
+            onChange={(e) => setDiscordId(e.target.value)}
+            placeholder="Enter Discord User ID"
+            className="
+              w-full p-4 rounded-xl
+              bg-black/60
+              border border-[#00ff66]/30
+              text-[#00ff66]
+              placeholder:text-[#00ff66]/30
+              focus:border-[#00ff66]
+              focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]
+              transition-all
+            "
           />
-          <span>Skip Discord Role Assignment</span>
-        </label>
+        </div>
 
-        <label className="flex items-center gap-2 cursor-pointer">
+        {/* CHECKBOXES */}
+        <div className="mb-6 flex flex-col gap-3">
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={skipRoleSync}
+              onChange={(e) => setSkipRoleSync(e.target.checked)}
+              className="accent-[#00ff66]"
+            />
+            Skip Discord Role Assignment
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={importFromDiscord}
+              onChange={(e) => setImportFromDiscord(e.target.checked)}
+              className="accent-[#00ff66]"
+            />
+            Import Rank + Certifications From Discord
+          </label>
+
+        </div>
+
+        {/* RANK */}
+        <div className="mb-6">
+          <label className="block mb-2 text-sm text-gray-300">
+            Rank (Don't select if importing)
+          </label>
+
+          <select
+            value={rankId}
+            onChange={(e) => setRankId(e.target.value)}
+            className="
+              w-full p-4 rounded-xl
+              bg-black/60
+              border border-[#00ff66]/30
+              text-[#00ff66]
+              focus:border-[#00ff66]
+              transition-all
+            "
+          >
+            <option value="">-- Select Rank --</option>
+            {ranks.map((rank) => (
+              <option key={rank.id} value={rank.id}>
+                {rank.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* BIRTH NUMBER */}
+        <div className="mb-6">
+          <label className="block mb-2 text-sm text-gray-300">
+            Birth Number
+          </label>
+
           <input
-            type="checkbox"
-            checked={importFromDiscord}
-            onChange={(e) => setImportFromDiscord(e.target.checked)}
-            className="accent-[#00ff4c]"
+            type="text"
+            value={birthNumber}
+            onChange={(e) => setBirthNumber(e.target.value)}
+            className="
+              w-full p-4 rounded-xl
+              bg-black/60
+              border border-[#00ff66]/30
+              text-[#00ff66]
+              focus:border-[#00ff66]
+              transition-all
+            "
           />
-          <span>Import Rank + Certifications From Discord</span>
-        </label>
+        </div>
 
-      </div>
+        {/* NAME */}
+        <div className="mb-8">
+          <label className="block mb-2 text-sm text-gray-300">
+            Name
+          </label>
 
-      {/* RANK */}
-      <div className="mb-6">
-        <label className="block mb-2 text-sm tracking-widest text-gray-300">
-          Rank (Optional)
-        </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="
+              w-full p-4 rounded-xl
+              bg-black/60
+              border border-[#00ff66]/30
+              text-[#00ff66]
+              focus:border-[#00ff66]
+              transition-all
+            "
+          />
+        </div>
 
-        <select
-          value={rankId}
-          onChange={(e) => setRankId(e.target.value)}
+        {/* CREATE BUTTON */}
+        <button
+          onClick={createUser}
           className="
-            bg-black
-            border border-[#00ff4c]
-            p-3
-            w-full
-            rounded-xl
-            focus:ring-2 focus:ring-[#00ff4c]
-            transition-all
+            w-full py-4 rounded-xl
+            bg-[#00ff66]/10
+            border border-[#00ff66]
+            text-[#00ff66]
+            font-bold
+            tracking-wide
+            transition-all duration-300
+            hover:bg-[#00ff66]
+            hover:text-black
+            hover:scale-105
+            hover:shadow-[0_0_30px_rgba(0,255,100,0.7)]
           "
         >
-          <option value="">-- Select Rank --</option>
-          {ranks.map((rank) => (
-            <option key={rank.id} value={rank.id}>
-              {rank.name}
-            </option>
-          ))}
-        </select>
+          Create Personnel
+        </button>
+
       </div>
-
-      {/* BIRTH NUMBER */}
-      <div className="mb-6">
-        <label className="block mb-2 text-sm tracking-widest text-gray-300">
-          Birth Number
-        </label>
-
-        <input
-          type="text"
-          value={birthNumber}
-          onChange={(e) => setBirthNumber(e.target.value)}
-          className="
-            bg-black
-            border border-[#00ff4c]
-            p-3
-            w-full
-            rounded-xl
-            focus:ring-2 focus:ring-[#00ff4c]
-            transition-all
-          "
-        />
-      </div>
-
-      {/* NAME */}
-      <div className="mb-6">
-        <label className="block mb-2 text-sm tracking-widest text-gray-300">
-          Name
-        </label>
-
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="
-            bg-black
-            border border-[#00ff4c]
-            p-3
-            w-full
-            rounded-xl
-            focus:ring-2 focus:ring-[#00ff4c]
-            transition-all
-          "
-        />
-      </div>
-
-      {/* CREATE BUTTON */}
-      <button
-        onClick={createUser}
-        className="
-          px-8 py-3
-          border border-[#00ff4c]
-          text-[#00ff4c]
-          rounded-xl
-          transition-all duration-300
-          hover:bg-[#003d14]
-          hover:text-black
-          hover:scale-105
-          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
-        "
-      >
-        Create Personnel
-      </button>
-
     </div>
   );
 }

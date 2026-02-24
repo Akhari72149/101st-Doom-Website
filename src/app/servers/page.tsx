@@ -43,7 +43,9 @@ export default function ServersPage() {
     person.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  /* ================= AUTH ================= */
+  /* ===================================================== */
+  /* AUTH */
+  /* ===================================================== */
 
   useEffect(() => {
     const loadUser = async () => {
@@ -52,7 +54,6 @@ export default function ServersPage() {
       } = await supabase.auth.getUser();
 
       setUser(user);
-
       if (!user) return;
 
       const { data: roles } = await supabase
@@ -129,51 +130,13 @@ export default function ServersPage() {
     setBookings(enriched as any);
   }
 
-  async function handleConfirmBooking() {
-    if (!canBook) return;
-    if (!user || selectedStartIndex === null || !selectedPerson) return;
-
-    const start = slots[selectedStartIndex];
-    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-    const tempId = crypto.randomUUID();
-
-    const newBooking: Booking = {
-      id: tempId,
-      server_id: activeServer,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      title: bookingTitle,
-      booked_for: selectedPerson,
-      personnel: {
-        name:
-          personnelList.find((p) => p.id === selectedPerson)?.name ||
-          "Unknown",
-      },
-    };
-
-    setBookings((prev) => [...prev, newBooking]);
-
-    const { error } = await supabase.from("server_bookings").insert([
-      {
-        server_id: activeServer,
-        user_id: user.id,
-        booked_for: selectedPerson,
-        title: bookingTitle,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-      },
-    ]);
-
-    if (error) {
-      setBookings((prev) => prev.filter((b) => b.id !== tempId));
-      alert(error.message);
-    } else {
-      setSelectedStartIndex(null);
-      setSelectedPerson("");
-      setSearchQuery("");
-      setBookingTitle("");
-      setShowResults(false);
-    }
+  function isBlocked(slot: Date) {
+    return bookings.some((b) => {
+      const slotEnd = new Date(slot.getTime() + 30 * 60 * 1000);
+      const bookingStart = new Date(b.start_time);
+      const bookingEnd = new Date(b.end_time);
+      return slot < bookingEnd && slotEnd > bookingStart;
+    });
   }
 
   async function handleDelete(id: string) {
@@ -193,55 +156,107 @@ export default function ServersPage() {
     }
   }
 
-  function isBlocked(slot: Date) {
-    return bookings.some((b) => {
-      const slotEnd = new Date(slot.getTime() + 30 * 60 * 1000);
-      const bookingStart = new Date(b.start_time);
-      const bookingEnd = new Date(b.end_time);
-      return slot < bookingEnd && slotEnd > bookingStart;
-    });
+  async function handleConfirmBooking() {
+    if (!canBook || selectedStartIndex === null || !selectedPerson)
+      return;
+
+    const start = slots[selectedStartIndex];
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+
+    await supabase.from("server_bookings").insert([
+      {
+        server_id: activeServer,
+        user_id: user.id,
+        booked_for: selectedPerson,
+        title: bookingTitle,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+      },
+    ]);
+
+    setSelectedStartIndex(null);
+    setSelectedPerson("");
+    setSearchQuery("");
+    setBookingTitle("");
+    setShowResults(false);
+
+    fetchBookings();
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00] text-white p-10">
+  /* ===================================================== */
+  /* UI */
+  /* ===================================================== */
 
-      {/* BACK BUTTON */}
+  return (
+    <div className="
+      min-h-screen
+      bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
+      text-white
+      p-10
+    ">
+
+      {/* BACK */}
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-6 border border-[#00ff4c] px-4 py-2 hover:bg-[#00ff4c] hover:text-black transition"
+        className="
+          mb-8 px-4 py-2 rounded-lg
+          border border-[#00ff66]/50
+          text-[#00ff66]
+          backdrop-blur-md
+          transition-all duration-200
+          hover:bg-[#00ff66]/10
+          hover:scale-105
+        "
       >
-        ← Return to Dashboard
+        ← Back
       </button>
 
-      {/* DATE */}
-      <div className="mb-8">
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="bg-black border border-[#00ff4c] p-3 rounded-xl"
-        />
-      </div>
+      {/* TITLE */}
+      <h1 className="
+        text-4xl font-bold mb-10
+        text-[#00ff66]
+        tracking-[0.4em]
+      ">
+        SERVER BOOKINGS
+      </h1>
 
-      {/* SERVER SELECT */}
-      <div className="flex gap-4 mb-8 flex-wrap">
+      {/* DATE */}
+      <input
+        type="date"
+        value={selectedDate}
+        onChange={(e) => setSelectedDate(e.target.value)}
+        className="
+          mb-8 p-3 rounded-xl
+          bg-black/40 backdrop-blur-md
+          border border-[#00ff66]/40
+          text-[#00ff66]
+          focus:border-[#00ff66]
+        "
+      />
+
+      {/* SERVER TABS */}
+      <div className="flex gap-4 mb-10 flex-wrap">
         {[1, 2, 3, 4, 5, 6].map((server) => (
           <div
             key={server}
             onClick={() => setActiveServer(server)}
-            className={`px-6 py-3 cursor-pointer border border-[#00ff4c] rounded-md ${
-              activeServer === server
-                ? "bg-[#003d14] border border-[#00ff4c] text-[#00ff4c] scale-105 shadow-[0_0_15px_rgba(0,255,80,0.3)]"
-                : "text-[#00ff4c] hover:bg-[#00ff4c] hover:text-black"
-            }`}
+            className={`
+              px-6 py-3 rounded-xl cursor-pointer
+              border transition-all duration-200
+              ${
+                activeServer === server
+                  ? "bg-[#00ff66]/20 border-[#00ff66] text-[#00ff66] scale-105 shadow-[0_0_20px_rgba(0,255,100,0.4)]"
+                  : "border-[#00ff66]/30 hover:bg-[#00ff66]/10 hover:scale-105"
+              }
+            `}
           >
-            SERVER-{server}
+            SERVER {server}
           </div>
         ))}
       </div>
 
       {/* SLOTS */}
-      <div className="max-w-3xl grid gap-5">
+      <div className="max-w-4xl grid gap-6">
         {slots.map((slot, index) => {
           const blocked = isBlocked(slot);
           const isSelected =
@@ -253,28 +268,33 @@ export default function ServersPage() {
             <div
               key={slot.toISOString()}
               onClick={() => {
-                if (!blocked && canBook) {
-                  setSelectedStartIndex(index);
-                }
+                if (!blocked && canBook) setSelectedStartIndex(index);
               }}
-              className={`p-6 rounded-2xl transition-all ${
-                blocked
-                  ? "bg-black/40 border border-[#00ff4c]"
-                  : isSelected
-                  ? "bg-[#003d14] border border-[#00ff4c] text-[#00ff4c] scale-105 shadow-[0_0_15px_rgba(0,255,80,0.3)]"
-                  : "bg-black/40 border border-[#00ff4c]/40 hover:border-[#00ff4c] hover:scale-105"
-              } ${!canBook ? "cursor-default" : "cursor-pointer"}`}
+              className={`
+                p-6 rounded-2xl
+                border transition-all duration-200
+                ${
+                  blocked
+                    ? "bg-black/50 border-[#00ff66]/30"
+                    : isSelected
+                    ? "bg-[#003d14] border-[#00ff66] scale-105 shadow-[0_0_20px_rgba(0,255,100,0.4)]"
+                    : "bg-black/40 border-[#00ff66]/20 hover:border-[#00ff66] hover:scale-105"
+                }
+              `}
             >
-              <div className="text-xl font-bold">
+              <div className="text-xl font-bold text-[#00ff66]">
                 {slot.toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
               </div>
 
+              {/* BOOKINGS */}
               {bookings
                 .filter((b) => {
-                  const slotEnd = new Date(slot.getTime() + 30 * 60 * 1000);
+                  const slotEnd = new Date(
+                    slot.getTime() + 30 * 60 * 1000
+                  );
                   const bookingStart = new Date(b.start_time);
                   const bookingEnd = new Date(b.end_time);
                   return slot < bookingEnd && slotEnd > bookingStart;
@@ -282,12 +302,18 @@ export default function ServersPage() {
                 .map((b) => (
                   <div
                     key={b.id}
-                    className="mt-3 p-4 rounded-xl bg-black/60 border border-[#00ff4c]"
+                    className="
+                      mt-4 p-4 rounded-xl
+                      bg-black/60
+                      border border-[#00ff66]
+                    "
                   >
-                    <div className="text-[#00ff4c] font-semibold text-lg">
+                    <div className="text-[#00ff66] font-semibold">
                       {b.personnel?.name}
                     </div>
-                    <div className="text-gray-300">{b.title}</div>
+                    <div className="text-gray-300 text-sm">
+                      {b.title}
+                    </div>
 
                     {canBook && (
                       <button
@@ -306,22 +332,33 @@ export default function ServersPage() {
 
       {/* CONFIRM PANEL */}
       {selectedStartIndex !== null && canBook && (
-        <div className="fixed bottom-10 right-10 z-50 bg-black/90 backdrop-blur-xl border border-[#00ff4c] p-6 rounded-2xl w-96">
-          <div className="text-lg mb-4">
-            Booking from{" "}
-            <span className="text-[#00ff4c] font-bold">
+        <div className="
+          fixed bottom-10 right-10
+          w-96 p-6 rounded-2xl
+          bg-black/80 backdrop-blur-xl
+          border border-[#00ff66]
+          shadow-[0_0_40px_rgba(0,255,100,0.3)]
+        ">
+          <h2 className="mb-4 text-lg text-[#00ff66]">
+            Booking:
+            <span className="font-bold ml-2">
               {slots[selectedStartIndex].toLocaleTimeString()} →
               {slots[selectedStartIndex + 3]?.toLocaleTimeString()}
             </span>
-          </div>
+          </h2>
 
           <input
             placeholder="Booking Title"
             value={bookingTitle}
             onChange={(e) => setBookingTitle(e.target.value)}
-            className="w-full bg-black border border-[#00ff4c] p-3 rounded-xl mb-4 text-white"
+            className="
+              w-full p-3 mb-4 rounded-xl
+              bg-black border border-[#00ff66]
+              text-white
+            "
           />
 
+          {/* PERSON SELECT */}
           <div className="relative mb-4">
             <input
               placeholder="Search personnel..."
@@ -331,14 +368,21 @@ export default function ServersPage() {
                 setSearchQuery(e.target.value);
                 setShowResults(true);
               }}
-              className="w-full bg-black border border-[#00ff4c] p-3 rounded-xl text-white"
+              className="
+                w-full p-3 rounded-xl
+                bg-black border border-[#00ff66]
+                text-white
+              "
             />
 
             {showResults && searchQuery && (
-              <div className="absolute z-[9999] w-full bg-black border border-[#00ff4c] rounded-xl mt-2 max-h-60 overflow-y-auto">
-                {filteredPersonnel.length === 0 && (
-                  <div className="p-3 text-gray-400">No results</div>
-                )}
+              <div className="
+                absolute z-50 w-full mt-2
+                max-h-60 overflow-y-auto
+                bg-black/90 backdrop-blur-xl
+                border border-[#00ff66]
+                rounded-xl
+              ">
                 {filteredPersonnel.map((person) => (
                   <div
                     key={person.id}
@@ -347,7 +391,12 @@ export default function ServersPage() {
                       setSearchQuery(person.name);
                       setShowResults(false);
                     }}
-                    className="p-3 hover:bg-[#00ff4c] hover:text-black cursor-pointer transition"
+                    className="
+                      p-3 cursor-pointer
+                      hover:bg-[#00ff66]
+                      hover:text-black
+                      transition
+                    "
                   >
                     {person.name}
                   </div>
@@ -356,10 +405,15 @@ export default function ServersPage() {
             )}
           </div>
 
+          {/* ACTIONS */}
           <div className="flex gap-3">
             <button
               onClick={handleConfirmBooking}
-              className="px-6 py-3 border border-[#00ff4c] text-[#00ff4c] rounded-xl hover:bg-[#00ff4c] hover:text-black transition"
+              className="
+                px-4 py-2 rounded-xl
+                bg-[#00ff66] text-black font-semibold
+                hover:scale-105 transition
+              "
             >
               Confirm
             </button>
@@ -372,7 +426,12 @@ export default function ServersPage() {
                 setBookingTitle("");
                 setShowResults(false);
               }}
-              className="px-6 py-3 border border-red-500 text-red-400 rounded-xl hover:bg-red-500 hover:text-black transition"
+              className="
+                px-4 py-2 rounded-xl
+                border border-red-500 text-red-400
+                hover:bg-red-500 hover:text-black
+                transition
+              "
             >
               Cancel
             </button>
@@ -382,6 +441,8 @@ export default function ServersPage() {
     </div>
   );
 }
+
+/* ================= SLOT GENERATOR ================= */
 
 function generateSlots(dateString: string) {
   const slots: Date[] = [];

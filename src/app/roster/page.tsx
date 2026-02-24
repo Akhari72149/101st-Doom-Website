@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
+import { useRouter } from "next/navigation";
 
 type Personnel = {
   id: string;
@@ -12,13 +13,12 @@ type Personnel = {
   slotted_position: string;
 };
 
-export default function Home() {
+export default function Roster() {
+  const router = useRouter();
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [ranks, setRanks] = useState<any[]>([]);
 
-  /* =====================================================
-     FETCH DATA
-  ======================================================*/
+  /* ================= FETCH ================= */
 
   useEffect(() => {
     async function fetchData() {
@@ -28,14 +28,12 @@ export default function Home() {
 
       setRanks(rankData || []);
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("personnel")
-        .select("*, ranks(name, rank_level)")
+        .select("*")
         .order("rank_id", { ascending: true });
 
-      if (!error) {
-        setPersonnel(data || []);
-      }
+      setPersonnel(data || []);
     }
 
     fetchData();
@@ -46,19 +44,25 @@ export default function Home() {
     return rank ? rank.name : "Unranked";
   };
 
-  /* =====================================================
-     UI (BLUE HOLO + ORBITRON)
-  ======================================================*/
+  /* ================= UI ================= */
 
   const renderStructure = () => {
     return structure.map((section, index) => {
       if (section.type !== "header") return null;
 
       return (
-        <div key={index} className="mt-10 font-orbitron">
+        <div key={index} className="mt-16">
 
           {/* HEADER */}
-          <div className="bg-[#05080f] border border-[#00e5ff] text-[#00e5ff] px-6 py-4 text-2xl font-bold tracking-widest rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.4)]">
+          <div className="
+            px-6 py-5
+            rounded-3xl
+            border border-[#00ff66]/30
+            bg-black/50 backdrop-blur-xl
+            text-[#00ff66]
+            text-2xl font-bold tracking-widest
+            shadow-[0_0_60px_rgba(0,255,100,0.15)]
+          ">
             {section.title}
           </div>
 
@@ -66,10 +70,18 @@ export default function Home() {
             if (child.type !== "sub-header") return null;
 
             return (
-              <div key={childIndex} className="ml-6 mt-6">
+              <div key={childIndex} className="ml-10 mt-10">
 
                 {/* SUB HEADER */}
-                <div className="bg-[#05080f] border border-[#00e5ff] text-[#00e5ff] px-4 py-3 text-lg font-semibold rounded-lg shadow-[0_0_15px_rgba(0,229,255,0.3)]">
+                <div className="
+                  px-5 py-3
+                  rounded-2xl
+                  border border-[#00ff66]/30
+                  bg-black/40 backdrop-blur-md
+                  text-[#00ff66]
+                  text-lg font-semibold
+                  shadow-[0_0_30px_rgba(0,255,100,0.2)]
+                ">
                   {child.title}
                 </div>
 
@@ -82,9 +94,21 @@ export default function Home() {
                   return (
                     <div
                       key={roleIndex}
-                      className="ml-6 mt-4 border border-[#00e5ff] bg-black/60 p-4 rounded-2xl shadow-[0_0_30px_rgba(0,229,255,0.15)]"
+                      className="
+                        ml-8 mt-6
+                        p-6
+                        rounded-3xl
+                        border border-[#00ff66]/20
+                        bg-black/50 backdrop-blur-xl
+                        shadow-[0_0_40px_rgba(0,255,100,0.12)]
+                        transition-all duration-300
+                        hover:border-[#00ff66]
+                        hover:shadow-[0_0_70px_rgba(0,255,100,0.35)]
+                      "
                     >
-                      <div className="font-bold text-[#00e5ff] mb-3 tracking-wide">
+
+                      {/* ROLE TITLE */}
+                      <div className="mb-4 text-[#00ff66] font-bold tracking-wide">
                         {role.role}
 
                         {role.count > 1 && (
@@ -94,7 +118,7 @@ export default function Home() {
                         )}
                       </div>
 
-                      {/* SLOT LIST */}
+                      {/* SLOTS */}
                       {Array.from({ length: role.count }).map(
                         (_, slotIndex) => {
                           const person = matchedPeople[slotIndex];
@@ -102,19 +126,28 @@ export default function Home() {
                           return (
                             <div
                               key={slotIndex}
-                              className="border border-[#00e5ff]/40 bg-[#05080f] px-4 py-3 mt-3 rounded-xl hover:border-[#00e5ff] transition"
+                              className="
+                                px-4 py-3 mb-3
+                                rounded-xl
+                                border border-[#00ff66]/30
+                                bg-black/40
+                                transition-all duration-200
+                                hover:border-[#00ff66]
+                                hover:scale-[1.03]
+                                hover:shadow-[0_0_25px_rgba(0,255,100,0.5)]
+                              "
                             >
                               {person ? (
                                 <>
-                                  <span className="font-bold text-[#00e5ff]">
+                                  <span className="font-bold text-[#00ff66]">
                                     {getRankName(person.rank_id)}
                                   </span>{" "}
-                                  <span className="text-white">
+                                  <span>
                                     {person.name}
                                   </span>
                                 </>
                               ) : (
-                                <span className="text-gray-400">
+                                <span className="text-gray-500">
                                   Empty Slot
                                 </span>
                               )}
@@ -122,25 +155,55 @@ export default function Home() {
                           );
                         }
                       )}
+
                     </div>
                   );
                 })}
+
               </div>
             );
           })}
+
         </div>
       );
     });
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#05080f] via-[#0b0f1a] to-black text-white p-10">
+    <main className="
+      min-h-screen
+      bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)]
+      text-[#eafff2]
+      p-10
+    ">
 
-      <h1 className="text-5xl font-bold tracking-widest text-[#00e5ff] mb-8 font-orbitron">
-        101st Doom Battalion Roster
+      {/* BACK BUTTON */}
+      <button
+        onClick={() => router.push("/pcs")}
+        className="
+          mb-8 px-5 py-2 rounded-lg
+          border border-[#00ff66]/50
+          text-[#00ff66]
+          font-semibold
+          transition-all duration-200
+          hover:bg-[#00ff66]/10
+          hover:scale-105
+        "
+      >
+        ← Return to Dashboard
+      </button>
+
+      {/* TITLE */}
+      <h1 className="
+        text-4xl font-bold tracking-widest
+        text-[#00ff66]
+        mb-12
+        drop-shadow-[0_0_20px_rgba(0,255,100,0.6)]
+      ">
+        101ST DOOM BATTALION ROSTER
       </h1>
 
-      <div>{renderStructure()}</div>
+      {renderStructure()}
 
     </main>
   );

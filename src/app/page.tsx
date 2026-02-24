@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-
-/* ========================================================= */
-/* ======================= TYPES =========================== */
-/* ========================================================= */
+import { hasRole } from "@/lib/permissions";
 
 type Event = {
   id: string;
@@ -15,7 +12,7 @@ type Event = {
   start_time: string;
   personnel?: {
     name: string;
-  }[];
+  };
 };
 
 type Server = {
@@ -23,12 +20,9 @@ type Server = {
   online: boolean;
 };
 
-/* ========================================================= */
-/* ======================= PAGE ============================ */
-/* ========================================================= */
-
 export default function HomePage() {
   const router = useRouter();
+
   const [events, setEvents] = useState<Event[]>([]);
   const [servers, setServers] = useState<Server[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -38,7 +32,12 @@ export default function HomePage() {
     "/slideshow/img2.jpg",
     "/slideshow/img3.jpg",
     "/slideshow/img4.jpg",
+    "/slideshow/img5.jpg",
   ];
+
+  /* ===================================================== */
+  /* SLIDESHOW */
+  /* ===================================================== */
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -49,6 +48,10 @@ export default function HomePage() {
 
     return () => clearInterval(interval);
   }, []);
+
+  /* ===================================================== */
+  /* FETCH EVENTS — BUG FIX INCLUDED */
+  /* ===================================================== */
 
   useEffect(() => {
     fetchEvents();
@@ -74,11 +77,22 @@ export default function HomePage() {
       .lt("start_time", tomorrow.toISOString())
       .order("start_time", { ascending: true });
 
-    setEvents((bookings as unknown as Event[]) || []);
+    // ✅ FIX: Properly map personnel object (not array)
+    const safeEvents: Event[] = (bookings || []).map((b: any) => ({
+      ...b,
+      personnel: b.personnel ?? null,
+    }));
+
+    setEvents(safeEvents);
   };
+
+  /* ===================================================== */
+  /* FETCH SERVERS */
+  /* ===================================================== */
 
   useEffect(() => {
     fetchServers();
+
     const interval = setInterval(fetchServers, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -93,17 +107,18 @@ export default function HomePage() {
     }
   };
 
-  /* ========================================================= */
-  /* ======================== UI ============================= */
-  /* ========================================================= */
+  /* ===================================================== */
+  /* UI */
+  /* ===================================================== */
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00] text-white font-orbitron flex">
+    <div className="min-h-screen flex bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] text-white font-orbitron">
 
-      {/* LEFT — SERVERS */}
-      <div className="w-[320px] border-r border-[#00ff4c]/30 p-6 bg-black/40 backdrop-blur-xl">
+      {/* ================= LEFT — SERVERS ================= */}
 
-        <h2 className="text-xl text-[#00ff4c] mb-6 tracking-widest">
+      <div className="w-[320px] border-r border-[#00ff66]/30 p-6 bg-black/40 backdrop-blur-xl">
+
+        <h2 className="text-xl text-[#00ff66] mb-6 tracking-widest">
           Servers
         </h2>
 
@@ -111,76 +126,67 @@ export default function HomePage() {
           <div
             key={server.id}
             className="
-              mb-4
-              border border-[#00ff4c]/30
-              rounded-xl p-4 bg-black/60
-              shadow-[0_0_12px_rgba(0,255,80,0.2)]
-              flex justify-between items-center
-              transition-all duration-300
-              hover:border-[#00ff4c]
+              mb-4 p-4 rounded-xl
+              border border-[#00ff66]/30
+              bg-black/60
+              flex justify-between
+              transition-all duration-200
+              hover:border-[#00ff66]
               hover:scale-[1.03]
-              hover:shadow-[0_0_25px_rgba(0,255,80,0.4)]
+              hover:shadow-[0_0_25px_rgba(0,255,100,0.4)]
             "
           >
-            <span className="font-semibold">
-              Server {server.id}
-            </span>
+            <span>Server {server.id}</span>
 
             <span
               className={`text-xs font-bold ${
-                server.online ? "text-[#00ff4c]" : "text-red-500"
+                server.online ? "text-[#00ff66]" : "text-red-500"
               }`}
             >
               {server.online ? "ONLINE" : "OFFLINE"}
             </span>
           </div>
         ))}
-
       </div>
 
-      {/* CENTER */}
+      {/* ================= CENTER ================= */}
+
       <div className="flex-1 flex flex-col items-center pt-16">
 
-        <h1 className="text-3xl md:text-5xl font-bold tracking-[0.3em] text-[#00ff4c] text-center">
+        <h1 className="text-4xl md:text-6xl font-bold tracking-[0.4em] text-[#00ff66] text-center">
           101ST<br />
           DOOM BATTALION
         </h1>
 
-        <p className="mt-4 text-gray-300 text-sm md:text-base text-center tracking-wide">
+        <p className="mt-4 text-gray-300 text-center">
           Operational Command & Personnel Management System
         </p>
 
-        {/* BUTTON */}
-        <div className="mt-8">
-          <button
-            onClick={() => router.push("/pcs")}
-            className="
-              px-8 py-3
-              text-sm md:text-lg
-              border border-[#00ff4c]
-              rounded-lg
-              transition-all duration-300
-              shadow-[0_0_15px_rgba(0,255,80,0.3)]
-              hover:bg-[#003d14]
-              hover:text-[#00ff4c]
-              hover:scale-105
-              hover:shadow-[0_0_25px_rgba(0,255,80,0.5)]
-            "
-          >
-            Enter Personnel Command
-          </button>
-        </div>
+        <button
+          onClick={() => router.push("/pcs")}
+          className="
+            mt-8 px-8 py-3
+            border border-[#00ff66]
+            rounded-lg
+            text-[#00ff66]
+            transition-all duration-200
+            hover:bg-[#00ff66]
+            hover:text-black
+            hover:scale-105
+          "
+        >
+          Enter Personnel Command
+        </button>
 
         {/* SLIDESHOW */}
+
         <div className="
-          mt-12
-          w-[95%] max-w-4xl h-[500px]
+          mt-12 w-[95%] max-w-4xl h-[500px]
           relative overflow-hidden
           rounded-2xl
-          border border-[#00ff4c]/30
-          shadow-[0_0_30px_rgba(0,255,80,0.3)]
+          border border-[#00ff66]/30
+          shadow-[0_0_30px_rgba(0,255,100,0.3)]
         ">
-
           {slides.map((slide, index) => (
             <img
               key={slide}
@@ -191,20 +197,19 @@ export default function HomePage() {
               }`}
             />
           ))}
-
         </div>
-
       </div>
 
-      {/* RIGHT — EVENTS */}
-      <div className="w-[380px] border-l border-[#00ff4c]/30 p-6 bg-black/40 backdrop-blur-xl flex flex-col">
+      {/* ================= RIGHT — EVENTS ================= */}
 
-        <h2 className="text-xl text-[#00ff4c] mb-4 tracking-widest">
+      <div className="w-[380px] border-l border-[#00ff66]/30 p-6 bg-black/40 backdrop-blur-xl flex flex-col">
+
+        <h2 className="text-xl text-[#00ff66] mb-4 tracking-widest">
           Upcoming Events Today
         </h2>
 
         {events.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-gray-300 text-sm">
+          <div className="flex-1 flex items-center justify-center text-gray-400">
             No events scheduled today.
           </div>
         ) : (
@@ -213,24 +218,22 @@ export default function HomePage() {
               <div
                 key={event.id}
                 className="
-                  border border-[#00ff4c]/30
-                  rounded-xl p-4
+                  p-4 rounded-xl
+                  border border-[#00ff66]/30
                   bg-black/60
-                  shadow-[0_0_15px_rgba(0,255,80,0.2)]
-                  transition-all duration-300
-                  hover:border-[#00ff4c]
+                  transition-all duration-200
+                  hover:border-[#00ff66]
                   hover:scale-[1.03]
-                  hover:shadow-[0_0_25px_rgba(0,255,80,0.4)]
+                  hover:shadow-[0_0_25px_rgba(0,255,100,0.4)]
                 "
               >
-                <div className="text-sm text-[#00ff4c]">
+                <div className="text-sm text-[#00ff66]">
                   SERVER {event.server_id}
                 </div>
 
+                {/* ✅ FIXED: Properly read object instead of array */}
                 <div className="font-semibold mt-1">
-                  {event.personnel && event.personnel.length > 0
-                    ? event.personnel[0].name
-                    : "Unknown"}
+                  {event.personnel?.name || "Unknown"}
                 </div>
 
                 <div className="text-gray-300 text-sm">
@@ -246,9 +249,9 @@ export default function HomePage() {
         )}
 
         {/* CONNECTIONS */}
-        <div className="mt-6 border-t border-[#00ff4c]/30 pt-6">
 
-          <h3 className="text-[#00ff4c] tracking-widest mb-4">
+        <div className="mt-6 border-t border-[#00ff66]/30 pt-6">
+          <h3 className="text-[#00ff66] tracking-widest mb-4">
             Unit Connections
           </h3>
 
@@ -273,22 +276,19 @@ export default function HomePage() {
               className="
                 block mb-4 px-4 py-3 text-center
                 rounded-xl
-                border border-[#00ff4c]/30
-                transition-all duration-300
-                hover:bg-[#003d14]
-                hover:text-[#00ff4c]
+                border border-[#00ff66]/30
+                transition-all duration-200
+                hover:bg-[#00ff66]/10
                 hover:scale-105
-                hover:shadow-[0_0_20px_rgba(0,255,80,0.5)]
+                hover:shadow-[0_0_20px_rgba(0,255,100,0.5)]
               "
             >
               {item.label}
             </a>
           ))}
-
         </div>
 
       </div>
-
     </div>
   );
 }

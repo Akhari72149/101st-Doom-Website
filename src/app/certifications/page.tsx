@@ -12,9 +12,9 @@ export default function CertificationByPerson() {
   const [certifications, setCertifications] = useState<any[]>([]);
   const router = useRouter();
 
-  /* =====================================================
-     🔥 FETCH PERSONNEL + RANKS
-  ======================================================*/
+  /* ===================================================== */
+  /* FETCH */
+  /* ===================================================== */
 
   useEffect(() => {
     fetchData();
@@ -34,10 +34,6 @@ export default function CertificationByPerson() {
     setRanks(rankData || []);
   };
 
-  /* =====================================================
-     🔥 FETCH CERTIFICATIONS
-  ======================================================*/
-
   const fetchCertifications = async (personId: string) => {
     const { data } = await supabase
       .from("personnel_certifications")
@@ -52,9 +48,9 @@ export default function CertificationByPerson() {
     setCertifications(data || []);
   };
 
-  /* =====================================================
-     🔥 HELPERS
-  ======================================================*/
+  /* ===================================================== */
+  /* HELPERS */
+  /* ===================================================== */
 
   const getRankName = (person: any) => {
     const rank = ranks.find((r) => r.id === person.rank_id);
@@ -67,41 +63,42 @@ export default function CertificationByPerson() {
       .includes(search.toLowerCase())
   );
 
-  /* =====================================================
-     ✅ UI — GREEN TACTICAL THEME
-  ======================================================*/
+  /* ===================================================== */
+  /* UI */
+  /* ===================================================== */
 
   return (
     <div className="
       min-h-screen
-      bg-gradient-to-br from-[#001200] via-[#002700] to-[#000a00]
+      bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
       text-[#eafff2]
       p-10
-      font-orbitron
-      tracking-wide
     ">
 
-      {/* BACK BUTTON */}
+      {/* BACK */}
       <button
         onClick={() => router.push("/pcs")}
         className="
-          mb-6
-          border border-[#00ff4c]
-          px-4 py-2
-          rounded-lg
-          transition-all duration-300
-          shadow-[0_0_15px_rgba(0,255,80,0.3)]
-          hover:bg-[#003d14]
-          hover:text-[#00ff4c]
+          mb-8 px-4 py-2 rounded-lg
+          border border-[#00ff66]/50
+          text-[#00ff66]
+          font-semibold
+          backdrop-blur-md
+          transition-all duration-200
+          hover:bg-[#00ff66]/10
           hover:scale-105
-          hover:shadow-[0_0_25px_rgba(0,255,80,0.6)]
         "
       >
-        ← Back to Dashboard
+        ← Back
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00ff4c] tracking-widest">
-        Certification Lookup
+      {/* TITLE */}
+      <h1 className="
+        text-4xl font-bold mb-8
+        text-[#00ff66]
+        tracking-[0.4em]
+      ">
+        CERTIFICATION LOOKUP
       </h1>
 
       {/* SEARCH */}
@@ -112,23 +109,27 @@ export default function CertificationByPerson() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="
-            bg-black
-            border border-[#00ff4c]
-            p-3 w-full
-            rounded-xl
-            text-white
-            placeholder-gray-400
-            focus:outline-none
-            focus:ring-2 focus:ring-[#00ff4c]
+            w-full p-4 rounded-xl
+            bg-black/40 backdrop-blur-md
+            border border-[#00ff66]/40
+            text-[#00ff66]
+            placeholder:text-[#00ff66]/40
+            focus:border-[#00ff66]
+            focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]
             transition-all duration-300
-            shadow-[0_0_15px_rgba(0,255,80,0.2)]
           "
         />
       </div>
 
       {/* SEARCH RESULTS */}
       {search && (
-        <div className="mb-8 border border-[#00ff4c] bg-black/60 rounded-xl">
+        <div className="
+          mb-8
+          border border-[#00ff66]/40
+          bg-black/50 backdrop-blur-md
+          rounded-xl
+          max-h-64 overflow-y-auto
+        ">
           {filteredPersonnel.length === 0 ? (
             <p className="p-4 text-gray-400">
               No personnel found.
@@ -143,12 +144,12 @@ export default function CertificationByPerson() {
                   setSearch("");
                 }}
                 className="
-                  p-3
-                  border-b border-[#00ff4c]
+                  px-4 py-3
+                  border-b border-[#00ff66]/20
                   cursor-pointer
-                  transition-all duration-300
-                  hover:bg-[#003d14]
-                  hover:text-[#00ff4c]
+                  transition-all duration-200
+                  hover:bg-[#00ff66]/10
+                  hover:text-[#00ff66]
                   hover:pl-6
                 "
               >
@@ -159,60 +160,65 @@ export default function CertificationByPerson() {
         </div>
       )}
 
-      {/* SELECTED PERSON */}
+      {/* PROFILE CARD */}
       {selectedPerson && (
         <div className="
-          border border-[#00ff4c]
-          p-6
-          bg-black/60
-          rounded-2xl
-          shadow-[0_0_40px_rgba(0,255,80,0.2)]
+          p-8 rounded-3xl
+          bg-black/50 backdrop-blur-xl
+          border border-[#00ff66]/30
+          shadow-[0_0_60px_rgba(0,255,100,0.2)]
         ">
-          <h2 className="text-2xl font-bold mb-6 text-[#00ff4c]">
+          <h2 className="
+            text-2xl font-bold mb-6
+            text-[#00ff66]
+            tracking-widest
+          ">
             {getRankName(selectedPerson)} {selectedPerson.name}
           </h2>
 
+          {/* CERTIFICATIONS TABLE */}
           {certifications.length === 0 ? (
             <p className="text-gray-400">
               No certifications assigned.
             </p>
           ) : (
-            <table className="w-full border border-[#00ff4c]">
-              <thead className="bg-[#00ff4c] text-black">
-                <tr>
-                  <th className="px-4 py-2 text-left">
-                    Certification
-                  </th>
-                  <th className="px-4 py-2 text-left">
-                    Awarded At
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {certifications.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="
-                      border-t border-[#00ff4c]
-                      transition-all duration-300
-                      hover:bg-[#003d14]
-                      hover:text-[#00ff4c]
-                    "
-                  >
-                    <td className="px-4 py-3">
-                      {c.certification?.name || "Unknown"}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {c.awarded_at
-                        ? new Date(c.awarded_at).toLocaleDateString()
-                        : "N/A"}
-                    </td>
+            <div className="overflow-hidden rounded-xl border border-[#00ff66]/40">
+              <table className="w-full">
+                <thead className="bg-[#00ff66] text-black">
+                  <tr>
+                    <th className="px-4 py-3 text-left">
+                      Certification
+                    </th>
+                    <th className="px-4 py-3 text-left">
+                      Awarded
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+
+                <tbody>
+                  {certifications.map((c) => (
+                    <tr
+                      key={c.id}
+                      className="
+                        border-t border-[#00ff66]/20
+                        transition-all duration-200
+                        hover:bg-[#00ff66]/10
+                      "
+                    >
+                      <td className="px-4 py-3">
+                        {c.certification?.name || "Unknown"}
+                      </td>
+
+                      <td className="px-4 py-3 text-[#00ff66]">
+                        {c.awarded_at
+                          ? new Date(c.awarded_at).toLocaleDateString()
+                          : "N/A"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

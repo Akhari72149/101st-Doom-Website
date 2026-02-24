@@ -109,11 +109,11 @@ export const structure = [
         type: "sub-header",
         title: "1-3A",
         roles: [
-          { role: "Squad Lead", count: 1, slotId: "tomahawk1-1-2a-squadlead", discordRoleIds: ["757767664474259606", "840037756642263081", "757765856494223451"] },
-          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-2a-teamlead", discordRoleIds: ["757767664474259606", "840037756642263081", "757765856494223451"] },
-          { role: "RTO", count: 1, slotId: "tomahawk1-1-2a-rto", discordRoleIds: ["757767664474259606", "840037756642263081"] },
-          { role: "Trooper", count: 1, slotId: "tomahawk1-1-2a-trooper", discordRoleIds: ["757767664474259606", "840037756642263081"] },
-          { role: "Medic", count: 1, slotId: "tomahawk1-1-2a-medic", discordRoleIds: ["757767664474259606", "840037756642263081"] },
+          { role: "Squad Lead", count: 1, slotId: "tomahawk1-1-3a-squadlead", discordRoleIds: ["757767664474259606", "840037756642263081", "757765856494223451"] },
+          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-3a-teamlead", discordRoleIds: ["757767664474259606", "840037756642263081", "757765856494223451"] },
+          { role: "RTO", count: 1, slotId: "tomahawk1-1-3a-rto", discordRoleIds: ["757767664474259606", "840037756642263081"] },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-3a-trooper", discordRoleIds: ["757767664474259606", "840037756642263081"] },
+          { role: "Medic", count: 1, slotId: "tomahawk1-1-3a-medic", discordRoleIds: ["757767664474259606", "840037756642263081"] },
         ],
       },
 
@@ -121,9 +121,9 @@ export const structure = [
         type: "sub-header",
         title: "1-3B",
         roles: [
-          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-2b-teamlead", discordRoleIds: ["757767664474259606", "840037756642263081", "757765856494223451"] },
-          { role: "Trooper", count: 2, slotId: "tomahawk1-1-2b-trooper", discordRoleIds: ["757767664474259606", "840037756642263081"] },
-          { role: "Medic", count: 1, slotId: "tomahawk1-1-2b-medic", discordRoleIds: ["757767664474259606", "840037756642263081"] },
+          { role: "Team Lead", count: 1, slotId: "tomahawk1-1-3b-teamlead", discordRoleIds: ["757767664474259606", "840037756642263081", "757765856494223451"] },
+          { role: "Trooper", count: 2, slotId: "tomahawk1-1-3b-trooper", discordRoleIds: ["757767664474259606", "840037756642263081"] },
+          { role: "Medic", count: 1, slotId: "tomahawk1-1-3b-medic", discordRoleIds: ["757767664474259606", "840037756642263081"] },
         ],
       },
 	  

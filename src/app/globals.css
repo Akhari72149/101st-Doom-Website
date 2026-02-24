@@ -58,3 +58,18 @@ body::after {
   pointer-events: none;
   z-index: -1;
 }
+
+@keyframes tickerScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ticker {
+  display: flex;
+  width: max-content;
+  animation: tickerScroll 20s linear infinite;
+}

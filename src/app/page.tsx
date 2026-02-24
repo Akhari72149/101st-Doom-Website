@@ -53,6 +53,7 @@ export default function HomePage() {
     "/slideshow/simple.jpg",
     "/slideshow/beach.jpg",
     "/slideshow/img6.jpg",
+    "/slideshow/img7.jpg",
     "/slideshow/halberd.jpg",
   ];
 

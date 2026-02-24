@@ -137,6 +137,14 @@ export const structure = [
           { role: "Trooper", count: 1, slotId: "tomahawk1-scimitar-medic", discordRoleIds: ["1259512490300276756", "840037756642263081"] },
         ],
       },
+	  
+	  {
+        type: "sub-header",
+        title: "Logistics",
+        roles: [
+          { role: "Trooper", count: 2, slotId: "scimitar1-1-1-trooper", discordRoleIds: ["1259512490300276756", "840037756642263081","757766977350664232"] },
+        ],
+      },
 
       {
         type: "sub-header",

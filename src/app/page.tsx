@@ -38,11 +38,17 @@ export default function HomePage() {
   ];
 
   const slides = [
+    "/slideshow/farewell.jpg",
     "/slideshow/img1.jpg",
     "/slideshow/img2.jpg",
     "/slideshow/img3.jpg",
     "/slideshow/img4.jpg",
     "/slideshow/img5.jpg",
+    "/slideshow/dagger.jpg",
+    "/slideshow/simple.jpg",
+    "/slideshow/beach.jpg",
+    "/slideshow/img6.jpg",
+    "/slideshow/halberd.jpg",
   ];
 
   /* ================= LIVE CLOCK ================= */

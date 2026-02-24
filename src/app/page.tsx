@@ -77,6 +77,33 @@ export default function HomePage() {
 
     return () => clearInterval(interval);
   }, []);
+  
+  /* ================= WEEKLY EVENTS (UTC BASED) ================= */
+
+const weeklyEvents = [
+  { name: "Tomahawk 1", day: 0, hour: 20, minute: 0 }, // Sunday 15:00 UTC
+  { name: "Claymore 2", day: 6, hour: 24, minute: 0 }, // Friday 19:00 UTC
+  { name: "Broadsword 3", day: 0, hour: 2, minute: 0 },
+  { name: "Dagger", day: 6, hour: 23, minute: 0 },
+];
+
+const getNextOccurrence = (day: number, hour: number, minute: number) => {
+  const now = new Date();
+  const result = new Date();
+
+  result.setUTCHours(hour, minute, 0, 0);
+
+  const currentDay = result.getUTCDay();
+  const diff = (day - currentDay + 7) % 7;
+
+  result.setUTCDate(result.getUTCDate() + diff);
+
+  if (result < now) {
+    result.setUTCDate(result.getUTCDate() + 7);
+  }
+
+  return result;
+};
 
   /* ================= EVENTS ================= */
 
@@ -306,35 +333,39 @@ export default function HomePage() {
           )}
 
           {/* ================= WEEKLY EVENTS ================= */}
-          <div className="mt-8 border-t border-[#00ff66]/30 pt-6">
-            <h2 className="text-xl text-[#00ff66] mb-4 tracking-widest">
-              Weekly Events
-            </h2>
+          <div className="space-y-4">
+  {weeklyEvents.map((event) => {
+    const localDate = getNextOccurrence(
+      event.day,
+      event.hour,
+      event.minute
+    );
 
-            <div className="space-y-4">
-              {[
-                { name: "Tomahawk 1", day: "Sunday", time: "3:00 PM" },
-                { name: "Claymore 2", day: "Friday", time: "7:00 PM" },
-                { name: "Broadsword 3", day: "Friday", time: "9:00 PM" },
-                { name: "Dagger", day: "Friday", time: "6:00 PM" },
-              ].map((event) => (
-                <div
-                  key={event.name}
-                  className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
-                >
-                  <div className="text-[#00ff66] font-semibold">
-                    {event.name}
-                  </div>
-                  <div className="text-sm text-gray-300 mt-1">
-                    {event.day}
-                  </div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {event.time}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+    return (
+      <div
+        key={event.name}
+        className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
+      >
+        <div className="text-[#00ff66] font-semibold">
+          {event.name}
+        </div>
+
+        <div className="text-sm text-gray-300 mt-1">
+          {localDate.toLocaleDateString(undefined, {
+            weekday: "long",
+          })}
+        </div>
+
+        <div className="text-xs text-gray-400 mt-1">
+          {localDate.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </div>
+      </div>
+    );
+  })}
+</div>
 
           {/* UNIT CONNECTIONS */}
           <div className="mt-6 border-t border-[#00ff66]/30 pt-6">

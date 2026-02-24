@@ -15,6 +15,7 @@ export default function CreatePersonnel() {
   const [birthNumber, setBirthNumber] = useState("");
   const [name, setName] = useState("");
   const [discordId, setDiscordId] = useState("");
+  const [teamspeakId, setTeamspeakId] = useState(""); // ✅ NEW
 
   const [skipRoleSync, setSkipRoleSync] = useState(false);
   const [importFromDiscord, setImportFromDiscord] = useState(false);
@@ -104,6 +105,7 @@ export default function CreatePersonnel() {
           birth_number: birthNumber,
           name,
           discord_id: discordId || null,
+          ts_id: teamspeakId || null, // ✅ NEW COLUMN
           auto_role_sync: !skipRoleSync && !importFromDiscord,
           created_at: new Date().toISOString(),
         },
@@ -116,7 +118,7 @@ export default function CreatePersonnel() {
       return;
     }
 
-    /* ================= 🔥 AUDIT LOG (NEW MEMBER) ================= */
+    /* ================= 🔥 AUDIT LOG ================= */
 
     await supabase.from("audit_logs").insert([
       {
@@ -150,6 +152,7 @@ export default function CreatePersonnel() {
     setBirthNumber("");
     setName("");
     setDiscordId("");
+    setTeamspeakId(""); // ✅ RESET
     setSkipRoleSync(false);
     setImportFromDiscord(false);
   };
@@ -194,7 +197,20 @@ export default function CreatePersonnel() {
           />
         </div>
 
-        {/* CHECKBOXES (🔥 RESTORED EXACTLY) */}
+        {/* ✅ TEAMSPEAK ID (NEW) */}
+        <div className="mb-6">
+          <label className="block mb-2 text-sm text-gray-300">
+            Teamspeak ID (Optional for now, will be required soon)
+          </label>
+          <input
+            type="text"
+            value={teamspeakId}
+            onChange={(e) => setTeamspeakId(e.target.value)}
+            className="w-full p-4 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66]"
+          />
+        </div>
+
+        {/* CHECKBOXES */}
         <div className="mb-6 flex flex-col gap-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input

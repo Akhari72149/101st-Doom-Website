@@ -10,8 +10,11 @@ export default function AuditLogsPage() {
   /* ================= STATES ================= */
 
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [loadingLogs, setLoadingLogs] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
+
+  const [users, setUsers] = useState<string[]>([]);
+  const [actions, setActions] = useState<string[]>([]);
 
   const [selectedUser, setSelectedUser] = useState<string>("all");
   const [selectedAction, setSelectedAction] = useState<string>("all");
@@ -43,51 +46,107 @@ export default function AuditLogsPage() {
         return;
       }
 
-      await fetchLogs();
+      await fetchFilterOptions();
       setLoadingAuth(false);
     };
 
     checkAccess();
   }, [router]);
 
+  /* ================= FETCH FILTER OPTIONS ================= */
+
+  const fetchFilterOptions = async () => {
+    // Fetch users
+    const { data: userData } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .order("display_name");
+
+    if (userData) {
+      setUsers(
+        userData
+          .map((u) => u.display_name)
+          .filter(Boolean)
+      );
+    }
+
+    // Fetch actions
+    const { data: actionData } = await supabase
+      .from("audit_logs")
+      .select("action");
+
+    if (actionData) {
+      const uniqueActions = Array.from(
+        new Set(actionData.map((a) => a.action).filter(Boolean))
+      );
+      setActions(uniqueActions);
+    }
+  };
+
+  /* ================= FILTER DETECTION ================= */
+
+  const hasActiveFilter =
+    selectedUser !== "all" ||
+    selectedAction !== "all" ||
+    selectedDate !== "all";
+
   /* ================= FETCH LOGS ================= */
 
   const fetchLogs = async () => {
+    if (!hasActiveFilter) {
+      setLogs([]);
+      return;
+    }
+
     setLoadingLogs(true);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("audit_logs")
       .select(`
         id,
         action,
         created_at,
-
-        profiles:user_id (
-          display_name
-        ),
-
-        personnel:target_personnel_id (
-          name
-        ),
-
-        ranks:target_rank_id (
-          name
-        ),
-
-        oldRank:old_rank_id (
-          name
-        ),
-
-        certifications:target_certification_id (
-          name
-        ),
-
+        user_id,
+        profiles:user_id ( display_name ),
+        personnel:target_personnel_id ( name ),
+        ranks:target_rank_id ( name ),
+        oldRank:old_rank_id ( name ),
+        certifications:target_certification_id ( name ),
         target_slot_label,
         target_slot_section,
         target_slot_subsection
       `)
       .order("created_at", { ascending: false })
       .limit(200);
+
+    if (selectedAction !== "all") {
+      query = query.eq("action", selectedAction);
+    }
+
+    if (selectedDate !== "all") {
+      const start = new Date(selectedDate);
+      const end = new Date(selectedDate);
+      end.setHours(23, 59, 59, 999);
+
+      query = query
+        .gte("created_at", start.toISOString())
+        .lte("created_at", end.toISOString());
+    }
+
+    if (selectedUser !== "all") {
+      // Get user_id from profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("display_name", selectedUser)
+        .single();
+
+      if (profile) {
+        query = query.eq("user_id", profile.id);
+      }
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       alert(error.message);
@@ -98,6 +157,16 @@ export default function AuditLogsPage() {
     setLogs(data || []);
     setLoadingLogs(false);
   };
+
+  /* ================= FETCH WHEN FILTER CHANGES ================= */
+
+  useEffect(() => {
+    if (hasActiveFilter) {
+      fetchLogs();
+    } else {
+      setLogs([]);
+    }
+  }, [selectedUser, selectedAction, selectedDate]);
 
   /* ================= HELPERS ================= */
 
@@ -135,8 +204,6 @@ export default function AuditLogsPage() {
     return "";
   };
 
-  /* ================= ACTION COLORS ================= */
-
   const getActionStyle = (action: string) => {
     switch (action) {
       case "RANK_CHANGED":
@@ -154,7 +221,7 @@ export default function AuditLogsPage() {
     }
   };
 
-  /* ================= LOADING ================= */
+  /* ================= LOADING SCREEN ================= */
 
   if (loadingAuth) {
     return (
@@ -164,38 +231,10 @@ export default function AuditLogsPage() {
     );
   }
 
-  /* ================= FILTER DATA ================= */
-
-  const uniqueUsers = Array.from(
-    new Set(logs.map((log) => log.profiles?.display_name).filter(Boolean))
-  );
-
-  const uniqueActions = Array.from(
-    new Set(logs.map((log) => log.action).filter(Boolean))
-  );
-
-  const filteredLogs = logs.filter((log) => {
-    const userMatch =
-      selectedUser === "all" ||
-      log.profiles?.display_name === selectedUser;
-
-    const actionMatch =
-      selectedAction === "all" ||
-      log.action === selectedAction;
-
-    const dateMatch =
-      selectedDate === "all" ||
-      new Date(log.created_at).toDateString() ===
-        new Date(selectedDate).toDateString();
-
-    return userMatch && actionMatch && dateMatch;
-  });
-
   /* ================= UI ================= */
 
   return (
     <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
-
       <button
         onClick={() => router.push("/pcs")}
         className="mb-8 px-5 py-2 rounded-xl border border-[#00ff66]/50 text-[#00ff66] hover:bg-[#00ff66]/10 transition"
@@ -204,44 +243,38 @@ export default function AuditLogsPage() {
       </button>
 
       <div className="max-w-6xl mx-auto p-8 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg shadow-[0_0_60px_rgba(0,255,100,0.15)]">
-
         <h1 className="text-3xl font-bold text-[#00ff66] mb-6">
           Audit Logs
         </h1>
 
-        {/* ================= FILTERS ================= */}
-
+        {/* FILTERS */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-
-          {/* USER FILTER */}
           <select
             value={selectedUser}
             onChange={(e) => setSelectedUser(e.target.value)}
             className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white"
           >
             <option value="all">All Users</option>
-            {uniqueUsers.map((user) => (
+            {users.map((user) => (
               <option key={user} value={user}>
                 {user}
               </option>
             ))}
           </select>
 
-          {/* ACTION FILTER */}
           <select
             value={selectedAction}
             onChange={(e) => setSelectedAction(e.target.value)}
             className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white"
           >
             <option value="all">All Actions</option>
-            {uniqueActions.map((action) => (
+            {actions.map((action) => (
               <option key={action} value={action}>
                 {action}
               </option>
             ))}
           </select>
 
-          {/* DATE FILTER */}
           <input
             type="date"
             value={selectedDate === "all" ? "" : selectedDate}
@@ -250,10 +283,7 @@ export default function AuditLogsPage() {
             }
             className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white"
           />
-
         </div>
-
-        {/* RESET BUTTON */}
 
         <button
           onClick={() => {
@@ -266,11 +296,9 @@ export default function AuditLogsPage() {
           Reset Filters
         </button>
 
-        {/* ================= TABLE ================= */}
-
+        {/* TABLE */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-
             <thead>
               <tr className="border-b border-[#00ff66]/30 text-[#00ff66]">
                 <th className="p-3">User</th>
@@ -282,20 +310,26 @@ export default function AuditLogsPage() {
             </thead>
 
             <tbody>
-              {loadingLogs ? (
+              {!hasActiveFilter ? (
+                <tr>
+                  <td colSpan={5} className="p-6 text-center text-gray-400">
+                    Apply at least one filter to view audit logs.
+                  </td>
+                </tr>
+              ) : loadingLogs ? (
                 <tr>
                   <td colSpan={5} className="p-6 text-center text-gray-400">
                     Loading logs...
                   </td>
                 </tr>
-              ) : filteredLogs.length === 0 ? (
+              ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-6 text-center text-gray-400">
                     No logs found.
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => {
+                logs.map((log) => {
                   const user = log.profiles?.display_name || "Unknown";
                   const personnelName = log.personnel?.name || "Unknown";
 
@@ -325,10 +359,8 @@ export default function AuditLogsPage() {
                 })
               )}
             </tbody>
-
           </table>
         </div>
-
       </div>
     </div>
   );

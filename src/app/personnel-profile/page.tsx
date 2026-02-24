@@ -129,15 +129,7 @@ export default function PersonnelProfile() {
       {/* BACK */}
       <button
         onClick={() => router.push("/pcs")}
-        className="
-          mb-6 px-4 py-2 rounded-lg
-          border border-[#00ff66]/50
-          text-[#00ff66]
-          font-semibold
-          transition-all duration-200
-          hover:bg-[#00ff66]/10
-          hover:scale-105
-        "
+        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold transition-all duration-200 hover:bg-[#00ff66]/10 hover:scale-105"
       >
         ← Return to Dashboard
       </button>
@@ -152,25 +144,12 @@ export default function PersonnelProfile() {
         placeholder="Search by rank or name..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="
-          w-full mb-6 p-4 rounded-xl
-          bg-black/40 backdrop-blur-md
-          border border-[#00ff66]/40
-          text-[#00ff66]
-          placeholder:text-[#00ff66]/40
-          focus:border-[#00ff66]
-          focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]
-          transition-all duration-300
-        "
+        className="w-full mb-6 p-4 rounded-xl bg-black/40 backdrop-blur-md border border-[#00ff66]/40 text-[#00ff66] placeholder:text-[#00ff66]/40 focus:border-[#00ff66] focus:shadow-[0_0_15px_rgba(0,255,100,0.4)] transition-all duration-300"
       />
 
       {/* SEARCH RESULTS */}
       {search && (
-        <div className="
-          border border-[#00ff66]/40
-          bg-black/50 backdrop-blur-md
-          rounded-xl max-h-60 overflow-y-auto mb-6
-        ">
+        <div className="border border-[#00ff66]/40 bg-black/50 backdrop-blur-md rounded-xl max-h-60 overflow-y-auto mb-6">
           {filteredPersonnel.map((p) => (
             <div
               key={p.id}
@@ -178,14 +157,7 @@ export default function PersonnelProfile() {
                 setSearch("");
                 loadProfile(p);
               }}
-              className="
-                p-3 border-b border-[#00ff66]/20
-                cursor-pointer
-                hover:bg-[#00ff66]/10
-                hover:text-[#00ff66]
-                hover:pl-6
-                transition-all duration-200
-              "
+              className="p-3 border-b border-[#00ff66]/20 cursor-pointer hover:bg-[#00ff66]/10 hover:text-[#00ff66] hover:pl-6 transition-all duration-200"
             >
               {getRankName(p.rank_id)} {p.name}
             </div>
@@ -198,12 +170,7 @@ export default function PersonnelProfile() {
         <div className="space-y-10">
 
           {/* MAIN PROFILE CARD */}
-          <div className="
-            p-10 rounded-3xl
-            bg-black/50 backdrop-blur-xl
-            border border-[#00ff66]/30
-            shadow-[0_0_60px_rgba(0,255,100,0.15)]
-          ">
+          <div className="p-10 rounded-3xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30 shadow-[0_0_60px_rgba(0,255,100,0.15)]">
 
             <p className="text-sm tracking-[0.4em] text-gray-400 uppercase">
               {getRankName(selectedPerson.rank_id)}
@@ -227,7 +194,7 @@ export default function PersonnelProfile() {
 
             <div className="border-t border-[#00ff66]/40 my-8" />
 
-            {/* SERVICE */}
+            {/* YEARS OF SERVICE BAR */}
             <div>
               <p className="text-xs text-gray-400 mb-2 tracking-widest">
                 YEARS OF SERVICE
@@ -275,7 +242,7 @@ export default function PersonnelProfile() {
                 </p>
               </div>
 
-              <div className="md:col-span-2">
+              <div>
                 <p className="text-xs text-gray-400 tracking-widest">
                   CURRENT BILLET
                 </p>
@@ -284,60 +251,68 @@ export default function PersonnelProfile() {
                 </p>
               </div>
 
+              <div>
+                <p className="text-xs text-gray-400 tracking-widest">
+                  TEAMSPEAK ID
+                </p>
+                <p className="text-lg text-[#00ff66]">
+                  {selectedPerson.ts_id || "Not Set"}
+                </p>
+              </div>
+
             </div>
           </div>
 
-          {/* PROMOTION + CERT CARDS */}
-          {[
-            {
-              title: "PROMOTION RECORD",
-              data: rankHistory,
-              empty: "No promotion history recorded.",
-              render: (r: any) => (
-                <>
-                  <span>{getRankName(r.rank)}</span>
-                  <span className="text-gray-400">
-                    {formatDate(r.changed_at)}
-                  </span>
-                </>
-              ),
-            },
-            {
-              title: "QUALIFICATIONS",
-              data: certifications,
-              empty: "No certifications recorded.",
-              render: (c: any) => <span>{c.certification?.name}</span>,
-            },
-          ].map((section, idx) => (
-            <div
-              key={idx}
-              className="
-                p-8 rounded-2xl
-                bg-black/50 backdrop-blur-xl
-                border border-[#00ff66]/30
-                shadow-[0_0_40px_rgba(0,255,100,0.15)]
-              "
-            >
-              <h3 className="text-lg tracking-widest border-b border-[#00ff66]/40 pb-3 mb-4">
-                {section.title}
-              </h3>
+          {/* PROMOTION RECORD */}
+          <div className="p-8 rounded-2xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30 shadow-[0_0_40px_rgba(0,255,100,0.15)]">
+            <h3 className="text-lg tracking-widest border-b border-[#00ff66]/40 pb-3 mb-4">
+              PROMOTION RECORD
+            </h3>
 
-              {section.data.length === 0 ? (
-                <p className="text-gray-400">{section.empty}</p>
-              ) : (
-                <div className="space-y-3">
-                  {section.data.map((item: any, i: number) => (
-                    <div
-                      key={i}
-                      className="flex justify-between border-b border-[#00ff66]/20 py-2"
-                    >
-                      {section.render(item)}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+            {rankHistory.length === 0 ? (
+              <p className="text-gray-400">
+                No promotion history recorded.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {rankHistory.map((r: any, i: number) => (
+                  <div
+                    key={i}
+                    className="flex justify-between border-b border-[#00ff66]/20 py-2"
+                  >
+                    <span>{getRankName(r.rank)}</span>
+                    <span className="text-gray-400">
+                      {formatDate(r.changed_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* QUALIFICATIONS */}
+          <div className="p-8 rounded-2xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30 shadow-[0_0_40px_rgba(0,255,100,0.15)]">
+            <h3 className="text-lg tracking-widest border-b border-[#00ff66]/40 pb-3 mb-4">
+              QUALIFICATIONS
+            </h3>
+
+            {certifications.length === 0 ? (
+              <p className="text-gray-400">
+                No certifications recorded.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {certifications.map((c: any, i: number) => (
+                  <div
+                    key={i}
+                    className="flex justify-between border-b border-[#00ff66]/20 py-2"
+                  >
+                    <span>{c.certification?.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
         </div>
       )}

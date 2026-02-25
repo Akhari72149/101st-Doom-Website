@@ -81,8 +81,8 @@ export default function HomePage() {
   /* ================= WEEKLY EVENTS (UTC BASED) ================= */
 
 const weeklyEvents = [
-  { name: "Tomahawk 1", day: 0, hour: 20, minute: 0 }, // Sunday 15:00 UTC
-  { name: "Claymore 2", day: 6, hour: 24, minute: 0 }, // Friday 19:00 UTC
+  { name: "Tomahawk 1", day: 0, hour: 20, minute: 0 }, 
+  { name: "Claymore 2", day: 6, hour: 24, minute: 0 }, 
   { name: "Broadsword 3", day: 0, hour: 2, minute: 0 },
   { name: "Dagger", day: 6, hour: 23, minute: 0 },
 ];
@@ -273,12 +273,38 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
             Operational Command & Personnel Management System
           </p>
 
-          <button
-            onClick={() => router.push("/pcs")}
-            className="mt-8 px-8 py-3 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all"
-          >
-            Enter Personnel Command
-          </button>
+          <div className="mt-8 flex flex-col items-center gap-4">
+
+  {/* Main Button */}
+  <button
+    onClick={() => router.push("/pcs")}
+    className="px-8 py-3 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all"
+  >
+    Enter Personnel Command
+  </button>
+
+  {/* Row With Offset Buttons */}
+  <div className="flex gap-8">
+    
+    {/* Left Offset */}
+    <button
+      onClick={() => router.push("/Art-of-War")}
+      className="px-8 py-3 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all translate-x-[-20px]"
+    >
+      Art of War
+    </button>
+
+    {/* Right Button */}
+    <button
+      onClick={() => router.push("/Galactic-Campaign")}
+      className="px-8 py-3 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all translate-x-[20px]"
+    >
+      Galactic Campaign
+    </button>
+
+  </div>
+
+</div>
 
           <div className="mt-20 w-[95%] max-w-4xl h-[500px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
             {slides.map((slide, index) => (

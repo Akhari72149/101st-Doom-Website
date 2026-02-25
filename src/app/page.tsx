@@ -108,71 +108,6 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
   return result;
 };
 
-  /* ================= Logic for countdown & In Progress ================= */
-
-const getEventStatus = (day: number, hour: number, minute: number) => {
-  const now = new Date();
-
-  const thisWeek = getNextOccurrence(day, hour, minute);
-  const lastWeek = new Date(thisWeek);
-  lastWeek.setDate(thisWeek.getDate() - 7);
-
-  const possibleStarts = [lastWeek, thisWeek];
-
-  for (const start of possibleStarts) {
-    const startTime = start.getTime();
-    const endTime = startTime + 2 * 60 * 60 * 1000;
-
-    // ✅ ACTIVE
-    if (now.getTime() >= startTime && now.getTime() <= endTime) {
-  const remaining = endTime - now.getTime();
-  const elapsed = 2 * 60 * 60 * 1000 - remaining;
-
-  const progress = (elapsed / (2 * 60 * 60 * 1000)) * 100;
-
-  const hours = Math.floor(
-    (remaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-  );
-  const minutes = Math.floor(
-    (remaining % (1000 * 60 * 60)) / (1000 * 60)
-  );
-  const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-
-  return {
-    type: "active",
-    hours,
-    minutes,
-    seconds,
-    progress,
-  };
-}
-
-    // ✅ UPCOMING
-    if (now.getTime() < startTime) {
-      const diff = startTime - now.getTime();
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor(
-        (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-      );
-      const minutes = Math.floor(
-        (diff % (1000 * 60 * 60)) / (1000 * 60)
-      );
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      return {
-        type: "upcoming",
-        days,
-        hours,
-        minutes,
-        seconds,
-      };
-    }
-  }
-
-  return { type: "finished" };
-};
-
   /* ================= EVENTS ================= */
 
   useEffect(() => {
@@ -528,7 +463,6 @@ const getEventStatus = (day: number, hour: number, minute: number) => {
       Weekly Events
     </span>
 
-    {/* Arrow Icon */}
     <span
       className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
         weeklyOpen ? "rotate-180" : "rotate-0"
@@ -547,17 +481,11 @@ const getEventStatus = (day: number, hour: number, minute: number) => {
     <div className="p-4 rounded-2xl border border-[#00ff66]/40 bg-black/40">
       <div className="space-y-4">
         {weeklyEvents.map((event) => {
-          const status = getEventStatus(
-  event.day,
-  event.hour,
-  event.minute
-);
-
-const nextOccurrence = getNextOccurrence(
-  event.day,
-  event.hour,
-  event.minute
-);
+          const nextOccurrence = getNextOccurrence(
+            event.day,
+            event.hour,
+            event.minute
+          );
 
           return (
             <div
@@ -575,51 +503,11 @@ const nextOccurrence = getNextOccurrence(
               </div>
 
               <div className="text-xs text-gray-400 mt-1">
-  {nextOccurrence.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  })}
-</div>
-
-<div className="mt-2 text-xs font-mono">
-  {status.type === "upcoming" && (
-    <div className="text-[#00ff66]">
-      Starts in:{" "}
-      {status.days > 0 && `${status.days}d `}
-      {status.hours > 0 && `${status.hours}h `}
-      {status.minutes > 0 && `${status.minutes}m `}
-      {status.seconds}s
-    </div>
-  )}
-
-  {status.type === "active" && (
-  <div className="space-y-2">
-    
-    {/* Operation Text */}
-    <div className="text-orange-400 font-bold animate-pulse">
-      🚀 Operation In Progress —{" "}
-      {status.hours}h {status.minutes}m {status.seconds}s remaining
-    </div>
-
-    {/* Progress Bar */}
-    <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-      <div
-        className="h-full bg-orange-500 transition-all duration-300"
-        style={{
-          width: `${status.progress}%`,
-        }}
-      />
-    </div>
-
-  </div>
-)}
-
-  {status.type === "finished" && (
-    <div className="text-gray-500">
-      Completed
-    </div>
-  )}
-</div>
+                {nextOccurrence.toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </div>
             </div>
           );
         })}

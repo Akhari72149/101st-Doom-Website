@@ -18,8 +18,11 @@ export default function Roster() {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [ranks, setRanks] = useState<any[]>([]);
 
-  // ✅ Added dropdown state
+  // Header dropdown state
   const [openSection, setOpenSection] = useState<number | null>(null);
+
+  // Sub-header dropdown state (sectionIndex-childIndex)
+  const [openSubSection, setOpenSubSection] = useState<string | null>(null);
 
   /* ================= FETCH ================= */
 
@@ -58,9 +61,11 @@ export default function Roster() {
 
           {/* HEADER */}
           <div
-            onClick={() =>
-              setOpenSection(openSection === index ? null : index)
-            }
+            onClick={() => {
+              const isOpen = openSection === index;
+              setOpenSection(isOpen ? null : index);
+              setOpenSubSection(null); // Reset sub-sections when switching header
+            }}
             className="
               px-6 py-5
               rounded-3xl
@@ -78,101 +83,112 @@ export default function Roster() {
             {section.title}
           </div>
 
-          {/* ✅ Only render children if open */}
+          {/* Only render section if open */}
           {openSection === index &&
             section.children?.map((child: any, childIndex: number) => {
               if (child.type !== "sub-header") return null;
+
+              const subKey = `${index}-${childIndex}`;
+              const isSubOpen = openSubSection === subKey;
 
               return (
                 <div key={childIndex} className="ml-10 mt-10">
 
                   {/* SUB HEADER */}
-                  <div className="
-                    px-5 py-3
-                    rounded-2xl
-                    border border-[#00ff66]/30
-                    bg-black/40 backdrop-blur-md
-                    text-[#00ff66]
-                    text-lg font-semibold
-                    shadow-[0_0_30px_rgba(0,255,100,0.2)]
-                  ">
+                  <div
+                    onClick={() =>
+                      setOpenSubSection(isSubOpen ? null : subKey)
+                    }
+                    className="
+                      px-5 py-3
+                      rounded-2xl
+                      border border-[#00ff66]/30
+                      bg-black/40 backdrop-blur-md
+                      text-[#00ff66]
+                      text-lg font-semibold
+                      shadow-[0_0_30px_rgba(0,255,100,0.2)]
+                      cursor-pointer
+                      transition-all duration-200
+                      hover:border-[#00ff66]
+                      hover:shadow-[0_0_50px_rgba(0,255,100,0.4)]
+                    "
+                  >
                     {child.title}
                   </div>
 
-                  {/* ROLES */}
-                  {child.roles?.map((role: any, roleIndex: number) => {
-                    const matchedPeople = personnel.filter((person) =>
-                      person.slotted_position?.startsWith(role.slotId)
-                    );
+                  {/* ROLES (only if sub-header open) */}
+                  {isSubOpen &&
+                    child.roles?.map((role: any, roleIndex: number) => {
+                      const matchedPeople = personnel.filter((person) =>
+                        person.slotted_position?.startsWith(role.slotId)
+                      );
 
-                    return (
-                      <div
-                        key={roleIndex}
-                        className="
-                          ml-8 mt-6
-                          p-6
-                          rounded-3xl
-                          border border-[#00ff66]/20
-                          bg-black/50 backdrop-blur-xl
-                          shadow-[0_0_40px_rgba(0,255,100,0.12)]
-                          transition-all duration-300
-                          hover:border-[#00ff66]
-                          hover:shadow-[0_0_70px_rgba(0,255,100,0.35)]
-                        "
-                      >
+                      return (
+                        <div
+                          key={roleIndex}
+                          className="
+                            ml-8 mt-6
+                            p-6
+                            rounded-3xl
+                            border border-[#00ff66]/20
+                            bg-black/50 backdrop-blur-xl
+                            shadow-[0_0_40px_rgba(0,255,100,0.12)]
+                            transition-all duration-300
+                            hover:border-[#00ff66]
+                            hover:shadow-[0_0_70px_rgba(0,255,100,0.35)]
+                          "
+                        >
 
-                        {/* ROLE TITLE */}
-                        <div className="mb-4 text-[#00ff66] font-bold tracking-wide">
-                          {role.role}
+                          {/* ROLE TITLE */}
+                          <div className="mb-4 text-[#00ff66] font-bold tracking-wide">
+                            {role.role}
+                            {role.count > 1 && (
+                              <span className="text-gray-400 ml-2">
+                                ×{role.count}
+                              </span>
+                            )}
+                          </div>
 
-                          {role.count > 1 && (
-                            <span className="text-gray-400 ml-2">
-                              ×{role.count}
-                            </span>
+                          {/* SLOTS */}
+                          {Array.from({ length: role.count }).map(
+                            (_, slotIndex) => {
+                              const person = matchedPeople[slotIndex];
+
+                              return (
+                                <div
+                                  key={slotIndex}
+                                  className="
+                                    px-4 py-3 mb-3
+                                    rounded-xl
+                                    border border-[#00ff66]/30
+                                    bg-black/40
+                                    transition-all duration-200
+                                    hover:border-[#00ff66]
+                                    hover:scale-[1.03]
+                                    hover:shadow-[0_0_25px_rgba(0,255,100,0.5)]
+                                  "
+                                >
+                                  {person ? (
+                                    <>
+                                      <span className="font-bold text-[#00ff66]">
+                                        {getRankName(person.rank_id)}
+                                      </span>{" "}
+                                      <span>
+                                        {person.name}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-500">
+                                      Empty Slot
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            }
                           )}
                         </div>
-
-                        {/* SLOTS */}
-                        {Array.from({ length: role.count }).map(
-                          (_, slotIndex) => {
-                            const person = matchedPeople[slotIndex];
-
-                            return (
-                              <div
-                                key={slotIndex}
-                                className="
-                                  px-4 py-3 mb-3
-                                  rounded-xl
-                                  border border-[#00ff66]/30
-                                  bg-black/40
-                                  transition-all duration-200
-                                  hover:border-[#00ff66]
-                                  hover:scale-[1.03]
-                                  hover:shadow-[0_0_25px_rgba(0,255,100,0.5)]
-                                "
-                              >
-                                {person ? (
-                                  <>
-                                    <span className="font-bold text-[#00ff66]">
-                                      {getRankName(person.rank_id)}
-                                    </span>{" "}
-                                    <span>
-                                      {person.name}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span className="text-gray-500">
-                                    Empty Slot
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          }
-                        )}
-
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
 
                 </div>
               );

@@ -56,7 +56,7 @@ export default function GCLogisticsHub() {
     const check = async () => {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
-        router.replace("/login");
+        router.replace("/GC-Platoon-Logi");
         return;
       }
       setLoadingAuth(false);
@@ -270,6 +270,12 @@ export default function GCLogisticsHub() {
       {/* ================= LEFT ================= */}
 
       <div className="w-[300px] border-r border-[#00ff66]/30 p-6 space-y-4">
+	  <button
+            onClick={() => router.push("/Galactic-Campaign")}
+            className="px-4 py-2 border border-[#00ff66] text-[#00ff66]"
+          >
+            ← Back
+          </button>
         <h2 className="text-[#00ff66] text-xl mb-4">Platoons</h2>
 
         {platoons.map((p) => (

@@ -31,6 +31,9 @@ export default function HomePage() {
   const [expandedServer, setExpandedServer] = useState<number | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [time, setTime] = useState(new Date());
+  const [weeklyOpen, setWeeklyOpen] = useState(false);
+  const [previousStatus, setPreviousStatus] = useState<Record<number, boolean>>({});
+  
 
   /* ================= DATA ================= */
 
@@ -81,7 +84,7 @@ export default function HomePage() {
   /* ================= WEEKLY EVENTS (UTC BASED) ================= */
 
 const weeklyEvents = [
-  { name: "Tomahawk 1", day: 0, hour: 20, minute: 0 }, 
+  { name: "Tomahawk 1", day: 0, hour: 20, minute:0 }, 
   { name: "Claymore 2", day: 6, hour: 24, minute: 0 }, 
   { name: "Broadsword 3", day: 0, hour: 2, minute: 0 },
   { name: "Dagger", day: 6, hour: 23, minute: 0 },
@@ -103,6 +106,71 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
   }
 
   return result;
+};
+
+  /* ================= Logic for countdown & In Progress ================= */
+
+const getEventStatus = (day: number, hour: number, minute: number) => {
+  const now = new Date();
+
+  const thisWeek = getNextOccurrence(day, hour, minute);
+  const lastWeek = new Date(thisWeek);
+  lastWeek.setDate(thisWeek.getDate() - 7);
+
+  const possibleStarts = [lastWeek, thisWeek];
+
+  for (const start of possibleStarts) {
+    const startTime = start.getTime();
+    const endTime = startTime + 2 * 60 * 60 * 1000;
+
+    // ✅ ACTIVE
+    if (now.getTime() >= startTime && now.getTime() <= endTime) {
+  const remaining = endTime - now.getTime();
+  const elapsed = 2 * 60 * 60 * 1000 - remaining;
+
+  const progress = (elapsed / (2 * 60 * 60 * 1000)) * 100;
+
+  const hours = Math.floor(
+    (remaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+  );
+  const minutes = Math.floor(
+    (remaining % (1000 * 60 * 60)) / (1000 * 60)
+  );
+  const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+
+  return {
+    type: "active",
+    hours,
+    minutes,
+    seconds,
+    progress,
+  };
+}
+
+    // ✅ UPCOMING
+    if (now.getTime() < startTime) {
+      const diff = startTime - now.getTime();
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor(
+        (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+      );
+      const minutes = Math.floor(
+        (diff % (1000 * 60 * 60)) / (1000 * 60)
+      );
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      return {
+        type: "upcoming",
+        days,
+        hours,
+        minutes,
+        seconds,
+      };
+    }
+  }
+
+  return { type: "finished" };
 };
 
   /* ================= EVENTS ================= */
@@ -148,19 +216,36 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
   }, []);
 
   const fetchServers = async () => {
-    try {
-      const res = await fetch("/api/server-status");
-      const data = await res.json();
+  try {
+    const res = await fetch("/api/server-status");
+    const data = await res.json();
 
-      setServers(data);
+    // Track status transitions
+    setPreviousStatus((prev) => {
+      const updated: Record<number, boolean> = { ...prev };
 
-      if (initialLoad) {
-        setInitialLoad(false);
-      }
-    } catch (err) {
-      console.error("Server fetch failed", err);
+      data.forEach((server: Server) => {
+        if (prev[server.id] === false && server.online === true) {
+          // Server just came online
+          updated[server.id] = true;
+        } else {
+          // Store current status for next comparison
+          updated[server.id] = server.online;
+        }
+      });
+
+      return updated;
+    });
+
+    setServers(data);
+
+    if (initialLoad) {
+      setInitialLoad(false);
     }
-  };
+  } catch (err) {
+    console.error("Server fetch failed", err);
+  }
+};
 
   const toggleServer = (id: number) => {
     setExpandedServer((prev) => (prev === id ? null : id));
@@ -168,6 +253,9 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
   const onlineCount = servers.filter((s) => s.online).length;
   const offlineCount = servers.length - onlineCount;
+  
+  const justCameOnline = (server: Server) =>
+  previousStatus[server.id] === false && server.online;
 
   return (
     <div className="relative min-h-screen flex text-white font-orbitron pb-16">
@@ -219,42 +307,63 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
             ) : (
               <div className="space-y-4">
                 {servers.map((server) => {
-                  const isOpen = expandedServer === server.id;
+  const isOpen = expandedServer === server.id;
+  
 
-                  return (
-                    <div key={server.id}>
-                      <div
-                        onClick={() => toggleServer(server.id)}
-                        className="cursor-pointer p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 flex justify-between items-center transition-all duration-200 hover:border-[#00ff66] hover:scale-[1.03]"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              server.online
-                                ? "bg-[#00ff66] animate-pulse"
-                                : "bg-red-500"
-                            }`}
-                          />
-                          <span>Server {server.id}</span>
-                        </div>
+  return (
+    <div key={server.id}>
+      <div
+       onClick={() => toggleServer(server.id)}
+       className={`cursor-pointer rounded-xl border border-[#00ff66]/30 bg-black/60 overflow-hidden transition-all duration-300 hover:border-[#00ff66]
+        ${justCameOnline(server) ? "animate-[glowBurst_1.2s_ease-out]" : ""}
+        `}
+         >
+        {/* HEADER (Always Visible) */}
+        <div className="p-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                server.online
+                  ? "bg-[#00ff66] shadow-[0_0_8px_#00ff66]"
+                  : "bg-red-500 shadow-[0_0_8px_red]"
+              }`}
+            />
+            <span>Server {server.id}</span>
+          </div>
 
-                        <div className="text-xs font-bold text-[#00ff66]">
-                          {server.online
-                            ? `${server.players} / ${server.maxPlayers}`
-                            : "OFFLINE"}
-                        </div>
-                      </div>
+          <div className={`text-[10px] px-2 py-1 rounded-full ${
+            server.online
+            ? "bg-green-500/20 text-green-400"
+            : "bg-red-500/20 text-red-400"
+            }`}>
+           {server.online ? "ONLINE" : "OFFLINE"}
+          </div>
+        </div>
 
-                      {isOpen && server.online && (
-                        <div className="ml-4 mt-2 p-4 rounded-xl border border-[#00ff66]/20 bg-black/40 text-sm">
-                          <div className="text-[#00ff66]">
-                            Players Online ({server.players})
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+        {/* ✅ EXPANDING SECTION (JUST PLAYER COUNT INFO) */}
+        <div
+          className={`grid transition-all duration-300 ${
+            isOpen && server.online
+              ? "grid-rows-[1fr] opacity-100"
+              : "grid-rows-[0fr] opacity-0"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="border-t border-[#00ff66]/20 p-4 text-sm text-gray-300">
+              <div className="text-[#00ff66]">
+                Players Online
+              </div>
+
+              <div className="mt-2 text-xs font-bold">
+                {server.players} Active Players
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+})}
               </div>
             )}
 
@@ -306,25 +415,74 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
 </div>
 
-          <div className="mt-20 w-[95%] max-w-4xl h-[500px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
-            {slides.map((slide, index) => (
-              <img
-                key={slide}
-                src={slide}
-                alt="slideshow"
-                className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${
-                  index === currentSlide
-                    ? "opacity-100 scale-105"
-                    : "opacity-0 scale-100"
-                }`}
-              />
-            ))}
-          </div>
+          <div className="group mt-20 w-[95%] max-w-4xl h-[500px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
+
+  {/* SLIDES */}
+  {slides.map((slide, index) => (
+    <img
+      loading="lazy"
+      key={slide}
+      src={slide}
+      alt="slideshow"
+      className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${
+        index === currentSlide
+          ? "opacity-100 scale-105"
+          : "opacity-0 scale-100"
+      }`}
+    />
+  ))}
+  
+  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+  {slides.map((_, index) => (
+    <div
+      key={index}
+      className={`h-2 rounded-full transition-all ${
+        index === currentSlide
+          ? "w-6 bg-[#00ff66]"
+          : "w-2 bg-gray-500"
+      }`}
+    />
+  ))}
+</div>
+
+  {/* ================= LEFT ARROW ================= */}
+  <button
+    onClick={() =>
+      setCurrentSlide((prev) =>
+        prev === 0 ? slides.length - 1 : prev - 1
+      )
+    }
+    className="absolute left-4 top-1/2 -translate-y-1/2 
+               bg-black/60 text-[#00ff66] p-3 rounded-full 
+               opacity-0 group-hover:opacity-100 
+               transition-all duration-300 
+               hover:scale-110 hover:bg-black/80"
+  >
+    ◀
+  </button>
+
+  {/* ================= RIGHT ARROW ================= */}
+  <button
+    onClick={() =>
+      setCurrentSlide((prev) =>
+        prev === slides.length - 1 ? 0 : prev + 1
+      )
+    }
+    className="absolute right-4 top-1/2 -translate-y-1/2 
+               bg-black/60 text-[#00ff66] p-3 rounded-full 
+               opacity-0 group-hover:opacity-100 
+               transition-all duration-300 
+               hover:scale-110 hover:bg-black/80"
+  >
+    ▶
+  </button>
+
+</div>
 
         </div>
 
         {/* ================= RIGHT PANEL ================= */}
-        <div className="w-[380px] border-l border-[#00ff66]/30 p-6 bg-black/40 backdrop-blur-xl flex flex-col">
+        <div className="w-[380px] border-l border-[#00ff66]/30 p-6 bg-black/50 backdrop-blur-2xl shadow-2xl flex flex-col">
 
           <h2 className="text-xl text-[#00ff66] mb-4 tracking-widest">
             Upcoming Events Today
@@ -358,39 +516,117 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
             </div>
           )}
 
-          {/* ================= WEEKLY EVENTS ================= */}
-          <div className="space-y-4">
-  {weeklyEvents.map((event) => {
-    const localDate = getNextOccurrence(
-      event.day,
-      event.hour,
-      event.minute
-    );
+{/* ================= WEEKLY EVENTS ================= */}
+<div className="mt-8">
+  
+  {/* CLICKABLE HEADER */}
+  <button
+    onClick={() => setWeeklyOpen(!weeklyOpen)}
+    className="w-full flex items-center justify-between p-4 rounded-2xl border border-[#00ff66]/60 bg-black/50 hover:bg-black/70 transition-all cursor-pointer"
+  >
+    <span className="text-xl text-[#00ff66] tracking-widest">
+      Weekly Events
+    </span>
 
-    return (
-      <div
-        key={event.name}
-        className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
-      >
-        <div className="text-[#00ff66] font-semibold">
-          {event.name}
-        </div>
+    {/* Arrow Icon */}
+    <span
+      className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
+        weeklyOpen ? "rotate-180" : "rotate-0"
+      }`}
+    >
+      ▼
+    </span>
+  </button>
 
-        <div className="text-sm text-gray-300 mt-1">
-          {localDate.toLocaleDateString(undefined, {
-            weekday: "long",
-          })}
-        </div>
+  {/* COLLAPSIBLE CONTENT */}
+  <div
+    className={`overflow-hidden transition-all duration-500 ${
+      weeklyOpen ? "max-h-[1000px] opacity-100 mt-4" : "max-h-0 opacity-0"
+    }`}
+  >
+    <div className="p-4 rounded-2xl border border-[#00ff66]/40 bg-black/40">
+      <div className="space-y-4">
+        {weeklyEvents.map((event) => {
+          const status = getEventStatus(
+  event.day,
+  event.hour,
+  event.minute
+);
 
-        <div className="text-xs text-gray-400 mt-1">
-          {localDate.toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          })}
-        </div>
-      </div>
-    );
+const nextOccurrence = getNextOccurrence(
+  event.day,
+  event.hour,
+  event.minute
+);
+
+          return (
+            <div
+              key={event.name}
+              className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
+            >
+              <div className="text-[#00ff66] font-semibold">
+                {event.name}
+              </div>
+
+              <div className="text-sm text-gray-300 mt-1">
+                {nextOccurrence.toLocaleDateString(undefined, {
+                  weekday: "long",
+                })}
+              </div>
+
+              <div className="text-xs text-gray-400 mt-1">
+  {nextOccurrence.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
   })}
+</div>
+
+<div className="mt-2 text-xs font-mono">
+  {status.type === "upcoming" && (
+    <div className="text-[#00ff66]">
+      Starts in:{" "}
+      {status.days > 0 && `${status.days}d `}
+      {status.hours > 0 && `${status.hours}h `}
+      {status.minutes > 0 && `${status.minutes}m `}
+      {status.seconds}s
+    </div>
+  )}
+
+  {status.type === "active" && (
+  <div className="space-y-2">
+    
+    {/* Operation Text */}
+    <div className="text-orange-400 font-bold animate-pulse">
+      🚀 Operation In Progress —{" "}
+      {status.hours}h {status.minutes}m {status.seconds}s remaining
+    </div>
+
+    {/* Progress Bar */}
+    <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div
+        className="h-full bg-orange-500 transition-all duration-300"
+        style={{
+          width: `${status.progress}%`,
+        }}
+      />
+    </div>
+
+  </div>
+)}
+
+  {status.type === "finished" && (
+    <div className="text-gray-500">
+      Completed
+    </div>
+  )}
+</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+
 </div>
 
           {/* UNIT CONNECTIONS */}

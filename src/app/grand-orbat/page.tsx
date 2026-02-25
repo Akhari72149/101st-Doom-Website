@@ -6,6 +6,7 @@ import { buildTree } from "@/utils/buildTree";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { useRouter } from "next/navigation";
 
+
 /* ===================================================== */
 /* MAIN COMPONENT */
 /* ===================================================== */
@@ -16,6 +17,9 @@ export default function GrandOrbat() {
   const [openNodes, setOpenNodes] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
   const [personnel, setPersonnel] = useState<any[]>([]);
+
+  const transformRef = useRef<any>(null);
+  const treeContainerRef = useRef<HTMLDivElement>(null);
 
   /* ===================================================== */
   /* FETCH DATA */
@@ -53,6 +57,25 @@ export default function GrandOrbat() {
 
     fetchData();
   }, []);
+
+  /* ===================================================== */
+  /*  MANUAL POSITION + SCALE ON LOAD */
+  /* ===================================================== */
+
+  useEffect(() => {
+    if (!transformRef.current) return;
+
+    const timer = setTimeout(() => {
+      transformRef.current.setTransform(
+        -200,    // X
+        100,    // Y
+        0.3,  // Scale
+        800   // Animation duration
+      );
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [orgTree]);
 
   /* ===================================================== */
   /* SLOT MAP */
@@ -107,11 +130,10 @@ export default function GrandOrbat() {
     const isTreeOpen = !!openNodes[node.id];
     const hasChildren = node.children?.length > 0;
 
-    const [showSlots, setShowSlots] = useState(false);
+    const [showSlots, setShowSlots] = useState(true);
     const [lineStyle, setLineStyle] = useState<any>({});
     const childrenRef = useRef<HTMLDivElement>(null);
 
-    /* ✅ CLICK TOGGLE SLOT PANEL */
     const handleClick = (e: React.MouseEvent) => {
       e.stopPropagation();
       setShowSlots((prev) => !prev);
@@ -268,7 +290,6 @@ export default function GrandOrbat() {
         bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]
       "
     >
-      {/* BACK BUTTON */}
       <button
         onClick={() => router.push("/pcs")}
         className="
@@ -288,7 +309,6 @@ export default function GrandOrbat() {
         Grand ORBAT
       </h1>
 
-      {/* SEARCH */}
       <div className="mb-6">
         <input
           type="text"
@@ -308,9 +328,9 @@ export default function GrandOrbat() {
         />
       </div>
 
-      {/* TREE CONTAINER */}
       <div className="overflow-hidden border border-[#00ff66]/40 rounded-3xl shadow-[0_0_40px_rgba(0,255,100,0.08)]">
         <TransformWrapper
+          ref={transformRef}
           limitToBounds={false}
           smooth
           minScale={0.3}
@@ -319,7 +339,10 @@ export default function GrandOrbat() {
           doubleClick={{ disabled: true }}
         >
           <TransformComponent>
-            <div className="flex justify-center min-w-max p-10">
+            <div
+              ref={treeContainerRef}
+              className="flex justify-center min-w-max p-10"
+            >
               {filteredTree.map((node) => (
                 <div key={node.id} className="px-12">
                   <TreeNode node={node} />

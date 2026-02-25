@@ -53,7 +53,7 @@ export default function GalacticCampaignPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowIntro(false);
-    }, 4000);
+    }, 1500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -249,6 +249,7 @@ export default function GalacticCampaignPage() {
   const toggleLore = (section: string) => {
     setOpenLore(openLore === section ? null : section);
   };
+  
 
   /* ================= UI ================= */
 
@@ -265,10 +266,10 @@ export default function GalacticCampaignPage() {
           <h1 className="text-4xl md:text-6xl text-[#00ff66] font-bold tracking-widest mb-6">
             REPUBLIC MILITARY COMMAND
           </h1>
-          <p className="text-xl text-green-400 mb-2">
+          <p className="text-xl text-yellow-400 mb-2">
             OPERATION: YOABOS
           </p>
-          <p className="text-sm text-green-600">
+          <p className="text-m text-red-500">
             Clearance Level: High Command
           </p>
         </div>

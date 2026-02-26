@@ -14,9 +14,12 @@ export async function verifyServerControlRole() {
      FIX: Explicitly await cookies() to avoid TS Promise type
      ======================================================= */
 
-  const cookieStore = await cookies(); // ✅ FIXED
+  const cookieStore = await cookies();
 
   const token = cookieStore.get("sb-access-token")?.value;
+
+  console.log("Cookies Received:", cookieStore.getAll());
+  console.log("Token:", token);
 
   if (!token) {
     throw new Error("Unauthorized");

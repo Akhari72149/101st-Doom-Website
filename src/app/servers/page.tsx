@@ -135,55 +135,38 @@ const weekday = new Date(start).getDay();
 
  /* ================= RECURRING BLOCKS ================= */
 
+const startOfDay = new Date(year, month - 1, day, 0, 0, 0);
+const endOfDay = new Date(year, month - 1, day + 1, 0, 0, 0);
+
 const { data: recurring } = await supabase
   .from("recurring_server_blocks")
   .select("*")
   .eq("server_id", activeServer)
-  .eq("weekday", weekday);
+  .gte("start_at", startOfDay.toISOString())
+  .lt("start_at", endOfDay.toISOString());
 
-const recurringBookings = (recurring || []).map((r) => {
+const recurringBookings = (recurring ?? [])
+  .filter((r) => r.start_at && r.end_at)
+  .map((r) => {
 
-  // ✅ Safely parse timetz by extracting hours/minutes directly
-  const parseTimetz = (value: string) => {
-    const timePart = value.split("+")[0]; // remove timezone offset
-    const [h, m] = timePart.split(":").map(Number);
-    return { h, m };
-  };
+    // ✅ Direct timestamp conversion
+    const start = new Date(r.start_at);
+    const end = new Date(r.end_at);
 
-  const { h: startH, m: startM } = parseTimetz(r.start_time);
-  const { h: endH, m: endM } = parseTimetz(r.end_time);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      console.warn("Invalid timestamptz values", r);
+    }
 
-  console.log("weekday:", weekday);
-  console.log("recurring raw:", recurring);
-  console.log("startH:", startH, "startM:", startM);
-  console.log("endH:", endH, "endM:", endM);
-
-  const baseDate = new Date(
-    year,
-    month - 1,
-    day,
-    0,
-    0,
-    0,
-    0
-  );
-
-  const start = new Date(baseDate);
-  start.setHours(startH, startM, 0, 0);
-
-  const end = new Date(baseDate);
-  end.setHours(endH, endM, 0, 0);
-
-  return {
-    id: `recurring-${r.id}`,
-    server_id: r.server_id,
-    start_time: formatLocalTimestamp(start),
-    end_time: formatLocalTimestamp(end),
-    title: r.title,
-    booked_for: "SYSTEM",
-    personnel: { name: "Blocked" },
-  };
-});
+    return {
+      id: `recurring-${r.id}`,
+      server_id: r.server_id,
+      start_time: formatLocalTimestamp(start),
+      end_time: formatLocalTimestamp(end),
+      title: r.title,
+      booked_for: "SYSTEM",
+      personnel: { name: "Blocked" },
+    };
+  });
   /* ================= MERGE ================= */
 
   setBookings([...(enriched as any), ...recurringBookings]);

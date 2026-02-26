@@ -450,8 +450,11 @@ function formatLocalTimestamp(date: Date) {
 
 function generateSlots(dateString: string) {
   const slots: Date[] = [];
-  const base = new Date(dateString);
-  base.setHours(0, 0, 0, 0);
+
+  const [year, month, day] = dateString.split("-").map(Number);
+
+  // Build using LOCAL time — NOT UTC
+  const base = new Date(year, month - 1, day, 0, 0, 0);
 
   for (let i = 0; i < 48; i++) {
     slots.push(new Date(base.getTime() + i * 30 * 60 * 1000));

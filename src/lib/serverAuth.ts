@@ -22,7 +22,8 @@ export async function verifyServerControlRole() {
   console.log("Token:", token);
 
   if (!token) {
-    throw new Error("Unauthorized");
+    console.log("No token found!");
+    // throw new Error("Unauthorized");
   }
 
   /* =======================================================

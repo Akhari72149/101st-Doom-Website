@@ -8,8 +8,8 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
-  title: "101st Doom Battalion",
-  description: "101st Doom Battalion Website",
+  title: "101st Doom Battalion | Official Military Operations Hub",
+  description: "The official operational command system for the 101st Doom Battalion. View rosters, certifications, campaigns, and military operations.",
 };
 
 export default function RootLayout({

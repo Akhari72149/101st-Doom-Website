@@ -682,6 +682,13 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
               ))}
             </div>
           )}
+          <div className="hidden">
+  101st Doom Battalion  
+  Star Wars MilSim  
+  Military Roleplay  
+  Arma Unit  
+  Tactical Gaming Community  
+</div>
 
 {/* ================= WEEKLY EVENTS ================= */}
 <div className="mt-8">

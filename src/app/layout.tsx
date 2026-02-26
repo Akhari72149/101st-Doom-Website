@@ -8,8 +8,8 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
-  title: "Personnel Command System",
-  description: "Server & Certification Management",
+  title: "101st Doom Battalion",
+  description: "101st Doom Battalion Website",
 };
 
 export default function RootLayout({

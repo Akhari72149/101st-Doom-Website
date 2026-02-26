@@ -538,6 +538,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
   {/* MAIN BUTTON */}
   <button
+  onClick={() => router.push("/Who-We-Are")}
     className="px-8 py-3 border border-[#00ff66] rounded-lg 
                text-[#00ff66] hover:bg-[#00ff66] 
                hover:text-black hover:scale-105 

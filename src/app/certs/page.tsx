@@ -27,55 +27,95 @@ const categories: { key: CategoryKey; label: string }[] = [
 
 const tabs: Record<CategoryKey, TabItem[]> = {
   CERT: [
-    { key: "U3", label: "Support", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U4", label: "Anti-Tank", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U5", label: "Grenadier", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U6", label: "Marksman", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U7", label: "Combat Engineer", rank: "CST", image: "/WWA/placeholder.jpg" },
+    { key: "U3", label: "Support", rank: "CT", image: "/WWA/support.jpg" },
+    { key: "U4", label: "Anti-Tank", rank: "CT", image: "/WWA/at.jpg" },
+    { key: "U5", label: "Grenadier", rank: "CT", image: "/WWA/gren.jpg" },
+    { key: "U6", label: "Marksman", rank: "CT", image: "/WWA/Mark.jpg" },
+    { key: "U7", label: "Combat Engineer", rank: "CST", image: "/WWA/ce.jpg" },
     { key: "U8", label: "IFV", rank: "CST", image: "/WWA/placeholder.jpg" },
-    { key: "U9", label: "MBT", rank: "VCT", image: "/WWA/placeholder.jpg" },
+    { key: "U9", label: "MBT", rank: "VCT", image: "/WWA/mbt.jpg" },
     { key: "U10", label: "IDF", rank: "CST", image: "/WWA/IDF.jpg" },
     { key: "U11", label: "AV-7", rank: "VCT", image: "/WWA/placeholder.jpg" },
     { key: "U12", label: "Drone Operator", rank: "VCT/CI", image: "/WWA/placeholder.jpg" },
     { key: "U13", label: "Weaponised Drone", rank: "VCT", image: "/WWA/placeholder.jpg" },
+    { key: "U23", label: "forge", rank: "VCT", image: "/WWA/forge.jpg" },
     { key: "U14", label: "Adv. Gren", rank: "VCT", image: "/WWA/placeholder.jpg" },
     { key: "U15", label: "Adv. Support", rank: "CSP", image: "/WWA/placeholder.jpg" },
     { key: "U16", label: "Adv. Marksman", rank: "VCT", image: "/WWA/placeholder.jpg" },
   ],
 
   MOS: [
-    { key: "U1", label: "RTO", rank: "CR-C", image: "/WWA/placeholder.jpg" },
-    { key: "U2", label: "CLS", rank: "CR-C", image: "/WWA/placeholder.jpg" },
-    { key: "U17", label: "Hammer", rank: "CR-C", image: "/WWA/placeholder.jpg" },
+    { key: "U1", label: "RTO", rank: "CR-C", image: "/WWA/rto.jpg" },
+    { key: "U2", label: "CLS", rank: "CR-C", image: "/WWA/sus.jpg" },
+    { key: "U17", label: "Hammer", rank: "CR-C", image: "/WWA/hammer.jpg" },
   ],
 
   CSHOP: [
-    { key: "U18", label: "Zeus", rank: "CT", image: "/WWA/placeholder.jpg" },
+    { key: "U18", label: "Zeus", rank: "CT", image: "/WWA/zeus.jpg" },
     { key: "U19", label: "Mission Builder", rank: "CT", image: "/WWA/placeholder.jpg" },
     { key: "U23", label: "Recruiters", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U24", label: "Drill Instructors", rank: "CT", image: "/WWA/placeholder.jpg" },
+    { key: "U24", label: "Drill Instructors", rank: "CT", image: "/WWA/DI.jpg" },
     { key: "U20", label: "GC Team", rank: "CT", image: "/WWA/placeholder.jpg" },
     { key: "U21", label: "Mod Team", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U22", label: "Media Team", rank: "CR-C", image: "/WWA/placeholder.jpg" },
+    { key: "U22", label: "Media Team", rank: "CR-C", image: "/WWA/media.jpg" },
+    { key: "U25", label: "Server Maintenance", rank: "N/A", image: "/WWA/server.jpg" },
   ],
 };
 
 /* ================= UNIT CONTENT MAP ================= */
 
 const unitContent: Record<string, string> = {
-  U10: `
-IDF serves as the Mortar Certification for the 101st Doom Battalion.
+  U1: `The voice of command in the chaos of war. RTOs maintain critical communications between squads, command, and supporting assets.
+
+Managing complex radio networks under pressure, they ensure no unit fights alone and no order goes unheard.
+
+When the battlefield grows loud, the RTO keeps it clear.
+`,
+
+ U2: `Using the full depth of KAT and ACE medical systems, our medics operate in a high-fidelity combat medical environment.
+
+From tourniquets under fire to advanced surgical stabilization, they stand between life and death.
+
+Their skill, speed, and composure keep our forces in the fight when it matters most.
+`,
+  
+    U3: `Support Certification enables operators to provide sustained automatic fire and logistical reinforcement to frontline elements.
+
+Focused on ammunition management, suppressive fire control, and positional dominance, Support-certified soldiers ensure squad-level combat endurance and battlefield stability.
+`,
+  
+    U10: `IDF serves as the Mortar Certification for the 101st Doom Battalion.
 
 Focused on precision indirect fire, IDF provides versatile battlefield support capable of engaging targets at both close and extended ranges.
 
 Operating deployable mortar systems and vehicle-mounted platforms, IDF delivers adaptable firepower — from danger-close support to long-range suppression — ensuring sustained and responsive indirect coverage wherever it is required.
 `,
 
-  U3: `
-Support Certification enables operators to provide sustained automatic fire and logistical reinforcement to frontline elements.
+ U12: `Drone Operators serve as the eyes of the battlefield, deploying unmanned aerial systems to gather real-time intelligence across hostile terrain.
 
-Focused on ammunition management, suppressive fire control, and positional dominance, Support-certified soldiers ensure squad-level combat endurance and battlefield stability.
+From route clearance and overwatch to target identification and movement tracking, they provide commanders with the clarity needed to act decisively.
 `,
+
+ U13: `Weaponised Drone Operators integrate armed unmanned systems into defensive and force-protection operations.
+
+Tasked with securing perimeters, overwatching patrol bases, and reinforcing vulnerable sectors, they provide rapid-response aerial fire support when ground forces come under threat.
+`,
+
+
+
+U17: `Hammer commands the skies. Operating LAAT gunships and fixed-wing assets, this aviation element delivers rapid troop insertion, close air support, armed escort, and aerial reconnaissance.
+
+When ground forces are pinned or pushing forward, Hammer answers — fast, precise, and overwhelming.
+`,
+
+U25: `Server Maintenance ensures the battlefield never falls silent.
+
+esponsible for infrastructure stability, mod integrity, performance optimization, and backend reliability, this role safeguards the operational environment that every mission depends on.
+
+While others fight the war, Server Maintenance ensures the war can be fought.
+`,
+
+  
 };
 
 

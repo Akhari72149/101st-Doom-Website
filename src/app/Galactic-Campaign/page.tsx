@@ -102,90 +102,70 @@ export default function GalacticCampaignPage() {
 
   /* ================= SIDE OP COUNTDOWN ================= */
 
-  const getSideOpTarget = () => {
-    const now = new Date();
-    const target = new Date();
-    target.setDate(now.getDate() + ((5 - now.getDay() + 7) % 7));
-    target.setHours(0, 0, 0, 0);
-    return target;
-  };
+  
 
   const [timeLeft, setTimeLeft] = useState("Loading...");
   const [isActive, setIsActive] = useState(false);
 
   useEffect(() => {
-    const target = getSideOpTarget();
+  const interval = setInterval(() => {
+    const diff = SIDE_OP_TARGET.getTime() - Date.now();
 
-    const interval = setInterval(() => {
-      const diff = target.getTime() - new Date().getTime();
+    if (diff <= 0) {
+      setIsActive(true);
+      setTimeLeft("00:00:00");
+      return;
+    }
 
-      if (diff <= 0) {
-        setIsActive(true);
-        setTimeLeft("00:00:00");
-        clearInterval(interval);
-        return;
-      }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
 
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
+    setTimeLeft(
+      `${String(h).padStart(2, "0")}:${String(m).padStart(
+        2,
+        "0"
+      )}:${String(s).padStart(2, "0")}`
+    );
+  }, 1000);
 
-      setTimeLeft(
-        `${String(h).padStart(2, "0")}:${String(m).padStart(
-          2,
-          "0"
-        )}:${String(s).padStart(2, "0")}`
-      );
-    }, 80);
+  return () => clearInterval(interval);
+}, []);
 
-    return () => clearInterval(interval);
-  }, []);
+  /* ================= FIXED EVENT TIME ================= */
 
-  /* ================= LANDING COUNTDOWN ================= */
+const SIDE_OP_TARGET = new Date("2026-03-15T19:00:00Z"); 
+const LANDFALL_TARGET = new Date("2026-03-20T00:00:00Z");
 
-  const getLandfallTarget = () => {
-    const now = new Date();
-    const target = new Date();
-
-    const daysUntilSaturday = (6 - now.getDay() + 7) % 7;
-
-    target.setDate(now.getDate() + daysUntilSaturday);
-    target.setHours(0, 0, 0, 0);
-
-    return target;
-  };
+ 
 
   const [landfallTime, setLandfallTime] = useState("Loading...");
   const [landfallActive, setLandfallActive] = useState(false);
 
   useEffect(() => {
-    const target = getLandfallTarget();
+  const interval = setInterval(() => {
+    const diff = LANDFALL_TARGET.getTime() - Date.now();
 
-    const interval = setInterval(() => {
-      const diff = target.getTime() - new Date().getTime();
+    if (diff <= 0) {
+      setLandfallActive(true);
+      setLandfallTime("00:00:00");
+      return;
+    }
 
-      if (diff <= 0) {
-        setLandfallActive(true);
-        setLandfallTime("00:00:00");
-        clearInterval(interval);
-        return;
-      }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
 
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
+    setLandfallTime(
+      `${String(h).padStart(2, "0")}:${String(m).padStart(
+        2,
+        "0"
+      )}:${String(s).padStart(2, "0")}`
+    );
+  }, 1000);
 
-      setLandfallTime(
-        `${String(h).padStart(2, "0")}:${String(m).padStart(
-          2,
-          "0"
-        )}:${String(s).padStart(2, "0")}`
-      );
-    }, 80);
-
-    return () => clearInterval(interval);
-  }, []);
-
+  return () => clearInterval(interval);
+}, []);
   /* ================= STARFIELD ================= */
 
   const [stars, setStars] = useState<any[]>([]);

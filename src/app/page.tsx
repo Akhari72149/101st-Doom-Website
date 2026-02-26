@@ -33,7 +33,88 @@ export default function HomePage() {
   const [time, setTime] = useState(new Date());
   const [weeklyOpen, setWeeklyOpen] = useState(false);
   const [previousStatus, setPreviousStatus] = useState<Record<number, boolean>>({});
+  const [user, setUser] = useState<any>(null);
+  const [roles, setRoles] = useState<string[]>([]);
   
+/* ================= AUTH ================= */
+
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      setUser(user);
+
+      if (user) {
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id);
+
+        setRoles(data?.map((r) => r.role) || []);
+      }
+    };
+
+    getUser();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    router.push("/login");
+  };
+
+ /* ================= Page Const ================= */
+
+const personnelItems = [
+  {
+    href: "/personnel-profile",
+    title: "Personnel Profile",
+  },
+  {
+    href: "/grand-orbat",
+    title: "Grand ORBAT",
+  },
+  {
+    href: "/roster",
+    title: "Slotted Roster",
+  },
+  {
+    href: "/admin/positions",
+    title: "Slotting & Rank",
+    allowedRoles: ["admin", "nco", "di"],
+  },
+  {
+    href: "/admin/create",
+    title: "User Creation",
+    allowedRoles: ["admin", "recruiter"],
+  },
+  {
+    href: "/admin/certifications",
+    title: "Certification Management",
+    allowedRoles: ["admin", "nco", "trainer"],
+  },
+  {
+    href: "/certifications",
+    title: "Certification Lookup",
+  },
+  {
+    href: "/servers",
+    title: "Server Booking",
+  },
+  {
+    href: "/audit",
+    title: "Audit Log",
+    allowedRoles: ["nco", "admin", "trainer"],
+  },
+];
+
+const filteredPersonnelItems = personnelItems.filter(
+  (item) =>
+    !item.allowedRoles ||
+    item.allowedRoles.some((role) => roles.includes(role))
+);
 
   /* ================= DATA ================= */
 
@@ -320,12 +401,51 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
           <div className="mt-8 flex flex-col items-center gap-4">
 
   {/* Main Button */}
+  {/* ================= PERSONNEL COMMAND DROPDOWN ================= */}
+
+<div className="relative group z-50">
+
+  {/* MAIN BUTTON */}
   <button
     onClick={() => router.push("/pcs")}
-    className="px-8 py-3 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all"
+    className="px-8 py-3 border border-[#00ff66] rounded-lg 
+               text-[#00ff66] hover:bg-[#00ff66] 
+               hover:text-black hover:scale-105 
+               transition-all w-full"
   >
     Enter Personnel Command
   </button>
+
+  {/* DROPDOWN MENU */}
+  <div
+    className="
+      absolute left-0 top-full w-full pt-2
+      opacity-0 invisible
+      group-hover:opacity-100
+      group-hover:visible
+      transition-all duration-200
+      pointer-events-none
+      group-hover:pointer-events-auto
+    "
+  >
+    <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2 max-h-[400px] overflow-y-auto">
+
+      {filteredPersonnelItems.map((item) => (
+        <button
+          key={item.href}
+          onClick={() => router.push(item.href)}
+          className="w-full text-left px-4 py-2 rounded-md 
+                     text-[#00ff66] hover:bg-[#00ff66]/10 
+                     transition-all text-sm"
+        >
+          {item.title}
+        </button>
+      ))}
+
+    </div>
+  </div>
+
+</div>
 
   {/* Row With Offset Buttons */}
   <div className="flex gap-8">
@@ -339,12 +459,59 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
     </button>
 
     {/* Right Button */}
-    <button
-      onClick={() => router.push("/Galactic-Campaign")}
-      className="px-8 py-3 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all translate-x-[20px]"
-    >
-      Galactic Campaign
-    </button>
+<div className="relative group translate-x-[20px] z-50">
+
+  {/* MAIN BUTTON */}
+  <button
+    onClick={() => router.push("/Galactic-Campaign")}
+    className="px-8 py-3 border border-[#00ff66] rounded-lg 
+               text-[#00ff66] hover:bg-[#00ff66] 
+               hover:text-black hover:scale-105 
+               transition-all w-full"
+  >
+    Galactic Campaign
+  </button>
+
+  {/* DROPDOWN MENU */}
+  <div
+    className="
+      absolute left-0 top-full w-full pt-2
+      opacity-0 invisible
+      group-hover:opacity-100
+      group-hover:visible
+      transition-all duration-200
+      pointer-events-none
+      group-hover:pointer-events-auto
+    "
+  >
+    <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2">
+
+      {/* Always Visible */}
+      <button
+        onClick={() => router.push("/GC-Platoon-Logi")}
+        className="w-full px-4 py-2 text-left rounded-md
+                   text-[#00ff66] hover:bg-[#00ff66]/10
+                   transition-all text-sm"
+      >
+        Platoon Logistics
+      </button>
+
+      {/* ✅ Role Restricted */}
+      {(roles.includes("admin") || roles.includes("logistics")) && (
+        <button
+          onClick={() => router.push("/GC-Logi")}
+          className="w-full px-4 py-2 text-left rounded-md
+                     text-[#00ff66] hover:bg-[#00ff66]/10
+                     transition-all text-sm"
+        >
+          Battalion Logistics
+        </button>
+      )}
+
+    </div>
+  </div>
+
+</div>
 
   </div>
 

@@ -480,6 +480,7 @@ const recurringBookings = (recurring ?? [])
             >
               <option value={1}>1 Hour</option>
               <option value={2}>2 Hours</option>
+              <option value={4}>4 Hours</option>
             </select>
           </div>
 

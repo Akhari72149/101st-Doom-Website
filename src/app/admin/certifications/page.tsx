@@ -14,7 +14,8 @@ export default function ManageCertifications() {
   const [personCerts, setPersonCerts] = useState<any[]>([]);
   const [selectedPerson, setSelectedPerson] = useState("");
   const [searchPerson, setSearchPerson] = useState("");
-  const [selectedCert, setSelectedCert] = useState("");
+  const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
+  const [filteredCerts, setFilteredCerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   /* ================= AUTH ================= */
@@ -96,7 +97,7 @@ export default function ManageCertifications() {
   };
 
   const assignCertification = async () => {
-    if (!selectedPerson || !selectedCert) return;
+    if (!selectedPerson || selectedCerts.length === 0) return;
 
     setLoading(true);
 
@@ -104,29 +105,29 @@ export default function ManageCertifications() {
       data: { user },
     } = await supabase.auth.getUser();
 
+    const inserts = selectedCerts.map((certId) => ({
+      personnel_id: selectedPerson,
+      certification_id: certId,
+      awarded_at: new Date().toISOString(),
+      awarded_by: user?.id ?? null,
+    }));
+
     const { error } = await supabase
       .from("personnel_certifications")
-      .insert([
-        {
-          personnel_id: selectedPerson,
-          certification_id: selectedCert,
-          awarded_at: new Date().toISOString(),
-          awarded_by: user?.id ?? null,
-        },
-      ]);
+      .insert(inserts);
 
     setLoading(false);
 
     if (error) {
       if (error.code === "23505") {
-        alert("⚠ Already assigned.");
+        alert("⚠ One or more certifications already assigned.");
       } else {
         alert(error.message);
       }
       return;
     }
 
-    setSelectedCert("");
+    setSelectedCerts([]);
     fetchPersonCerts();
   };
 
@@ -165,40 +166,34 @@ export default function ManageCertifications() {
       .includes(searchPerson.toLowerCase())
   );
 
-  /* ================= UI ================= */
-
   return (
     <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
 
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-8 px-5 py-2 rounded-xl border border-[#00ff66]/50 text-[#00ff66] hover:bg-[#00ff66]/10 transition shadow-[0_0_15px_rgba(0,255,100,0.2)]"
+        className="mb-8 px-5 py-2 rounded-xl border border-[#00ff66]/50 text-[#00ff66] hover:bg-[#00ff66]/10 transition"
       >
         ← Back
       </button>
 
-      <div className="max-w-6xl mx-auto p-8 rounded-3xl border border-[#00ff66]/20 bg-black/60 backdrop-blur-xl shadow-[0_0_60px_rgba(0,255,100,0.15)]">
+      <div className="max-w-6xl mx-auto p-8 rounded-3xl border border-[#00ff66]/20 bg-black/60 backdrop-blur-xl">
 
-        <h1 className="text-3xl font-bold mb-10 text-[#00ff66] tracking-wide">
+        <h1 className="text-3xl font-bold mb-10 text-[#00ff66]">
           Certification Management
         </h1>
 
-        {/* SEARCH */}
+        {/* SEARCH PERSONNEL */}
         <div className="mb-8">
-          <label className="block mb-2 text-sm text-gray-400">
-            Search Personnel
-          </label>
-
           <input
             type="text"
             placeholder="Search by rank or name..."
             value={searchPerson}
             onChange={(e) => setSearchPerson(e.target.value)}
-            className="bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66] transition"
+            className="bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl"
           />
 
           {searchPerson && (
-            <div className="mt-3 border border-[#00ff66]/30 bg-black/80 rounded-xl max-h-60 overflow-y-auto shadow-lg">
+            <div className="mt-3 border border-[#00ff66]/30 bg-black rounded-xl max-h-60 overflow-y-auto">
               {filteredPersonnel.length === 0 ? (
                 <p className="p-4 text-gray-400">No personnel found.</p>
               ) : (
@@ -209,7 +204,7 @@ export default function ManageCertifications() {
                       setSelectedPerson(p.id);
                       setSearchPerson("");
                     }}
-                    className="p-4 border-b border-[#00ff66]/10 cursor-pointer hover:bg-[#00ff66]/10 hover:text-[#00ff66] transition"
+                    className="p-4 border-b border-[#00ff66]/10 cursor-pointer hover:bg-[#00ff66]/10"
                   >
                     {getRankName(p)} {p.name}
                   </div>
@@ -219,9 +214,31 @@ export default function ManageCertifications() {
           )}
         </div>
 
-        {/* CURRENT CERTS */}
+        {/* SELECTED PERSON DISPLAY */}
         {selectedPerson && (
-          <div className="mb-10 p-6 rounded-2xl border border-[#00ff66]/20 bg-black/50 shadow-[0_0_40px_rgba(0,255,100,0.1)]">
+          <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/40">
+            <h2 className="text-sm text-gray-400 mb-2">
+              Selected Personnel
+            </h2>
+
+            {(() => {
+              const person = personnel.find(
+                (p) => p.id === selectedPerson
+              );
+              if (!person) return null;
+
+              return (
+                <div className="text-[#00ff66] font-semibold text-lg">
+                  {getRankName(person)} {person.name}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* CURRENT CERTIFICATIONS */}
+        {selectedPerson && (
+          <div className="mb-10 p-6 rounded-2xl border border-[#00ff66]/20 bg-black/50">
             <h2 className="text-xl mb-6 text-[#00ff66] font-semibold">
               Current Certifications
             </h2>
@@ -236,13 +253,11 @@ export default function ManageCertifications() {
                   key={pc.id}
                   className="flex justify-between items-center mb-4"
                 >
-                  <span className="text-gray-200">
-                    {pc.certification?.name}
-                  </span>
+                  <span>{pc.certification?.name}</span>
 
                   <button
                     onClick={() => revokeCertification(pc.id)}
-                    className="px-4 py-1 rounded-lg border border-red-600 text-red-500 hover:bg-red-600 hover:text-black transition"
+                    className="px-4 py-1 rounded-lg border border-red-600 text-red-500 hover:bg-red-600 hover:text-black"
                   >
                     Revoke
                   </button>
@@ -252,34 +267,109 @@ export default function ManageCertifications() {
           </div>
         )}
 
-        {/* ASSIGN */}
-        <div className="mb-6">
-          <label className="block mb-2 text-sm text-gray-400">
-            Select Certification
-          </label>
+        {/* ASSIGN CERTIFICATIONS (HIDDEN UNTIL PERSON SELECTED) */}
+        {selectedPerson && (
+          <div className="mb-10 p-6 rounded-2xl border border-[#00ff66]/30 bg-black/60 shadow-[0_0_40px_rgba(0,255,100,0.1)]">
+            <h2 className="text-xl mb-4 text-[#00ff66] font-semibold">
+              Assign Certifications (Can select multiple)
+            </h2>
 
-          <select
-            className="bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl focus:border-[#00ff66] transition"
-            value={selectedCert}
-            onChange={(e) => setSelectedCert(e.target.value)}
-          >
-            <option value="">-- Select Certification --</option>
-            {certifications.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+            {/* CERT SEARCH */}
+            <input
+              type="text"
+              placeholder="Search certifications..."
+              className="mb-4 bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl"
+              onChange={(e) => {
+                const search = e.target.value.toLowerCase();
+                const filtered = certifications.filter(
+                  (c) =>
+                    c.name.toLowerCase().includes(search) &&
+                    !personCerts.some(
+                      (pc) => pc.certification?.id === c.id
+                    )
+                );
+                setFilteredCerts(filtered);
+              }}
+            />
 
-        <button
-          onClick={assignCertification}
-          disabled={loading}
-          className="px-6 py-3 rounded-xl border border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10 hover:shadow-[0_0_25px_rgba(0,255,100,0.5)] transition disabled:opacity-50"
-        >
-          {loading ? "Assigning..." : "Assign Certification"}
-        </button>
+            {/* AVAILABLE CERTS */}
+            <div className="max-h-60 overflow-y-auto border border-[#00ff66]/20 rounded-xl p-3 mb-4 bg-black/40">
+              {(filteredCerts.length ? filteredCerts : certifications)
+                .filter(
+                  (c) =>
+                    !personCerts.some(
+                      (pc) => pc.certification?.id === c.id
+                    )
+                )
+                .map((c) => {
+                  const isSelected = selectedCerts.includes(c.id);
 
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() =>
+                        setSelectedCerts((prev) =>
+                          prev.includes(c.id)
+                            ? prev.filter((id) => id !== c.id)
+                            : [...prev, c.id]
+                        )
+                      }
+                      className={`p-3 rounded-lg cursor-pointer mb-2 transition ${
+                        isSelected
+                          ? "bg-[#00ff66]/20 border border-[#00ff66]"
+                          : "hover:bg-[#00ff66]/10"
+                      }`}
+                    >
+                      {c.name}
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* SELECTED CHIPS */}
+            {selectedCerts.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {selectedCerts.map((certId) => {
+                  const cert = certifications.find(
+                    (c) => c.id === certId
+                  );
+                  if (!cert) return null;
+
+                  return (
+                    <div
+                      key={certId}
+                      className="px-3 py-1 rounded-full bg-[#00ff66]/20 border border-[#00ff66] text-sm flex items-center gap-2"
+                    >
+                      {cert.name}
+                      <span
+                        className="cursor-pointer text-red-400"
+                        onClick={() =>
+                          setSelectedCerts((prev) =>
+                            prev.filter((id) => id !== certId)
+                          )
+                        }
+                      >
+                        ✕
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              onClick={assignCertification}
+              disabled={loading || selectedCerts.length === 0}
+              className="px-6 py-3 rounded-xl border border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10 disabled:opacity-50 transition"
+            >
+              {loading
+                ? "Assigning..."
+                : selectedCerts.length > 1
+                ? `Assign ${selectedCerts.length} Certifications`
+                : "Assign Certification"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

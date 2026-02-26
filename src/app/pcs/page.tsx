@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-/* ✅ ICONS RESTORED */
+
 import {
   Users,
   Shield,

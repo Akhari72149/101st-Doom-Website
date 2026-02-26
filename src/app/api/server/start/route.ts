@@ -19,11 +19,13 @@ export async function POST(req: Request) {
 
 
     const scriptPath = path.join(
-      process.cwd(),
-      "AutoServer",
-      "Main Start",
-      `Server ${serverId} Start.bat`
-    );
+  process.cwd(),                // /app
+  "src",
+  "app",
+  "Auto Server",
+  "Main Start",
+  `Server ${serverId} Start.bat`
+);
 
     console.log("Script Path:", scriptPath);
 

@@ -17,18 +17,16 @@ export async function POST(req: Request) {
       );
     }
 
-    /* =========================================================
-       🔥 DOCKER SAFE PATH
-       Scripts must be copied into:
-       /app/AutoServer/
-    ========================================================= */
+
 
     const scriptPath = path.join(
-      process.cwd(),
-      "AutoServer",
-      "Main Stop Exe",
-      `Server ${serverId}.bat`
-    );
+  process.cwd(),                // /app
+  "src",
+  "app",
+  "Auto Server",
+  "Main Stop Exe",
+  `Server ${serverId}.bat`
+);
 
     console.log("Script Path:", scriptPath);
 

@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import path from "path";
-import { verifyLoggedIn } from "@/lib/serverAuth";
 
 export async function POST(req: Request) {
   try {
-    await verifyLoggedIn();
-
     const { serverId } = await req.json();
 
     if (!serverId || serverId < 1 || serverId > 6) {
@@ -29,7 +26,7 @@ export async function POST(req: Request) {
     exec(`cmd /c "${scriptPath}"`);
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return new NextResponse("Unauthorized", { status: 403 });
+  } catch (err) {
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

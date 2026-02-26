@@ -1,21 +1,35 @@
+// app/api/server/start/route.ts
+
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
+import path from "path";
 import { verifyServerControlRole } from "@/lib/serverAuth";
 
 export async function POST(req: Request) {
   try {
-    // 🔐 Verify user + role
     await verifyServerControlRole();
 
     const { serverId } = await req.json();
 
-    const scriptPath = `C:/scripts/server${serverId}-start.bat`;
+    if (!serverId || serverId < 1 || serverId > 6) {
+      return NextResponse.json(
+        { error: "Invalid server id" },
+        { status: 400 }
+      );
+    }
 
-    exec(`cmd /c "${scriptPath}"`, (err) => {
-      if (err) {
-        console.error(err);
-      }
-    });
+    // ✅ Correct path
+    const scriptPath = path.join(
+      "C:",
+      "Users",
+      "Admin",
+      "Desktop",
+      "Auto Server",
+      "Main Start",
+      `Server ${serverId} Start.bat`
+    );
+
+    exec(`cmd /c "${scriptPath}"`);
 
     return NextResponse.json({ success: true });
 

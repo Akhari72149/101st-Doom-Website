@@ -77,9 +77,13 @@ export default function ServerControlPage() {
     setActionLoading((prev) => ({ ...prev, [serverId]: true }));
 
     await fetch("/api/server/start", {
-      method: "POST",
-      body: JSON.stringify({ serverId }),
-    });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  credentials: "include",
+  body: JSON.stringify({ serverId }),
+});
 
     setTimeout(fetchServerStatus, 3000);
   };
@@ -88,9 +92,13 @@ export default function ServerControlPage() {
     setActionLoading((prev) => ({ ...prev, [serverId]: true }));
 
     await fetch("/api/server/stop", {
-      method: "POST",
-      body: JSON.stringify({ serverId }),
-    });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  credentials: "include", // REQUIRED
+  body: JSON.stringify({ serverId }),
+});
 
     setTimeout(fetchServerStatus, 3000);
   };

@@ -117,8 +117,8 @@ end.setUTCDate(end.getUTCDate() + 1);
     .from("server_bookings")
     .select("*")
     .eq("server_id", activeServer)
-    .gte("start_time", start.toISOString())
-    .lt("start_time", end.toISOString());
+    .lte("start_time", end.toISOString())
+    .gte("end_time", start.toISOString());
 
   const personnelIds = [
     ...new Set((bookingData || []).map((b) => b.booked_for)),

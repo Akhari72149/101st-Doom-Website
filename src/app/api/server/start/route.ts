@@ -6,6 +6,7 @@ import path from "path";
 import { verifyServerControlRole } from "@/lib/serverAuth";
 
 export async function POST(req: Request) {
+  console.log("API START ROUTE HIT");
   try {
     await verifyServerControlRole();
 

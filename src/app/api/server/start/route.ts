@@ -1,14 +1,11 @@
-// app/api/server/start/route.ts
-
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import path from "path";
-import { verifyServerControlRole } from "@/lib/serverAuth";
+import { verifyLoggedIn } from "@/lib/serverAuth";
 
 export async function POST(req: Request) {
-  console.log("API START ROUTE HIT");
   try {
-    await verifyServerControlRole();
+    await verifyLoggedIn();
 
     const { serverId } = await req.json();
 
@@ -19,7 +16,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ Correct path
     const scriptPath = path.join(
       "C:",
       "Users",
@@ -33,10 +29,7 @@ export async function POST(req: Request) {
     exec(`cmd /c "${scriptPath}"`);
 
     return NextResponse.json({ success: true });
-
   } catch (err: any) {
-    return new NextResponse(err.message || "Unauthorized", {
-      status: 403,
-    });
+    return new NextResponse("Unauthorized", { status: 403 });
   }
 }

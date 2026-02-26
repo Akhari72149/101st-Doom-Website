@@ -450,11 +450,14 @@ end.setUTCDate(end.getUTCDate() + 1);
 
 function generateSlots(dateString: string) {
   const slots: Date[] = [];
-  const base = new Date(dateString);
-  base.setHours(0, 0, 0, 0);
+
+  // Force the selected date to UTC midnight
+  const [year, month, day] = dateString.split("-").map(Number);
+
+  const base = Date.UTC(year, month - 1, day, 0, 0, 0);
 
   for (let i = 0; i < 48; i++) {
-    slots.push(new Date(base.getTime() + i * 30 * 60 * 1000));
+    slots.push(new Date(base + i * 30 * 60 * 1000));
   }
 
   return slots;

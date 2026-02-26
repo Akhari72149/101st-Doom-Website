@@ -210,10 +210,7 @@ async function fetchBookings() {
       },
     ]);
 
-    if (error) {
-  alert(error.message);
-  return;
-}
+    
 
     setSelectedStartIndex(null);
     setSelectedPerson("");
@@ -293,7 +290,7 @@ async function fetchBookings() {
               }`}
             >
               <div className="text-xl font-bold text-[#00ff66]">
-                {slot.toLocaleTimeString([], {
+                {slot.toLocaleTimeString(undefined, {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
@@ -343,11 +340,18 @@ async function fetchBookings() {
           <h2 className="mb-4 text-lg text-[#00ff66]">
             Booking:
             <span className="font-bold ml-2">
-              {slots[selectedStartIndex].toLocaleTimeString()} →
-              {new Date(
-                slots[selectedStartIndex].getTime() +
-                  durationHours * 60 * 60 * 1000
-              ).toLocaleTimeString()}
+              {slots[selectedStartIndex].toLocaleTimeString(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+})}
+ →
+{new Date(
+  slots[selectedStartIndex].getTime() +
+    durationHours * 60 * 60 * 1000
+).toLocaleTimeString(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+})}
             </span>
           </h2>
 

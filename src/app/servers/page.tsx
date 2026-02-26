@@ -82,6 +82,7 @@ export default function ServersPage() {
   }, []);
 
   useEffect(() => {
+    setBookings([]);
     fetchBookings();
 
     const channel = supabase
@@ -105,6 +106,7 @@ const start = new Date(Date.UTC(
   Number(selectedDate.split("-")[2]),
   0, 0, 0
 ));
+console.log("Fetching for:", selectedDate);
 
 const end = new Date(start);
 end.setUTCDate(end.getUTCDate() + 1);

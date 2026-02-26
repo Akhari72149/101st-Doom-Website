@@ -138,9 +138,11 @@ end.setUTCDate(end.getUTCDate() + 1);
     personnel: { name: map[b.booked_for] || "Unknown" },
   }));
 
-  /* ================= RECURRING BLOCKS ================= */
+    /* ================= RECURRING BLOCKS ================= */
 
-  const weekday = new Date(selectedDate).getDay();
+  // Use UTC weekday to avoid timezone shifting weekday mismatch
+  const [y, m, d] = selectedDate.split("-").map(Number);
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 
   const { data: recurring } = await supabase
     .from("recurring_server_blocks")
@@ -149,13 +151,19 @@ end.setUTCDate(end.getUTCDate() + 1);
     .eq("weekday", weekday);
 
   const recurringBookings = (recurring || []).map((r) => {
-    const start = new Date(selectedDate);
-    const [startH, startM] = r.start_time.split(":");
-    start.setHours(Number(startH), Number(startM), 0, 0);
+    const [year, month, day] = selectedDate.split("-").map(Number);
 
-    const end = new Date(selectedDate);
+    const [startH, startM] = r.start_time.split(":");
     const [endH, endM] = r.end_time.split(":");
-    end.setHours(Number(endH), Number(endM), 0, 0);
+
+    // Build timestamps from calendar day + stored time
+    const start = new Date(
+      Date.UTC(year, month - 1, day, Number(startH), Number(startM), 0)
+    );
+
+    const end = new Date(
+      Date.UTC(year, month - 1, day, Number(endH), Number(endM), 0)
+    );
 
     return {
       id: `recurring-${r.id}`,
@@ -255,7 +263,10 @@ end.setUTCDate(end.getUTCDate() + 1);
       />
 
       {/* SERVER TABS RESTORED */}
-      <div className="flex gap-4 mb-10 flex-wrap">
+      <h2 className="text-xl text-[#00ff66] mb-4 tracking-widest">
+        Select Server (Your timezone)
+        </h2>
+        <div className="flex gap-4 mb-10 flex-wrap">
         {[1, 2, 3, 4, 5, 6].map((server) => (
           <div
             key={server}
@@ -272,6 +283,10 @@ end.setUTCDate(end.getUTCDate() + 1);
       </div>
 
       {/* SLOTS */}
+      <h2 className="text-xl text-[#00ff66] mb-6 tracking-widest">
+          Available Time Slots
+      </h2>
+       
       <div className="max-w-6xl grid grid-cols-4 gap-4">
         {slots.map((slot, index) => {
           const blocked = isBlocked(slot);

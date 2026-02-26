@@ -96,10 +96,15 @@ export default function ServersPage() {
   }, [activeServer, selectedDate]);
 
 async function fetchBookings() {
-  const [year, month, day] = selectedDate.split("-").map(Number);
+  
+const [year, month, day] = selectedDate.split("-").map(Number);
 
 const start = new Date(year, month - 1, day, 0, 0, 0);
 const end = new Date(year, month - 1, day + 1, 0, 0, 0);
+
+const weekday = new Date(start).getDay();
+
+
 
   /* ================= NORMAL BOOKINGS ================= */
 
@@ -128,9 +133,7 @@ const end = new Date(year, month - 1, day + 1, 0, 0, 0);
     personnel: { name: map[b.booked_for] || "Unknown" },
   }));
 
-  /* ================= RECURRING BLOCKS ================= */
-
-  const weekday = new Date(selectedDate).getDay();
+ /* ================= RECURRING BLOCKS ================= */
 
   const { data: recurring } = await supabase
     .from("recurring_server_blocks")
@@ -139,13 +142,12 @@ const end = new Date(year, month - 1, day + 1, 0, 0, 0);
     .eq("weekday", weekday);
 
   const recurringBookings = (recurring || []).map((r) => {
-    const [year, month, day] = selectedDate.split("-").map(Number);
 
-const [startH, startM] = r.start_time.split(":");
-const [endH, endM] = r.end_time.split(":");
+    const [startH, startM] = r.start_time.split(":");
+    const [endH, endM] = r.end_time.split(":");
 
-const start = new Date(year, month - 1, day, +startH, +startM, 0);
-const end = new Date(year, month - 1, day, +endH, +endM, 0);
+    const start = new Date(year, month - 1, day, +startH, +startM, 0);
+    const end = new Date(year, month - 1, day, +endH, +endM, 0);
 
     return {
       id: `recurring-${r.id}`,
@@ -157,7 +159,6 @@ const end = new Date(year, month - 1, day, +endH, +endM, 0);
       personnel: { name: "Blocked" },
     };
   });
-
   /* ================= MERGE ================= */
 
   setBookings([...(enriched as any), ...recurringBookings]);

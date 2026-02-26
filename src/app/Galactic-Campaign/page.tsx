@@ -134,8 +134,8 @@ export default function GalacticCampaignPage() {
 
   /* ================= FIXED EVENT TIME ================= */
 
-const SIDE_OP_TARGET = new Date("2026-03-15T19:00:00Z"); 
-const LANDFALL_TARGET = new Date("2026-03-20T00:00:00Z");
+const SIDE_OP_TARGET = new Date("2026-02-15T19:00:00Z");  
+const LANDFALL_TARGET = new Date("2026-02-20T00:00:00Z");
 
  
 

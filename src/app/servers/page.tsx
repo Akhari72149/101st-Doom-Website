@@ -96,11 +96,10 @@ export default function ServersPage() {
   }, [activeServer, selectedDate]);
 
 async function fetchBookings() {
-  const start = new Date(selectedDate);
-  start.setHours(0, 0, 0, 0);
+  const [year, month, day] = selectedDate.split("-").map(Number);
 
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+const start = new Date(year, month - 1, day, 0, 0, 0);
+const end = new Date(year, month - 1, day + 1, 0, 0, 0);
 
   /* ================= NORMAL BOOKINGS ================= */
 
@@ -108,8 +107,8 @@ async function fetchBookings() {
     .from("server_bookings")
     .select("*")
     .eq("server_id", activeServer)
-    .gte("start_time", start.toISOString())
-    .lt("start_time", end.toISOString());
+    .gte("start_time", formatLocalTimestamp(start))
+    .lt("start_time", formatLocalTimestamp(end));
 
   const personnelIds = [
     ...new Set((bookingData || []).map((b) => b.booked_for)),
@@ -140,19 +139,19 @@ async function fetchBookings() {
     .eq("weekday", weekday);
 
   const recurringBookings = (recurring || []).map((r) => {
-    const start = new Date(selectedDate);
-    const [startH, startM] = r.start_time.split(":");
-    start.setHours(Number(startH), Number(startM), 0, 0);
+    const [year, month, day] = selectedDate.split("-").map(Number);
 
-    const end = new Date(selectedDate);
-    const [endH, endM] = r.end_time.split(":");
-    end.setHours(Number(endH), Number(endM), 0, 0);
+const [startH, startM] = r.start_time.split(":");
+const [endH, endM] = r.end_time.split(":");
+
+const start = new Date(year, month - 1, day, +startH, +startM, 0);
+const end = new Date(year, month - 1, day, +endH, +endM, 0);
 
     return {
       id: `recurring-${r.id}`,
       server_id: r.server_id,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
+      start_time: formatLocalTimestamp(start),
+      end_time: formatLocalTimestamp(end),
       title: r.title,
       booked_for: "SYSTEM",
       personnel: { name: "Blocked" },
@@ -167,8 +166,8 @@ async function fetchBookings() {
   function isBlocked(slot: Date) {
     return bookings.some((b) => {
       const slotEnd = new Date(slot.getTime() + 30 * 60 * 1000);
-      const bookingStart = new Date(b.start_time);
-      const bookingEnd = new Date(b.end_time);
+      const bookingStart = parseLocalTimestamp(b.start_time);
+      const bookingEnd = parseLocalTimestamp(b.end_time);
       return slot < bookingEnd && slotEnd > bookingStart;
     });
   }
@@ -205,8 +204,8 @@ async function fetchBookings() {
         user_id: user.id,
         booked_for: selectedPerson,
         title: bookingTitle,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
+        start_time: formatLocalTimestamp(start),
+        end_time: formatLocalTimestamp(end),
       },
     ]);
 
@@ -427,6 +426,25 @@ async function fetchBookings() {
         </div>
       )}
     </div>
+  );
+}
+
+function parseLocalTimestamp(value: string) {
+  return new Date(value.replace(" ", "T"));
+}
+
+function formatLocalTimestamp(date: Date) {
+  return (
+    date.getFullYear() +
+    "-" +
+    String(date.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(date.getDate()).padStart(2, "0") +
+    " " +
+    String(date.getHours()).padStart(2, "0") +
+    ":" +
+    String(date.getMinutes()).padStart(2, "0") +
+    ":00"
   );
 }
 

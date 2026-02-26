@@ -99,10 +99,15 @@ export default function ServersPage() {
   }, [activeServer, selectedDate]);
 
 async function fetchBookings() {
-const start = new Date(selectedDate + "T00:00:00");
+const start = new Date(Date.UTC(
+  Number(selectedDate.split("-")[0]),
+  Number(selectedDate.split("-")[1]) - 1,
+  Number(selectedDate.split("-")[2]),
+  0, 0, 0
+));
 
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+const end = new Date(start);
+end.setUTCDate(end.getUTCDate() + 1);
 
   /* ================= NORMAL BOOKINGS ================= */
 

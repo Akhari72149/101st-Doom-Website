@@ -146,8 +146,14 @@ const weekday = new Date(start).getDay();
     const [startH, startM] = r.start_time.split(":");
     const [endH, endM] = r.end_time.split(":");
 
-    const start = new Date(year, month - 1, day, +startH, +startM, 0);
-    const end = new Date(year, month - 1, day, +endH, +endM, 0);
+    const baseDate = new Date(selectedDate);
+baseDate.setHours(0, 0, 0, 0);
+
+const start = new Date(baseDate);
+start.setHours(+startH, +startM, 0, 0);
+
+const end = new Date(baseDate);
+end.setHours(+endH, +endM, 0, 0);
 
     return {
       id: `recurring-${r.id}`,

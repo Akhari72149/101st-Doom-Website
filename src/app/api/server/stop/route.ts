@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
 
     const scriptPath = path.join(
-  process.cwd(),                // /app
+  process.cwd(),               
   "src",
   "app",
   "Auto Server",

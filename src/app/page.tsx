@@ -110,6 +110,15 @@ const personnelItems = [
   },
 ];
 
+/* ================= WHO WE ARE DROPDOWN ================= */
+
+const whoWeAreLinks = [
+  {
+    label: "What we Offer",
+    href: "/certs",
+  },
+];
+
 const filteredPersonnelItems = personnelItems.filter(
   (item) =>
     !item.allowedRoles ||
@@ -397,13 +406,17 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
           <p className="mt-4 text-gray-300 text-center">
             Operational Command & Personnel Management System
           </p>
+          
 
           <div className="mt-8 flex flex-col items-center gap-4">
+
+            
 
   {/* Main Button */}
   {/* ================= PERSONNEL COMMAND DROPDOWN ================= */}
 
 <div className="relative group z-50">
+  
 
   {/* MAIN BUTTON */}
   <button
@@ -415,6 +428,8 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
   >
     Enter Personnel Command
   </button>
+
+  
 
   {/* DROPDOWN MENU */}
   <div
@@ -429,6 +444,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
     "
   >
     <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2 max-h-[400px] overflow-y-auto">
+
 
       {filteredPersonnelItems.map((item) => (
         <button
@@ -446,6 +462,8 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
   </div>
 
 </div>
+
+
 
   {/* Row With Offset Buttons */}
   <div className="flex gap-8">
@@ -515,7 +533,53 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
   </div>
 
+{/* ================= WHO WE ARE DROPDOWN ================= */}
+<div className="relative group w-full max-w-[280px]">
+
+  {/* MAIN BUTTON */}
+  <button
+    className="px-8 py-3 border border-[#00ff66] rounded-lg 
+               text-[#00ff66] hover:bg-[#00ff66] 
+               hover:text-black hover:scale-105 
+               transition-all w-full"
+  >
+    Who We Are
+  </button>
+
+  {/* DROPDOWN */}
+  <div
+    className="
+      absolute left-0 top-full w-full pt-2
+      opacity-0 invisible
+      group-hover:opacity-100
+      group-hover:visible
+      transition-all duration-200
+      pointer-events-none
+      group-hover:pointer-events-auto
+    "
+  >
+    <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2">
+
+      {whoWeAreLinks.map((item) => (
+        <button
+          key={item.href}
+          onClick={() => router.push(item.href)}
+          className="w-full text-left px-4 py-2 rounded-md 
+                     text-[#00ff66] hover:bg-[#00ff66]/10 
+                     transition-all text-sm"
+        >
+          {item.label}
+        </button>
+      ))}
+
+    </div>
+  </div>
+
 </div>
+
+</div>
+
+
 
           <div className="group mt-20 w-[95%] max-w-4xl h-[500px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
 

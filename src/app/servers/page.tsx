@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { hasRole } from "@/lib/permissions";
 
 type Booking = {
   id: string;
@@ -20,8 +19,6 @@ type Booking = {
 export default function ServersPage() {
   const router = useRouter();
 
-  const [user, setUser] = useState<any>(null);
-  const [canBook, setCanBook] = useState(false);
 
   const [activeServer, setActiveServer] = useState(1);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -38,6 +35,10 @@ export default function ServersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [bookingTitle, setBookingTitle] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"book" | "delete" | null>(null);
+  const [canBook, setCanBook] = useState(false);
 
   const slots = generateSlots(selectedDate);
 
@@ -47,29 +48,7 @@ export default function ServersPage() {
 
   /* ================= AUTH ================= */
 
-  useEffect(() => {
-    const loadUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
 
-      setUser(user);
-      if (!user) return;
-
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = roles?.map((r) => r.role) || [];
-
-      if (hasRole(roleList, ["zeus"])) {
-        setCanBook(true);
-      }
-    };
-
-    loadUser();
-  }, []);
 
   useEffect(() => {
     supabase
@@ -182,7 +161,11 @@ const recurringBookings = (recurring ?? [])
   }
 
   async function handleDelete(id: string) {
-    if (!canBook) return;
+    if (!canBook) {
+  setPendingAction("delete");
+  setShowPasswordPrompt(true);
+  return;
+}
 
     const old = bookings;
     setBookings((prev) => prev.filter((b) => b.id !== id));
@@ -199,39 +182,97 @@ const recurringBookings = (recurring ?? [])
   }
 
   async function handleConfirmBooking() {
-    if (!canBook || selectedStartIndex === null || !selectedPerson)
-      return;
-
-    const start = slots[selectedStartIndex];
-    const end = new Date(
-      start.getTime() + durationHours * 60 * 60 * 1000
-    );
-
-    await supabase.from("server_bookings").insert([
-      {
-        server_id: activeServer,
-        user_id: user.id,
-        booked_for: selectedPerson,
-        title: bookingTitle,
-        start_time: formatLocalTimestamp(start),
-        end_time: formatLocalTimestamp(end),
-      },
-    ]);
-
-    setSelectedStartIndex(null);
-    setSelectedPerson("");
-    setSearchQuery("");
-    setBookingTitle("");
-    setShowResults(false);
-    setDurationHours(1);
-
-    fetchBookings();
+  if (!canBook || !selectedPerson) {
+    return;
   }
+
+
+  if (selectedStartIndex === null) {
+    alert("Please select a time slot first.");
+    return;
+  }
+
+  const start = slots[selectedStartIndex];
+
+  const end = new Date(
+    start.getTime() + durationHours * 60 * 60 * 1000
+  );
+
+  const { error } = await supabase.from("server_bookings").insert([
+    {
+      server_id: activeServer,
+      booked_for: selectedPerson,
+      title: bookingTitle,
+      start_time: formatLocalTimestamp(start),
+      end_time: formatLocalTimestamp(end),
+    },
+  ]);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  setSelectedStartIndex(null);
+  setSelectedPerson("");
+  setSearchQuery("");
+  setBookingTitle("");
+  setShowResults(false);
+  setDurationHours(1);
+
+  fetchBookings();
+}
+
 
   /* ================= UI ================= */
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] text-white p-10">
+
+{showPasswordPrompt && (
+  <div className="fixed inset-0 flex items-center justify-center bg-black/80 z-50">
+    <div className="p-6 bg-black border border-[#00ff66] rounded-xl w-96">
+      <h2 className="text-[#00ff66] mb-4 text-lg font-bold">
+        Admin Password Required
+      </h2>
+
+      <input
+        type="password"
+        placeholder="Enter Password"
+        value={adminPassword}
+        onChange={(e) => setAdminPassword(e.target.value)}
+        className="w-full p-3 rounded-xl bg-black border border-[#00ff66] text-white"
+      />
+
+      <button
+        onClick={async () => {
+          const { data } = await supabase.rpc("verify_admin_password", {
+            password_input: adminPassword,
+          });
+
+          if (data === true) {
+            setCanBook(true);
+            setShowPasswordPrompt(false);
+
+            // ✅ After unlocking — automatically retry the action
+            if (pendingAction === "book" && selectedStartIndex !== null) {
+            setSelectedStartIndex(selectedStartIndex);
+            }
+
+            if (pendingAction === "delete") {
+              // You may want to store the delete ID temporarily
+            }
+          } else {
+            alert("Wrong password");
+          }
+        }}
+        className="mt-4 w-full px-4 py-2 bg-[#00ff66] text-black rounded-xl font-semibold"
+      >
+        Unlock
+      </button>
+    </div>
+  </div>
+)}
 
       <button
         onClick={() => router.push("/pcs")}
@@ -283,9 +324,15 @@ const recurringBookings = (recurring ?? [])
             <div
               key={slot.toISOString()}
               onClick={() => {
-                if (!blocked && canBook) {
-                  setSelectedStartIndex(index);
-                }
+               if (blocked) return;
+
+               if (!canBook) {
+               setPendingAction("book");
+               setShowPasswordPrompt(true);
+                return;
+                             }
+
+               setSelectedStartIndex(index);
               }}
               className={`p-6 rounded-2xl border transition-all duration-200 ${
                 blocked

@@ -96,6 +96,11 @@ const personnelItems = [
     allowedRoles: ["admin", "nco", "trainer"],
   },
   {
+    href: "/admin/server-control",
+    title: "Server Control",
+    allowedRoles: ["server-control"],
+  },
+  {
     href: "/certifications",
     title: "Certification Lookup",
   },

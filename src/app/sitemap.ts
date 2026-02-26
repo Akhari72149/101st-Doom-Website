@@ -1,10 +1,10 @@
 import { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://https://101stdoombattalion.com/";
+  const baseUrl = "https://101stdoombattalion.com"; // no trailing slash
 
   const routes = [
-    "/",
+    "/", 
     "/Who-Are-We",
     "/certifications",
     "/galactic-campaign",

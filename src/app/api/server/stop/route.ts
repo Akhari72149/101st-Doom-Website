@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import path from "path";
+import fs from "fs";
 
 export async function POST(req: Request) {
+  console.log("🛑 STOP ROUTE HIT");
+
   try {
     const { serverId } = await req.json();
+    console.log("Server ID:", serverId);
 
     if (!serverId || serverId < 1 || serverId > 6) {
       return NextResponse.json(
@@ -13,20 +17,49 @@ export async function POST(req: Request) {
       );
     }
 
+    /* =========================================================
+       🔥 DOCKER SAFE PATH
+       Scripts must be copied into:
+       /app/AutoServer/
+    ========================================================= */
+
     const scriptPath = path.join(
-      "C:",
-      "Users",
-      "Admin",
-      "Desktop",
-      "Auto Server",
+      process.cwd(),
+      "AutoServer",
       "Main Stop Exe",
       `Server ${serverId}.bat`
     );
 
-    exec(`cmd /c "${scriptPath}"`);
+    console.log("Script Path:", scriptPath);
+
+    // ✅ Verify script exists
+    const exists = fs.existsSync(scriptPath);
+    console.log("File Exists?", exists);
+
+    if (!exists) {
+      return NextResponse.json(
+        { error: "Stop script not found in container" },
+        { status: 500 }
+      );
+    }
+
+    // ✅ Execute stop script
+    exec(`cmd /c ""${scriptPath}""`, (err, stdout, stderr) => {
+      console.log("EXEC OUTPUT:", stdout);
+      console.log("EXEC ERROR:", stderr);
+
+      if (err) {
+        console.error("EXEC FAILED:", err);
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("Route Error:", err);
+
+    return NextResponse.json(
+      { error: "Server error" },
+      { status: 500 }
+    );
   }
 }

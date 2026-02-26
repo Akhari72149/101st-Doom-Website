@@ -11,28 +11,38 @@ export async function POST(req: Request) {
     console.log("Server ID:", serverId);
 
     if (!serverId || serverId < 1 || serverId > 6) {
-      return NextResponse.json({ error: "Invalid server id" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid server id" },
+        { status: 400 }
+      );
     }
 
+
     const scriptPath = path.join(
-      "C:",
-      "Users",
-      "Admin",
-      "Desktop",
-      "Auto Server",
+      process.cwd(),
+      "AutoServer",
       "Main Start",
       `Server ${serverId} Start.bat`
     );
 
     console.log("Script Path:", scriptPath);
 
-    // 🔎 Check if file actually exists
+    // ✅ Check if file exists inside container
     const exists = fs.existsSync(scriptPath);
     console.log("File Exists?", exists);
 
+    if (!exists) {
+      return NextResponse.json(
+        { error: "Script not found in container" },
+        { status: 500 }
+      );
+    }
+
+    // ✅ Execute the bat file
     exec(`cmd /c ""${scriptPath}""`, (err, stdout, stderr) => {
       console.log("EXEC OUTPUT:", stdout);
       console.log("EXEC ERROR:", stderr);
+
       if (err) {
         console.error("EXEC FAILED:", err);
       }
@@ -41,6 +51,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Route Error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Server error" },
+      { status: 500 }
+    );
   }
 }

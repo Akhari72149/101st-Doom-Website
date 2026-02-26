@@ -232,10 +232,26 @@ const recurringBookings = (recurring ?? [])
 {showPasswordPrompt && (
   <div className="fixed inset-0 flex items-center justify-center bg-black/80 z-50">
     <div className="p-6 bg-black border border-[#00ff66] rounded-xl w-96">
-      <h2 className="text-[#00ff66] mb-4 text-lg font-bold">
-        Admin Password Required
-      </h2>
+      
 
+
+      <div className="flex items-center justify-between mb-4">
+  <h2 className="text-[#00ff66] text-lg font-bold">
+    Admin Password Required
+  </h2>
+
+  {/* Close Button INSIDE HEADER */}
+  <button
+    onClick={() => {
+      setShowPasswordPrompt(false);
+      setPendingAction(null);
+      setAdminPassword("");
+    }}
+    className="text-red-400 hover:text-red-300 text-2xl leading-none"
+  >
+    ✕
+  </button>
+</div>
       <input
         type="password"
         placeholder="Enter Password"

@@ -25,9 +25,12 @@ export default function ServersPage() {
 
   const [activeServer, setActiveServer] = useState(1);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const today = new Date();
+  const localDate = today.getFullYear() + "-" +
+        String(today.getMonth() + 1).padStart(2, "0") + "-" +
+        String(today.getDate()).padStart(2, "0");
+
+  const [selectedDate, setSelectedDate] = useState(localDate);
   const [selectedStartIndex, setSelectedStartIndex] =
     useState<number | null>(null);
 
@@ -96,8 +99,7 @@ export default function ServersPage() {
   }, [activeServer, selectedDate]);
 
 async function fetchBookings() {
-  const start = new Date(selectedDate);
-  start.setHours(0, 0, 0, 0);
+const start = new Date(selectedDate + "T00:00:00");
 
   const end = new Date(start);
   end.setDate(end.getDate() + 1);

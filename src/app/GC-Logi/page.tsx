@@ -53,16 +53,41 @@ export default function GCLogisticsHub() {
   /* ================= AUTH ================= */
 
   useEffect(() => {
-    const check = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
-        router.replace("/GC-Platoon-Logi");
-        return;
-      }
-      setLoadingAuth(false);
-    };
-    check();
-  }, []);
+  const checkAccess = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    // ❌ Not logged in
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    // Fetch roles
+    const { data } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+
+    const userRoles = data?.map((r) => r.role) || [];
+
+    const hasAccess =
+      userRoles.includes("admin") ||
+      userRoles.includes("logistics");
+
+    // ❌ Logged in but no permission
+    if (!hasAccess) {
+      router.replace("/GC-Platoon-Logi");
+      return;
+    }
+
+    // ✅ Allowed
+    setLoadingAuth(false);
+  };
+
+  checkAccess();
+}, [router]);
 
   /* ================= FETCH DATA ================= */
 

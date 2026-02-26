@@ -66,6 +66,8 @@ export default function GalacticCampaignPage() {
   const [droidDisplay, setDroidDisplay] = useState(0);
   const [cloneShake, setCloneShake] = useState(false);
   const [droidShake, setDroidShake] = useState(false);
+  const [sideOpOpen, setSideOpOpen] = useState(false);
+  const [landfallOpen, setLandfallOpen] = useState(false);
 
   const animateCounter = (
     target: number,
@@ -103,8 +105,8 @@ export default function GalacticCampaignPage() {
   const getSideOpTarget = () => {
     const now = new Date();
     const target = new Date();
-    target.setDate(now.getDate() + ((4 - now.getDay() + 7) % 7));
-    target.setHours(19, 0, 0, 0);
+    target.setDate(now.getDate() + ((5 - now.getDay() + 7) % 7));
+    target.setHours(0, 0, 0, 0);
     return target;
   };
 
@@ -145,10 +147,10 @@ export default function GalacticCampaignPage() {
     const now = new Date();
     const target = new Date();
 
-    const daysUntilFriday = (5 - now.getDay() + 7) % 7;
+    const daysUntilSaturday = (6 - now.getDay() + 7) % 7;
 
-    target.setDate(now.getDate() + daysUntilFriday);
-    target.setHours(19, 0, 0, 0);
+    target.setDate(now.getDate() + daysUntilSaturday);
+    target.setHours(0, 0, 0, 0);
 
     return target;
   };
@@ -319,27 +321,158 @@ export default function GalacticCampaignPage() {
             {isActive ? "SIDE OPERATION ACTIVE" : "Galactic Campaign"}
           </h1>
 
-          {/* SIDE OP COUNTDOWN */}
-          {!isActive && (
-            <div>
-              <p className="text-green-400 text-lg mt-2">
-                Side Operation Begins In:
-              </p>
-              <div className="text-3xl text-yellow-400 font-mono">
-                {timeLeft}
-              </div>
-            </div>
-          )}
+{/* ================= SIDE OP BOX ================= */}
 
-          {/* LANDING COUNTDOWN */}
-          <div className="mt-4">
-            <p className="text-red-400 text-lg">
-              C2 make initial Landfall on Triton in T-
-            </p>
-            <div className="text-3xl text-red-500 font-mono">
-              {landfallActive ? "00:00:00" : landfallTime}
-            </div>
-          </div>
+<div className="border border-[#00ff66]/40 bg-black/50 rounded-2xl overflow-hidden">
+
+  {/* HEADER (ALWAYS VISIBLE + CONTAINS COUNTDOWN) */}
+  <button
+    onClick={() => setSideOpOpen(!sideOpOpen)}
+    className="w-full flex justify-between items-center p-6 
+               hover:bg-[#00ff66]/10 transition"
+  >
+
+    <div className="text-left">
+      <h2 className="text-2xl text-[#00ff66] font-bold">
+        🛑 GC Side Operation
+      </h2>
+
+      {/* ✅ COUNTDOWN MOVED HERE */}
+      <div className="mt-1">
+        <span className="text-sm text-yellow-400">
+          📅 Thursday — 7:00 PM EST
+        </span>
+
+        <div className="text-xl text-green-400 font-mono">
+          {isActive ? "OPERATION ACTIVE" : timeLeft}
+        </div>
+      </div>
+    </div>
+
+    <span className="text-xl text-[#00ff66]">
+      {sideOpOpen ? "▲" : "▼"}
+    </span>
+
+  </button>
+
+  {/* COLLAPSIBLE CONTENT */}
+  <div
+    className={`
+      overflow-hidden transition-all duration-500
+      ${sideOpOpen ? "max-h-[2000px] opacity-100 p-6" : "max-h-0 opacity-0"}
+    `}
+  >
+
+    {/* Announcement Text */}
+    <div className="text-sm text-gray-300 leading-relaxed space-y-4">
+
+      <p>
+        A platoon of ARF troopers has been pushed behind enemy lines
+        after heavy casualties. Your mission is to stealthily return
+        to friendly territory with limited supplies.
+      </p>
+
+      <p>
+        Detection means death. This is a one life operation.
+        Team coordination and discretion are mandatory.
+      </p>
+
+      <div className="border-t border-[#00ff66]/20 pt-4">
+
+        <p className="text-[#00ff66] font-semibold">
+          Team One — Longbow Omegon
+        </p>
+        <ul className="ml-4 text-sm space-y-1">
+          <li>Team Lead: Akhari</li>
+          <li>Sniper: Sick</li>
+          <li>Spotter: Toxic</li>
+          <li>Medic: Advisor</li>
+          <li>Assault: Sour</li>
+          <li>Assault: Yami</li>
+        </ul>
+
+        <p className="text-[#00ff66] font-semibold mt-4">
+          Team Two — Longbow Epsilon
+        </p>
+        <ul className="ml-4 text-sm space-y-1">
+          <li>Team Lead: Shy</li>
+          <li>Sniper: Wulf</li>
+          <li>Spotter: Joker</li>
+          <li>Medic: Vidar</li>
+          <li>Assault: York</li>
+          <li>Assault: Blitz</li>
+        </ul>
+
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+{/* ================= C2 LANDFALL BOX ================= */}
+
+<div className="border border-red-500/40 bg-black/50 rounded-2xl overflow-hidden">
+
+  {/* HEADER — ALWAYS VISIBLE */}
+  <button
+    onClick={() => setLandfallOpen(!landfallOpen)}
+    className="w-full flex justify-between items-center p-6 hover:bg-red-500/10 transition"
+  >
+    <div className="text-left">
+      <h2 className="text-2xl text-red-500 font-bold">
+        🚀 C2 LANDING — TRITON
+      </h2>
+
+      {/* ✅ COUNTDOWN MOVED HERE */}
+      <div className="mt-1">
+        <span className="text-sm text-red-400">
+          Initial Landfall Countdown
+        </span>
+
+        <div className="text-xl text-yellow-400 font-mono">
+          {landfallActive ? "LANDING ACTIVE" : landfallTime}
+        </div>
+      </div>
+    </div>
+
+    <span className="text-xl text-red-500">
+      {landfallOpen ? "▲" : "▼"}
+    </span>
+  </button>
+
+  {/* COLLAPSIBLE CONTENT */}
+  <div
+    className={`
+      overflow-hidden transition-all duration-500
+      ${landfallOpen ? "max-h-[2000px] opacity-100 p-6" : "max-h-0 opacity-0"}
+    `}
+  >
+
+    <div className="text-sm text-gray-300 leading-relaxed space-y-4">
+
+      <p>
+        DOOM Battalion must make landfall on the Yaoboan Moon of Triton.
+        Initial landing forces must secure a landing zone to allow
+        TASK FORCE DOOM Acclamators to support ground operations.
+      </p>
+
+      <p>
+        Triton is a heavily defended rocky moon with powerful gun
+        emplacements capable of engaging orbital assets.
+        Securing it is critical — without Triton, the battalion
+        remains stranded in deep space without direct support.
+      </p>
+
+      <p>
+        Pacifying Triton ensures orbital dominance and enables sustained
+        occupation of Yaoboa through coordinated ground support.
+      </p>
+
+    </div>
+
+  </div>
+</div>
 
           {/* PHASES (LOCKED LOGIC ONLY CHANGED) */}
           <div className="flex gap-4">

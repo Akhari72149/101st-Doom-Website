@@ -1,63 +1,82 @@
 @import "tailwindcss";
 
+/* ================= ROOT THEME ================= */
+
 :root {
-  --background: #05080f;
-  --foreground: #e6faff;
+  --background: #000a06;
+  --foreground: #00ff66;
 }
 
+/* Tailwind Theme Tokens */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
   --font-sans: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* ================= DARK MODE ================= */
+
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #05080f;
-    --foreground: #e6faff;
+    --background: #000a06;
+    --foreground: #00ff66;
   }
 }
 
+/* ================= GLOBAL BODY STYLE ================= */
+
 body {
-  background: linear-gradient(
-    to bottom right,
-    #05080f,
-    #0b0f1a,
-    #000000
-  );
-  color: #e6faff;
+  background: radial-gradient(
+      circle at center,
+      #001f11 0%,
+      #000a06 60%,
+      #000000 100%
+    );
+  color: #e6fff0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  min-height: 100vh;
 }
 
-/* Subtle blue holographic glow overlay */
+/* ================= GREEN HOLOGRAM OVERLAY ================= */
+
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(circle at 25% 25%, rgba(0, 229, 255, 0.08), transparent 70%),
-    radial-gradient(circle at 75% 75%, rgba(0, 229, 255, 0.05), transparent 70%);
+    radial-gradient(circle at 25% 25%, rgba(0, 255, 102, 0.08), transparent 70%),
+    radial-gradient(circle at 75% 75%, rgba(0, 255, 102, 0.05), transparent 70%);
   pointer-events: none;
   z-index: -1;
 }
 
-/* Subtle scanline effect */
+/* ================= SUBTLE SCANLINES ================= */
+
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(0, 229, 255, 0.03),
-    rgba(0, 229, 255, 0.03) 1px,
+    rgba(0, 255, 102, 0.03),
+    rgba(0, 255, 102, 0.03) 1px,
     transparent 1px,
     transparent 3px
   );
   pointer-events: none;
   z-index: -1;
 }
+
+/* ================= SMOOTH ANIMATIONS ================= */
+
+* {
+  scroll-behavior: smooth;
+}
+
+/* ================= TICKER ================= */
 
 @keyframes ticker {
   0% {
@@ -72,3 +91,15 @@ body::after {
   animation: ticker 30s linear infinite;
 }
 
+/* ================= GLOW EFFECT (FOR YOUR BOXES) ================= */
+
+.glow-border {
+  border: 1px solid rgba(0, 255, 102, 0.3);
+  box-shadow: 0 0 25px rgba(0, 255, 102, 0.15);
+  transition: all 0.3s ease;
+}
+
+.glow-border:hover {
+  border: 1px solid #00ff66;
+  box-shadow: 0 0 50px rgba(0, 255, 102, 0.5);
+}

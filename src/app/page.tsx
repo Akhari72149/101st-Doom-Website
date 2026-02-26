@@ -477,7 +477,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
     </button>
 
     {/* Right Button */}
-<div className="relative group translate-x-[20px] z-50">
+<div className="relative group translate-x-[20px] z-40">
 
   {/* MAIN BUTTON */}
   <button

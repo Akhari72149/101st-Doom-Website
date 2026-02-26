@@ -25,12 +25,9 @@ export default function ServersPage() {
 
   const [activeServer, setActiveServer] = useState(1);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const today = new Date();
-  const localDate = today.getFullYear() + "-" +
-        String(today.getMonth() + 1).padStart(2, "0") + "-" +
-        String(today.getDate()).padStart(2, "0");
-
-  const [selectedDate, setSelectedDate] = useState(localDate);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
   const [selectedStartIndex, setSelectedStartIndex] =
     useState<number | null>(null);
 
@@ -82,7 +79,6 @@ export default function ServersPage() {
   }, []);
 
   useEffect(() => {
-    setBookings([]);
     fetchBookings();
 
     const channel = supabase
@@ -100,16 +96,11 @@ export default function ServersPage() {
   }, [activeServer, selectedDate]);
 
 async function fetchBookings() {
-const start = new Date(Date.UTC(
-  Number(selectedDate.split("-")[0]),
-  Number(selectedDate.split("-")[1]) - 1,
-  Number(selectedDate.split("-")[2]),
-  0, 0, 0
-));
-console.log("Fetching for:", selectedDate);
+  const start = new Date(selectedDate);
+  start.setHours(0, 0, 0, 0);
 
-const end = new Date(start);
-end.setUTCDate(end.getUTCDate() + 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
 
   /* ================= NORMAL BOOKINGS ================= */
 
@@ -117,8 +108,8 @@ end.setUTCDate(end.getUTCDate() + 1);
     .from("server_bookings")
     .select("*")
     .eq("server_id", activeServer)
-    .lte("start_time", end.toISOString())
-    .gte("end_time", start.toISOString());
+    .gte("start_time", start.toISOString())
+    .lt("start_time", end.toISOString());
 
   const personnelIds = [
     ...new Set((bookingData || []).map((b) => b.booked_for)),
@@ -138,11 +129,9 @@ end.setUTCDate(end.getUTCDate() + 1);
     personnel: { name: map[b.booked_for] || "Unknown" },
   }));
 
-    /* ================= RECURRING BLOCKS ================= */
+  /* ================= RECURRING BLOCKS ================= */
 
-  // Use UTC weekday to avoid timezone shifting weekday mismatch
-  const [y, m, d] = selectedDate.split("-").map(Number);
-  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const weekday = new Date(selectedDate).getDay();
 
   const { data: recurring } = await supabase
     .from("recurring_server_blocks")
@@ -151,19 +140,13 @@ end.setUTCDate(end.getUTCDate() + 1);
     .eq("weekday", weekday);
 
   const recurringBookings = (recurring || []).map((r) => {
-    const [year, month, day] = selectedDate.split("-").map(Number);
-
+    const start = new Date(selectedDate);
     const [startH, startM] = r.start_time.split(":");
+    start.setHours(Number(startH), Number(startM), 0, 0);
+
+    const end = new Date(selectedDate);
     const [endH, endM] = r.end_time.split(":");
-
-    // Build timestamps from calendar day + stored time
-    const start = new Date(
-      Date.UTC(year, month - 1, day, Number(startH), Number(startM), 0)
-    );
-
-    const end = new Date(
-      Date.UTC(year, month - 1, day, Number(endH), Number(endM), 0)
-    );
+    end.setHours(Number(endH), Number(endM), 0, 0);
 
     return {
       id: `recurring-${r.id}`,
@@ -216,7 +199,7 @@ end.setUTCDate(end.getUTCDate() + 1);
       start.getTime() + durationHours * 60 * 60 * 1000
     );
 
-    const { error } = await supabase.from("server_bookings").insert([
+    await supabase.from("server_bookings").insert([
       {
         server_id: activeServer,
         user_id: user.id,
@@ -226,8 +209,6 @@ end.setUTCDate(end.getUTCDate() + 1);
         end_time: end.toISOString(),
       },
     ]);
-
-    
 
     setSelectedStartIndex(null);
     setSelectedPerson("");
@@ -263,10 +244,7 @@ end.setUTCDate(end.getUTCDate() + 1);
       />
 
       {/* SERVER TABS RESTORED */}
-      <h2 className="text-xl text-[#00ff66] mb-4 tracking-widest">
-        Select Server (Your timezone)
-        </h2>
-        <div className="flex gap-4 mb-10 flex-wrap">
+      <div className="flex gap-4 mb-10 flex-wrap">
         {[1, 2, 3, 4, 5, 6].map((server) => (
           <div
             key={server}
@@ -283,10 +261,6 @@ end.setUTCDate(end.getUTCDate() + 1);
       </div>
 
       {/* SLOTS */}
-      <h2 className="text-xl text-[#00ff66] mb-6 tracking-widest">
-          Available Time Slots
-      </h2>
-       
       <div className="max-w-6xl grid grid-cols-4 gap-4">
         {slots.map((slot, index) => {
           const blocked = isBlocked(slot);
@@ -314,7 +288,7 @@ end.setUTCDate(end.getUTCDate() + 1);
               }`}
             >
               <div className="text-xl font-bold text-[#00ff66]">
-                {slot.toLocaleTimeString(undefined, {
+                {slot.toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
@@ -364,18 +338,11 @@ end.setUTCDate(end.getUTCDate() + 1);
           <h2 className="mb-4 text-lg text-[#00ff66]">
             Booking:
             <span className="font-bold ml-2">
-              {slots[selectedStartIndex].toLocaleTimeString(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-})}
- →
-{new Date(
-  slots[selectedStartIndex].getTime() +
-    durationHours * 60 * 60 * 1000
-).toLocaleTimeString(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-})}
+              {slots[selectedStartIndex].toLocaleTimeString()} →
+              {new Date(
+                slots[selectedStartIndex].getTime() +
+                  durationHours * 60 * 60 * 1000
+              ).toLocaleTimeString()}
             </span>
           </h2>
 
@@ -465,14 +432,11 @@ end.setUTCDate(end.getUTCDate() + 1);
 
 function generateSlots(dateString: string) {
   const slots: Date[] = [];
-
-  // Force the selected date to UTC midnight
-  const [year, month, day] = dateString.split("-").map(Number);
-
-  const base = Date.UTC(year, month - 1, day, 0, 0, 0);
+  const base = new Date(dateString);
+  base.setHours(0, 0, 0, 0);
 
   for (let i = 0; i < 48; i++) {
-    slots.push(new Date(base + i * 30 * 60 * 1000));
+    slots.push(new Date(base.getTime() + i * 30 * 60 * 1000));
   }
 
   return slots;

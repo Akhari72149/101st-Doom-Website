@@ -51,11 +51,28 @@ export default function ServersPage() {
 
 
   useEffect(() => {
-    supabase
-      .from("personnel")
-      .select("id,name")
-      .then(({ data }) => setPersonnelList(data || []));
-  }, []);
+  const certificationIds = [
+    "0a559b7d-b2d4-4972-a2a7-a64d805d968e",
+    "5d61393e-ce1e-40c9-b698-2526b020a486",
+    "d6555eb7-3eac-4019-81cb-e11291437156",
+    "a4316aa4-f69d-4265-aff0-0760614ff987"
+  ];
+
+  supabase
+    .from("personnel")
+    .select(`
+      id,
+      name,
+      personnel_certifications!inner (
+        certification_id
+      )
+    `)
+    .in("personnel_certifications.certification_id", certificationIds)
+    .then(({ data }) => {
+      setPersonnelList(data || []);
+    });
+
+}, []);
 
   useEffect(() => {
     fetchBookings();

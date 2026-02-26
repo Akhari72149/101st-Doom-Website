@@ -31,6 +31,8 @@ export default function ServersPage() {
   const [selectedStartIndex, setSelectedStartIndex] =
     useState<number | null>(null);
 
+  const [durationHours, setDurationHours] = useState<1 | 2>(1);
+
   const [personnelList, setPersonnelList] = useState<any[]>([]);
   const [selectedPerson, setSelectedPerson] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -43,9 +45,7 @@ export default function ServersPage() {
     person.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  /* ===================================================== */
-  /* AUTH */
-  /* ===================================================== */
+  /* ================= AUTH ================= */
 
   useEffect(() => {
     const loadUser = async () => {
@@ -95,40 +95,74 @@ export default function ServersPage() {
     };
   }, [activeServer, selectedDate]);
 
-  async function fetchBookings() {
+async function fetchBookings() {
+  const start = new Date(selectedDate);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  /* ================= NORMAL BOOKINGS ================= */
+
+  const { data: bookingData } = await supabase
+    .from("server_bookings")
+    .select("*")
+    .eq("server_id", activeServer)
+    .gte("start_time", start.toISOString())
+    .lt("start_time", end.toISOString());
+
+  const personnelIds = [
+    ...new Set((bookingData || []).map((b) => b.booked_for)),
+  ];
+
+  const { data: personnelData } = await supabase
+    .from("personnel")
+    .select("id,name")
+    .in("id", personnelIds);
+
+  const map = Object.fromEntries(
+    (personnelData || []).map((p) => [p.id, p.name])
+  );
+
+  const enriched = (bookingData || []).map((b) => ({
+    ...b,
+    personnel: { name: map[b.booked_for] || "Unknown" },
+  }));
+
+  /* ================= RECURRING BLOCKS ================= */
+
+  const weekday = new Date(selectedDate).getDay();
+
+  const { data: recurring } = await supabase
+    .from("recurring_server_blocks")
+    .select("*")
+    .eq("server_id", activeServer)
+    .eq("weekday", weekday);
+
+  const recurringBookings = (recurring || []).map((r) => {
     const start = new Date(selectedDate);
-    start.setHours(0, 0, 0, 0);
+    const [startH, startM] = r.start_time.split(":");
+    start.setHours(Number(startH), Number(startM), 0, 0);
 
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    const end = new Date(selectedDate);
+    const [endH, endM] = r.end_time.split(":");
+    end.setHours(Number(endH), Number(endM), 0, 0);
 
-    const { data: bookingData } = await supabase
-      .from("server_bookings")
-      .select("*")
-      .eq("server_id", activeServer)
-      .gte("start_time", start.toISOString())
-      .lt("start_time", end.toISOString());
+    return {
+      id: `recurring-${r.id}`,
+      server_id: r.server_id,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      title: r.title,
+      booked_for: "SYSTEM",
+      personnel: { name: "Blocked" },
+    };
+  });
 
-    const personnelIds = [
-      ...new Set((bookingData || []).map((b) => b.booked_for)),
-    ];
+  /* ================= MERGE ================= */
 
-    const { data: personnelData } = await supabase
-      .from("personnel")
-      .select("id,name")
-      .in("id", personnelIds);
-
-    const map = Object.fromEntries(
-      (personnelData || []).map((p) => [p.id, p.name])
-    );
-
-    const enriched = (bookingData || []).map((b) => ({
-      ...b,
-      personnel: { name: map[b.booked_for] || "Unknown" },
-    }));
-
-    setBookings(enriched as any);
-  }
+  setBookings([...(enriched as any), ...recurringBookings]);
+}
 
   function isBlocked(slot: Date) {
     return bookings.some((b) => {
@@ -161,9 +195,11 @@ export default function ServersPage() {
       return;
 
     const start = slots[selectedStartIndex];
-    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    const end = new Date(
+      start.getTime() + durationHours * 60 * 60 * 1000
+    );
 
-    await supabase.from("server_bookings").insert([
+    const { error } = await supabase.from("server_bookings").insert([
       {
         server_id: activeServer,
         user_id: user.id,
@@ -174,81 +210,55 @@ export default function ServersPage() {
       },
     ]);
 
+    if (error) {
+  alert(error.message);
+  return;
+}
+
     setSelectedStartIndex(null);
     setSelectedPerson("");
     setSearchQuery("");
     setBookingTitle("");
     setShowResults(false);
+    setDurationHours(1);
 
     fetchBookings();
   }
 
-  /* ===================================================== */
-  /* UI */
-  /* ===================================================== */
+  /* ================= UI ================= */
 
   return (
-    <div className="
-      min-h-screen
-      bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
-      text-white
-      p-10
-    ">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] text-white p-10">
 
-      {/* BACK */}
       <button
         onClick={() => router.push("/pcs")}
-        className="
-          mb-8 px-4 py-2 rounded-lg
-          border border-[#00ff66]/50
-          text-[#00ff66]
-          backdrop-blur-md
-          transition-all duration-200
-          hover:bg-[#00ff66]/10
-          hover:scale-105
-        "
+        className="mb-8 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] backdrop-blur-md transition-all duration-200 hover:bg-[#00ff66]/10 hover:scale-105"
       >
         ← Back
       </button>
 
-      {/* TITLE */}
-      <h1 className="
-        text-4xl font-bold mb-10
-        text-[#00ff66]
-        tracking-[0.4em]
-      ">
+      <h1 className="text-4xl font-bold mb-10 text-[#00ff66] tracking-[0.4em]">
         SERVER BOOKINGS
       </h1>
 
-      {/* DATE */}
       <input
         type="date"
         value={selectedDate}
         onChange={(e) => setSelectedDate(e.target.value)}
-        className="
-          mb-8 p-3 rounded-xl
-          bg-black/40 backdrop-blur-md
-          border border-[#00ff66]/40
-          text-[#00ff66]
-          focus:border-[#00ff66]
-        "
+        className="mb-8 p-3 rounded-xl bg-black/40 border border-[#00ff66]/40 text-[#00ff66]"
       />
 
-      {/* SERVER TABS */}
+      {/* SERVER TABS RESTORED */}
       <div className="flex gap-4 mb-10 flex-wrap">
         {[1, 2, 3, 4, 5, 6].map((server) => (
           <div
             key={server}
             onClick={() => setActiveServer(server)}
-            className={`
-              px-6 py-3 rounded-xl cursor-pointer
-              border transition-all duration-200
-              ${
-                activeServer === server
-                  ? "bg-[#00ff66]/20 border-[#00ff66] text-[#00ff66] scale-105 shadow-[0_0_20px_rgba(0,255,100,0.4)]"
-                  : "border-[#00ff66]/30 hover:bg-[#00ff66]/10 hover:scale-105"
-              }
-            `}
+            className={`px-6 py-3 rounded-xl cursor-pointer border transition-all duration-200 ${
+              activeServer === server
+                ? "bg-[#00ff66]/20 border-[#00ff66] text-[#00ff66] scale-105 shadow-[0_0_20px_rgba(0,255,100,0.4)]"
+                : "border-[#00ff66]/30 hover:bg-[#00ff66]/10 hover:scale-105"
+            }`}
           >
             SERVER {server}
           </div>
@@ -256,31 +266,31 @@ export default function ServersPage() {
       </div>
 
       {/* SLOTS */}
-      <div className="max-w-4xl grid gap-6">
+      <div className="max-w-6xl grid grid-cols-4 gap-4">
         {slots.map((slot, index) => {
           const blocked = isBlocked(slot);
+          const durationSlots = durationHours * 2;
+
           const isSelected =
             selectedStartIndex !== null &&
             index >= selectedStartIndex &&
-            index <= selectedStartIndex + 3;
+            index < selectedStartIndex + durationSlots;
 
           return (
             <div
               key={slot.toISOString()}
               onClick={() => {
-                if (!blocked && canBook) setSelectedStartIndex(index);
-              }}
-              className={`
-                p-6 rounded-2xl
-                border transition-all duration-200
-                ${
-                  blocked
-                    ? "bg-black/50 border-[#00ff66]/30"
-                    : isSelected
-                    ? "bg-[#003d14] border-[#00ff66] scale-105 shadow-[0_0_20px_rgba(0,255,100,0.4)]"
-                    : "bg-black/40 border-[#00ff66]/20 hover:border-[#00ff66] hover:scale-105"
+                if (!blocked && canBook) {
+                  setSelectedStartIndex(index);
                 }
-              `}
+              }}
+              className={`p-6 rounded-2xl border transition-all duration-200 ${
+                blocked
+                  ? "bg-black/50 border-[#00ff66]/30"
+                  : isSelected
+                  ? "bg-[#003d14] border-[#00ff66] scale-105 shadow-[0_0_20px_rgba(0,255,100,0.4)]"
+                  : "bg-black/40 border-[#00ff66]/20 hover:border-[#00ff66] hover:scale-105"
+              }`}
             >
               <div className="text-xl font-bold text-[#00ff66]">
                 {slot.toLocaleTimeString([], {
@@ -289,7 +299,7 @@ export default function ServersPage() {
                 })}
               </div>
 
-              {/* BOOKINGS */}
+
               {bookings
                 .filter((b) => {
                   const slotEnd = new Date(
@@ -302,11 +312,7 @@ export default function ServersPage() {
                 .map((b) => (
                   <div
                     key={b.id}
-                    className="
-                      mt-4 p-4 rounded-xl
-                      bg-black/60
-                      border border-[#00ff66]
-                    "
+                    className="mt-4 p-4 rounded-xl bg-black/60 border border-[#00ff66]"
                   >
                     <div className="text-[#00ff66] font-semibold">
                       {b.personnel?.name}
@@ -315,7 +321,7 @@ export default function ServersPage() {
                       {b.title}
                     </div>
 
-                    {canBook && (
+                    {canBook && !b.id.startsWith("recurring-") && (
                       <button
                         onClick={() => handleDelete(b.id)}
                         className="mt-2 text-sm text-red-400 hover:text-red-300"
@@ -332,33 +338,20 @@ export default function ServersPage() {
 
       {/* CONFIRM PANEL */}
       {selectedStartIndex !== null && canBook && (
-        <div className="
-          fixed bottom-10 right-10
-          w-96 p-6 rounded-2xl
-          bg-black/80 backdrop-blur-xl
-          border border-[#00ff66]
-          shadow-[0_0_40px_rgba(0,255,100,0.3)]
-        ">
+        <div className="fixed bottom-10 right-10 w-96 p-6 rounded-2xl bg-black/80 border border-[#00ff66] shadow-[0_0_40px_rgba(0,255,100,0.3)]">
+
           <h2 className="mb-4 text-lg text-[#00ff66]">
             Booking:
             <span className="font-bold ml-2">
               {slots[selectedStartIndex].toLocaleTimeString()} →
-              {slots[selectedStartIndex + 3]?.toLocaleTimeString()}
+              {new Date(
+                slots[selectedStartIndex].getTime() +
+                  durationHours * 60 * 60 * 1000
+              ).toLocaleTimeString()}
             </span>
           </h2>
 
-          <input
-            placeholder="Booking Title"
-            value={bookingTitle}
-            onChange={(e) => setBookingTitle(e.target.value)}
-            className="
-              w-full p-3 mb-4 rounded-xl
-              bg-black border border-[#00ff66]
-              text-white
-            "
-          />
-
-          {/* PERSON SELECT */}
+          {/* PERSON SEARCH */}
           <div className="relative mb-4">
             <input
               placeholder="Search personnel..."
@@ -368,21 +361,11 @@ export default function ServersPage() {
                 setSearchQuery(e.target.value);
                 setShowResults(true);
               }}
-              className="
-                w-full p-3 rounded-xl
-                bg-black border border-[#00ff66]
-                text-white
-              "
+              className="w-full p-3 rounded-xl bg-black border border-[#00ff66] text-white"
             />
 
             {showResults && searchQuery && (
-              <div className="
-                absolute z-50 w-full mt-2
-                max-h-60 overflow-y-auto
-                bg-black/90 backdrop-blur-xl
-                border border-[#00ff66]
-                rounded-xl
-              ">
+              <div className="absolute z-50 w-full mt-2 max-h-60 overflow-y-auto bg-black/90 border border-[#00ff66] rounded-xl">
                 {filteredPersonnel.map((person) => (
                   <div
                     key={person.id}
@@ -391,12 +374,7 @@ export default function ServersPage() {
                       setSearchQuery(person.name);
                       setShowResults(false);
                     }}
-                    className="
-                      p-3 cursor-pointer
-                      hover:bg-[#00ff66]
-                      hover:text-black
-                      transition
-                    "
+                    className="p-3 cursor-pointer hover:bg-[#00ff66] hover:text-black transition"
                   >
                     {person.name}
                   </div>
@@ -405,15 +383,34 @@ export default function ServersPage() {
             )}
           </div>
 
-          {/* ACTIONS */}
+          {/* DURATION */}
+          <div className="mb-4">
+            <label className="block mb-2 text-sm text-[#00ff66]">
+              Duration
+            </label>
+            <select
+              value={durationHours}
+              onChange={(e) =>
+                setDurationHours(Number(e.target.value) as 1 | 2)
+              }
+              className="w-full p-3 rounded-xl bg-black border border-[#00ff66] text-white"
+            >
+              <option value={1}>1 Hour</option>
+              <option value={2}>2 Hours</option>
+            </select>
+          </div>
+
+          <input
+            placeholder="Booking Title"
+            value={bookingTitle}
+            onChange={(e) => setBookingTitle(e.target.value)}
+            className="w-full p-3 mb-4 rounded-xl bg-black border border-[#00ff66] text-white"
+          />
+
           <div className="flex gap-3">
             <button
               onClick={handleConfirmBooking}
-              className="
-                px-4 py-2 rounded-xl
-                bg-[#00ff66] text-black font-semibold
-                hover:scale-105 transition
-              "
+              className="px-4 py-2 rounded-xl bg-[#00ff66] text-black font-semibold hover:scale-105 transition"
             >
               Confirm
             </button>
@@ -425,13 +422,9 @@ export default function ServersPage() {
                 setSearchQuery("");
                 setBookingTitle("");
                 setShowResults(false);
+                setDurationHours(1);
               }}
-              className="
-                px-4 py-2 rounded-xl
-                border border-red-500 text-red-400
-                hover:bg-red-500 hover:text-black
-                transition
-              "
+              className="px-4 py-2 rounded-xl border border-red-500 text-red-400 hover:bg-red-500 hover:text-black transition"
             >
               Cancel
             </button>
@@ -441,8 +434,6 @@ export default function ServersPage() {
     </div>
   );
 }
-
-/* ================= SLOT GENERATOR ================= */
 
 function generateSlots(dateString: string) {
   const slots: Date[] = [];

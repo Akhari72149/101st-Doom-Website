@@ -156,8 +156,8 @@ const recurringBookings = (recurring ?? [])
     return {
       id: `recurring-${r.id}`,
       server_id: r.server_id,
-      start_time: formatLocalTimestamp(start),
-      end_time: formatLocalTimestamp(end),
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
       title: r.title,
       booked_for: "SYSTEM",
       personnel: { name: "Blocked" },
@@ -171,8 +171,8 @@ const recurringBookings = (recurring ?? [])
   function isBlocked(slot: Date) {
     return bookings.some((b) => {
       const slotEnd = new Date(slot.getTime() + 30 * 60 * 1000);
-      const bookingStart = parseLocalTimestamp(b.start_time);
-      const bookingEnd = parseLocalTimestamp(b.end_time);
+      const bookingStart = new Date(b.start_time);
+      const bookingEnd = new Date(b.end_time);
       return slot < bookingEnd && slotEnd > bookingStart;
     });
   }

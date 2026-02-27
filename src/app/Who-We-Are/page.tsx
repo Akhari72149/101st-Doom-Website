@@ -51,11 +51,9 @@ Provides strategic suppression and battlefield control.
     icon: "/icons/jetpack.png",
     logo: "/WWA/Dagger.jpg",
     content: `
-Dagger functions as an elite operational platoon within the 101st, structured for rapid deployment and tactical superiority.
-
-It can detach to reinforce allied platoons or execute autonomous missions as operational demands require.
-
 Specializing in precision strikes, Dagger targets high-value enemy assets, infrastructure, and command elements to degrade enemy capability and secure strategic dominance for the wider campaign.
+
+Built for deep operations, Dagger can detach to reinforce allied platoons or execute independent missions as needed, excelling behind enemy lines and operating most effectively in a target-rich environment surrounded by hostile forces.
     `,
   },
   {
@@ -64,9 +62,9 @@ Specializing in precision strikes, Dagger targets high-value enemy assets, infra
     icon: "/icons/Plane.png",
     logo: "/WWA/Hammer.jpg",
     content: `
-Hammer serves as our elite flying MOS unit.
-Focused on air superiority, rapid insertion, and tactical aerial support.
-Provides precision overwatch and decisive air-based control.
+Hammer functions as the elite aviation element of the 101st, specializing in air superiority, rapid insertion, and tactical aerial support.
+
+It provides precision overwatch, battlefield mobility, and decisive control of the skies to ensure mission success across all operations.
     `,
   },
 ];

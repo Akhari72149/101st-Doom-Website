@@ -75,7 +75,8 @@ export default function VaultPage() {
       "Scanning security layers...",
       "Injecting authentication token...",
       "Access key verified.",
-      "Reconstructing classified data..."
+      "Reconstructing classified data...",
+      "fkin cwos"
     ];
 
     let index = 0;
@@ -97,7 +98,7 @@ export default function VaultPage() {
       ]);
 
       index++;
-    }, 250);
+    }, 200);
 
     return () => clearInterval(interval);
   }, [stage]);

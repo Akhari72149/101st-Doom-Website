@@ -299,100 +299,22 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
           GC Logistics Hub
           </button>
 
+          <button
+  onClick={() => router.push("/vault")}
+  className="px-6 py-3 border border-purple-500 text-purple-400 
+             hover:bg-purple-500/20 hover:scale-105 
+             transition-all duration-300 
+             shadow-[0_0_15px_rgba(128,0,255,0.4)]
+             font-bold tracking-widest"
+>
+  📁 ENTER WAR ARCHIVE
+</button>
+
           <h1 className="text-5xl text-red-500 font-bold">
-               SIDE OPERATION — COMPLETE
+               Planetfall Imminent - Prepare for War
           </h1>
 
-{/* ================= SIDE OP BOX ================= */}
 
-<div className="border border-[#00ff66]/40 bg-black/50 rounded-2xl overflow-hidden">
-
-  {/* HEADER (ALWAYS VISIBLE + CONTAINS COUNTDOWN) */}
-  <button
-    onClick={() => setSideOpOpen(!sideOpOpen)}
-    className="w-full flex justify-between items-center p-6 
-               hover:bg-[#00ff66]/10 transition"
-  >
-
-    <div className="text-left">
-      <h2 className="text-2xl text-[#00ff66] font-bold">
-        🛑 GC Side Operation
-      </h2>
-
-      {/* ✅ COUNTDOWN MOVED HERE */}
-      <div className="mt-1">
-       <span className="text-sm text-red-400">
-  📅 Operation Concluded
-</span>
-
-<div className="text-xl text-red-500 font-mono font-bold">
-  STATUS: OPERATION OVER
-</div>
-      </div>
-    </div>
-
-    <span className="text-xl text-[#00ff66]">
-      {sideOpOpen ? "▲" : "▼"}
-    </span>
-
-  </button>
-
-  {/* COLLAPSIBLE CONTENT */}
-  <div
-    className={`
-      overflow-hidden transition-all duration-500
-      ${sideOpOpen ? "max-h-[2000px] opacity-100 p-6" : "max-h-0 opacity-0"}
-    `}
-  >
-
-    {/* Announcement Text */}
-    <div className="text-sm text-gray-300 leading-relaxed space-y-4">
-
-      <p className="text-red-400 font-semibold">
-  The side operation has concluded. Heavy casualties sustained.
-</p>
-
-<p>
-  The platoon was compromised behind enemy lines.
-  Extraction attempts failed for most personnel.
-</p>
-
-<p className="text-yellow-400">
-  Survivors successfully returned to friendly territory.
-</p>
-
-      <div className="border-t border-[#00ff66]/20 pt-4">
-
-        <p className="text-[#00ff66] font-semibold">
-          Team One — Longbow Omegon
-        </p>
-        <ul className="ml-4 text-sm space-y-1">
-  <li className="line-through text-red-500">Team Lead: Akhari — KIA</li>
-  <li className="text-green-400 font-semibold">Sniper: Sick — SURVIVED</li>
-  <li className="text-green-400 font-semibold">Spotter: Toxic — SURVIVED</li>
-  <li className="text-green-400 font-semibold">Medic: Advisor — SURVIVED</li>
-  <li className="line-through text-red-500">Assault: Sour — KIA</li>
-  <li className="text-green-400 font-semibold">Assault: Yami — SURVIVED</li>
-</ul>
-
-        <p className="text-[#00ff66] font-semibold mt-4">
-          Team Two — Longbow Epsilon
-        </p>
-        <ul className="ml-4 text-sm space-y-1">
-  <li className="text-yellow-400 font-semibold">Team Lead: Shy — POW</li>
-  <li className="line-through text-red-500">Sniper: Wulf — KIA</li>
-  <li className="line-through text-red-500">Spotter: Joker — KIA</li>
-  <li className="text-yellow-400 font-semibold">Medic: Warden — POW</li>
-  <li className="line-through text-red-500">Assault: York — KIA</li>
-  <li className="line-through text-red-500">Assault: Blitz — KIA</li>
-</ul>
-
-      </div>
-
-    </div>
-
-  </div>
-</div>
 {/* ================= EXTRACTION OPERATION TEASER ================= */}
 
 <div className="border border-yellow-500/40 bg-black/50 rounded-2xl overflow-hidden">

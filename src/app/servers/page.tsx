@@ -220,8 +220,8 @@ const recurringBookings = (recurring ?? [])
       server_id: activeServer,
       booked_for: selectedPerson,
       title: bookingTitle,
-      start_time: formatLocalTimestamp(start),
-      end_time: formatLocalTimestamp(end),
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
     },
   ]);
 

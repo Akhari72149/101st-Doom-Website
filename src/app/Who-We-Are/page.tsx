@@ -59,7 +59,7 @@ Built for deep operations, Dagger can detach to reinforce allied platoons or exe
   {
     key: "H",
     label: "Hammer",
-    icon: "/icons/Plane.png",
+    icon: "/icons/plane.png",
     logo: "/WWA/Hammer.jpg",
     content: `
 Hammer functions as the elite aviation element of the 101st, specializing in air superiority, rapid insertion, and tactical aerial support.

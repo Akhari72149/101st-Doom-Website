@@ -108,6 +108,11 @@ const personnelItems = [
     title: "Audit Log",
     allowedRoles: ["nco", "admin", "trainer"],
   },
+  {
+    href: "/admin/attendance",
+    title: "Attendance Roster",
+    allowedRoles: ["nco", "admin"],
+  },
 ];
 
 /* ================= WHO WE ARE DROPDOWN ================= */

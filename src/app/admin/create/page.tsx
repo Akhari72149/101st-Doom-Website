@@ -19,6 +19,7 @@ export default function CreatePersonnel() {
 
   const [skipRoleSync, setSkipRoleSync] = useState(false);
   const [importFromDiscord, setImportFromDiscord] = useState(false);
+  const [createdAt, setCreatedAt] = useState<string>(""); 
 
   /* ================= AUTH ================= */
 
@@ -95,6 +96,8 @@ export default function CreatePersonnel() {
       return;
     }
 
+    
+
     /* ================= CREATE PERSONNEL ================= */
 
     const { data, error } = await supabase
@@ -107,7 +110,7 @@ export default function CreatePersonnel() {
           discord_id: discordId || null,
           ts_id: teamspeakId || null, // ✅ NEW COLUMN
           auto_role_sync: !skipRoleSync && !importFromDiscord,
-          created_at: new Date().toISOString(),
+          created_at: createdAt || null,
         },
       ])
       .select()
@@ -152,9 +155,10 @@ export default function CreatePersonnel() {
     setBirthNumber("");
     setName("");
     setDiscordId("");
-    setTeamspeakId(""); // ✅ RESET
+    setTeamspeakId("");
     setSkipRoleSync(false);
     setImportFromDiscord(false);
+    setCreatedAt("");
   };
 
   if (loadingAuth) {
@@ -280,6 +284,31 @@ export default function CreatePersonnel() {
             className="w-full p-4 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66]"
           />
         </div>
+
+        {/* CREATED AT */}
+<div className="mb-6">
+  <label className="block mb-2 text-sm text-gray-300">
+    Created At
+  </label>
+
+  <div className="flex gap-3">
+    <input
+      type="text"
+      placeholder="Blank until set..."
+      value={createdAt}
+      readOnly
+      className="flex-1 p-4 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66]"
+    />
+
+    <button
+      type="button"
+      onClick={() => setCreatedAt(new Date().toISOString())}
+      className="px-6 rounded-xl bg-[#00ff66]/10 border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black"
+    >
+      Set Now
+    </button>
+  </div>
+</div>
 
         {/* CREATE BUTTON */}
         <button

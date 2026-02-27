@@ -105,6 +105,12 @@ export default function Home() {
       icon: <Server size={20} />,
     },
     {
+      href: "/admin/attendance",
+      title: "Attendance Roster",
+      desc: "Update Weekly Attendance Chart",
+      icon: <Server size={20} />,
+    },
+    {
       href: "/audit",
       title: "Audit Log",
       desc: "Audit Log for all assign/unassign functions",

@@ -51,8 +51,11 @@ Provides strategic suppression and battlefield control.
     icon: "/icons/jetpack.png",
     logo: "/WWA/Dagger.jpg",
     content: `
-Dagger operates as our elite rapid strike force.
-High mobility, precision engagements, and deep infiltration.
+Dagger functions as an elite operational platoon within the 101st, structured for rapid deployment and tactical superiority.
+
+It can detach to reinforce allied platoons or execute autonomous missions as operational demands require.
+
+Specializing in precision strikes, Dagger targets high-value enemy assets, infrastructure, and command elements to degrade enemy capability and secure strategic dominance for the wider campaign.
     `,
   },
   {

@@ -68,6 +68,8 @@ export default function GalacticCampaignPage() {
   const [droidShake, setDroidShake] = useState(false);
   const [sideOpOpen, setSideOpOpen] = useState(false);
   const [landfallOpen, setLandfallOpen] = useState(false);
+  const powCount = 2;
+  const [extractionOpen, setExtractionOpen] = useState(false);
 
   const animateCounter = (
     target: number,
@@ -297,8 +299,8 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
           GC Logistics Hub
           </button>
 
-          <h1 className="text-5xl text-[#00ff66] font-bold">
-            {isActive ? "SIDE OPERATION ACTIVE" : "Galactic Campaign"}
+          <h1 className="text-5xl text-red-500 font-bold">
+               SIDE OPERATION — COMPLETE
           </h1>
 
 {/* ================= SIDE OP BOX ================= */}
@@ -319,13 +321,13 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
 
       {/* ✅ COUNTDOWN MOVED HERE */}
       <div className="mt-1">
-        <span className="text-sm text-yellow-400">
-          📅 Thursday — 7:00 PM EST
-        </span>
+       <span className="text-sm text-red-400">
+  📅 Operation Concluded
+</span>
 
-        <div className="text-xl text-green-400 font-mono">
-          {isActive ? "OPERATION ACTIVE" : timeLeft}
-        </div>
+<div className="text-xl text-red-500 font-mono font-bold">
+  STATUS: OPERATION OVER
+</div>
       </div>
     </div>
 
@@ -346,16 +348,18 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
     {/* Announcement Text */}
     <div className="text-sm text-gray-300 leading-relaxed space-y-4">
 
-      <p>
-        A platoon of ARF troopers has been pushed behind enemy lines
-        after heavy casualties. Your mission is to stealthily return
-        to friendly territory with limited supplies.
-      </p>
+      <p className="text-red-400 font-semibold">
+  The side operation has concluded. Heavy casualties sustained.
+</p>
 
-      <p>
-        Detection means death. This is a one life operation.
-        Team coordination and discretion are mandatory.
-      </p>
+<p>
+  The platoon was compromised behind enemy lines.
+  Extraction attempts failed for most personnel.
+</p>
+
+<p className="text-yellow-400">
+  Survivors successfully returned to friendly territory.
+</p>
 
       <div className="border-t border-[#00ff66]/20 pt-4">
 
@@ -363,30 +367,88 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
           Team One — Longbow Omegon
         </p>
         <ul className="ml-4 text-sm space-y-1">
-          <li>Team Lead: Akhari</li>
-          <li>Sniper: Sick</li>
-          <li>Spotter: Toxic</li>
-          <li>Medic: Advisor</li>
-          <li>Assault: Sour</li>
-          <li>Assault: Yami</li>
-        </ul>
+  <li className="line-through text-red-500">Team Lead: Akhari — KIA</li>
+  <li className="text-green-400 font-semibold">Sniper: Sick — SURVIVED</li>
+  <li className="text-green-400 font-semibold">Spotter: Toxic — SURVIVED</li>
+  <li className="text-green-400 font-semibold">Medic: Advisor — SURVIVED</li>
+  <li className="line-through text-red-500">Assault: Sour — KIA</li>
+  <li className="text-green-400 font-semibold">Assault: Yami — SURVIVED</li>
+</ul>
 
         <p className="text-[#00ff66] font-semibold mt-4">
           Team Two — Longbow Epsilon
         </p>
         <ul className="ml-4 text-sm space-y-1">
-          <li>Team Lead: Shy</li>
-          <li>Sniper: Wulf</li>
-          <li>Spotter: Joker</li>
-          <li>Medic: Vidar</li>
-          <li>Assault: York</li>
-          <li>Assault: Blitz</li>
-        </ul>
+  <li className="text-yellow-400 font-semibold">Team Lead: Shy — POW</li>
+  <li className="line-through text-red-500">Sniper: Wulf — KIA</li>
+  <li className="line-through text-red-500">Spotter: Joker — KIA</li>
+  <li className="text-yellow-400 font-semibold">Medic: Warden — POW</li>
+  <li className="line-through text-red-500">Assault: York — KIA</li>
+  <li className="line-through text-red-500">Assault: Blitz — KIA</li>
+</ul>
 
       </div>
 
     </div>
 
+  </div>
+</div>
+{/* ================= EXTRACTION OPERATION TEASER ================= */}
+
+<div className="border border-yellow-500/40 bg-black/50 rounded-2xl overflow-hidden">
+
+  <button
+    onClick={() => setExtractionOpen(!extractionOpen)}
+    className="w-full flex justify-between items-center p-6 hover:bg-yellow-500/10 transition"
+  >
+    <div className="text-left">
+      <h2 className="text-2xl text-yellow-400 font-bold">
+        🟡 OPERATION: RETRIBUTION
+      </h2>
+
+      <div className="mt-1">
+        <span className="text-sm text-yellow-300">
+          Classified Recovery Mission
+        </span>
+
+        <div className="text-xl text-yellow-400 font-mono">
+          STATUS: PLANNING PHASE
+        </div>
+      </div>
+    </div>
+
+    <span className="text-xl text-yellow-400">
+      {extractionOpen ? "▲" : "▼"}
+    </span>
+  </button>
+
+  <div
+    className={`
+      overflow-hidden transition-all duration-500
+      ${extractionOpen ? "max-h-[2000px] opacity-100 p-6" : "max-h-0 opacity-0"}
+    `}
+  >
+    <div className="text-sm text-gray-300 leading-relaxed space-y-4">
+
+      <p className="text-yellow-400 font-semibold">
+        Republic High Command has confirmed two captured personnel.
+      </p>
+
+      <p>
+        Intelligence reports indicate they are being held at a
+        fortified detention complex deep within hostile territory.
+      </p>
+
+      <p>
+        Recon teams are gathering surveillance data.
+        A precision strike team will be assembled.
+      </p>
+
+      <p className="text-red-400 font-semibold">
+        Failure is not an option.
+      </p>
+
+    </div>
   </div>
 </div>
 
@@ -550,6 +612,7 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
 
           <StatusBar label="System Control" value={planetControl} />
           <StatusBar label="Enemy Strength" value={enemyStrength} />
+          
 
           <div className="mt-6 space-y-6">
             <div>
@@ -565,6 +628,14 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
                 {droidDisplay.toLocaleString()}
               </p>
             </div>
+
+<div>
+  <p className="text-gray-400">Prisoners of War</p>
+  <p className="text-yellow-400 text-3xl font-bold tracking-widest animate-pulse">
+    {powCount}
+  </p>
+</div>
+            
           </div>
 
           <p className="text-sm mt-6">

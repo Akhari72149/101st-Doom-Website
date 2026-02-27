@@ -38,6 +38,11 @@ export default function GCLogisticsHub() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [amount, setAmount] = useState(0);
   const [assetSearch, setAssetSearch] = useState("");
+  const [stats, setStats] = useState({
+  totalAssets: 0,
+  totalAssetValue: 0,
+  tokensSpent: 0,
+});
 
   /* ✅ Per asset quantity */
   const [buyQuantities, setBuyQuantities] =
@@ -97,6 +102,41 @@ useEffect(() => {
     setSelected(updated);
   }
 }, [platoons]);
+
+  /* ================= STAT CALCS ================= */
+  const calculateStats = () => {
+  if (!selected) return;
+
+  // Total assets owned
+  const totalAssets = ownedAssets.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+
+  // Total asset value (quantity × token_cost)
+  const totalAssetValue = ownedAssets.reduce((sum, item) => {
+    return (
+      sum +
+      item.quantity *
+        (item.asset?.token_cost || 0)
+    );
+  }, 0);
+
+  // Tokens spent from transactions
+  const tokensSpent = transactions
+    .filter((tx) => tx.action === "BUY_ASSET")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  setStats({
+    totalAssets,
+    totalAssetValue,
+    tokensSpent,
+  });
+};
+
+useEffect(() => {
+  calculateStats();
+}, [ownedAssets, transactions]);
 
   /* ================= FETCH DATA ================= */
 
@@ -396,6 +436,36 @@ useEffect(() => {
                 </button>
               </div>
             </div>
+
+            {/* ================= DASHBOARD STATS ================= */}
+<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+    <div className="text-gray-400 text-sm">
+      Total Assets Owned
+    </div>
+    <div className="text-2xl text-[#00ff66] font-bold">
+      {stats.totalAssets}
+    </div>
+  </div>
+
+  <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+    <div className="text-gray-400 text-sm">
+      Total Asset Value
+    </div>
+    <div className="text-2xl text-[#00ff66] font-bold">
+      {stats.totalAssetValue}
+    </div>
+  </div>
+
+  <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+    <div className="text-gray-400 text-sm">
+      Tokens Spent
+    </div>
+    <div className="text-2xl text-red-400 font-bold">
+      {stats.tokensSpent}
+    </div>
+  </div>
+</div>
 
             {/* ================= SHOP (RESTORED) ================= */}
 

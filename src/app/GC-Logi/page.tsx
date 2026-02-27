@@ -89,6 +89,15 @@ export default function GCLogisticsHub() {
   checkAccess();
 }, [router]);
 
+useEffect(() => {
+  if (!selected) return;
+
+  const updated = platoons.find(p => p.id === selected.id);
+  if (updated) {
+    setSelected(updated);
+  }
+}, [platoons]);
+
   /* ================= FETCH DATA ================= */
 
   const fetchPlatoons = async () => {
@@ -100,10 +109,34 @@ export default function GCLogisticsHub() {
     setPlatoons(data || []);
   };
 
-  const fetchAssets = async () => {
-    const { data } = await supabase.from("hq_assets").select("*");
-    setAssets(data || []);
-  };
+  const fetchAssets = async (platoonId: string) => {
+  if (!platoonId) return;
+
+  // Get platoon name to determine permission level
+  const { data: platoonData } = await supabase
+    .from("platoons")
+    .select("name")
+    .eq("id", platoonId)
+    .single();
+
+  const platoonName = platoonData?.name?.toLowerCase();
+
+  // Full access if Company OR Blinds Basket
+  const hasFullAccess =
+    platoonName?.includes("company") ||
+    platoonName?.includes("blinds basket");
+
+  let query = supabase.from("hq_assets").select("*");
+
+  // Restrict assets for normal platoons
+  if (!hasFullAccess) {
+    query = query.eq("category", "platoon");
+  }
+
+  const { data } = await query;
+
+  setAssets(data || []);
+};
 
   const fetchTransactions = async (platoonId: string) => {
     const { data } = await supabase
@@ -135,7 +168,6 @@ export default function GCLogisticsHub() {
   useEffect(() => {
     if (!loadingAuth) {
       fetchPlatoons();
-      fetchAssets();
     }
   }, [loadingAuth]);
 
@@ -146,6 +178,12 @@ export default function GCLogisticsHub() {
     fetchTransactions(p.id);
     fetchOwnedAssets(p.id);
   };
+
+  useEffect(() => {
+  if (selected) {
+    fetchAssets(selected.id);
+  }
+}, [selected]);
 
   /* ================= ADD TOKENS ================= */
 

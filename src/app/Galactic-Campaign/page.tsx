@@ -59,7 +59,7 @@ export default function GalacticCampaignPage() {
 
   /* ================= ANIMATED MILITARY COUNTERS ================= */
 
-  const cloneTarget = 256;
+  const cloneTarget = 262;
   const droidTarget = 2100;
 
   const [cloneDisplay, setCloneDisplay] = useState(0);

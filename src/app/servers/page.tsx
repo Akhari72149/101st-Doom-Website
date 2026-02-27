@@ -22,9 +22,18 @@ export default function ServersPage() {
 
   const [activeServer, setActiveServer] = useState(1);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
+  const getLocalDateString = () => {
+  const today = new Date();
+  return (
+    today.getFullYear() +
+    "-" +
+    String(today.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(today.getDate()).padStart(2, "0")
   );
+};
+
+const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [selectedStartIndex, setSelectedStartIndex] =
     useState<number | null>(null);
 
@@ -108,8 +117,8 @@ const weekday = new Date(start).getDay();
     .from("server_bookings")
     .select("*")
     .eq("server_id", activeServer)
-    .gte("start_time", formatLocalTimestamp(start))
-    .lt("start_time", formatLocalTimestamp(end));
+    .gte("start_time", start.toISOString())
+    .lt("start_time", end.toISOString());
 
   const personnelIds = [
     ...new Set((bookingData || []).map((b) => b.booked_for)),
@@ -523,20 +532,20 @@ function parseLocalTimestamp(value: string) {
   return new Date(value.replace(" ", "T"));
 }
 
-function formatLocalTimestamp(date: Date) {
-  return (
-    date.getFullYear() +
-    "-" +
-    String(date.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(date.getDate()).padStart(2, "0") +
-    " " +
-    String(date.getHours()).padStart(2, "0") +
-    ":" +
-    String(date.getMinutes()).padStart(2, "0") +
-    ":00"
-  );
-}
+//function formatLocalTimestamp(date: Date) {
+  //return (
+    //date.getFullYear() +
+    //"-" +
+    //String(date.getMonth() + 1).padStart(2, "0") +
+    //"-" +
+    //String(date.getDate()).padStart(2, "0") +
+    //" " +
+    //String(date.getHours()).padStart(2, "0") +
+    //":" +
+    //String(date.getMinutes()).padStart(2, "0") +
+   // ":00"
+ // );
+//}
 
 function generateSlots(dateString: string) {
   const slots: Date[] = [];

@@ -8,8 +8,6 @@ RUN npm install
 
 COPY . .
 
-COPY ./Auto\ Server /app/AutoServer
-
 RUN npm run build
 
 EXPOSE 3000

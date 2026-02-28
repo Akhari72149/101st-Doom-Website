@@ -137,10 +137,11 @@ const filteredPersonnelItems = personnelItems.filter(
   /* ================= DATA ================= */
 
   const newsItems = [
-    "Weekly Unit Stats - 150 clone casualties this week, 256 lost during Yoabos GC",
+    "Weekly Unit Stats - 150 clone casualties last week, 256 lost during Yoabos GC",
     "Weekly Kill Stats - 600+ clankers taken out, 2100+ destroyed during GC",
     "Company Medic Applications closed",
     "ARF Sideop this Thursday, Longbow Omegon and Longbow Epsilon to make Planet Fall and scout the region",
+    "CC has tooth removed - approach with caution, sugary snacks not advised",
   ];
 
   const slides = [

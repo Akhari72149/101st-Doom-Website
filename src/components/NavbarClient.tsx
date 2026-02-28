@@ -75,7 +75,7 @@ export default function NavbarClient() {
         { href: "/grand-orbat", label: "Grand Orbat" },
         { href: "/servers", label: "Server Booking" },
         { href: "/certifications", label: "Cert Lookup" },
-        { href: "/Art-of_war", label: "Art of War" },
+        { href: "/Art-of-War", label: "Art of War" },
       ],
     },
 {

@@ -63,7 +63,7 @@ export default function FAQPage() {
               </p>
             </div>
           ))}
-          
+
 
           {/* Back Button */}
           <div className="pt-6 text-center">
@@ -83,3 +83,4 @@ export default function FAQPage() {
     </div>
   );
 }
+

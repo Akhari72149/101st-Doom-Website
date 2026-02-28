@@ -115,7 +115,7 @@ export default function Home() {
       title: "Audit Log",
       desc: "Audit Log for all assign/unassign functions",
       icon: <FileText size={20} />,
-      allowedRoles: ["nco", "admin", "trainer"],
+      allowedRoles: ["nco", "admin", "trainer", "di"],
     },
   ];
 

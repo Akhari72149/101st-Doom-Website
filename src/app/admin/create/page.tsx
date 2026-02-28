@@ -110,7 +110,9 @@ export default function CreatePersonnel() {
           discord_id: discordId || null,
           ts_id: teamspeakId || null, // ✅ NEW COLUMN
           auto_role_sync: !skipRoleSync && !importFromDiscord,
-          created_at: createdAt || null,
+          created_at: createdAt
+  ? new Date(createdAt).toISOString()
+  : null,
         },
       ])
       .select()
@@ -285,7 +287,7 @@ export default function CreatePersonnel() {
           />
         </div>
 
-        {/* CREATED AT */}
+{/* CREATED AT */}
 <div className="mb-6">
   <label className="block mb-2 text-sm text-gray-300">
     Created At
@@ -293,19 +295,35 @@ export default function CreatePersonnel() {
 
   <div className="flex gap-3">
     <input
-      type="text"
-      placeholder="Blank until set..."
+      type="datetime-local"
       value={createdAt}
-      readOnly
+      onChange={(e) => setCreatedAt(e.target.value)}
       className="flex-1 p-4 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66]"
     />
 
     <button
       type="button"
-      onClick={() => setCreatedAt(new Date().toISOString())}
+      onClick={() => {
+        const now = new Date();
+        const local = new Date(
+          now.getTime() - now.getTimezoneOffset() * 60000
+        )
+          .toISOString()
+          .slice(0, 16);
+
+        setCreatedAt(local);
+      }}
       className="px-6 rounded-xl bg-[#00ff66]/10 border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black"
     >
       Set Now
+    </button>
+
+    <button
+      type="button"
+      onClick={() => setCreatedAt("")}
+      className="px-4 rounded-xl border border-red-500 text-red-400 hover:bg-red-500 hover:text-black"
+    >
+      Clear
     </button>
   </div>
 </div>

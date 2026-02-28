@@ -39,7 +39,7 @@ export default function AuditLogsPage() {
         .eq("user_id", user.id);
 
       const roleList = roles?.map((r) => r.role) || [];
-      const allowedRoles = ["nco", "admin"];
+      const allowedRoles = ["nco", "admin", "trainer", "di"];
 
       if (!roleList.some((role) => allowedRoles.includes(role))) {
         router.replace("/");

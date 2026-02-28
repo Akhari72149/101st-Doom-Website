@@ -106,7 +106,7 @@ const personnelItems = [
   {
     href: "/audit",
     title: "Audit Log",
-    allowedRoles: ["nco", "admin", "trainer"],
+    allowedRoles: ["nco", "admin", "trainer", "di"],
   },
   {
     href: "/admin/attendance",

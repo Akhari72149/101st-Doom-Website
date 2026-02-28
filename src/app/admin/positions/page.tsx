@@ -243,11 +243,11 @@ export default function PositionEditor() {
   return (
     <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
 
-      <button
+            <button
         onClick={() => router.push("/pcs")}
-        className="mb-6 px-5 py-2 rounded-xl border border-[#00ff66]/50 text-[#00ff66] hover:bg-[#00ff66]/10 transition"
+        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
       >
-        ← Back
+        ← Return to Dashboard
       </button>
 
       <h1 className="text-4xl font-bold text-[#00ff66] mb-10">

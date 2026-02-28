@@ -73,7 +73,7 @@ export default function Home() {
     },
     {
       href: "/admin/positions",
-      title: "Slotting & Rank",
+      title: "Promotions & Slotting",
       desc: "Manage positions & rank assignments",
       icon: <Shield size={20} />,
       allowedRoles: ["admin", "nco", "di"],
@@ -107,8 +107,9 @@ export default function Home() {
     {
       href: "/admin/attendance",
       title: "Attendance Roster",
-      desc: "Update Weekly Attendance Chart",
-      icon: <Server size={20} />,
+      desc: "Confirm attendance for weekly mainops/trainings",
+      icon: <FileText size={20} />,
+      allowedRoles: ["nco", "admin"],
     },
     {
       href: "/audit",
@@ -129,12 +130,11 @@ export default function Home() {
 
   return (
     <div className="
-      min-h-screen w-full
-      flex flex-col
-      bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
-      text-white
-      font-orbitron
-    ">
+  min-h-screen w-full
+  flex flex-col
+  relative
+  z-0
+">
 
       {/* ================= TOP BAR ================= */}
 
@@ -145,6 +145,7 @@ export default function Home() {
         border-b border-[#00ff66]/20
         px-8 py-6
         flex justify-between items-center
+        
       ">
 
         {/* 🔥 LOGO */}
@@ -159,67 +160,7 @@ export default function Home() {
 
         <div className="flex items-center gap-4">
 
-          <button
-            onClick={() => router.push("/")}
-            className="
-              px-4 py-2 rounded-xl
-              border border-[#00ff66]/50
-              text-[#00ff66]
-              transition-all duration-200
-              hover:bg-[#00ff66]/10
-              hover:scale-105
-              hover:shadow-[0_0_20px_rgba(0,255,100,0.6)]
-            "
-          >
-            Home
-          </button>
-
-          {user ? (
-            <>
-              {/* 👤 USER + ROLE BADGE */}
-              <div className="flex flex-col">
-                <span className="text-sm text-gray-300">
-                  {user.email}
-                </span>
-
-                {roles.length > 0 && (
-                  <span className="text-xs text-[#00ff66] opacity-80">
-                    {roles.join(" | ").toUpperCase()}
-                  </span>
-                )}
-              </div>
-
-              <button
-                onClick={handleLogout}
-                className="
-                  px-4 py-2 rounded-xl
-                  border border-[#00ff66]/50
-                  text-[#00ff66]
-                  transition-all duration-200
-                  hover:bg-[#00ff66]/10
-                  hover:scale-105
-                  hover:shadow-[0_0_20px_rgba(0,255,100,0.6)]
-                "
-              >
-                Logout
-              </button>
-            </>
-          ) : (
-            <Link
-              href="/login"
-              className="
-                px-4 py-2 rounded-xl
-                border border-[#00ff66]/50
-                text-[#00ff66]
-                transition-all duration-200
-                hover:bg-[#00ff66]/10
-                hover:scale-105
-                hover:shadow-[0_0_20px_rgba(0,255,100,0.6)]
-              "
-            >
-              Login
-            </Link>
-          )}
+          
         </div>
       </div>
 

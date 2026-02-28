@@ -176,12 +176,11 @@ export default function CreatePersonnel() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#eafff2] p-10">
 
-      {/* BACK */}
-      <button
+            <button
         onClick={() => router.push("/pcs")}
-        className="mb-10 px-5 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10"
+        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
       >
-        ← Back
+        ← Return to Dashboard
       </button>
 
       <div className="max-w-3xl mx-auto p-10 rounded-3xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30">

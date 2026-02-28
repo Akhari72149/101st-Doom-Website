@@ -135,7 +135,7 @@ export default function WhoWeArePage() {
     >
 
       {/* ================= BACK BUTTON (✅ NEW) ================= */}
-      <div className="absolute top-8 left-8 z-50">
+      <div className="absolute top-8 left-8 z-10">
         <button
           onClick={() => router.back()}
           className="px-6 py-2 border border-[#00ff66] text-[#00ff66] rounded-xl bg-black/60 backdrop-blur-lg hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all duration-300 shadow-lg"

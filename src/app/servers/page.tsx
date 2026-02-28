@@ -318,9 +318,9 @@ const recurringBookings = (recurring ?? [])
 
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-8 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] backdrop-blur-md transition-all duration-200 hover:bg-[#00ff66]/10 hover:scale-105"
+        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
       >
-        ← Back
+        ← Return to Dashboard
       </button>
 
       <h1 className="text-4xl font-bold mb-10 text-[#00ff66] tracking-[0.4em]">

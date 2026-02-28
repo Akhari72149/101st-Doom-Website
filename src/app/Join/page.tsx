@@ -198,6 +198,111 @@ export default function HowToJoinPage() {
     <div className="bg-black/60 border border-[#00ff66]/30 rounded-2xl p-10 shadow-xl space-y-16">
 
       {/* ================= Detailed Joining Process ================= */}
+
+      {/* ================= Modlists & Whitelist Section ================= */}
+<div>
+  <h2 className="text-3xl text-[#00ff66] mb-6">
+    Required Modlists & Unit Whitelist
+  </h2>
+
+  <div className="text-gray-300 space-y-6 leading-relaxed">
+
+    <p>
+      All members are required to download and properly load the official unit modlists
+      before attending operations.
+    </p>
+
+    <p>
+      Server 4 operates off the Main Operation Modlist - Server 4 is also keyed, if you have any mods outside the modlist or unit whitelist, you cannot get in.
+    </p>
+
+    <p>
+      Server 1 operates off theFun Operation Modlist </p>
+
+    <p>
+      Server 2, 3 and 5 operates off the Training Server Modlist
+    </p>
+
+    <p>
+      Server 6 operates off the FOTM modlist which varies every 2 months, Jan & Feb, March & April etc.
+    </p>
+    
+    <p/>
+
+    <div className="space-y-4">
+
+      <a
+        href="https://cdn.discordapp.com/attachments/1284402204748546114/1471514051950546995/Yoaboa_V2.html?ex=69a44dc1&is=69a2fc41&hm=49e5d6f3aa76a25df6f05c45caa25c409fb46ddf4d09bb255d42f3638bb8a110&"
+        target="_blank"
+        className="block text-[#00ff66] underline hover:text-white transition"
+      >
+        Main Operations Modlist
+      </a>
+
+      <a
+        href="https://cdn.discordapp.com/attachments/1284402204748546114/1471514051463876649/Training_Server_Modlist_V2.html?ex=69a44dc1&is=69a2fc41&hm=aefc731a0722aa326446839465e28a8fb57ba1c899d9d8a67900c7efcd2431b0&"
+        target="_blank"
+        className="block text-[#00ff66] underline hover:text-white transition"
+      >
+        Training Modlist
+      </a>
+
+      <a
+        href="https://cdn.discordapp.com/attachments/1284402204748546114/1471514051036188756/Funop_Modlist_V5.html?ex=69a44dc1&is=69a2fc41&hm=00bd71791d9fe0b992652f1059345ec4e48c00210af1a93a972ad094bedd3b5f&"
+        target="_blank"
+        className="block text-[#00ff66] underline hover:text-white transition"
+      >
+        Fun Operation Modlist
+      </a>
+
+      <a
+        href="https://cdn.discordapp.com/https://cdn.discordapp.com/attachments/983174143400869898/1464716029312630987/101st_FOTM_40k_Rubicon.html?ex=69a3f65a&is=69a2a4da&hm=afb618de63df40618b068742e8af922f4d356dc14ec4a91018104ce5c9d9aae3&/1284402204748546114/1471514051036188756/Funop_Modlist_V5.html?ex=69a44dc1&is=69a2fc41&hm=00bd71791d9fe0b992652f1059345ec4e48c00210af1a93a972ad094bedd3b5f&"
+        target="_blank"
+        className="block text-[#00ff66] underline hover:text-white transition"
+      >
+        FOTM Modlist (WH 40k)
+      </a>
+
+
+
+    </div>
+
+    <p>
+      Ensure your mods are updated prior to loading into server, check server-information in discord for recently updated mods.
+    </p>
+
+    {/* FAQ LINK */}
+<div className="mt-4">
+  <a
+    href="/faq"
+    className="text-[#00ff66] underline hover:text-white transition"
+  >
+    Need Help With Mods? Visit the FAQ Page
+  </a>
+</div>
+
+    {/* ================= WHITELIST SECTION ================= */}
+
+    <div className="mt-6">
+      <h3 className="text-2xl text-[#00ff66] mb-3">
+        Unit Whitelist
+      </h3>
+
+      <p className="mb-3">
+        List of approved client-side mods that can be ran on our servers - do not load any mod not in the above modlists or unit whitelist.
+      </p>
+
+      <a
+        href="https://steamcommunity.com/sharedfiles/filedetails/?id=3150345662"
+        target="_blank"
+        className="block text-[#00ff66] underline hover:text-white transition"
+      >
+        Official Unit Whitelist
+      </a>
+    </div>
+
+  </div>
+</div>
       <div>
         <h2 className="text-3xl text-[#00ff66] mb-6">
           Detailed Joining Process

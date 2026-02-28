@@ -148,7 +148,7 @@ export default function ExpandedUnitsPage() {
     >
 
       {/* BACK BUTTON */}
-      <div className="absolute top-8 left-8 z-50">
+      <div className="absolute top-8 left-8 z-10">
         <button
           onClick={() => router.back()}
           className="px-6 py-2 border border-[#00ff66]/40 text-[#00ff66]

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Orbitron } from "next/font/google";
+import LayoutWrapper from "@/components/LayoutWrapper";
 
 const orbitron = Orbitron({
   subsets: ["latin"],
@@ -9,7 +10,8 @@ const orbitron = Orbitron({
 
 export const metadata: Metadata = {
   title: "101st Doom Battalion | Official Military Operations Hub",
-  description: "The official operational command system for the 101st Doom Battalion. View rosters, certifications, campaigns, and military operations.",
+  description:
+    "The official operational command system for personnel management.",
 };
 
 export default function RootLayout({
@@ -20,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${orbitron.className} antialiased`}>
-        {children}
+        <LayoutWrapper>
+          {children}
+        </LayoutWrapper>
       </body>
     </html>
   );

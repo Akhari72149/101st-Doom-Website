@@ -2,10 +2,6 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-/**
- * Simple auth check.
- * Only verifies the user is logged in.
- */
 export async function verifyLoggedIn() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

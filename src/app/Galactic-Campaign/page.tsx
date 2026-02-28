@@ -60,7 +60,7 @@ export default function GalacticCampaignPage() {
   /* ================= ANIMATED MILITARY COUNTERS ================= */
 
   const cloneTarget = 262;
-  const droidTarget = 2100;
+  const droidTarget = 2953;
 
   const [cloneDisplay, setCloneDisplay] = useState(0);
   const [droidDisplay, setDroidDisplay] = useState(0);
@@ -374,68 +374,41 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
   </div>
 </div>
 
-{/* ================= C2 LANDFALL BOX ================= */}
+{/* ================= C2 LANDFALL — COMPLETED ================= */}
 
-<div className="border border-red-500/40 bg-black/50 rounded-2xl overflow-hidden">
+<div className="border border-red-500/40 bg-black/50 rounded-2xl p-6">
 
-  {/* HEADER — ALWAYS VISIBLE */}
-  <button
-    onClick={() => setLandfallOpen(!landfallOpen)}
-    className="w-full flex justify-between items-center p-6 hover:bg-red-500/10 transition"
-  >
-    <div className="text-left">
-      <h2 className="text-2xl text-red-500 font-bold">
-        🚀 C2 LANDING — TRITON
-      </h2>
+  <h2 className="text-2xl text-red-500 font-bold">
+    🚀 C2 LANDING — TRITON
+  </h2>
 
-      {/* ✅ COUNTDOWN MOVED HERE */}
-      <div className="mt-1">
-        <span className="text-sm text-red-400">
-          Initial Landfall Countdown
-        </span>
-
-        <div className="text-xl text-yellow-400 font-mono">
-          {landfallActive ? "LANDING ACTIVE" : landfallTime}
-        </div>
-      </div>
-    </div>
-
-    <span className="text-xl text-red-500">
-      {landfallOpen ? "▲" : "▼"}
+  <div className="mt-2">
+    <span className="inline-block px-3 py-1 rounded bg-green-500/20 text-green-400 text-sm border border-green-500/40">
+      Landfall Complete
     </span>
-  </button>
+  </div>
 
-  {/* COLLAPSIBLE CONTENT */}
-  <div
-    className={`
-      overflow-hidden transition-all duration-500
-      ${landfallOpen ? "max-h-[2000px] opacity-100 p-6" : "max-h-0 opacity-0"}
-    `}
-  >
+  <div className="mt-6 border-t border-red-500/30 pt-4 text-sm text-gray-300 leading-relaxed space-y-3">
 
-    <div className="text-sm text-gray-300 leading-relaxed space-y-4">
+    <p className="text-green-400 font-semibold">
+      Foothold successfully established.
+    </p>
 
-      <p>
-        DOOM Battalion must make landfall on the Yaoboan Moon of Triton.
-        Initial landing forces must secure a landing zone to allow
-        TASK FORCE DOOM Acclamators to support ground operations.
-      </p>
+    <p>
+      Initial assault forces secured the landing zone under heavy resistance.
+      Defensive emplacements neutralized. Orbital denial capability weakened.
+    </p>
 
-      <p>
-        Triton is a heavily defended rocky moon with powerful gun
-        emplacements capable of engaging orbital assets.
-        Securing it is critical — without Triton, the battalion
-        remains stranded in deep space without direct support.
-      </p>
+    <p>
+      853 confirmed enemy eliminations. Friendly casualties are being counted.
+    </p>
 
-      <p>
-        Pacifying Triton ensures orbital dominance and enables sustained
-        occupation of Yaoboa through coordinated ground support.
-      </p>
-
-    </div>
+    <p className="text-red-400 font-semibold">
+      Triton Landing Zone secured.
+    </p>
 
   </div>
+
 </div>
 
           {/* PHASES (LOCKED LOGIC ONLY CHANGED) */}

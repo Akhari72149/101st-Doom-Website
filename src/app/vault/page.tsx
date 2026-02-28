@@ -20,6 +20,7 @@ export default function VaultPage() {
 
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [landfallArchiveOpen, setLandfallArchiveOpen] = useState(false);
 
   /* ========================================================= */
   /* ================= PASSWORD / HACK LOGIC ================== */
@@ -364,13 +365,99 @@ export default function VaultPage() {
                       </li>
                     </ul>
 
+                    
+
                   </div>
                 </div>
               </div>
             </div>
+{/* ================= C2 LANDFALL ARCHIVE ================= */}
 
+<div className="border border-red-500/40 bg-black/60 rounded-3xl overflow-hidden">
+
+  {/* HEADER */}
+  <button
+    onClick={() => setLandfallArchiveOpen(!landfallArchiveOpen)}
+    className="w-full flex justify-between items-center p-6 hover:bg-red-500/10 transition"
+  >
+    <div className="text-left">
+      <h3 className="text-xl text-red-500 font-bold">
+        🚀 C2 LANDFALL — TRITON
+      </h3>
+
+      <div>
+        <span className="text-sm text-green-400">
+          STATUS: Foothold Established
+        </span>
+
+        <div className="text-sm text-yellow-400 font-bold">
+          853 Confirmed Eliminations
+        </div>
+      </div>
+    </div>
+
+    <span className="text-red-500 text-xl">
+      {landfallArchiveOpen ? "▲" : "▼"}
+    </span>
+  </button>
+
+  {/* COLLAPSIBLE CONTENT */}
+  <div
+    className={`transition-all duration-500 overflow-hidden ${
+      landfallArchiveOpen
+        ? "max-h-[2000px] opacity-100 p-6"
+        : "max-h-0 opacity-0"
+    }`}
+  >
+    <div className="space-y-4 text-sm text-gray-300 leading-relaxed">
+
+      <p className="text-green-400 font-semibold">
+        Landfall Successful.
+      </p>
+
+      <p>
+        Initial assault forces breached Triton's defensive perimeter
+        under sustained orbital and surface artillery fire.
+        Defensive emplacements were neutralized through coordinated
+        ground and orbital strikes.
+      </p>
+
+      <p>
+        TASK FORCE DOOM Acclamators are now able to provide sustained
+        orbital support. Triton is no longer a denial zone.
+        A stable planetary foothold has been achieved.
+      </p>
+
+      <div className="border-t border-red-500/30 pt-4 space-y-2">
+
+        <p className="text-yellow-400 font-bold">
+          ⚔ Engagement Summary
+        </p>
+
+        <p>
+          Confirmed Enemy Eliminations:
+          <span className="text-red-500 font-bold"> 853</span>
+        </p>
+
+        <p>
+          Friendly Casualties:
+          <span className="text-yellow-400 font-bold">
+            {" "}Deaths Currently Being Counted
+          </span>
+        </p>
+
+        <p className="text-green-400 font-semibold">
+          Triton Secured. Orbital dominance achieved.
+        </p>
+
+      </div>
+    </div>
+  </div>
+</div>
           </div>
         )}
+
+
 
       </div>
     </div>

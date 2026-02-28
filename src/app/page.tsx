@@ -115,9 +115,13 @@ const personnelItems = [
   },
 ];
 
-/* ================= WHO WE ARE DROPDOWN ================= */
+/* ================= How to Join  ================= */
 
 const whoWeAreLinks = [
+  {
+    label: "Who We Are",
+    href: "/Who-We-Are",
+  },
   {
     label: "What we Offer",
     href: "/certs",
@@ -420,7 +424,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
   {/* Main Button */}
   {/* ================= PERSONNEL COMMAND DROPDOWN ================= */}
 
-<div className="relative group z-50">
+<div className="relative group z-52">
   
 
   {/* MAIN BUTTON */}
@@ -470,118 +474,121 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
 
 
-  {/* Row With Offset Buttons */}
-  <div className="flex gap-8">
-    
-    {/* Left Offset */}
+{/* Row With Offset Buttons */}
+<div className="flex gap-8">
+
+  {/* ================= LEFT = How to Join ================= */}
+  <div className="relative group translate-x-[-20px] z-50">
+
+    {/* MAIN BUTTON */}
     <button
-      onClick={() => router.push("/Art-of-War")}
-      className="px-8 py-3 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all translate-x-[-20px]"
+      onClick={() => router.push("/Join")}
+      className="px-8 py-3 border border-[#00ff66] rounded-lg 
+                 text-[#00ff66] hover:bg-[#00ff66] 
+                 hover:text-black hover:scale-105 
+                 transition-all w-full"
     >
-      Art of War
+      How to Join
     </button>
 
-    {/* Right Button */}
-<div className="relative group translate-x-[20px] z-40">
+    {/* DROPDOWN */}
+    <div
+      className="
+        absolute left-0 top-full w-full pt-2
+        opacity-0 invisible
+        group-hover:opacity-100
+        group-hover:visible
+        transition-all duration-200
+        pointer-events-none
+        group-hover:pointer-events-auto
+      "
+    >
+      <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2">
 
-  {/* MAIN BUTTON */}
-  <button
-    onClick={() => router.push("/Galactic-Campaign")}
-    className="px-8 py-3 border border-[#00ff66] rounded-lg 
-               text-[#00ff66] hover:bg-[#00ff66] 
-               hover:text-black hover:scale-105 
-               transition-all w-full"
-  >
-    Galactic Campaign
-  </button>
+        {whoWeAreLinks.map((item) => (
+          <button
+            key={item.href}
+            onClick={() => router.push(item.href)}
+            className="w-full text-left px-4 py-2 rounded-md 
+                       text-[#00ff66] hover:bg-[#00ff66]/10 
+                       transition-all text-sm"
+          >
+            {item.label}
+          </button>
+        ))}
 
-  {/* DROPDOWN MENU */}
-  <div
-    className="
-      absolute left-0 top-full w-full pt-2
-      opacity-0 invisible
-      group-hover:opacity-100
-      group-hover:visible
-      transition-all duration-200
-      pointer-events-none
-      group-hover:pointer-events-auto
-    "
-  >
-    <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2">
+      </div>
+    </div>
 
-      {/* Always Visible */}
-      <button
-        onClick={() => router.push("/GC-Platoon-Logi")}
-        className="w-full px-4 py-2 text-left rounded-md
-                   text-[#00ff66] hover:bg-[#00ff66]/10
-                   transition-all text-sm"
-      >
-        Platoon Logistics
-      </button>
+  </div>
 
-      {/* ✅ Role Restricted */}
-      {(roles.includes("admin") || roles.includes("logistics")) && (
+  {/* ================= RIGHT = GALACTIC CAMPAIGN ================= */}
+  <div className="relative group translate-x-[20px] z-51">
+
+    {/* MAIN BUTTON */}
+    <button
+      onClick={() => router.push("/Galactic-Campaign")}
+      className="px-8 py-3 border border-[#00ff66] rounded-lg 
+                 text-[#00ff66] hover:bg-[#00ff66] 
+                 hover:text-black hover:scale-105 
+                 transition-all w-full"
+    >
+      Galactic Campaign
+    </button>
+
+    {/* DROPDOWN MENU */}
+    <div
+      className="
+        absolute left-0 top-full w-full pt-2
+        opacity-0 invisible
+        group-hover:opacity-100
+        group-hover:visible
+        transition-all duration-200
+        pointer-events-none
+        group-hover:pointer-events-auto
+      "
+    >
+      <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2">
+
+        {/* Always Visible */}
         <button
-          onClick={() => router.push("/GC-Logi")}
+          onClick={() => router.push("/GC-Platoon-Logi")}
           className="w-full px-4 py-2 text-left rounded-md
                      text-[#00ff66] hover:bg-[#00ff66]/10
                      transition-all text-sm"
         >
-          Battalion Logistics
+          Platoon Logistics
         </button>
-      )}
 
+        {/* Role Restricted */}
+        {(roles.includes("admin") || roles.includes("logistics")) && (
+          <button
+            onClick={() => router.push("/GC-Logi")}
+            className="w-full px-4 py-2 text-left rounded-md
+                       text-[#00ff66] hover:bg-[#00ff66]/10
+                       transition-all text-sm"
+          >
+            Battalion Logistics
+          </button>
+        )}
+
+      </div>
     </div>
+
   </div>
 
 </div>
 
-  </div>
-
-{/* ================= WHO WE ARE DROPDOWN ================= */}
-<div className="relative group w-full max-w-[280px]">
-
-  {/* MAIN BUTTON */}
-  <button
-  onClick={() => router.push("/Who-We-Are")}
-    className="px-8 py-3 border border-[#00ff66] rounded-lg 
-               text-[#00ff66] hover:bg-[#00ff66] 
-               hover:text-black hover:scale-105 
-               transition-all w-full"
-  >
-    Who We Are
-  </button>
-
-  {/* DROPDOWN */}
-  <div
-    className="
-      absolute left-0 top-full w-full pt-2
-      opacity-0 invisible
-      group-hover:opacity-100
-      group-hover:visible
-      transition-all duration-200
-      pointer-events-none
-      group-hover:pointer-events-auto
-    "
-  >
-    <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2">
-
-      {whoWeAreLinks.map((item) => (
-        <button
-          key={item.href}
-          onClick={() => router.push(item.href)}
-          className="w-full text-left px-4 py-2 rounded-md 
-                     text-[#00ff66] hover:bg-[#00ff66]/10 
-                     transition-all text-sm"
-        >
-          {item.label}
-        </button>
-      ))}
-
-    </div>
-  </div>
-
-</div>
+{/* ================= ART OF WAR (Now Below The Row) ================= */}
+<button
+  onClick={() => router.push("/Art-of-War")}
+  className="px-8 py-3 border border-[#00ff66] rounded-lg 
+             text-[#00ff66] hover:bg-[#00ff66] 
+             hover:text-black hover:scale-105 
+             transition-all"
+>
+  Art of War
+</button>
 
 </div>
 

@@ -2,10 +2,32 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+
+
 
 export default function HowToJoinPage() {
   const router = useRouter();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const searchParams = useSearchParams();
+const openSection = searchParams.get("open");
+
+
+
+useEffect(() => {
+  if (openSection === "modlists") {
+    // Open the Full Overview section first
+    setDetailsOpen(true);
+
+    // Wait for it to expand before scrolling
+    setTimeout(() => {
+      document
+        .getElementById("modlists")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+  }
+}, [openSection]);
 
   const joinLinks = [
     {
@@ -200,7 +222,7 @@ export default function HowToJoinPage() {
       {/* ================= Detailed Joining Process ================= */}
 
       {/* ================= Modlists & Whitelist Section ================= */}
-<div>
+<div id="modlists"> 
   <h2 className="text-3xl text-[#00ff66] mb-6">
     Required Modlists & Unit Whitelist
   </h2>

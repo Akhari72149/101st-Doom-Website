@@ -22,6 +22,7 @@ type NavGroup = {
 };
 
 export default function NavbarClient() {
+  console.log("🚀 NAVBAR MOUNTED");
   const router = useRouter();
 
   const [user, setUser] = useState<any>(null);

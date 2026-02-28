@@ -35,6 +35,8 @@ export default function NavbarClient() {
         data: { user },
       } = await supabase.auth.getUser();
 
+          console.log("🔥 SUPABASE USER:", user);
+
       setUser(user);
 
       if (user) {
@@ -42,6 +44,8 @@ export default function NavbarClient() {
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id);
+
+           console.log("🔥 USER ROLES FROM DB:", data);
 
         setRoles(data?.map((r) => r.role) || []);
       }
@@ -137,6 +141,7 @@ export default function NavbarClient() {
         !group.allowedRoles ||
         group.allowedRoles.some((role) => roles.includes(role))
     )
+
     .map((group) => ({
       ...group,
       items: group.items.filter(
@@ -145,6 +150,8 @@ export default function NavbarClient() {
           item.allowedRoles.some((role) => roles.includes(role))
       ),
     }));
+
+    console.log("🔥 FILTERED GROUPS:", filteredGroups);
 
   return (
     <nav className="relative z-50 w-full bg-black/60 backdrop-blur border-b border-[#00ff66]/20 px-6 py-4 flex justify-between items-center">

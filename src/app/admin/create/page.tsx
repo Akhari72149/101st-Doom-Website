@@ -20,43 +20,76 @@ export default function CreatePersonnel() {
   const [skipRoleSync, setSkipRoleSync] = useState(false);
   const [importFromDiscord, setImportFromDiscord] = useState(false);
   const [createdAt, setCreatedAt] = useState<string>(""); 
+  const PROCESSOR_CERT_IDS = [
+  "079827bf-8b8f-4f37-9b6c-664942689a0a",
+  "c579ef59-7010-4bcc-bcd4-9cd448ac5bf5",
+  "8eff73b9-9793-452a-b77d-c16cde5b9b4c",
+];
+const [processors, setProcessors] = useState<any[]>([]);
+const [selectedProcessor, setSelectedProcessor] = useState("");
 
-  /* ================= AUTH ================= */
+useEffect(() => {
+  const loadProcessors = async () => {
+    const { data: certPersonnel } = await supabase
+      .from("personnel_certifications")
+      .select("personnel_id")
+      .in("certification_id", PROCESSOR_CERT_IDS);
 
-  useEffect(() => {
-    const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    if (!certPersonnel || certPersonnel.length === 0) {
+      setProcessors([]);
+      return;
+    }
 
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
+    const personnelIds = certPersonnel.map((c) => c.personnel_id);
 
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
+    const { data: personnelData } = await supabase
+      .from("personnel")
+      .select("id, name")
+      .in("id", personnelIds);
 
-      const roleList = roles?.map((r) => r.role) || [];
+    setProcessors(personnelData || []);
+  };
 
-      if (!hasRole(roleList, ["recruiter", "di", "nco"])) {
-        router.replace("/");
-        return;
-      }
+  loadProcessors();
+}, []);
 
-      const { data: rankData } = await supabase
-        .from("ranks")
-        .select("*")
-        .order("rank_level", { ascending: true });
+  /* ================= AUTH CHECK ================= */
 
-      setRanks(rankData || []);
-      setLoadingAuth(false);
-    };
+useEffect(() => {
+  const checkAccess = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    checkAccess();
-  }, [router]);
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+
+    const roleList = roles?.map((r) => r.role) || [];
+
+    if (!hasRole(roleList, ["recruiter", "di", "nco"])) {
+      router.replace("/");
+      return;
+    }
+
+    const { data: rankData } = await supabase
+      .from("ranks")
+      .select("*")
+      .order("rank_level", { ascending: true });
+
+    setRanks(rankData || []);
+    setLoadingAuth(false);
+  };
+
+  checkAccess();
+}, [router]);
+
 
   /* ================= CREATE ================= */
 
@@ -123,16 +156,27 @@ export default function CreatePersonnel() {
       return;
     }
 
-    /* ================= 🔥 AUDIT LOG ================= */
+/* ================= 🔥 AUDIT LOG ================= */
 
-    await supabase.from("audit_logs").insert([
-      {
-        user_id: user.id,
-        target_personnel_id: data.id,
-        action: "NEW_MEMBER",
-        details: "New member added to system",
-      },
-    ]);
+const { data: auditData, error: auditError } = await supabase
+  .from("audit_logs")
+  .insert([
+    {
+      user_id: user.id, 
+      target_personnel_id: data.id,
+      action: "NEW_MEMBER",
+      details: "New member added to system",
+      processed_by: selectedProcessor || null, 
+    },
+  ])
+  .select()
+  .single();
+
+if (auditError) {
+  console.error("Audit Insert Error:", auditError);
+  alert("Audit log failed to insert: " + auditError.message);
+  return;
+}
 
     /* ================= DISCORD IMPORT ================= */
 
@@ -164,12 +208,13 @@ export default function CreatePersonnel() {
   };
 
   if (loadingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#00ff66]">
-        Checking permissions...
-      </div>
-    );
-  }
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-black text-[#00ff66]">
+      Checking permissions...
+    </div>
+  );
+}
+
 
   /* ================= UI ================= */
 
@@ -325,6 +370,27 @@ export default function CreatePersonnel() {
       Clear
     </button>
   </div>
+</div>
+
+{/* PROCESSOR SELECTION */}
+<div className="mb-6">
+  <label className="block mb-2 text-sm text-gray-300">
+    Who Processed This Form?
+  </label>
+
+  <select
+    value={selectedProcessor}
+    onChange={(e) => setSelectedProcessor(e.target.value)}
+    className="w-full p-4 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66]"
+  >
+    <option value="">-- Select Processor --</option>
+
+    {processors.map((processor) => (
+      <option key={processor.id} value={processor.id}>
+        {processor.name}
+      </option>
+    ))}
+  </select>
 </div>
 
         {/* CREATE BUTTON */}

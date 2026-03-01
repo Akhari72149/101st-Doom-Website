@@ -31,8 +31,11 @@ Core focus: Break enemy lines and secure objectives.
     icon: "/icons/helicopter.png",
     logo: "/WWA/C2.jpg",
     content: `
-Claymore 2 provides aerial superiority and rapid response.
-Focus on mobility, air support, and tactical deployment.
+Claymore 2 specializes in Air Assault operations, executing rapid deployments to overwhelm and dismantle enemy defenses with speed and precision. Acting as the Galactic Marine spearhead of the 101st, the platoon breaches fortified positions and disrupts enemy coordination to create decisive openings for follow-on forces.
+
+After securing objectives, the unit swiftly re-embarks and prepares for immediate redeployment to the next target — maintaining constant pressure and operational momentum.
+
+Mission: Strike. Break. Advance.
     `,
   },
   {
@@ -41,8 +44,13 @@ Focus on mobility, air support, and tactical deployment.
     icon: "/icons/mortar.png",
     logo: "/WWA/B3.jpg",
     content: `
-Broadsword 3 specializes in indirect fire support.
-Provides strategic suppression and battlefield control.
+Forged in the legacy of the Clone Wars, this elite unit specializes in high-velocity orbital insertions and rapid planetary assaults. Deploying from armored drop pods, they strike contested zones with speed and precision, seizing the initiative before the enemy can mount a response.
+
+Upon landing, they transition immediately into heavy fire support operations. Equipped with rotary cannons, missile systems, and deployable artillery, they suppress fortified positions and dismantle armored threats while forward observers coordinate devastating indirect fire support.
+
+Doctrine: Shock. Establish. Overwhelm.
+
+When the pods hit the ground, the battle is already decided.
     `,
   },
   {
@@ -62,9 +70,9 @@ Built for deep operations, Dagger can detach to reinforce allied platoons or exe
     icon: "/icons/plane.png",
     logo: "/WWA/Hammer.jpg",
     content: `
-Hammer functions as the elite aviation element of the 101st, specializing in air superiority, rapid insertion, and tactical aerial support.
+Hammer is the elite aviation element of the 101st, specializing in air superiority, rapid troop insertion, and close air support. Operating as a force multiplier, it provides precision overwatch, battlefield mobility, and sustained aerial dominance to enable mission success.
 
-It provides precision overwatch, battlefield mobility, and decisive control of the skies to ensure mission success across all operations.
+By controlling the skies and delivering rapid response firepower, Hammer ensures ground forces can advance with protection, speed, and overwhelming tactical advantage.
     `,
   },
 ];
@@ -134,15 +142,7 @@ export default function WhoWeArePage() {
       className="relative min-h-screen flex flex-col text-white font-orbitron pb-16"
     >
 
-      {/* ================= BACK BUTTON (✅ NEW) ================= */}
-      <div className="absolute top-8 left-8 z-10">
-        <button
-          onClick={() => router.back()}
-          className="px-6 py-2 border border-[#00ff66] text-[#00ff66] rounded-xl bg-black/60 backdrop-blur-lg hover:bg-[#00ff66] hover:text-black hover:scale-105 transition-all duration-300 shadow-lg"
-        >
-          ← Back
-        </button>
-      </div>
+
 
       {/* ================= BACKGROUND ================= */}
       <div

@@ -83,7 +83,6 @@ export default function Home() {
       title: "User Creation",
       desc: "Add new personnel to system",
       icon: <Users size={20} />,
-      allowedRoles: ["admin", "recruiter"],
     },
     {
       href: "/admin/certifications",

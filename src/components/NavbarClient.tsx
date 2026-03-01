@@ -63,11 +63,20 @@ export default function NavbarClient() {
   /* ================= NAV GROUPS ================= */
 
   const navGroups: NavGroup[] = [
+
+{
+      label: "Newcomers",
+      items: [
+        { href: "/Join", label: "How to Join" },
+        { href: "/Who-We-Are", label: "Who We Are" },
+        { href: "/documents", label: "Documents & Forms" },
+      ],
+    },
+
     {
       label: "Operations",
       items: [
         { href: "/pcs", label: "Personnel Command Dashboard" },
-        { href: "/Who-We-Are", label: "Who We Are" },
         { href: "/certs", label: "What We Offer" },
         { href: "/personnel-profile", label: "Personnel Profile" },
         { href: "/roster", label: "Slotted Roster" },
@@ -77,12 +86,7 @@ export default function NavbarClient() {
         { href: "/Art-of-War", label: "Art of War" },
       ],
     },
-{
-      label: "Newcomers",
-      items: [
-        { href: "/Join", label: "How to Join" },
-      ],
-    },
+
 {
       label: "Galactic Campaign",
       items: [

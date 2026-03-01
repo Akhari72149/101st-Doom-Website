@@ -5,7 +5,128 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 
+function TFARSetupBox() {
+  const [index, setIndex] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
 
+  const steps = [
+    {
+      title: "Step 1 — Download TFAR Beta and access the file",
+      image: "/tfar/step1.jpg",
+      text: "Once you have downloaded the modlist, find Task Force Arrowhead Radio Beta in the arma 3 console."
+    },
+    {
+      title: "Step 2 — Access the Mod Folder",
+      image: "/tfar/step2.jpg",
+      text: "Click the three dots underneath the mod image and click Open folder inw Windows Explorer. press I Understand when the popup opens."
+    },
+    {
+      title: "Step 3 — Open the folder",
+      image: "/tfar/step3.jpg",
+      text: "Navigate to the TFAR mod folder, then teamspeak."
+    },
+    {
+      title: "Step 4 — Run the plugin installer",
+      image: "/tfar/step4.jpg",
+      text: "Doubleclick on the below installer, if you do not see the TS logo, please see the faq tab."
+    },
+    {
+      title: "Step 5 — Complete installation",
+      image: "/tfar/step5.jpg",
+      text: "Ensure Teamspeak is Closed then Click Install, press yes on the next popups that appear."
+    },
+    {
+      title: "Step 6 — Confirm Installation",
+      image: "/tfar/step6.jpg",
+      text: "Open Teamspeak, head to tools in the top bar, options, then Addons in the popup, you should now see Task Force Arrowhead Radio as an addon."
+    }
+  ];
+
+  const next = () => setIndex((prev) => (prev + 1) % steps.length);
+  const prev = () =>
+    setIndex((prev) => (prev - 1 + steps.length) % steps.length);
+
+  return (
+  <>
+    <div className="bg-black/60 border border-[#00ff66]/30 rounded-2xl p-8 shadow-xl">
+<div className="mb-6">
+  <h2 className="text-3xl text-[#00ff66]">
+    TFAR Beta Setup Guide
+  </h2>
+
+<p className="text-xs text-gray-500 mt-1 tracking-wide uppercase">
+  Click the image to expand
+</p>
+</div>
+
+      <div className="flex flex-col md:flex-row gap-8 items-center">
+        <div className="relative w-full md:w-1/2">
+          <img
+            src={steps[index].image}
+            alt={steps[index].title}
+            onClick={() => setIsOpen(true)}
+            className="rounded-xl border border-[#00ff66]/30 shadow-lg w-full cursor-pointer hover:scale-[1.02] transition"
+          />
+
+          <button
+            onClick={prev}
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/70 px-4 py-2 rounded-lg border border-[#00ff66]"
+          >
+            ◀
+          </button>
+
+          <button
+            onClick={next}
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/70 px-4 py-2 rounded-lg border border-[#00ff66]"
+          >
+            ▶
+          </button>
+        </div>
+
+        <div className="w-full md:w-1/2 space-y-4">
+          <h3 className="text-xl text-[#00ff66]">
+            {steps[index].title}
+          </h3>
+
+          <p className="text-gray-300 leading-relaxed">
+            {steps[index].text}
+          </p>
+
+          <p className="text-sm text-gray-500">
+            Step {index + 1} of {steps.length}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {/* ================= IMAGE MODAL ================= */}
+    {isOpen && (
+      <div
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+        onClick={() => setIsOpen(false)}
+      >
+        <div
+          className="relative max-w-6xl w-full"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setIsOpen(false)}
+            className="absolute -top-12 right-0 text-[#00ff66] text-3xl hover:scale-110 transition"
+          >
+            ✕
+          </button>
+
+          <img
+            src={steps[index].image}
+            alt={steps[index].title}
+            className="w-full rounded-xl border border-[#00ff66]/40 shadow-2xl"
+          />
+        </div>
+      </div>
+    )}
+  </>
+);
+}
 
 
 export default function HowToJoinPage() {
@@ -47,6 +168,9 @@ export default function HowToJoinPage() {
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+
+
+  
 
   return (
     <div className="bg-black/60 border border-[#00ff66]/30 rounded-2xl overflow-hidden">
@@ -203,15 +327,50 @@ export default function HowToJoinPage() {
   {/* Collapsible Content */}
   <div
     className={`overflow-hidden transition-all duration-500 ${
-      detailsOpen ? "max-h [5000px] opacity-100 mt-6" : "max-h-0 opacity-0"
+      detailsOpen ? "max-h-[5000px] opacity-100 mt-6" : "max-h-0 opacity-0"
     }`}
   >
     <div className="bg-black/60 border border-[#00ff66]/30 rounded-2xl p-10 shadow-xl space-y-16">
 
-      {/* ================= Detailed Joining Process ================= */}
+      {/* ================= Full Overview ================= */}
 
-      {/* ================= Modlists & Whitelist Section ================= */}
+       {/* ================= Detailed Joining Process ================= */}
+
+      <div>
+        <h2 className="text-3xl text-[#00ff66] mb-6">
+          Detailed Joining Process
+        </h2>
+
+        <div className="text-gray-300 space-y-6 leading-relaxed">
+
+          <p>
+            After contacting a Recruiter, you will be assigned to an available staff member
+            who will conduct a short introductory interview.
+          </p>
+
+          <div>
+            <p className="mb-2">In this session, we will:</p>
+
+            <ul className="list-disc list-inside space-y-2">
+              <li>Review unit operations and expectations</li>
+              <li>Explain certifications and training requirements</li>
+              <li>Go over rank structure and progression</li>
+              <li>Introduce available modlists</li>
+              <li>Explain the whitelist process</li>
+              <li>
+                Collect and verify your in-game name, contact information,
+                and Discord/TeamSpeak details for official processing
+              </li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+
+      
 <div> 
+  {/* ================= Modlists & Whitelist Section ================= */}
+
   <h2 className="text-3xl text-[#00ff66] mb-6">
     Required Modlists & Unit Whitelist
   </h2>
@@ -313,40 +472,20 @@ export default function HowToJoinPage() {
     </div>
 
   </div>
+{/* ================= TFAR SETUP ================= */}
+<div className="mt-24 space-y-8">
+  
+  <h2 className="text-4xl text-[#00ff66] font-bold tracking-wide">
+    How To Setup TFAR Beta
+  </h2>
+
+  <TFARSetupBox />
+
 </div>
-      <div>
-        <h2 className="text-3xl text-[#00ff66] mb-6">
-          Detailed Joining Process
-        </h2>
 
-        <div className="text-gray-300 space-y-6 leading-relaxed">
-
-          <p>
-            After contacting a Recruiter, you will be assigned to an available staff member
-            who will conduct a short introductory interview.
-          </p>
-
-          <div>
-            <p className="mb-2">In this session, we will:</p>
-
-            <ul className="list-disc list-inside space-y-2">
-              <li>Review unit operations and expectations</li>
-              <li>Explain certifications and training requirements</li>
-              <li>Go over rank structure and progression</li>
-              <li>Introduce available modlists</li>
-              <li>Explain the whitelist process</li>
-              <li>
-                Collect and verify your in-game name, contact information,
-                and Discord/TeamSpeak details for official processing
-              </li>
-            </ul>
-          </div>
-
-        </div>
-      </div>
 
 {/* ================= What Now Section ================= */}
-<div>
+<div className="mt-16 space-y-8">
   <h2 className="text-3xl text-[#00ff66] mb-6">
     What Now?
   </h2>
@@ -391,7 +530,7 @@ export default function HowToJoinPage() {
             target="_blank"
             className="text-[#00ff66] underline hover:text-white transition"
           >
-            Operation Attendance Form
+            Operation Attendance Form (Click me)
           </a>
         </li>
       </ul>
@@ -609,19 +748,18 @@ export default function HowToJoinPage() {
       >
         Certification Overview Page
       </a>
-    </div>
 
-  </div>
-</div>
-        </div>
-      </div>
-
+      
     </div>
   </div>
-
 </div>
-
-      </div>
-    </div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
   );
 }

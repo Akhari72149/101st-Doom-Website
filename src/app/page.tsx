@@ -292,7 +292,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
   previousStatus[server.id] === false && server.online;
 
   return (
-    <div className="relative min-h-screen flex text-white font-orbitron pb-16">
+    <div className="relative min-h-screen flex text-white font-orbitron pb-29">
 
       {/* ================= BACKGROUND ================= */}
       <div
@@ -780,8 +780,12 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
                 href: "https://discord.gg/dZhRghrDfX",
               },
               {
-                label: "Download TeamSpeak",
-                href: "https://files.teamspeak-services.com/releases/client/3.6.2/TeamSpeak3-Client-win64-3.6.2.exe",
+                label: "Unit Reddit",
+                href: "https://www.reddit.com/user/101stDBMediaTeam/",
+              },
+              {
+                label: "Unit Instagram",
+                href: "https://www.instagram.com/101stdoombattalion_mediateam?igsh=MWk2d2t5cWd1amFhZw==",
               },
               {
                 label: "Join TeamSpeak Server",

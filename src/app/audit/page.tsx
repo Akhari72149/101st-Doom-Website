@@ -103,19 +103,21 @@ export default function AuditLogsPage() {
     let query = supabase
       .from("audit_logs")
       .select(`
-        id,
-        action,
-        created_at,
-        user_id,
-        profiles:user_id ( display_name ),
-        personnel:target_personnel_id ( name ),
-        ranks:target_rank_id ( name ),
-        oldRank:old_rank_id ( name ),
-        certifications:target_certification_id ( name ),
-        target_slot_label,
-        target_slot_section,
-        target_slot_subsection
-      `)
+  id,
+  action,
+  created_at,
+  user_id,
+  processed_by,
+  profiles:user_id ( display_name ),
+  processor:processed_by ( name ),
+  personnel:target_personnel_id ( name ),
+  ranks:target_rank_id ( name ),
+  oldRank:old_rank_id ( name ),
+  certifications:target_certification_id ( name ),
+  target_slot_label,
+  target_slot_section,
+  target_slot_subsection
+`)
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -330,7 +332,13 @@ export default function AuditLogsPage() {
                 </tr>
               ) : (
                 logs.map((log) => {
-                  const user = log.profiles?.display_name || "Unknown";
+                  let user;
+
+if (log.action === "NEW_MEMBER") {
+  user = log.processor?.name || "Unknown";
+} else {
+  user = log.profiles?.display_name || "Unknown";
+}
                   const personnelName = log.personnel?.name || "Unknown";
 
                   return (

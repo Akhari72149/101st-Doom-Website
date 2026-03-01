@@ -144,23 +144,11 @@ export default function ExpandedUnitsPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.6 }}
-      className="relative min-h-screen flex flex-col text-white font-orbitron pb-16"
-    >
-
-      {/* BACK BUTTON */}
-      <div className="absolute top-8 left-8 z-10">
-        <button
-          onClick={() => router.back()}
-          className="px-6 py-2 border border-[#00ff66]/40 text-[#00ff66]
-                     rounded-xl bg-black/60
-                     hover:bg-[#00ff66]/10 hover:shadow-[0_0_15px_rgba(0,255,100,0.3)]
-                     transition-all"
-        >
-          ← Back
-        </button>
-      </div>
-
+      className="relative min-h-screen flex flex-col text-white font-orbitron pb-16">
+      
+    
       <div className="relative z-10 flex flex-col items-center w-full pt-28">
+        
 
         {/* CATEGORY BUTTONS */}
         <div className="flex gap-6 mb-12">

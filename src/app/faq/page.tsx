@@ -12,27 +12,12 @@ export default function FAQPage() {
     setOpenIndex(openIndex === index ? null : index);
   };
 
-  const goToModlists = () => {
-    router.push("/Join?open=modlists");
-  };
-
   const faqs = [
     {
       category: "Installation",
       question: "How do I install the modlists?",
-      answer: (
-        <>
-          Click the{" "}
-          <button
-            onClick={goToModlists}
-            className="text-[#00ff66] underline hover:text-white transition"
-          >
-            modlist link
-          </button>
-          , subscribe or download the preset, then open your Arma 3 launcher,
-          go to Mods, and load the preset before joining the server.
-        </>
-      ),
+      answer:
+        "Click the modlist link, subscribe or download the preset, then open your Arma 3 launcher, go to Mods, and load the preset before joining the server.",
     },
     {
       category: "Troubleshooting",
@@ -87,15 +72,12 @@ export default function FAQPage() {
 
               {faqs
                 .filter((item) => item.category === cat)
-                .map((item) => {
+                .map((item, index) => {
                   const globalIndex = faqs.indexOf(item);
                   const isOpen = openIndex === globalIndex;
 
                   return (
-                    <div
-                      key={globalIndex}
-                      className="border-b border-[#00ff66]/20 pb-4 mb-6"
-                    >
+                    <div key={globalIndex} className="border-b border-[#00ff66]/20 pb-4 mb-6">
                       <button
                         onClick={() => toggleFAQ(globalIndex)}
                         aria-expanded={isOpen}
@@ -121,12 +103,11 @@ export default function FAQPage() {
                         role="region"
                         aria-labelledby={`faq-button-${globalIndex}`}
                         ref={(el) => {
-                          contentRefs.current[globalIndex] = el;
+                        contentRefs.current[globalIndex] = el;
                         }}
                         style={{
                           maxHeight: isOpen
-                            ? contentRefs.current[globalIndex]?.scrollHeight +
-                              "px"
+                            ? contentRefs.current[globalIndex]?.scrollHeight + "px"
                             : "0px",
                         }}
                         className="overflow-hidden transition-all duration-300 ease-in-out"
@@ -143,16 +124,13 @@ export default function FAQPage() {
 
           {/* SUPPORT CTA */}
           <div className="mt-10 p-6 border border-[#00ff66]/30 rounded-xl text-center">
-            <h3 className="text-xl text-[#00ff66] mb-2">
-              Still Having Issues?
-            </h3>
+            <h3 className="text-xl text-[#00ff66] mb-2">Still Having Issues?</h3>
             <p className="text-gray-400 mb-4">
-              Join our tech-support channel on Discord and we’ll help you
-              directly.
+              Join our tech-support channel on Discord and we’ll help you directly.
             </p>
 
             <a
-              href="https://discord.com/channels/445933549816774656/1250482107483160616"
+              href="YOUR_DISCORD_LINK_HERE"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block px-6 py-2 border border-[#00ff66] rounded-lg
@@ -177,6 +155,7 @@ export default function FAQPage() {
               Back to Recruitment
             </button>
           </div>
+
         </div>
       </div>
     </div>

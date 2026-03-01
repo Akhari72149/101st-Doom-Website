@@ -59,7 +59,7 @@ export default function GalacticCampaignPage() {
 
   /* ================= ANIMATED MILITARY COUNTERS ================= */
 
-  const cloneTarget = 288;
+  const cloneTarget = 321;
   const droidTarget = 5833;
 
   const [cloneDisplay, setCloneDisplay] = useState(0);
@@ -376,40 +376,7 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
 
 {/* ================= C2 LANDFALL — COMPLETED ================= */}
 
-<div className="border border-red-500/40 bg-black/50 rounded-2xl p-6">
 
-  <h2 className="text-2xl text-red-500 font-bold">
-    🚀 C2 LANDING — TRITON
-  </h2>
-
-  <div className="mt-2">
-    <span className="inline-block px-3 py-1 rounded bg-green-500/20 text-green-400 text-sm border border-green-500/40">
-      Landfall Complete
-    </span>
-  </div>
-
-  <div className="mt-6 border-t border-red-500/30 pt-4 text-sm text-gray-300 leading-relaxed space-y-3">
-
-    <p className="text-green-400 font-semibold">
-      Foothold successfully established.
-    </p>
-
-    <p>
-      Initial assault forces secured the landing zone under heavy resistance.
-      Defensive emplacements neutralized. Orbital denial capability weakened.
-    </p>
-
-    <p>
-      853 confirmed enemy eliminations. Friendly casualties are being counted.
-    </p>
-
-    <p className="text-red-400 font-semibold">
-      Triton Landing Zone secured.
-    </p>
-
-  </div>
-
-</div>
 
           {/* PHASES (LOCKED LOGIC ONLY CHANGED) */}
           <div className="flex gap-4">

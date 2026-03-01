@@ -12,7 +12,7 @@ const initialPhases = [
     description:
       "Secure Triton and Oberon to establish orbital dominance.",
     objectives: [
-      { id: "t1", name: "Triton: Secure Guns", complete: false },
+      { id: "t1", name: "Triton: Secure Guns - Secured by Dagger 02/28/2026", complete: true },
       { id: "t2", name: "Triton: Secure Shipyard", complete: false },
       { id: "o1", name: "Oberon: Secure Radar Facilities", complete: false },
       { id: "o2", name: "Oberon: Secure Supply Depots", complete: false },

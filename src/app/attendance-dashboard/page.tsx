@@ -13,6 +13,7 @@ export default function AttendanceDashboard() {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+
   /* ================= FETCH ================= */
 
   const fetchData = async () => {
@@ -68,6 +69,14 @@ export default function AttendanceDashboard() {
     return acc;
 
   }, {});
+
+    const total = filteredRecords.length;
+
+const presentCount = filteredRecords.filter(r => r.status === "Y").length;
+const absentCount = filteredRecords.filter(r => r.status === "N").length;
+
+const presentPercent = total ? ((presentCount / total) * 100).toFixed(1) : 0;
+const absentPercent = total ? ((absentCount / total) * 100).toFixed(1) : 0;
 
   /* ================= UNIQUE PLATOONS ================= */
 
@@ -268,28 +277,28 @@ export default function AttendanceDashboard() {
 
           <div className="space-y-4 text-sm">
 
-            <div>
-              Total Records:
-              <span className="text-[#00ff66] ml-2">
-                {filteredRecords.length}
-              </span>
-            </div>
+  <div>
+    Total Records:
+    <span className="text-[#00ff66] ml-2">
+      {total}
+    </span>
+  </div>
 
-            <div>
-              Present:
-              <span className="text-green-400 ml-2">
-                {filteredRecords.filter(r => r.status === "Y").length}
-              </span>
-            </div>
+  <div>
+    Present:
+    <span className="text-green-400 ml-2">
+      {presentCount} ({presentPercent}%)
+    </span>
+  </div>
 
-            <div>
-              Absent:
-              <span className="text-red-400 ml-2">
-                {filteredRecords.filter(r => r.status === "N").length}
-              </span>
-            </div>
+  <div>
+    Absent:
+    <span className="text-red-400 ml-2">
+      {absentCount} ({absentPercent}%)
+    </span>
+  </div>
 
-          </div>
+</div>
 
         </div>
 

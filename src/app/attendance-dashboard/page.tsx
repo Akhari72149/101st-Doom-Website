@@ -12,6 +12,7 @@ export default function AttendanceDashboard() {
   const [selectedPlatoon, setSelectedPlatoon] = useState<string | null>(null);
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedSquad, setSelectedSquad] = useState<string | null>(null);
 
 
   /* ================= FETCH ================= */
@@ -21,24 +22,25 @@ export default function AttendanceDashboard() {
     setLoading(true);
 
     const { data } = await supabase
-      .from("attendance_records")
-      .select(`
-        id,
-        type,
-        status,
-        attendance_month,
-        week_number,
-        personnel (
-          id,
-          name,
-          ranks(name)
-        ),
-        platoon_slots (
-          platoon_name
-        )
-      `)
-      .eq("attendance_month", selectedMonth)
-      .eq("week_number", selectedWeek);
+  .from("attendance_records")
+  .select(`
+    id,
+    type,
+    status,
+    attendance_month,
+    week_number,
+    personnel (
+      id,
+      name,
+      ranks(name)
+    ),
+    platoon_slots (
+      platoon_name,
+      squad_name
+    )
+  `)
+  .eq("attendance_month", selectedMonth)
+  .eq("week_number", selectedWeek);
 
     setRecords(data || []);
     setLoading(false);
@@ -48,13 +50,23 @@ export default function AttendanceDashboard() {
     fetchData();
   }, [selectedMonth, selectedWeek]);
 
+  useEffect(() => {
+  setSelectedSquad(null);
+}, [selectedPlatoon]);
+
   /* ================= GROUP DATA ================= */
 
-  const filteredRecords = selectedPlatoon
-    ? records.filter(
-        r => r.platoon_slots?.platoon_name === selectedPlatoon
-      )
-    : records;
+const filteredRecords = records
+  .filter(r =>
+    selectedPlatoon
+      ? r.platoon_slots?.platoon_name === selectedPlatoon
+      : true
+  )
+  .filter(r =>
+    selectedSquad
+      ? r.platoon_slots?.squad_name === selectedSquad
+      : true
+  );
 
   const grouped = filteredRecords.reduce((acc: any, row: any) => {
 
@@ -80,13 +92,65 @@ const absentPercent = total ? ((absentCount / total) * 100).toFixed(1) : 0;
 
   /* ================= UNIQUE PLATOONS ================= */
 
-  const platoonList = Array.from(
-    new Set(
-      records
-        .map(r => r.platoon_slots?.platoon_name)
-        .filter(Boolean)
-    )
-  );
+  const platoonOrder = [
+  "Battalion Command",
+  "Company Command",
+  "Tomahawk 1",
+  "Claymore 2",
+  "Broadsword 3"
+];
+
+const platoonList = Array.from(
+  new Set(
+    records
+      .map(r => r.platoon_slots?.platoon_name)
+      .filter(Boolean)
+  )
+).sort((a, b) => {
+  const indexA = platoonOrder.indexOf(a as string);
+  const indexB = platoonOrder.indexOf(b as string);
+
+  // Unknown platoons go to the bottom
+  if (indexA === -1) return 1;
+  if (indexB === -1) return -1;
+
+  return indexA - indexB;
+});
+
+
+
+const squadList = Array.from(
+  new Set(
+    records
+      .filter(r =>
+        selectedPlatoon
+          ? r.platoon_slots?.platoon_name === selectedPlatoon
+          : true
+      )
+      .map(r => r.platoon_slots?.squad_name)
+      .filter(Boolean)
+  )
+).sort((a: any, b: any) => {
+
+  // ✅ Always force "All" first if it exists
+  if (a === "All") return -1;
+  if (b === "All") return 1;
+
+  // ✅ Force "Hammer" last
+  if (a === "Hammer") return 1;
+  if (b === "Hammer") return -1;
+
+  // ✅ Extract numbers from squad names
+  const getNumber = (name: string) => {
+    const match = name.match(/\d+/);
+    return match ? parseInt(match[0]) : 999;
+  };
+
+  const numA = getNumber(a);
+  const numB = getNumber(b);
+
+  return numA - numB;
+});
 
   /* ================= RENDER ================= */
 
@@ -175,6 +239,46 @@ const absentPercent = total ? ((absentCount / total) * 100).toFixed(1) : 0;
 
             </div>
           </div>
+
+          {/* ================= SQUAD FILTER ================= */}
+
+{selectedPlatoon && (
+  <div className="mt-6">
+    <h3 className="text-[#00ff66] text-sm mb-3 tracking-widest">
+      Squads
+    </h3>
+
+    <div className="flex flex-wrap gap-2">
+
+      {/* ALL BUTTON */}
+      <button
+        onClick={() => setSelectedSquad(null)}
+        className={`px-3 py-1 rounded-lg text-xs border ${
+          !selectedSquad
+            ? "bg-[#00ff66] text-black"
+            : "border-[#00ff66]/40 text-[#00ff66]"
+        }`}
+      >
+        All
+      </button>
+
+      {squadList.map((squad) => (
+        <button
+          key={squad}
+          onClick={() => setSelectedSquad(squad)}
+          className={`px-3 py-1 rounded-lg text-xs border ${
+            selectedSquad === squad
+              ? "bg-[#00ff66] text-black"
+              : "border-[#00ff66]/40 text-[#00ff66]"
+          }`}
+        >
+          {squad}
+        </button>
+      ))}
+
+    </div>
+  </div>
+)}
 
           <div className="mt-6 text-sm text-gray-400">
             Total Records: {records.length}

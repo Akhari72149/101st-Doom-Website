@@ -73,7 +73,7 @@ export default function HowToJoinPage() {
       {/* Dropdown Content */}
       <div
         className={`transition-all duration-500 overflow-hidden ${
-          open ? "max-h-[1000px] opacity-100 p-6" : "max-h-0 opacity-0"
+          open ? "max-h-[3000px] opacity-100 p-6" : "max-h-0 opacity-0"
         }`}
       >
         {children}
@@ -203,7 +203,7 @@ export default function HowToJoinPage() {
   {/* Collapsible Content */}
   <div
     className={`overflow-hidden transition-all duration-500 ${
-      detailsOpen ? "max-h-[3000px] opacity-100 mt-6" : "max-h-0 opacity-0"
+      detailsOpen ? "max-h [5000px] opacity-100 mt-6" : "max-h-0 opacity-0"
     }`}
   >
     <div className="bg-black/60 border border-[#00ff66]/30 rounded-2xl p-10 shadow-xl space-y-16">

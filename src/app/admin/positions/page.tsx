@@ -181,24 +181,39 @@ export default function PositionEditor() {
   };
 
   const updateRank = async () => {
-    if (!selectedPerson) {
-      alert("Select a person first.");
-      return;
-    }
+  if (!selectedPerson) {
+    alert("Select a person first.");
+    return;
+  }
 
-    const { error } = await supabase
-      .from("personnel")
-      .update({ rank_id: selectedRankId || null })
-      .eq("id", selectedPerson.id);
+  const oldRank = selectedPerson.rank_id;
 
-    if (error) {
-      alert("Rank update failed: " + error.message);
-      return;
-    }
+  // 1️⃣ Update rank in database
+  const { error } = await supabase
+    .from("personnel")
+    .update({
+      rank_id: selectedRankId || null,
+    })
+    .eq("id", selectedPerson.id);
 
-    alert("✅ Rank Updated!");
-    fetchData();
-  };
+  if (error) {
+    alert("Rank update failed: " + error.message);
+    return;
+  }
+
+  // 2️⃣ Manually trigger rank sync (same pattern as slots)
+  await supabase.functions.invoke("discord-rank-sync", {
+    body: {
+      personnelId: selectedPerson.id,
+      oldRankId: oldRank,
+      newRankId: selectedRankId,
+    },
+  });
+
+  alert("✅ Rank Updated + Discord Synced");
+
+  fetchData();
+};
 
   const unassignPosition = async () => {
     if (!selectedPerson) return;

@@ -67,23 +67,23 @@ export default function NavbarClient() {
 {
       label: "Newcomers",
       items: [
+        { href: "/documents", label: "Documents & Forms" },
         { href: "/Join", label: "How to Join" },
         { href: "/Who-We-Are", label: "Who We Are" },
-        { href: "/documents", label: "Documents & Forms" },
       ],
     },
 
     {
       label: "Operations",
       items: [
-        { href: "/pcs", label: "Personnel Command Dashboard" },
-        { href: "/certs", label: "What We Offer" },
-        { href: "/personnel-profile", label: "Personnel Profile" },
-        { href: "/roster", label: "Slotted Roster" },
-        { href: "/grand-orbat", label: "Grand Orbat" },
-        { href: "/servers", label: "Server Booking" },
-        { href: "/certifications", label: "Cert Lookup" },
         { href: "/Art-of-War", label: "Art of War" },
+        { href: "/certifications", label: "Cert Lookup" },
+        { href: "/grand-orbat", label: "Grand Orbat" },
+        { href: "/pcs", label: "Personnel Command Dashboard" },
+        { href: "/personnel-profile", label: "Personnel Profile" },
+        { href: "/servers", label: "Server Booking" },
+        { href: "/roster", label: "Slotted Roster" },
+        { href: "/certs", label: "What We Offer" },
       ],
     },
 
@@ -104,9 +104,14 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "recruiter"],
         },
         {
-          href: "/admin/positions",
-          label: "Promotions & Slotting",
-          allowedRoles: ["admin", "nco", "di"],
+          href: "/admin/attendance",
+          label: "Attendance Roster",
+          allowedRoles: ["admin", "nco"],
+        },
+        {
+          href: "/attendance-dashboard",
+          label: "Attendance Roster Viewer",
+          allowedRoles: ["admin", "nco"],
         },
         {
           href: "/audit",
@@ -119,20 +124,16 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "nco", "trainer", "di"],
         },
         {
-          href: "/admin/attendance",
-          label: "Attendance Roster",
-          allowedRoles: ["admin", "nco"],
-        },
-        {
-          href: "/attendance-dashboard",
-          label: "Attendance Roster Viewer",
-          allowedRoles: ["admin", "nco"],
-        },
-        {
           href: "/GC-Logi",
           label: "GC Logistics",
           allowedRoles: ["Akhari", "logistics"],
         },
+        {
+          href: "/admin/positions",
+          label: "Promotions & Slotting",
+          allowedRoles: ["admin", "nco", "di"],
+        },
+
       ],
     },
   ];

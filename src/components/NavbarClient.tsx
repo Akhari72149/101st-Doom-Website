@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 /* ================= TYPES ================= */
 
-type Role = "admin" | "nco" | "di" | "trainer" | "logistics" | "recruiter";
+type Role = "admin" | "nco" | "di" | "trainer" | "logistics" | "recruiter" | "Akhari";
 
 type NavItem = {
   href: string;
@@ -96,7 +96,7 @@ export default function NavbarClient() {
     },
     {
       label: "Admin",
-      allowedRoles: ["admin", "nco", "di", "trainer", "recruiter", "logistics"],
+      allowedRoles: ["admin", "nco", "di", "trainer", "recruiter", "logistics", "Akhari"],
       items: [
         {
           href: "/admin/create",
@@ -131,7 +131,7 @@ export default function NavbarClient() {
         {
           href: "/GC-Logi",
           label: "GC Logistics",
-          allowedRoles: ["admin", "logistics"],
+          allowedRoles: ["Akhari", "logistics"],
         },
       ],
     },

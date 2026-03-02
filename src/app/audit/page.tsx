@@ -211,7 +211,7 @@ export default function AuditLogsPage() {
       case "RANK_CHANGED":
         return "text-blue-600";
       case "CERTIFICATION_ASSIGNED":
-        return "text-green-900";
+        return "text-orange-600";
       case "CERTIFICATION_REVOKED":
         return "text-red-800";
       case "POSITION_ASSIGNED":

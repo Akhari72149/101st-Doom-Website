@@ -204,7 +204,6 @@ if (auditError) {
     },
   });
 
-console.log("Discord Import Response:", importData);
 
 if (importError) {
   alert(importError.message);
@@ -413,11 +412,10 @@ if (importData?.error) {
     <option value="">-- Select Processor --</option>
 
     {processors.map((processor) => {
-  console.log("Processor in dropdown:", processor);
 
   return (
     <option key={processor.id} value={processor.id}>
-      {processor.name} ({processor.id})
+      {processor.name}
     </option>
   );
 })}

@@ -78,7 +78,7 @@ export default function GCLogisticsHub() {
     const userRoles = data?.map((r) => r.role) || [];
 
     const hasAccess =
-      userRoles.includes("admin") ||
+      userRoles.includes("Akhari") ||
       userRoles.includes("logistics");
 
     // ❌ Logged in but no permission

@@ -53,6 +53,19 @@ export default function AuditLogsPage() {
     checkAccess();
   }, [router]);
 
+  const renderName = (name: string) => {
+  if (!name) return null;
+
+  if (name === "Mommy Doombot") {
+    return <span className="text-green-500 font-semibold">{name}</span>;
+  }
+  if (name === "Akhari") {
+    return <span className="text-yellow-600 font-semibold">{name}</span>;
+  }
+
+  return name;
+};
+
   /* ================= FETCH FILTER OPTIONS ================= */
 
   const fetchFilterOptions = async () => {
@@ -178,11 +191,11 @@ export default function AuditLogsPage() {
 
   const formatTarget = (log: any) => {
     if (log.action === "CERTIFICATION_ASSIGNED") {
-      return `Certification → ${log.certifications?.name || "Unknown"}`;
+      return `Certification → ${log.certifications?.name || "Mommy Doombot"}`;
     }
 
     if (log.action === "CERTIFICATION_REVOKED") {
-      return `Certification → ${log.certifications?.name || "Unknown"}`;
+      return `Certification → ${log.certifications?.name || "Mommy Doombot"}`;
     }
 
     if (log.action === "RANK_CHANGED") {
@@ -335,19 +348,19 @@ export default function AuditLogsPage() {
                   let user;
 
 if (log.action === "NEW_MEMBER") {
-  user = log.processor?.name || "Unknown";
+  user = log.processor?.name || "Mommy Doombot";
 } else {
-  user = log.profiles?.display_name || "Unknown";
+  user = log.profiles?.display_name || "Mommy Doombot";
 }
-                  const personnelName = log.personnel?.name || "Unknown";
+                  const personnelName = log.personnel?.name || "Mommy Doombot";
 
                   return (
                     <tr
                       key={log.id}
                       className="border-b border-[#00ff66]/10 hover:bg-[#00ff66]/5 transition"
                     >
-                      <td className="p-3">{user}</td>
-                      <td className="p-3">{personnelName}</td>
+                      <td className="p-3">{renderName(user)}</td>
+                      <td className="p-3">{renderName(personnelName)}</td>
 
                       <td className={`p-3 font-semibold ${getActionStyle(log.action)}`}>
                         {log.action}

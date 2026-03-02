@@ -17,6 +17,9 @@ export default function ManageCertifications() {
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
   const [filteredCerts, setFilteredCerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [trainerPersonnel, setTrainerPersonnel] = useState<any[]>([]);
+  const [selectedTrainer, setSelectedTrainer] = useState("");
+  const [trainerSearch, setTrainerSearch] = useState("");
 
   /* ================= AUTH ================= */
 
@@ -84,6 +87,72 @@ export default function ManageCertifications() {
     setCertifications(certs || []);
   };
 
+useEffect(() => {
+  const fetchTrainers = async () => {
+    const { data: trainerCerts } = await supabase
+      .from("certifications")
+      .select("id")
+      .eq("is_trainer_cert", true);
+
+    const trainerCertIds = trainerCerts?.map((c) => c.id) || [];
+
+    if (trainerCertIds.length === 0) {
+      setTrainerPersonnel([]);
+      return;
+    }
+
+    const { data: trainerData } = await supabase
+      .from("personnel_certifications")
+      .select(`
+        personnel_id,
+        personnel:personnel_id ( id, name, rank_id )
+      `)
+      .in("certification_id", trainerCertIds);
+
+    if (!trainerData) {
+      setTrainerPersonnel([]);
+      return;
+    }
+
+    const uniqueTrainers = Array.from(
+      new Map(
+        trainerData.map((item: any) => [
+          item.personnel?.id,
+          item.personnel,
+        ])
+      ).values()
+    );
+
+    setTrainerPersonnel(uniqueTrainers);
+
+    /* ------------------------------------------------ */
+    /* ✅ AUTO SELECT LOGIC */
+    /* ------------------------------------------------ */
+
+    const { data: session } = await supabase.auth.getUser();
+    const loggedInUserId = session?.user?.id;
+
+    // Check if logged-in user is a trainer
+    const loggedInTrainer = uniqueTrainers.find(
+      (t) => t.id === loggedInUserId
+    );
+
+    if (loggedInTrainer) {
+      setSelectedTrainer(loggedInTrainer.id);
+      return;
+    }
+
+    // If only one trainer exists → auto select it
+    if (uniqueTrainers.length === 1) {
+      setSelectedTrainer(uniqueTrainers[0].id);
+    }
+  };
+
+  if (!loadingAuth) {
+    fetchTrainers();
+  }
+}, [loadingAuth]);
+
   const fetchPersonCerts = async () => {
     const { data } = await supabase
       .from("personnel_certifications")
@@ -97,7 +166,10 @@ export default function ManageCertifications() {
   };
 
   const assignCertification = async () => {
-    if (!selectedPerson || selectedCerts.length === 0) return;
+    if (!selectedPerson || selectedCerts.length === 0 || !selectedTrainer) {
+  alert("Please select a trainer before assigning.");
+  return;
+}
 
     setLoading(true);
 
@@ -109,7 +181,7 @@ export default function ManageCertifications() {
       personnel_id: selectedPerson,
       certification_id: certId,
       awarded_at: new Date().toISOString(),
-      awarded_by: user?.id ?? null,
+      awarded_by: selectedTrainer,
     }));
 
     const { error } = await supabase
@@ -128,6 +200,7 @@ export default function ManageCertifications() {
     }
 
     setSelectedCerts([]);
+    setSelectedTrainer("");
     fetchPersonCerts();
   };
 
@@ -235,6 +308,73 @@ export default function ManageCertifications() {
             })()}
           </div>
         )}
+
+{/* TRAINER SELECTION - SHOW AFTER PERSON IS SELECTED */}
+{selectedPerson && (
+  <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/40">
+    <h2 className="text-sm text-gray-400 mb-2">
+      Select Trainer Who Is Assigning
+    </h2>
+
+    {trainerPersonnel.length === 0 ? (
+  <p className="text-gray-400 text-sm">
+    No trainers available.
+  </p>
+) : (
+  <>
+    {/* Trainer Search */}
+    <input
+      type="text"
+      placeholder="Search trainers..."
+      value={trainerSearch}
+      onChange={(e) => setTrainerSearch(e.target.value)}
+      className="bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl mb-3"
+    />
+
+    {/* Trainer List */}
+    <div className="max-h-40 overflow-y-auto">
+      {trainerPersonnel
+        .filter((trainer) =>
+          trainer.name
+            ?.toLowerCase()
+            .includes(trainerSearch.toLowerCase())
+        )
+        .map((trainer) => {
+          const isSelected = selectedTrainer === trainer.id;
+
+          return (
+            <div
+              key={trainer.id}
+              onClick={() => {
+                setSelectedTrainer(trainer.id);
+                setTrainerSearch("");
+              }}
+              className={`p-2 rounded-lg cursor-pointer mb-2 transition ${
+                isSelected
+                  ? "bg-[#00ff66]/20 border border-[#00ff66]"
+                  : "hover:bg-[#00ff66]/10"
+              }`}
+            >
+              {trainer.name}
+            </div>
+          );
+        })}
+
+      {/* No Match Message */}
+      {trainerPersonnel.filter((trainer) =>
+        trainer.name
+          ?.toLowerCase()
+          .includes(trainerSearch.toLowerCase())
+      ).length === 0 && (
+        <p className="text-gray-400 text-sm">
+          No matching trainers.
+        </p>
+      )}
+    </div>
+  </>
+)}
+  </div>
+)}
 
         {/* CURRENT CERTIFICATIONS */}
         {selectedPerson && (

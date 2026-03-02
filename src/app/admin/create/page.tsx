@@ -51,7 +51,7 @@ useEffect(() => {
   };
 
   loadProcessors();
-}, []);
+}, [importFromDiscord]);
 
   /* ================= AUTH CHECK ================= */
 
@@ -60,6 +60,8 @@ useEffect(() => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    
 
     if (!user) {
       router.replace("/login");
@@ -158,36 +160,61 @@ useEffect(() => {
 
 /* ================= 🔥 AUDIT LOG ================= */
 
-const { data: auditData, error: auditError } = await supabase
+// ✅ Ensure processor is selected
+
+
+// ✅ Optional safety check — confirm processor exists
+const { data: processorExists } = await supabase
+  .from("personnel")
+  .select("id")
+  .eq("id", selectedProcessor)
+  .maybeSingle();
+
+if (!processorExists) {
+  alert("Selected processor does not exist.");
+  return;
+}
+
+const { error: auditError } = await supabase
   .from("audit_logs")
   .insert([
     {
-      user_id: user.id, 
+      user_id: user.id,
       target_personnel_id: data.id,
       action: "NEW_MEMBER",
       details: "New member added to system",
-      processed_by: selectedProcessor || null, 
+      processed_by: selectedProcessor || null,
     },
-  ])
-  .select()
-  .single();
+  ]);
 
 if (auditError) {
   console.error("Audit Insert Error:", auditError);
-  alert("Audit log failed to insert: " + auditError.message);
+  alert("Audit log failed: " + auditError.message);
   return;
 }
 
     /* ================= DISCORD IMPORT ================= */
 
     if (importFromDiscord && discordId) {
-      const { error: importError } =
-        await supabase.functions.invoke("discord-full-import", {
-          body: {
-            discord_id: discordId,
-            personnel_id: data.id,
-          },
-        });
+      const { data: importData, error: importError } =
+  await supabase.functions.invoke("discord-full-import", {
+    body: {
+      discord_id: discordId,
+      personnel_id: data.id,
+    },
+  });
+
+console.log("Discord Import Response:", importData);
+
+if (importError) {
+  alert(importError.message);
+  return;
+}
+
+if (importData?.error) {
+  alert(importData.error);
+  return;
+}
 
       if (importError) {
         alert(importError.message);
@@ -306,7 +333,7 @@ if (auditError) {
         {/* BIRTH NUMBER */}
         <div className="mb-6">
           <label className="block mb-2 text-sm text-gray-300">
-            Birth Number
+            Birth Number (If taken you will get a popup)
           </label>
 
           <input
@@ -320,7 +347,7 @@ if (auditError) {
         {/* NAME */}
         <div className="mb-8">
           <label className="block mb-2 text-sm text-gray-300">
-            Name
+            Name (If taken you will get a popup)
           </label>
 
           <input
@@ -385,11 +412,15 @@ if (auditError) {
   >
     <option value="">-- Select Processor --</option>
 
-    {processors.map((processor) => (
-      <option key={processor.id} value={processor.id}>
-        {processor.name}
-      </option>
-    ))}
+    {processors.map((processor) => {
+  console.log("Processor in dropdown:", processor);
+
+  return (
+    <option key={processor.id} value={processor.id}>
+      {processor.name} ({processor.id})
+    </option>
+  );
+})}
   </select>
 </div>
 

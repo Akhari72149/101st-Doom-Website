@@ -12,7 +12,9 @@ export default function PersonnelProfile() {
   const [selectedPerson, setSelectedPerson] = useState<any>(null);
   const [certifications, setCertifications] = useState<any[]>([]);
   const [rankHistory, setRankHistory] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"qual" | "trainer">("qual");
+  const [activeTab, setActiveTab] = useState<
+  "qual" | "trainer" | "rank"
+>("qual");
 
   const router = useRouter();
 
@@ -27,6 +29,11 @@ export default function PersonnelProfile() {
   const fetchData = async () => {
     const { data: rankData } = await supabase.from("ranks").select("*");
     setRanks(rankData || []);
+
+
+    setTimeout(() => {
+  setRanks((prev) => [...prev]);
+}, 0);
 
     const { data } = await supabase
       .from("personnel")
@@ -47,12 +54,17 @@ export default function PersonnelProfile() {
     setCertifications(certs || []);
 
     const { data: history } = await supabase
-      .from("rank_history")
-      .select("*")
-      .eq("personnel_id", person.id)
-      .order("changed_at", { ascending: false });
+  .from("rank_history")
+  .select(`
+    *,
+    old_rank:ranks!rank_history_old_rank_id_fkey(name),
+    new_rank:ranks!rank_history_new_rank_id_fkey(name)
+  `)
+  .eq("personnel_id", person.id)
+  .order("changed_at", { ascending: false });
 
-    setRankHistory(history || []);
+setRankHistory(history || []);
+
   };
 
   /* ===================================================== */
@@ -60,9 +72,12 @@ export default function PersonnelProfile() {
   /* ===================================================== */
 
   const getRankName = (rankId: string | null) => {
-    const rank = ranks.find((r) => r.id === rankId);
-    return rank ? rank.name : "Unranked";
-  };
+  if (!rankId || ranks.length === 0) return "Loading...";
+
+  const rank = ranks.find((r) => r.id === rankId);
+
+  return rank?.name || "Unranked";
+};
 
   const getRankLevel = (rankId: string | null) => {
     const rank = ranks.find((r) => r.id === rankId);
@@ -106,6 +121,24 @@ export default function PersonnelProfile() {
       .toLowerCase()
       .includes(search.toLowerCase())
   );
+
+  const calculateTimeInGrade = () => {
+  if (!selectedPerson || rankHistory.length === 0) return 0;
+
+  // Find the most recent time they received their current rank
+  const latestPromotion = rankHistory.find(
+    (h: any) => h.new_rank_id === selectedPerson.rank_id
+  );
+
+  if (!latestPromotion) return 0;
+
+  const rankDate = new Date(latestPromotion.changed_at);
+  const now = new Date();
+
+  const diff = now.getTime() - rankDate.getTime();
+
+  return Math.floor(diff / (1000 * 60 * 60 * 24)); // days
+};
 
   /* ===================================================== */
   /* CERT FILTERS FOR TABS */
@@ -195,13 +228,26 @@ export default function PersonnelProfile() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
               <div>
-                <p className="text-xs text-gray-400 tracking-widest">
-                  JOIN DATE
-                </p>
-                <p className="text-lg">
-                  {formatDate(selectedPerson.created_at)}
-                </p>
-              </div>
+  {/* JOIN DATE */}
+  <div>
+    <p className="text-xs text-gray-400 tracking-widest">
+      JOIN DATE
+    </p>
+    <p className="text-lg">
+      {formatDate(selectedPerson.created_at)}
+    </p>
+  </div>
+
+  {/* TIME IN GRADE */}
+  <div className="mt-6">
+    <p className="text-xs text-gray-400 tracking-widest">
+      TIME IN GRADE
+    </p>
+    <p className="text-lg text-[#00ff66]">
+      {calculateTimeInGrade()} Days
+    </p>
+  </div>
+</div>
 
               <div>
                 <p className="text-xs text-gray-400 tracking-widest">
@@ -272,41 +318,74 @@ export default function PersonnelProfile() {
                 TRAINER QUAL
               </button>
 
+              <button
+  onClick={() => setActiveTab("rank")}
+  className={`tracking-widest text-sm ${
+    activeTab === "rank"
+      ? "text-[#00ff66] border-b-2 border-[#00ff66]"
+      : "text-gray-400"
+  }`}
+>
+  RANK HISTORY
+</button>
+
             </div>
 
             {activeTab === "qual" ? (
-              normalCerts.length === 0 ? (
-                <p className="text-gray-400">
-                  No certifications recorded.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {normalCerts.map((c: any, i: number) => (
-                    <div
-                      key={i}
-                      className="border-b border-[#00ff66]/20 py-2"
-                    >
-                      {c.certification?.name}
-                    </div>
-                  ))}
-                </div>
-              )
-            ) : trainerCerts.length === 0 ? (
-              <p className="text-gray-400">
-                No trainer certifications recorded.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {trainerCerts.map((c: any, i: number) => (
-                  <div
-                    key={i}
-                    className="border-b border-[#00ff66]/20 py-2"
-                  >
-                    {c.certification?.name}
-                  </div>
-                ))}
-              </div>
-            )}
+  normalCerts.length === 0 ? (
+    <p className="text-gray-400">
+      No certifications recorded.
+    </p>
+  ) : (
+    <div className="space-y-3">
+      {normalCerts.map((c: any, i: number) => (
+        <div
+          key={i}
+          className="border-b border-[#00ff66]/20 py-2"
+        >
+          {c.certification?.name}
+        </div>
+      ))}
+    </div>
+  )
+) : activeTab === "trainer" ? (
+  trainerCerts.length === 0 ? (
+    <p className="text-gray-400">
+      No trainer certifications recorded.
+    </p>
+  ) : (
+    <div className="space-y-3">
+      {trainerCerts.map((c: any, i: number) => (
+        <div
+          key={i}
+          className="border-b border-[#00ff66]/20 py-2"
+        >
+          {c.certification?.name}
+        </div>
+      ))}
+    </div>
+  )
+) : (
+  /* ========================== */
+  /* RANK HISTORY TAB */
+  /* ========================== */
+
+  <div className="space-y-4">
+    {rankHistory.map((h: any) => (
+  <div key={h.id} className="border-b border-[#00ff66]/20 pb-3">
+    <p className="text-sm">
+  {getRankName(h.old_rank_id)}{" "}
+  <span className="text-[#00ff66]">→</span>{" "}
+  {getRankName(h.new_rank_id)}
+</p>
+
+    <p className="text-xs text-gray-400 mt-1">
+      {formatDate(h.changed_at)}
+    </p>
+  </div>
+))}
+  </div>
+)}
 
           </div>
 

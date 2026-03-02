@@ -19,6 +19,7 @@ export default function AuditLogsPage() {
   const [selectedUser, setSelectedUser] = useState<string>("all");
   const [selectedAction, setSelectedAction] = useState<string>("all");
   const [selectedDate, setSelectedDate] = useState<string>("all");
+  
 
   /* ================= AUTH ================= */
 
@@ -61,6 +62,9 @@ export default function AuditLogsPage() {
   }
   if (name === "Akhari") {
     return <span className="text-yellow-600 font-semibold">{name}</span>;
+  }
+  if (name === "Blind") {
+    return <span className="text-green-600 font-semibold">{name}</span>;
   }
 
   return name;
@@ -257,7 +261,7 @@ export default function AuditLogsPage() {
         ← Return to Dashboard
       </button>
 
-      <div className="max-w-6xl mx-auto p-8 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg shadow-[0_0_60px_rgba(0,255,100,0.15)]">
+      <div className="max-w-7xl mx-auto p-8 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg shadow-[0_0_60px_rgba(0,255,100,0.15)]">
         <h1 className="text-3xl font-bold text-[#00ff66] mb-6">
           Audit Logs
         </h1>
@@ -345,12 +349,21 @@ export default function AuditLogsPage() {
                 </tr>
               ) : (
                 logs.map((log) => {
-                  let user;
+                  let userName = "Mommy Doombot";
 
-if (log.action === "NEW_MEMBER") {
-  user = log.processor?.name || "Mommy Doombot";
+
+if (
+  log.action === "CERTIFICATION_ASSIGNED" ||
+  log.action === "CERTIFICATION_REVOKED"
+) {
+  userName =
+    log.processor?.name ||
+    log.profiles?.display_name ||
+    "Mommy Doombot";
+} else if (log.action === "NEW_MEMBER") {
+  userName = log.processor?.name || "Mommy Doombot";
 } else {
-  user = log.profiles?.display_name || "Mommy Doombot";
+  userName = log.profiles?.display_name || "Mommy Doombot";
 }
                   const personnelName = log.personnel?.name || "Mommy Doombot";
 
@@ -359,7 +372,7 @@ if (log.action === "NEW_MEMBER") {
                       key={log.id}
                       className="border-b border-[#00ff66]/10 hover:bg-[#00ff66]/5 transition"
                     >
-                      <td className="p-3">{renderName(user)}</td>
+                      <td className="p-3">{renderName(userName)}</td>
                       <td className="p-3">{renderName(personnelName)}</td>
 
                       <td className={`p-3 font-semibold ${getActionStyle(log.action)}`}>

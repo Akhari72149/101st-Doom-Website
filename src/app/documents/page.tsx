@@ -60,6 +60,7 @@ export default function DocumentsPage() {
       ],
       Hammer: [
         { label: "Hammer SOP", href: "https://docs.google.com/document/d/1iRgpcLMDEPJIcPnBUWChFMzFFh1j-IP6O8rl58wOCXU/edit?usp=sharing" },
+        { label: "Ride Along Form", href: "https://forms.gle/FYytpLP1BhKXacu3A" },
       ],
     },
 

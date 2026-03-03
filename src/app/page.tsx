@@ -20,6 +20,7 @@ type Server = {
   players: number;
   maxPlayers: number;
   playerList: string[];
+  missionFile?: string;
 };
 
 export default function HomePage() {
@@ -247,7 +248,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
   useEffect(() => {
     fetchServers();
-    const interval = setInterval(fetchServers, 30000);
+    const interval = setInterval(fetchServers, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -382,41 +383,64 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
           </div>
         </div>
 
-        {/* ✅ EXPANDING SECTION) */}
-        <div
-          className={`grid transition-all duration-300 ${
-            isOpen && server.online
-              ? "grid-rows-[1fr] opacity-100"
-              : "grid-rows-[0fr] opacity-0"
-          }`}
-        >
-          <div className="overflow-hidden">
-            <div className="border-t border-[#00ff66]/20 p-4 text-sm text-gray-300">
-              <div className="text-[#00ff66]">
-                Players Online
-              </div>
+        {/* ✅ EXPANDING SECTION */}
+<div
+  className={`grid transition-all duration-300 ${
+    isOpen && server.online
+      ? "grid-rows-[1fr] opacity-100"
+      : "grid-rows-[0fr] opacity-0"
+  }`}
+>
+  <div className="overflow-hidden">
+    <div className="border-t border-[#00ff66]/20 p-5 text-sm text-gray-300">
 
-<div className="mt-2 text-sm text-[#00ff66] space-y-1 break-words">
-  
-  
-  {server.playerList?.length > 0 ? (
-    server.playerList.map((player, index) => (
-      <div
-        key={`${server.id}-${index}`}
-        className="pl-1 border-l border-[#00ff66]/40"
-      >
-        {player}
+      {/* HEADER */}
+      <div className="text-[#00ff66] mb-3 tracking-wide">
+        Server Population
       </div>
-    ))
-  ) : (
-    <div className="text-gray-400 text-xs">
-      No players connected
+
+    {server.missionFile && (
+  <div className="text-xs text-gray-400 mt-2">
+    Map: {server.missionFile}
+  </div>
+)}
+
+      {/* PLAYER COUNT TEXT */}
+      <div className="flex items-center justify-between text-white text-lg font-semibold">
+        <span>
+          {server.players ?? 0} / {server.maxPlayers || "?"}
+        </span>
+
+        <span className="text-xs text-gray-400">
+          Players Online
+        </span>
+      </div>
+
+      {/* PROGRESS BAR */}
+      <div className="mt-3 w-full h-3 bg-black/70 rounded-full overflow-hidden border border-[#00ff66]/30">
+        <div
+          className="h-full bg-[#00ff66] transition-all duration-500"
+          style={{
+            width:
+              server.maxPlayers && server.maxPlayers > 0
+                ? `${(server.players / server.maxPlayers) * 100}%`
+                : "0%",
+          }}
+        />
+      </div>
+
+      {/* OPTIONAL STATUS TEXT */}
+      <div className="mt-2 text-xs text-gray-400">
+        {server.players === 0
+          ? "Server is empty"
+          : server.players === server.maxPlayers
+          ? "Server is full"
+          : "Server is active"}
+      </div>
+
     </div>
-  )}
+  </div>
 </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -18,7 +18,6 @@ function queryServer(host: string, port: number): Promise<any> {
   return new Promise((resolve) => {
     const socket = dgram.createSocket("udp4");
 
-    // ✅ Track socket state ourselves
     let socketClosed = false;
 
     function safeClose() {
@@ -27,9 +26,7 @@ function queryServer(host: string, port: number): Promise<any> {
 
       try {
         socket.close();
-      } catch (err) {
-        // ignore
-      }
+      } catch {}
     }
 
     const baseRequest = Buffer.from([
@@ -39,7 +36,7 @@ function queryServer(host: string, port: number): Promise<any> {
       0x00,
     ]);
 
-    let timeout = setTimeout(() => {
+    const timeout = setTimeout(() => {
       safeClose();
       resolve(null);
     }, 8000);
@@ -69,7 +66,6 @@ function queryServer(host: string, port: number): Promise<any> {
       /* ================= SERVER INFO ================= */
       if (type === 0x49) {
         let offset = 5;
-
         offset += 1;
 
         const readString = () => {
@@ -79,10 +75,10 @@ function queryServer(host: string, port: number): Promise<any> {
           return str;
         };
 
-        readString();
-        readString();
-        readString();
-        readString();
+        const serverName = readString();
+        const mapName = readString();
+        const folder = readString();
+        const game = readString();
 
         offset += 2;
 
@@ -92,6 +88,8 @@ function queryServer(host: string, port: number): Promise<any> {
         const maxPlayers = msg.readUInt8(offset);
         offset += 1;
 
+        const missionFile = mapName;
+
         const playerRequest = Buffer.from([
           0xff, 0xff, 0xff, 0xff,
           0x55,
@@ -100,88 +98,39 @@ function queryServer(host: string, port: number): Promise<any> {
 
         socket.send(playerRequest, port, host);
 
-        return resolvePlayerListener(players, maxPlayers);
-      }
+        // Wait for player packet
+        socket.once("message", (playerMsg) => {
+          const type = playerMsg[4];
 
-      /* ================= PLAYER RESPONSE ================= */
-      if (type === 0x44) {
-        
-        const playerCount = msg.readUInt8(5);
-        let offset = 3;
+          if (type !== 0x44) {
+            safeClose();
+            resolve({
+              online: true,
+              players,
+              maxPlayers,
+              missionFile: "",
+              playerList: [],
+            });
+            return;
+          }
 
-        const playerList: string[] = [];
+          const playerCount = playerMsg.readUInt8(5);
 
-        for (let i = 0; i < playerCount; i++) {
-          offset += 4;
-
-          const end = msg.indexOf(0x00, offset);
-          const name = msg.toString("utf8", offset, end);
-
-          playerList.push(name);
-          offset = end + 1;
-        }
-
-        safeClose();
-
-        resolve({
-          online: true,
-          players: playerList.length,
-          maxPlayers: 0,
-          playerList,
-        });
-      }
-    });
-
-    function resolvePlayerListener(players: number, maxPlayers: number) {
-      socket.once("message", (playerMsg) => {
-        const type = playerMsg[4];
-
-        if (type !== 0x44) {
           safeClose();
+
+          
           resolve({
             online: true,
-            players,
+            players: playerCount,
             maxPlayers,
+            missionFile,
             playerList: [],
           });
-          return;
-        }
-
-        const playerCount = playerMsg.readUInt8(5);
-        let offset = 6;
-
-        const playerList: string[] = [];
-
-        for (let i = 0; i < playerCount; i++) {
-
-  // Arma / Source player packet format:
-  // 1 byte index
-  // 2 bytes score
-  // 1 byte time connected
-  offset += 1;
-
-  const end = playerMsg.indexOf(0x00, offset);
-  if (end === -1) break;
-
-  const rawName = playerMsg.toString("utf8", offset, end);
-
-  console.log("RAW PLAYER STRING FROM PACKET:", rawName);
-
-  playerList.push(rawName.trim());
-
-  offset = end + 1;
-}
-
-        safeClose();
-
-        resolve({
-          online: true,
-          players,
-          maxPlayers,
-          playerList,
         });
-      });
-    }
+
+        return;
+      }
+    });
 
     socket.on("error", (err) => {
       console.error("UDP Error:", err);
@@ -204,6 +153,7 @@ export async function GET() {
 
       for (const port of ports) {
         console.log(`Querying server ${server.id} on port ${port}`);
+
         const data = await queryServer(server.host, port);
 
         if (data) {

@@ -171,14 +171,16 @@ const filteredPersonnelItems = personnelItems.filter(
   /* ================= SLIDESHOW ================= */
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) =>
-        prev === slides.length - 1 ? 0 : prev + 1
-      );
-    }, 5000);
+  const interval = setInterval(() => {
+    if (document.hidden) return;
 
-    return () => clearInterval(interval);
-  }, []);
+    setCurrentSlide((prev) =>
+      prev === slides.length - 1 ? 0 : prev + 1
+    );
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, [slides.length]);
   
   /* ================= WEEKLY EVENTS (UTC BASED) ================= */
 
@@ -245,7 +247,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
   useEffect(() => {
     fetchServers();
-    const interval = setInterval(fetchServers, 10000);
+    const interval = setInterval(fetchServers, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -342,6 +344,12 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
               <div className="space-y-4">
                 {servers.map((server) => {
   const isOpen = expandedServer === server.id;
+  console.log(
+    "RENDERING SERVER",
+    server.id,
+    "PLAYER LIST:",
+    server.playerList
+  );
   
 
   return (
@@ -374,7 +382,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
           </div>
         </div>
 
-        {/* ✅ EXPANDING SECTION (JUST PLAYER COUNT INFO) */}
+        {/* ✅ EXPANDING SECTION) */}
         <div
           className={`grid transition-all duration-300 ${
             isOpen && server.online
@@ -388,9 +396,24 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
                 Players Online
               </div>
 
-              <div className="mt-2 text-xs font-bold">
-                {server.players} Active Players
-              </div>
+<div className="mt-2 text-sm text-[#00ff66] space-y-1 break-words">
+  
+  
+  {server.playerList?.length > 0 ? (
+    server.playerList.map((player, index) => (
+      <div
+        key={`${server.id}-${index}`}
+        className="pl-1 border-l border-[#00ff66]/40"
+      >
+        {player}
+      </div>
+    ))
+  ) : (
+    <div className="text-gray-400 text-xs">
+      No players connected
+    </div>
+  )}
+</div>
             </div>
           </div>
         </div>

@@ -11,12 +11,26 @@ const SERVERS = [
 ];
 
 /* ===================================================== */
-/* ================== UDP QUERY ======================== */
+/* ================= SAFE SOCKET CLOSE ================== */
 /* ===================================================== */
 
 function queryServer(host: string, port: number): Promise<any> {
   return new Promise((resolve) => {
     const socket = dgram.createSocket("udp4");
+
+    // ✅ Track socket state ourselves
+    let socketClosed = false;
+
+    function safeClose() {
+      if (socketClosed) return;
+      socketClosed = true;
+
+      try {
+        socket.close();
+      } catch (err) {
+        // ignore
+      }
+    }
 
     const baseRequest = Buffer.from([
       0xff, 0xff, 0xff, 0xff,
@@ -26,109 +40,153 @@ function queryServer(host: string, port: number): Promise<any> {
     ]);
 
     let timeout = setTimeout(() => {
-      socket.close();
+      safeClose();
       resolve(null);
-    }, 4000);
+    }, 8000);
 
-    // 🔥 Send initial request
+    let challengeToken: Buffer | null = null;
+
     socket.send(baseRequest, port, host);
 
     socket.on("message", (msg) => {
-
       clearTimeout(timeout);
 
       const type = msg[4];
 
-      /* ===================================================== */
-      /* ============== CHALLENGE RESPONSE (0x41) ============ */
-      /* ===================================================== */
-
+      /* ================= CHALLENGE ================= */
       if (type === 0x41) {
-
-        // Challenge token is usually 4 bytes after header
-        const challenge = msg.slice(5, 9);
+        challengeToken = msg.slice(5);
 
         const challengeRequest = Buffer.concat([
           baseRequest,
-          challenge,
+          challengeToken,
         ]);
 
-        // Resend with challenge
         socket.send(challengeRequest, port, host);
         return;
       }
 
-      /* ===================================================== */
-      /* ================= INFO RESPONSE (0x49) ============== */
-      /* ===================================================== */
-
+      /* ================= SERVER INFO ================= */
       if (type === 0x49) {
+        let offset = 5;
 
+        offset += 1;
 
-        try {
-          let offset = 5;
+        const readString = () => {
+          const end = msg.indexOf(0x00, offset);
+          const str = msg.toString("utf8", offset, end);
+          offset = end + 1;
+          return str;
+        };
 
-          // Skip protocol
-          offset += 1;
+        readString();
+        readString();
+        readString();
+        readString();
 
-          const readString = () => {
-            const end = msg.indexOf(0x00, offset);
-            const str = msg.toString("utf8", offset, end);
-            offset = end + 1;
-            return str;
-          };
+        offset += 2;
 
-          // Server metadata
-          readString(); // server name
-          readString(); // map
-          readString(); // folder
-          readString(); // game
+        const players = msg.readUInt8(offset);
+        offset += 1;
 
-          // Skip app id
-          offset += 2;
+        const maxPlayers = msg.readUInt8(offset);
+        offset += 1;
 
-          const players = msg[offset];
-          offset += 1;
+        const playerRequest = Buffer.from([
+          0xff, 0xff, 0xff, 0xff,
+          0x55,
+          ...(challengeToken ?? []),
+        ]);
 
-          const maxPlayers = msg[offset];
-          offset += 1;
+        socket.send(playerRequest, port, host);
 
+        return resolvePlayerListener(players, maxPlayers);
+      }
 
+      /* ================= PLAYER RESPONSE ================= */
+      if (type === 0x44) {
+        
+        const playerCount = msg.readUInt8(5);
+        let offset = 3;
 
-          socket.close();
+        const playerList: string[] = [];
 
+        for (let i = 0; i < playerCount; i++) {
+          offset += 4;
+
+          const end = msg.indexOf(0x00, offset);
+          const name = msg.toString("utf8", offset, end);
+
+          playerList.push(name);
+          offset = end + 1;
+        }
+
+        safeClose();
+
+        resolve({
+          online: true,
+          players: playerList.length,
+          maxPlayers: 0,
+          playerList,
+        });
+      }
+    });
+
+    function resolvePlayerListener(players: number, maxPlayers: number) {
+      socket.once("message", (playerMsg) => {
+        const type = playerMsg[4];
+
+        if (type !== 0x44) {
+          safeClose();
           resolve({
             online: true,
             players,
             maxPlayers,
             playerList: [],
           });
-
           return;
-        } catch (err) {
-          console.error("Parsing error:", err);
-          socket.close();
-          resolve(null);
         }
-      }
 
-      /* ===================================================== */
-      /* ============= UNKNOWN RESPONSE (FALLBACK) =========== */
-      /* ===================================================== */
+        const playerCount = playerMsg.readUInt8(5);
+        let offset = 6;
 
-      socket.close();
-      resolve({
-        online: true,
-        players: 0,
-        maxPlayers: 0,
-        playerList: [],
+        const playerList: string[] = [];
+
+        for (let i = 0; i < playerCount; i++) {
+
+  // Arma / Source player packet format:
+  // 1 byte index
+  // 2 bytes score
+  // 1 byte time connected
+  offset += 1;
+
+  const end = playerMsg.indexOf(0x00, offset);
+  if (end === -1) break;
+
+  const rawName = playerMsg.toString("utf8", offset, end);
+
+  console.log("RAW PLAYER STRING FROM PACKET:", rawName);
+
+  playerList.push(rawName.trim());
+
+  offset = end + 1;
+}
+
+        safeClose();
+
+        resolve({
+          online: true,
+          players,
+          maxPlayers,
+          playerList,
+        });
       });
-    });
+    }
 
     socket.on("error", (err) => {
-      console.error("Socket error:", err);
+      console.error("UDP Error:", err);
       clearTimeout(timeout);
-      socket.close();
+      safeClose();
       resolve(null);
     });
   });
@@ -145,6 +203,7 @@ export async function GET() {
       const ports = [server.basePort, server.basePort + 1];
 
       for (const port of ports) {
+        console.log(`Querying server ${server.id} on port ${port}`);
         const data = await queryServer(server.host, port);
 
         if (data) {

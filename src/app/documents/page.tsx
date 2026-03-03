@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 
 type DocumentItem = {
   label: string;
@@ -120,7 +121,12 @@ export default function DocumentsPage() {
 
       <div className="relative z-10 w-full max-w-5xl p-10">
 
-        <h1 className="text-5xl md:text-6xl text-[#00ff66] tracking-[0.4em] text-center mb-8">
+        <h1 className="text-5xl md:text-6xl
+               text-transparent bg-clip-text
+               bg-gradient-to-r from-[#00ff66] to-[#00ffaa]
+               tracking-[0.4em]
+               text-center mb-8
+               drop-shadow-[0_0_15px_rgba(0,255,100,0.6)]">
           DOCUMENTS & FORMS
         </h1>
 
@@ -148,11 +154,11 @@ export default function DocumentsPage() {
                     setActiveMosTab("Medic");
                   }
                 }}
-                className={`px-6 py-2 rounded-lg border transition-all duration-300
-                  ${
-                    activeTab === tab.key
-                      ? "bg-[#00ff66] text-black border-[#00ff66]"
-                      : "border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66] hover:text-black"
+                className={`px-6 py-2 rounded-full border backdrop-blur-sm transition-all duration-300
+                 ${
+                   activeTab === tab.key
+                   ? "bg-[#00ff66] text-black border-[#00ff66] shadow-[0_0_20px_rgba(0,255,100,0.6)]"
+                   : "border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10 hover:scale-105"
                   }`}
               >
                 {tab.label}
@@ -167,11 +173,11 @@ export default function DocumentsPage() {
                 <button
                   key={mosTab}
                   onClick={() => setActiveMosTab(mosTab)}
-                  className={`px-4 py-2 rounded-lg border transition-all duration-300
+                  className={`px-4 py-2 rounded-full border backdrop-blur-sm transition-all duration-300
                     ${
                       activeMosTab === mosTab
-                        ? "bg-[#00ff66] text-black border-[#00ff66]"
-                        : "border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66] hover:text-black"
+                        ? "bg-[#00ff66] text-black border-[#00ff66] shadow-[0_0_15px_rgba(0,255,100,0.6)]"
+                        : "border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10 hover:scale-105"
                     }`}
                 >
                   {mosTab}
@@ -187,12 +193,19 @@ export default function DocumentsPage() {
                 key={index}
                 href={doc.href}
                 target="_blank"
-                className="block p-4 rounded-xl border border-[#00ff66]/30
-                           text-[#00ff66] hover:bg-[#00ff66]
-                           hover:text-black hover:scale-[1.02]
+                className="block p-5 rounded-2xl border border-[#00ff66]/20
+                           bg-black/40 backdrop-blur-md
+                           text-[#00ff66]
+                           hover:bg-[#00ff66]/10
+                           hover:border-[#00ff66]/60
+                           hover:scale-[1.03]
+                           hover:shadow-[0_0_25px_rgba(0,255,100,0.3)]
                            transition-all duration-300"
               >
-                {doc.label}
+                <div className="flex justify-between items-center">
+                 <span>{doc.label}</span>
+                  <ExternalLink className="w-4 h-4 opacity-60" />
+                </div>
               </a>
             ))}
           </div>

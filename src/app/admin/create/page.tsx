@@ -53,6 +53,14 @@ useEffect(() => {
   loadProcessors();
 }, [importFromDiscord]);
 
+  /* ================= Rank Block on import toggle ================= */
+
+useEffect(() => {
+  if (importFromDiscord) {
+    setRankId(""); // Clear rank if importing
+  }
+}, [importFromDiscord]);
+
   /* ================= AUTH CHECK ================= */
 
 useEffect(() => {
@@ -96,6 +104,11 @@ useEffect(() => {
   /* ================= CREATE ================= */
 
   const createUser = async () => {
+    if (!selectedProcessor) {
+     alert("You must select who processed this form.");
+     return;
+    }
+
     if (!birthNumber || !name) {
       alert("Birth Number and Name are required!");
       return;
@@ -259,7 +272,10 @@ if (importData?.error) {
         <h1 className="text-3xl font-bold text-[#00ff66] mb-8 tracking-widest">
           Create New Personnel
         </h1>
-
+          <h2 className="text-sm uppercase tracking-widest text-[#00ff66]/70 mb-4 border-b border-[#00ff66]/20 pb-2">
+              Basic Information
+           </h2>
+           
         {/* DISCORD ID */}
         <div className="mb-6">
           <label className="block mb-2 text-sm text-gray-300">
@@ -287,46 +303,65 @@ if (importData?.error) {
         </div>
 
         {/* CHECKBOXES */}
-        <div className="mb-6 flex flex-col gap-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={skipRoleSync}
-              onChange={(e) => setSkipRoleSync(e.target.checked)}
-              className="accent-[#00ff66]"
-            />
-            Skip Discord Role Assignment
-          </label>
+<div className="mb-6 flex flex-col gap-4">
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={importFromDiscord}
-              onChange={(e) => setImportFromDiscord(e.target.checked)}
-              className="accent-[#00ff66]"
-            />
-            Import Rank + Certifications From Discord
-          </label>
-        </div>
+  {/* Import From Discord */}
+  <label className="flex items-center justify-between cursor-pointer">
+    <span className={importFromDiscord ? "text-[#00ff66]" : ""}>
+      Import Rank + Certifications From Discord
+    </span>
+
+    <div className="relative">
+      <input
+        type="checkbox"
+        checked={importFromDiscord}
+        onChange={(e) => setImportFromDiscord(e.target.checked)}
+        className="sr-only"
+      />
+
+      <div
+        className={`w-12 h-6 rounded-full p-1 transition-all duration-200
+          ${importFromDiscord
+            ? "bg-[#00ff66]"
+            : "bg-black border border-[#00ff66]"}
+        `}
+      >
+        <div
+          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-all duration-200
+            ${importFromDiscord ? "translate-x-6" : ""}
+          `}
+        />
+      </div>
+    </div>
+  </label>
+  
+
+</div>
 
         {/* RANK */}
         <div className="mb-6">
           <label className="block mb-2 text-sm text-gray-300">
-            Rank (Don't select if importing)
-          </label>
+  Rank {importFromDiscord && "(Disabled - importing from Discord)"}
+</label>
 
           <select
-            value={rankId}
-            onChange={(e) => setRankId(e.target.value)}
-            className="w-full p-4 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66]"
-          >
-            <option value="">-- Select Rank --</option>
-            {ranks.map((rank) => (
-              <option key={rank.id} value={rank.id}>
-                {rank.name}
-              </option>
-            ))}
-          </select>
+  value={rankId}
+  onChange={(e) => setRankId(e.target.value)}
+  disabled={importFromDiscord}
+  className={`w-full p-4 rounded-xl text-[#00ff66] transition-all duration-200
+    ${importFromDiscord
+      ? "bg-black/40 border border-gray-700 text-gray-500 cursor-not-allowed opacity-60"
+      : "bg-black/60 border border-[#00ff66]/30 focus:outline-none focus:border-[#00ff66] focus:shadow-[0_0_10px_#00ff66]"
+    }
+  `}
+>
+  <option value="">-- Select Rank --</option>
+  {ranks.map((rank) => (
+    <option key={rank.id} value={rank.id}>
+      {rank.name}
+    </option>
+  ))}
+</select>
         </div>
 
         {/* BIRTH NUMBER */}
@@ -400,9 +435,15 @@ if (importData?.error) {
 
 {/* PROCESSOR SELECTION */}
 <div className="mb-6">
+
+  
   <label className="block mb-2 text-sm text-gray-300">
     Who Processed This Form?
   </label>
+
+<p className="text-xs text-[#00ff66]/60 mb-2">
+  Required for audit tracking
+</p>
 
   <select
     value={selectedProcessor}
@@ -424,11 +465,16 @@ if (importData?.error) {
 
         {/* CREATE BUTTON */}
         <button
-          onClick={createUser}
-          className="w-full py-4 rounded-xl bg-[#00ff66]/10 border border-[#00ff66] text-[#00ff66] font-bold hover:bg-[#00ff66] hover:text-black"
-        >
-          Create Personnel
-        </button>
+  onClick={createUser}
+  disabled={!selectedProcessor}
+  className={`w-full py-4 rounded-xl font-bold transition-all duration-200
+  ${selectedProcessor
+    ? "bg-[#00ff66]/10 border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:shadow-[0_0_25px_#00ff66]"
+    : "bg-gray-700 border border-gray-600 text-gray-400 cursor-not-allowed"
+  }`}
+>
+  Create Personnel
+</button>
 
       </div>
     </div>

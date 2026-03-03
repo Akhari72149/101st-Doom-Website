@@ -249,11 +249,17 @@ useEffect(() => {
         ← Return to Dashboard
       </button>
 
-      <div className="max-w-6xl mx-auto p-8 rounded-3xl border border-[#00ff66]/20 bg-black/60 backdrop-blur-xl">
+      <div className="max-w-7xl mx-auto p-8 rounded-3xl border border-[#00ff66]/20 bg-black/60 backdrop-blur-xl">
 
-        <h1 className="text-3xl font-bold mb-10 text-[#00ff66]">
-          Certification Management
-        </h1>
+  <h1 className="text-3xl font-bold mb-10 text-[#00ff66]">
+    Certification Management
+  </h1>
+
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        
+
+                {/* LEFT COLUMN */}
+      <div>
 
         {/* SEARCH PERSONNEL */}
         <div className="mb-8">
@@ -311,7 +317,7 @@ useEffect(() => {
 
 {/* TRAINER SELECTION - SHOW AFTER PERSON IS SELECTED */}
 {selectedPerson && (
-  <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/40">
+  <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/30">
     <h2 className="text-sm text-gray-400 mb-2">
       Select Trainer Who Is Assigning
     </h2>
@@ -332,7 +338,7 @@ useEffect(() => {
     />
 
     {/* Trainer List */}
-    <div className="max-h-40 overflow-y-auto">
+    <div className="max-h-160 overflow-y-auto">
       {trainerPersonnel
         .filter((trainer) =>
           trainer.name
@@ -376,36 +382,51 @@ useEffect(() => {
   </div>
 )}
 
-        {/* CURRENT CERTIFICATIONS */}
-        {selectedPerson && (
-          <div className="mb-10 p-6 rounded-2xl border border-[#00ff66]/20 bg-black/50">
-            <h2 className="text-xl mb-6 text-[#00ff66] font-semibold">
-              Current Certifications
-            </h2>
+</div>
 
-            {personCerts.length === 0 ? (
-              <p className="text-gray-400">
-                No certifications assigned.
-              </p>
-            ) : (
-              personCerts.map((pc) => (
-                <div
-                  key={pc.id}
-                  className="flex justify-between items-center mb-4"
-                >
-                  <span>{pc.certification?.name}</span>
+{/* RIGHT COLUMN */}
+<div>
 
-                  <button
-                    onClick={() => revokeCertification(pc.id)}
-                    className="px-4 py-1 rounded-lg border border-red-600 text-red-500 hover:bg-red-600 hover:text-black"
-                  >
-                    Revoke
-                  </button>
-                </div>
-              ))
-            )}
+{/* CURRENT CERTIFICATIONS */}
+{selectedPerson && (
+  <div className="mb-10 p-6 rounded-2xl border border-[#00ff66]/20 bg-black/50">
+    <h2 className="text-xl mb-4 text-[#00ff66] font-semibold">
+      Current Certifications
+    </h2>
+
+    {personCerts.length === 0 ? (
+      <p className="text-gray-400">
+        No certifications assigned.
+      </p>
+    ) : (
+      <div className="max-h-60 overflow-y-auto border border-[#00ff66]/20 rounded-xl p-3 bg-black/40">
+        {personCerts.map((pc) => (
+          <div
+            key={pc.id}
+            className="p-3 rounded-lg mb-2 border border-[#00ff66]/30 bg-[#00ff66]/10 flex justify-between items-center transition hover:bg-[#00ff66]/20"
+          >
+            <div className="flex flex-col">
+              <span className="font-medium text-white">
+                {pc.certification?.name}
+              </span>
+
+              <span className="text-xs text-[#00ff66]/70">
+                ✔ Certified
+              </span>
+            </div>
+
+            <button
+              onClick={() => revokeCertification(pc.id)}
+              className="px-3 py-1 rounded-lg border border-red-600 text-red-500 text-sm hover:bg-red-600 hover:text-black transition"
+            >
+              Revoke
+            </button>
           </div>
-        )}
+        ))}
+      </div>
+    )}
+  </div>
+)}
 
         {/* ASSIGN CERTIFICATIONS (HIDDEN UNTIL PERSON SELECTED) */}
         {selectedPerson && (
@@ -433,7 +454,7 @@ useEffect(() => {
             />
 
             {/* AVAILABLE CERTS */}
-            <div className="max-h-60 overflow-y-auto border border-[#00ff66]/20 rounded-xl p-3 mb-4 bg-black/40">
+            <div className="max-h-84 overflow-y-auto border border-[#00ff66]/20 rounded-xl p-3 mb-4 bg-black/40">
               {(filteredCerts.length ? filteredCerts : certifications)
                 .filter(
                   (c) =>
@@ -510,7 +531,9 @@ useEffect(() => {
             </button>
           </div>
         )}
+        </div> {/* END GRID */}
       </div>
+    </div>
     </div>
   );
 }

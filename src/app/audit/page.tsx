@@ -265,13 +265,21 @@ export default function AuditLogsPage() {
         <h1 className="text-3xl font-bold text-[#00ff66] mb-6">
           Audit Logs
         </h1>
+        {hasActiveFilter && (
+           <div className="text-sm text-gray-400 mb-4">
+                Showing {logs.length} log entries
+           </div>
+        )}
 
         {/* FILTERS */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <select
             value={selectedUser}
             onChange={(e) => setSelectedUser(e.target.value)}
-            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white"
+            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 
+           text-white 
+           focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 
+           hover:border-[#00ff66] transition"
           >
             <option value="all">All Users</option>
             {users.map((user) => (
@@ -284,7 +292,10 @@ export default function AuditLogsPage() {
           <select
             value={selectedAction}
             onChange={(e) => setSelectedAction(e.target.value)}
-            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white"
+            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 
+           text-white 
+           focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 
+           hover:border-[#00ff66] transition"
           >
             <option value="all">All Actions</option>
             {actions.map((action) => (
@@ -300,9 +311,20 @@ export default function AuditLogsPage() {
             onChange={(e) =>
               setSelectedDate(e.target.value || "all")
             }
-            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white"
+            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 
+           text-white 
+           focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 
+           hover:border-[#00ff66] transition"
           />
         </div>
+
+        {hasActiveFilter && (
+           <div className="mb-4">
+            <span className="px-3 py-1 rounded-full bg-[#00ff66]/10 border border-[#00ff66]/30 text-sm text-[#00ff66]">
+          Filters Active
+        </span>
+      </div>
+    )}
 
         <button
           onClick={() => {
@@ -343,9 +365,15 @@ export default function AuditLogsPage() {
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-6 text-center text-gray-400">
-                    No logs found.
-                  </td>
+                  <td colSpan={5} className="p-10 text-center">
+  <div className="flex flex-col items-center justify-center text-gray-400">
+    <div className="text-4xl mb-3 opacity-50">📭</div>
+    <div className="text-lg font-medium">No logs found</div>
+    <div className="text-sm opacity-60">
+      Try adjusting your filters
+    </div>
+  </div>
+</td>
                 </tr>
               ) : (
                 logs.map((log) => {
@@ -370,14 +398,20 @@ if (
                   return (
                     <tr
                       key={log.id}
-                      className="border-b border-[#00ff66]/10 hover:bg-[#00ff66]/5 transition"
+                      className="border-b border-[#00ff66]/10 
+           odd:bg-black/40 
+           even:bg-black/60 
+           hover:bg-[#00ff66]/10 
+           transition"
                     >
                       <td className="p-3">{renderName(userName)}</td>
                       <td className="p-3">{renderName(personnelName)}</td>
 
-                      <td className={`p-3 font-semibold ${getActionStyle(log.action)}`}>
-                        {log.action}
-                      </td>
+                      <td className="p-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getActionStyle(log.action)} bg-black/40 border`}>
+                           {log.action}
+                          </span>
+                       </td>
 
                       <td className="p-3 text-sm">
                         <span className="px-2 py-1 rounded-lg bg-[#00ff66]/10 border border-[#00ff66]/20">

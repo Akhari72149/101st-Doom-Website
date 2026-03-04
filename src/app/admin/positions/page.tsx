@@ -132,7 +132,7 @@ export default function PositionEditor() {
       for (const sub of section.children || []) {
         for (const role of sub.roles || []) {
           if (role.slotId === slotId) {
-            return `${section.title} — ${role.role}`;
+            return `${section.title} — ${sub.title} — ${role.role}`;
           }
         }
       }

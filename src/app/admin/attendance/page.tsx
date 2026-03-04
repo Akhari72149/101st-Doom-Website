@@ -181,7 +181,7 @@ export default function AttendancePage() {
       <select
         value={selectedMonth}
         onChange={(e) => setSelectedMonth(e.target.value)}
-        className="bg-black border border-green-500 text-white px-4 py-2 rounded-lg"
+        className="bg-black/60 border border-[#00ff66]/40 text-[#00ff66] px-4 py-2 rounded-lg backdrop-blur-md"
       >
         {["January","February","March","April","May","June",
           "July","August","September","October","November","December"
@@ -193,7 +193,7 @@ export default function AttendancePage() {
       <select
         value={selectedWeek}
         onChange={(e) => setSelectedWeek(Number(e.target.value))}
-        className="bg-black border border-green-500 text-white px-4 py-2 rounded-lg"
+        className="bg-black/60 border border-[#00ff66]/40 text-[#00ff66] px-4 py-2 rounded-lg backdrop-blur-md"
       >
         {[1,2,3,4,5].map((w) => (
           <option key={w} value={w}>
@@ -205,7 +205,7 @@ export default function AttendancePage() {
       <select
         value={selectedType}
         onChange={(e) => setSelectedType(e.target.value)}
-        className="bg-black border border-green-500 text-white px-4 py-2 rounded-lg"
+        className="bg-black/60 border border-[#00ff66]/40 text-[#00ff66] px-4 py-2 rounded-lg backdrop-blur-md"
       >
         <option value="Training">Training</option>
         <option value="MainOp">MainOp</option>
@@ -226,7 +226,18 @@ export default function AttendancePage() {
   /* ================= RENDER ================= */
 
   return (
-    <motion.div className="min-h-screen text-white p-12">
+  <motion.div className="relative min-h-screen flex text-white font-orbitron">
+
+    {/* Background image */}
+    <div
+      className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-20 pointer-events-none z-0"
+      style={{ backgroundImage: "url('/background/bg.jpg')" }}
+    />
+
+    {/* Radial gradient */}
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] z-0" />
+
+    <div className="relative z-10 w-full p-12">
 
 
       <button
@@ -236,7 +247,7 @@ export default function AttendancePage() {
         ← Return to Dashboard
       </button>
 
-      <h1 className="text-4xl text-green-400 text-center mb-10">
+      <h1 className="text-4xl font-bold text-[#00ff66] tracking-widest text-center mb-10">
         ROSTER ATTENDANCE
       </h1>
 
@@ -254,7 +265,12 @@ export default function AttendancePage() {
                   setActiveTab(tab);
                   setActiveSquad(null);
                 }}
-                className="w-full px-6 py-4 bg-black border border-green-500 text-green-400 rounded-xl"
+                className="w-full px-6 py-4 rounded-2xl
+           border border-[#00ff66]/30
+           bg-black/60 backdrop-blur-md
+           text-[#00ff66]
+           hover:border-[#00ff66]
+           transition-all duration-300"
               >
                 {tab}
               </button>
@@ -268,11 +284,11 @@ export default function AttendancePage() {
                         setActiveTab(tab);
                         setActiveSquad(squad);
                       }}
-                      className={`px-5 py-2 rounded-lg border text-sm text-left ${
+                      className={`px-5 py-2 rounded-xl border text-sm text-left transition-all duration-300 ${
                         activeSquad === squad
-                          ? "bg-green-500 text-black"
-                          : "bg-black text-green-400"
-                      }`}
+                        ? "bg-[#00ff66] text-black"
+                        : "bg-black/60 backdrop-blur-md border-[#00ff66]/40 text-[#00ff66] hover:border-[#00ff66]"
+                        }`}
                     >
                       {squad}
                     </button>
@@ -324,7 +340,7 @@ export default function AttendancePage() {
           ))}
         </div>
       )}
-
+        </div>
     </motion.div>
   );
 }

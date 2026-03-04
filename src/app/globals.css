@@ -91,7 +91,7 @@ body::after {
   animation: ticker 30s linear infinite;
 }
 
-/* ================= GLOW EFFECT (FOR YOUR BOXES) ================= */
+/* ================= GLOW EFFECT (BOXES) ================= */
 
 .glow-border {
   border: 1px solid rgba(0, 255, 102, 0.3);
@@ -104,7 +104,7 @@ body::after {
   box-shadow: 0 0 50px rgba(0, 255, 102, 0.5);
 }
 
-/* ================= Fadein animation ================= */
+/* ================= FADE IN ================= */
 
 @keyframes fade-in {
   from {
@@ -119,4 +119,29 @@ body::after {
 
 .animate-fade-in {
   animation: fade-in 0.4s ease-out;
+}
+
+/* ================= SERVICE BAR SHINE (FIXED) ================= */
+
+@keyframes shineMove {
+  0% {
+    transform: translateX(-200%);
+  }
+  100% {
+    transform: translateX(485%);
+  }
+}
+
+.shine-effect {
+  position: absolute;
+  inset: 0;
+  width: 20%;
+  background: linear-gradient(
+    110deg,
+    transparent 10%,
+    rgba(255, 255, 255, 0.9) 50%,
+    transparent 40%
+  );
+  animation: shineMove 4s linear infinite;
+  pointer-events: none;
 }

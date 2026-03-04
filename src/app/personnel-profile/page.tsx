@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
@@ -11,7 +11,26 @@ export default function PersonnelProfile() {
   const [search, setSearch] = useState("");
   const [selectedPerson, setSelectedPerson] = useState<any>(null);
   const [certifications, setCertifications] = useState<any[]>([]);
+  const [plasmaParticles, setPlasmaParticles] = useState<
+  { x: number; size: number }[]
+>([]);
   const [rankHistory, setRankHistory] = useState<any[]>([]);
+const getServiceColor = (totalMonths: number) => {
+  if (totalMonths <= 12) return "#00ff66"; 
+  if (totalMonths <= 36) return "#aeff00";     
+  if (totalMonths <= 60) return "#ffcc00";
+   if (totalMonths <= 80) return "#ffa200";
+  return "#ff0000";
+};
+const getServiceGlow = (totalMonths: number) => {
+  if (totalMonths <= 12) return "0 0 6px #00ff66";
+  if (totalMonths <= 36) return "0 0 10px #aeff00";
+  if (totalMonths <= 60) return "0 0 14px #ffcc00";
+  if (totalMonths <= 80) return "0 0 18px #ffa200";
+  return "0 0 22px #ff0000";
+};
+const isTopTier = (totalMonths: number) => totalMonths > 80;
+
   const [activeTab, setActiveTab] = useState<
   "qual" | "trainer" | "rank"
 >("qual");
@@ -90,15 +109,48 @@ setRankHistory(history || []);
   const formatDate = (date: string | null) =>
     date ? new Date(date).toLocaleDateString() : "N/A";
 
-  const calculateServiceYears = (date: string | null) => {
-    if (!date) return 0;
-    const now = new Date();
-    const then = new Date(date);
-    return Math.floor(
-      (now.getTime() - then.getTime()) /
-        (1000 * 60 * 60 * 24 * 365)
-    );
-  };
+const calculateServiceDuration = (date: string | null) => {
+  if (!date) return { years: 0, months: 0 };
+
+  const now = new Date();
+  const then = new Date(date);
+
+  let years = now.getFullYear() - then.getFullYear();
+  let months = now.getMonth() - then.getMonth();
+
+
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+
+  if (years < 0) return { years: 0, months: 0 };
+
+  return { years, months };
+};
+
+const generatePlasma = () => {
+  const count = Math.floor(Math.random() * 5) + 3; // 3–7 plasma blobs
+
+  const particles = Array.from({ length: count }).map(() => ({
+    x: Math.random() * 100,
+    size: 10 + Math.random() * 25,
+  }));
+
+  setPlasmaParticles(particles);
+};
+
+useEffect(() => {
+  generatePlasma();
+
+  const interval = setInterval(() => {
+    generatePlasma();
+  }, 1800); // refresh plasma every ~2s
+
+  return () => clearInterval(interval);
+}, []);
+
+
 
   const getBilletFromSlot = (slotId: string | null) => {
     if (!slotId) return "Unassigned";
@@ -168,7 +220,7 @@ setRankHistory(history || []);
       </button>
 
       <h1 className="text-4xl font-bold mb-8 text-[#00ff66] tracking-widest">
-        PERSONNEL DOSSIER
+        PERSONNEL PROFILE
       </h1>
 
       <input
@@ -268,29 +320,47 @@ setRankHistory(history || []);
               </div>
 
               <div>
-                <p className="text-xs text-gray-400 tracking-widest">
-                  YEARS OF SERVICE
-                </p>
-                <div className="w-full bg-[#001a0a] h-5 rounded-xl overflow-hidden mt-2">
-                  <div
-                    className="bg-[#00ff66] h-full"
-                    style={{
-                      width: `${Math.min(
-                        calculateServiceYears(selectedPerson.created_at) * 10,
-                        100
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <p className="text-sm mt-2 text-[#00ff66]">
-                  {calculateServiceYears(selectedPerson.created_at)} Years
-                </p>
-              </div>
+  <p className="text-xs text-gray-400 tracking-widest">
+    SERVICE DURATION
+  </p>
+
+  {(() => {
+    const { years, months } = calculateServiceDuration(
+      selectedPerson.created_at
+    );
+
+    const totalMonths = years * 12 + months;
+    const barColor = getServiceColor(totalMonths);
+
+    return (
+      <>
+        <div className="w-full bg-[#001a0a] h-5 rounded-xl overflow-hidden mt-2 relative">
+
+          <div
+            className="h-full relative overflow-hidden"
+            style={{
+              width: `${Math.min(totalMonths / 1.2, 100)}%`,
+              backgroundColor: barColor,
+            }}
+          >
+
+            <div className="shine-effect" />
+          </div>
+        </div>
+
+        <p className="text-sm mt-2" style={{ color: barColor }}>
+          {years} Year{years !== 1 ? "s" : ""}{" "}
+          {months} Month{months !== 1 ? "s" : ""}
+        </p>
+      </>
+    );
+  })()}
+</div>
 
             </div>
           </div>
 
-          {/* TAB SECTION — ONLY ADDITION IS TRAINER TAB */}
+
 
           <div className="p-8 rounded-2xl bg-black/50 border border-[#00ff66]/30">
 

@@ -230,7 +230,7 @@ export default function SideOperationPage() {
         </div>
 
         <h2 className="text-[#00ff66] mb-4 tracking-wider">
-          Volunteers ({signups.length})
+          Current Sign-Up Count ({signups.length})
         </h2>
 
         <div className="space-y-3 max-h-80 overflow-y-auto">

@@ -13,7 +13,25 @@ type TabItem = {
   label: string;
   rank: string;
   image: string;
+  description: string;
 };
+
+
+/* ================= Formatting ================= */
+
+const unit = (
+  key: string,
+  label: string,
+  rank: string,
+  image: string,
+  description: string = ""
+): TabItem => ({
+  key,
+  label,
+  rank,
+  image: `/WWA/${image}`,
+  description,
+});
 
 /* ================= CATEGORIES ================= */
 
@@ -27,36 +45,287 @@ const categories: { key: CategoryKey; label: string }[] = [
 
 const tabs: Record<CategoryKey, TabItem[]> = {
   CERT: [
-    { key: "U3", label: "Support", rank: "CT", image: "/WWA/support.jpg" },
-    { key: "U4", label: "Anti-Tank", rank: "CT", image: "/WWA/at.jpg" },
-    { key: "U5", label: "Grenadier", rank: "CT", image: "/WWA/gren.jpg" },
-    { key: "U6", label: "Marksman", rank: "CT", image: "/WWA/Mark.jpg" },
-    { key: "U7", label: "Combat Engineer", rank: "CST", image: "/WWA/ce.jpg" },
-    { key: "U8", label: "IFV", rank: "CST", image: "/WWA/placeholder.jpg" },
-    { key: "U9", label: "MBT", rank: "VCT", image: "/WWA/mbt.jpg" },
-    { key: "U10", label: "IDF", rank: "CST", image: "/WWA/IDF.jpg" },
-    { key: "U11", label: "AV-7", rank: "VCT", image: "/WWA/placeholder.jpg" },
-    { key: "U12", label: "Drone Operator", rank: "VCT", image: "/WWA/placeholder.jpg" },
-    { key: "U13", label: "Weaponised Drone", rank: "VCT", image: "/WWA/placeholder.jpg" },
-    { key: "U23", label: "Forge", rank: "VCT", image: "/WWA/forge.jpg" },
-    { key: "U14", label: "Adv. Gren", rank: "VCT", image: "/WWA/placeholder.jpg" },
-    { key: "U15", label: "Adv. Support", rank: "CSP", image: "/WWA/placeholder.jpg" },
-    { key: "U16", label: "Adv. Marksman", rank: "VCT", image: "/WWA/placeholder.jpg" },
+    unit(
+      "U3",
+      "Support",
+      "CT",
+      "support.jpg",
+      `This qualification allows the user access to the below weapons:
+
+• Z6 Rotary Blaster
+• Z8 Rotary Cannon
+• Z6IM
+• DC-15A Mod 0
+• DC-15L
+• AMT Cyclone
+• DLT-19
+• MG5 Zakkeg`
+    ),
+
+    unit(
+      "U4",
+      "Anti-Tank",
+      "CT",
+      "at.jpg",
+      `This qualification allows the user access to the below weapons:
+
+• DBA RPS-6 Prototype
+• DBA IPM-5x
+• DBA Sando Guided Rocket Launcher`
+    ),
+
+    unit(
+      "U5",
+      "Grenadier",
+      "CT",
+      "gren.jpg",
+      `This qualification allows the user access to the below weapons:
+
+• DBA DC-15A GL
+• DBA DC-15S GL
+• DBA Boma Shotgun GL
+• DBA DC-15C GL
+• DBA DP-23G
+• DBA Westar M5-G UGL - Must be CSS+`
+    ),
+
+    unit(
+      "U6",
+      "Marksman",
+      "CT",
+      "Mark.jpg",
+      `This qualification allows the user access to the below weapons:
+
+• DBA DC-15 LE
+• DBA Verpine DMR
+• ATM Jaeger`
+    ),
+
+    unit(
+      "U7",
+      "Combat Engineer",
+      "CST",
+      "ce.jpg",
+      `This qualification grants the user access to mines, the L-2F Flamethrower Primary, and the Fortify Tool, allowing you to build advanced deffensive and offensive fortifications.
+       
+      Further equipped with the mine detector, you take point when it comes to navigating through enemy minefields.`
+    ),
+
+    unit(
+      "U8",
+      "IFV",
+      "CST",
+      "placeholder.jpg",
+      `This qualification grants the user access to all available Infanty Fighting Vehicles currently at our disposal.
+      This includes but is not limited to:
+• DBA Overseer
+• DBA Warrior
+• DBA TX-130 Series
+• AMT PK-V5 Shredder
+• AMT PK-V5 Striker
+• AMT PK-V5 Sickle`
+    ),
+
+    unit(
+      "U9",
+      "MBT",
+      "VCT",
+      "mbt.jpg",
+      `This qualification grants the user access to all available Main Battle Tanks currently at our disposal.
+      This includes but is not limited to:
+• DBA Lepoard
+• DBA Merkava
+• DBA T-14
+• DBA TX-130M
+• DBA UT-AT
+• DBA AT-AT
+• AMT PK-V5 Stormer`
+    ),
+
+    unit(
+      "U10",
+      "IDF",
+      "CST",
+      "IDF.jpg",
+      `This qualification allows the user access to the below Mortar Tubes/Vehicles:
+
+• DBA IDW-224A1 light Mortar
+
+• DBA IDW-61LL infantry Mortar
+
+• DBA IDW-327F Heavy Mortar
+
+• The 327F requires a second person to carry the 327F Baseplate
+
+• DBA IDW-327F Heavy Mortar
+
+• DBA MLRS Mortar Vehicle - Range between 400m to 46000m
+
+• DBA Seara - Precision Missile Mortar Vehicle - Range between 1000m to 67000m
+
+• AMT PK-V5 Salamander - Precission Missile Mortar Vehicle - Range between 1000m to 67000m`
+    ),
+
+    unit(
+      "U11",
+      "AV-7",
+      "VCT",
+      "placeholder.jpg",
+      `This qualification allows the user access to the below advanced Mortar Vehicles:
+
+• DBA AV-7 - Mortar Vehicle - Minimum range of 1000m
+• DBA Sheolef - Mortar Tank - Minimum range of 1000m`
+    ),
+
+    unit(
+      "U12",
+      "Drone Operator",
+      "VCT",
+      "placeholder.jpg",
+      `This qualification allows the user access to the below drones:
+
+• AR-2 Portable drone (Air)
+• AR-6 Portable drone (Air)
+• UGV Stomper (Ground)`
+    ),
+
+    unit(
+      "U13",
+      "Weaponised Drone",
+      "VCT",
+      "placeholder.jpg",
+      `This qualification allows the user access to the below weaponised drones:
+
+• DBA UGV Weaponised Stomer (Ground vic with a mounted M2)
+• MQ-12 Falcon (Air)
+• F-99 Wombat (Air)
+• Yabhon-R3 (Air)`
+    ),
+
+    unit(
+      "U26",
+      "Forge",
+      "VCT",
+      "forge.jpg",
+      `As a support focused cert, Forge operates commonly on the frontlines providing Repairs to damaged vehicles, Rearming and Refueling where required.
+       
+      They can also operate as Air Traffic Control inside the Hangers during Hammer Operations. `
+    ),
+
+    unit(
+      "U14",
+      "Adv. Gren",
+      "VCT",
+      "placeholder.jpg",
+      `This qualification allows the user access to the MPL-60 Hand Mortar`
+    ),
+
+    unit(
+      "U15",
+      "Adv. Support",
+      "CSP",
+      "placeholder.jpg",
+      `This qualification allows the user access to the below advanced support weapons:
+
+• DBA Z6X-P Chaingun
+• DBA Z6-H Repeater Cannon`
+    ),
+
+    unit(
+      "U16",
+      "Adv. Marksman",
+      "VCT",
+      "placeholder.jpg",
+      `This qualification allows the user access to the below advanced marksman weapons:
+
+• DBA Valken
+• DBA W4-LRUS
+• DBA Gundark
+• DBA PGI-82
+• AMT Amban Rifle
+• AMT XM47 Fury`
+    ),
   ],
+
   MOS: [
-    { key: "U1", label: "RTO", rank: "CR-C", image: "/WWA/rto.jpg" },
-    { key: "U2", label: "CLS", rank: "CR-C", image: "/WWA/sus.jpg" },
-    { key: "U17", label: "Hammer", rank: "CR-C", image: "/WWA/hammer.jpg" },
+    unit(
+      "U1",
+      "RTO",
+      "CR-C",
+      "rto.jpg"
+    ),
+
+    unit(
+      "U2",
+      "CLS",
+      "CR-C",
+      "sus.jpg"
+    ),
+
+    unit(
+      "U17",
+      "Hammer",
+      "CR-C",
+      "hammer.jpg"
+    ),
   ],
+
   CSHOP: [
-    { key: "U18", label: "Zeus", rank: "CT", image: "/WWA/zeus.jpg" },
-    { key: "U19", label: "Mission Builder", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U23", label: "Recruiters", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U24", label: "Drill Instructors", rank: "CT", image: "/WWA/DI.jpg" },
-    { key: "U20", label: "GC Team", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U21", label: "Mod Team", rank: "CT", image: "/WWA/placeholder.jpg" },
-    { key: "U22", label: "Media Team", rank: "CR-C", image: "/WWA/media.jpg" },
-    { key: "U25", label: "Server Maintenance", rank: "N/A", image: "/WWA/server.jpg" },
+    unit(
+      "U18",
+      "Zeus",
+      "CT",
+      "zeus.jpg"
+    ),
+
+    unit(
+      "U19",
+      "Mission Builder",
+      "CT",
+      "placeholder.jpg"
+    ),
+
+    unit(
+      "U23",
+      "Recruiters",
+      "CT",
+      "placeholder.jpg"
+    ),
+
+    unit(
+      "U24",
+      "Drill Instructors",
+      "CT",
+      "DI.jpg"
+    ),
+
+    unit(
+      "U20",
+      "GC Team",
+      "CT",
+      "placeholder.jpg"
+    ),
+
+    unit(
+      "U21",
+      "Mod Team",
+      "CT",
+      "placeholder.jpg"
+    ),
+
+    unit(
+      "U22",
+      "Media Team",
+      "CR-C",
+      "media.jpg"
+    ),
+
+    unit(
+      "U25",
+      "Server Maintenance",
+      "N/A",
+      "server.jpg"
+    ),
   ],
 };
 
@@ -318,7 +587,7 @@ export default function ExpandedUnitsPage() {
               className="grid md:grid-cols-2 gap-10"
             >
               <div className="max-h-[500px] overflow-y-auto pr-4 text-gray-300 whitespace-pre-line">
-                {"Content coming soon..."}
+                 {activeUnit?.description}
               </div>
 
               <div className="flex items-center justify-center">

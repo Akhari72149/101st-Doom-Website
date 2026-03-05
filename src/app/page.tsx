@@ -138,10 +138,11 @@ const filteredPersonnelItems = personnelItems.filter(
   /* ================= DATA ================= */
 
   const newsItems = [
-    "Weekly Unit Stats - 150 clone casualties last week, 256 lost during Yoabos GC",
-    "Weekly Kill Stats - 600+ clankers taken out, 2100+ destroyed during GC",
-    "Company Medic Applications closed",
-    "CC has tooth removed - approach with caution, sugary snacks not advised",
+    "Week 3 Unit Stats - 104 clone casualties last week, 370 lost during Yoabos GC",
+    "Week 3 Kill Stats - 3770+ clankers taken out, 5870+ destroyed during GC",
+    "Kill stats reported innacurate as T1 zeus's fail to post their AAR",
+    "CC In deliberation over new Company Medic",
+    "Wild Bluejay angers medic with new Medical *Spicy* List",
   ];
 
   const slides = [

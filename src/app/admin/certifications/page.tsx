@@ -12,7 +12,7 @@ export default function ManageCertifications() {
   const [ranks, setRanks] = useState<any[]>([]);
   const [certifications, setCertifications] = useState<any[]>([]);
   const [personCerts, setPersonCerts] = useState<any[]>([]);
-  const [selectedPerson, setSelectedPerson] = useState("");
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [searchPerson, setSearchPerson] = useState("");
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
   const [filteredCerts, setFilteredCerts] = useState<any[]>([]);
@@ -62,9 +62,12 @@ export default function ManageCertifications() {
   }, [loadingAuth]);
 
   useEffect(() => {
-    if (selectedPerson) fetchPersonCerts();
-    else setPersonCerts([]);
-  }, [selectedPerson]);
+  if (selectedPeople.length === 1) {
+    fetchPersonCerts(selectedPeople[0]);
+  } else {
+    setPersonCerts([]);
+  }
+}, [selectedPeople]);
 
   const fetchData = async () => {
     const { data: people } = await supabase
@@ -153,56 +156,57 @@ useEffect(() => {
   }
 }, [loadingAuth]);
 
-  const fetchPersonCerts = async () => {
+  const fetchPersonCerts = async (personId: string) => {
     const { data } = await supabase
       .from("personnel_certifications")
       .select(`
         id,
         certification:certification_id ( id, name )
       `)
-      .eq("personnel_id", selectedPerson);
+      .eq("personnel_id", personId);
 
     setPersonCerts(data || []);
   };
 
   const assignCertification = async () => {
-    if (!selectedPerson || selectedCerts.length === 0 || !selectedTrainer) {
-  alert("Please select a trainer before assigning.");
-  return;
-}
+  if (selectedPeople.length === 0 || selectedCerts.length === 0 || !selectedTrainer) {
+    alert("Please select personnel, certifications, and a trainer.");
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const inserts = [];
 
-    const inserts = selectedCerts.map((certId) => ({
-      personnel_id: selectedPerson,
-      certification_id: certId,
-      awarded_at: new Date().toISOString(),
-      awarded_by: selectedTrainer,
-    }));
-
-    const { error } = await supabase
-      .from("personnel_certifications")
-      .insert(inserts);
-
-    setLoading(false);
-
-    if (error) {
-      if (error.code === "23505") {
-        alert("⚠ One or more certifications already assigned.");
-      } else {
-        alert(error.message);
-      }
-      return;
+  for (const personId of selectedPeople) {
+    for (const certId of selectedCerts) {
+      inserts.push({
+        personnel_id: personId,
+        certification_id: certId,
+        awarded_at: new Date().toISOString(),
+        awarded_by: selectedTrainer,
+      });
     }
+  }
 
-    setSelectedCerts([]);
-    setSelectedTrainer("");
-    fetchPersonCerts();
-  };
+  const { error } = await supabase
+    .from("personnel_certifications")
+    .insert(inserts);
+
+  setLoading(false);
+
+  if (error) {
+    if (error.code === "23505") {
+      alert("⚠ Some certifications were already assigned.");
+    } else {
+      alert(error.message);
+    }
+    return;
+  }
+
+  setSelectedCerts([]);
+  setSelectedPeople([]);
+};
 
   const revokeCertification = async (recordId: string) => {
     if (!confirm("Revoke this certification?")) return;
@@ -217,7 +221,9 @@ useEffect(() => {
       return;
     }
 
-    fetchPersonCerts();
+    if (selectedPeople.length === 1) {
+  fetchPersonCerts(selectedPeople[0]);
+}
   };
 
   const getRankName = (person: any) => {
@@ -280,11 +286,19 @@ useEffect(() => {
                   <div
                     key={p.id}
                     onClick={() => {
-                      setSelectedPerson(p.id);
-                      setSearchPerson("");
-                    }}
-                    className="p-4 border-b border-[#00ff66]/10 cursor-pointer hover:bg-[#00ff66]/10"
-                  >
+                      setSelectedPeople((prev) =>
+                       prev.includes(p.id)
+                       ? prev.filter((id) => id !== p.id)
+                      : [...prev, p.id]
+                       );
+                       setSearchPerson("");
+                       }}
+                    className={`p-4 border-b border-[#00ff66]/10 cursor-pointer transition ${
+                       selectedPeople.includes(p.id)
+                       ? "bg-[#00ff66]/20 border-l-4 border-[#00ff66]"
+                       : "hover:bg-[#00ff66]/10"
+                       }`}
+                     >
                     {getRankName(p)} {p.name}
                   </div>
                 ))
@@ -294,29 +308,43 @@ useEffect(() => {
         </div>
 
         {/* SELECTED PERSON DISPLAY */}
-        {selectedPerson && (
-          <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/40">
-            <h2 className="text-sm text-gray-400 mb-2">
-              Selected Personnel
-            </h2>
+        {selectedPeople.length > 0 && (
+  <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/40">
+    <h2 className="text-sm text-gray-400 mb-2">
+      Selected Personnel ({selectedPeople.length})
+    </h2>
 
-            {(() => {
-              const person = personnel.find(
-                (p) => p.id === selectedPerson
-              );
-              if (!person) return null;
+    <div className="flex flex-wrap gap-2">
+      {selectedPeople.map((personId) => {
+        const person = personnel.find((p) => p.id === personId);
+        if (!person) return null;
 
-              return (
-                <div className="text-[#00ff66] font-semibold text-lg">
-                  {getRankName(person)} {person.name}
-                </div>
-              );
-            })()}
+        return (
+          <div
+            key={personId}
+            className="px-3 py-1 rounded-full bg-[#00ff66]/20 border border-[#00ff66] text-sm flex items-center gap-2"
+          >
+            {getRankName(person)} {person.name}
+
+            <span
+              className="cursor-pointer text-red-400"
+              onClick={() =>
+                setSelectedPeople((prev) =>
+                  prev.filter((id) => id !== personId)
+                )
+              }
+            >
+              ✕
+            </span>
           </div>
-        )}
+        );
+      })}
+    </div>
+  </div>
+)}
 
 {/* TRAINER SELECTION - SHOW AFTER PERSON IS SELECTED */}
-{selectedPerson && (
+{selectedPeople.length > 0 && (
   <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/30">
     <h2 className="text-sm text-gray-400 mb-2">
       Select Trainer Who Is Assigning
@@ -388,7 +416,7 @@ useEffect(() => {
 <div>
 
 {/* CURRENT CERTIFICATIONS */}
-{selectedPerson && (
+{selectedPeople.length === 1 && (
   <div className="mb-10 p-6 rounded-2xl border border-[#00ff66]/20 bg-black/50">
     <h2 className="text-xl mb-4 text-[#00ff66] font-semibold">
       Current Certifications
@@ -429,7 +457,7 @@ useEffect(() => {
 )}
 
         {/* ASSIGN CERTIFICATIONS (HIDDEN UNTIL PERSON SELECTED) */}
-        {selectedPerson && (
+        {selectedPeople.length > 0 && (
           <div className="mb-10 p-6 rounded-2xl border border-[#00ff66]/30 bg-black/60 shadow-[0_0_40px_rgba(0,255,100,0.1)]">
             <h2 className="text-xl mb-4 text-[#00ff66] font-semibold">
               Assign Certifications (Can select multiple)
@@ -441,16 +469,24 @@ useEffect(() => {
               placeholder="Search certifications..."
               className="mb-4 bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl"
               onChange={(e) => {
-                const search = e.target.value.toLowerCase();
-                const filtered = certifications.filter(
-                  (c) =>
-                    c.name.toLowerCase().includes(search) &&
-                    !personCerts.some(
-                      (pc) => pc.certification?.id === c.id
-                    )
-                );
-                setFilteredCerts(filtered);
-              }}
+  const search = e.target.value.toLowerCase();
+
+  const filtered = certifications.filter((c) => {
+    const matchesSearch = c.name.toLowerCase().includes(search);
+
+    if (!matchesSearch) return false;
+
+    if (selectedPeople.length === 1) {
+      return !personCerts.some(
+        (pc) => pc.certification?.id === c.id
+      );
+    }
+
+    return true;
+  });
+
+  setFilteredCerts(filtered);
+}}
             />
 
             {/* AVAILABLE CERTS */}

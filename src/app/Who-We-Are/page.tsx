@@ -20,9 +20,12 @@ const unitTabs = [
     icon: "/icons/tank.png",
     logo: "/WWA/T1.jpg",
     content: `
-Tomahawk 1 is our armored spearhead unit.
-Specializes in ground dominance and heavy assault operations.
-Core focus: Break enemy lines and secure objectives.
+Tomahawk 1 meets every challenge with unbreakable force. Our vehicle crews, Scimitar, carry the firepower to answer any threat, while Tomahawk infantry adapt and overcome on the ground.
+
+Together, no enemy can withstand the will of steel and lead.
+
+Breach in steel. Dismount in fire.
+Doctrine: Shock. Roll. Dismount. Dominate.
     `,
   },
   {
@@ -35,7 +38,7 @@ Claymore 2 specializes in Air Assault operations, executing rapid deployments to
 
 After securing objectives, the unit swiftly re-embarks and prepares for immediate redeployment to the next target — maintaining constant pressure and operational momentum.
 
-Mission: Strike. Break. Advance.
+Doctrine: Strike. Break. Advance.
     `,
   },
   {

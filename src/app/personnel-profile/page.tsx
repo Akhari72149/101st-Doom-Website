@@ -129,28 +129,6 @@ const calculateServiceDuration = (date: string | null) => {
   return { years, months };
 };
 
-const generatePlasma = () => {
-  const count = Math.floor(Math.random() * 5) + 3; // 3–7 plasma blobs
-
-  const particles = Array.from({ length: count }).map(() => ({
-    x: Math.random() * 100,
-    size: 10 + Math.random() * 25,
-  }));
-
-  setPlasmaParticles(particles);
-};
-
-useEffect(() => {
-  generatePlasma();
-
-  const interval = setInterval(() => {
-    generatePlasma();
-  }, 1800); // refresh plasma every ~2s
-
-  return () => clearInterval(interval);
-}, []);
-
-
 
   const getBilletFromSlot = (slotId: string | null) => {
     if (!slotId) return "Unassigned";
@@ -159,7 +137,7 @@ useEffect(() => {
       for (const sub of section.children || []) {
         for (const role of sub.roles || []) {
           if (role.slotId === slotId) {
-            return `${section.title} — ${role.role}`;
+            return `${section.title} — ${sub.title} — ${role.role}`;
           }
         }
       }

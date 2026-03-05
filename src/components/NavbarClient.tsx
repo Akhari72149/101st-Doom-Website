@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 /* ================= TYPES ================= */
 
-type Role = "admin" | "nco" | "di" | "trainer" | "logistics" | "recruiter" | "Akhari";
+type Role = "admin" | "nco" | "di" | "trainer" | "logistics" | "recruiter" | "ServerMaintenance"  | "Akhari";
 
 type NavItem = {
   href: string;
@@ -97,7 +97,7 @@ export default function NavbarClient() {
     },
     {
       label: "Admin",
-      allowedRoles: ["admin", "nco", "di", "trainer", "recruiter", "logistics", "Akhari"],
+      allowedRoles: ["admin", "nco", "di", "trainer", "recruiter", "logistics", "Akhari", "ServerMaintenance"],
       items: [
         {
           href: "/admin/create",
@@ -133,6 +133,11 @@ export default function NavbarClient() {
           href: "/admin/positions",
           label: "Promotions & Slotting",
           allowedRoles: ["admin", "nco", "di"],
+        },
+        {
+          href: "/admin/server-control",
+          label: "Server Control Panel",
+          allowedRoles: ["ServerMaintenance", "Akhari"],
         },
 
       ],

@@ -484,7 +484,7 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
           members={[
             "Squad Leader:",
             "Sniper: Eclipse",
-            "Demolitions:",
+            "Demolitions: Griddle",
             "Medic: Okami",
           ]}
         />

@@ -113,12 +113,12 @@ const weekday = new Date(start).getDay();
 
   /* ================= NORMAL BOOKINGS ================= */
 
-  const { data: bookingData } = await supabase
-    .from("server_bookings")
-    .select("*")
-    .eq("server_id", activeServer)
-    .gte("start_time", start.toISOString())
-    .lt("start_time", end.toISOString());
+ const { data: bookingData } = await supabase
+  .from("server_bookings")
+  .select("*")
+  .eq("server_id", activeServer)
+  .lt("start_time", end.toISOString())     // starts before end of day
+  .gt("end_time", start.toISOString());    // ends after start of day
 
   const personnelIds = [
     ...new Set((bookingData || []).map((b) => b.booked_for)),
@@ -147,8 +147,8 @@ const { data: recurring } = await supabase
   .from("recurring_server_blocks")
   .select("*")
   .eq("server_id", activeServer)
-  .gte("start_at", startOfDay.toISOString())
-  .lt("start_at", endOfDay.toISOString());
+  .lt("start_at", endOfDay.toISOString())
+  .gt("end_at", startOfDay.toISOString());
 
 const recurringBookings = (recurring ?? [])
   .filter((r) => r.start_at && r.end_at)

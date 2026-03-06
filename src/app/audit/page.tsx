@@ -19,6 +19,9 @@ export default function AuditLogsPage() {
   const [selectedUser, setSelectedUser] = useState<string>("all");
   const [selectedAction, setSelectedAction] = useState<string>("all");
   const [selectedDate, setSelectedDate] = useState<string>("all");
+
+  const [personnelList, setPersonnelList] = useState<string[]>([]);
+  const [selectedPersonnel, setSelectedPersonnel] = useState<string>("all");
   
 
   /* ================= AUTH ================= */
@@ -73,39 +76,49 @@ export default function AuditLogsPage() {
   /* ================= FETCH FILTER OPTIONS ================= */
 
   const fetchFilterOptions = async () => {
-    // Fetch users
-    const { data: userData } = await supabase
-      .from("profiles")
-      .select("display_name")
-      .order("display_name");
+  const { data: userData } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .order("display_name");
 
-    if (userData) {
-      setUsers(
-        userData
-          .map((u) => u.display_name)
-          .filter(Boolean)
-      );
-    }
+  if (userData) {
+    setUsers(
+      userData
+        .map((u) => u.display_name)
+        .filter(Boolean)
+    );
+  }
 
-    // Fetch actions
-    const { data: actionData } = await supabase
-      .from("audit_logs")
-      .select("action");
+  const { data: actionData } = await supabase
+    .from("audit_logs")
+    .select("action");
 
-    if (actionData) {
-      const uniqueActions = Array.from(
-        new Set(actionData.map((a) => a.action).filter(Boolean))
-      );
-      setActions(uniqueActions);
-    }
-  };
+  if (actionData) {
+    const uniqueActions = Array.from(
+      new Set(actionData.map((a) => a.action).filter(Boolean))
+    );
+    setActions(uniqueActions);
+  }
+
+  const { data: personnelData } = await supabase
+    .from("personnel")
+    .select("name")
+    .order("name");
+
+  if (personnelData) {
+    setPersonnelList(
+      personnelData.map((p) => p.name).filter(Boolean)
+    );
+  }
+};
 
   /* ================= FILTER DETECTION ================= */
 
-  const hasActiveFilter =
-    selectedUser !== "all" ||
-    selectedAction !== "all" ||
-    selectedDate !== "all";
+const hasActiveFilter =
+  selectedUser !== "all" ||
+  selectedAction !== "all" ||
+  selectedDate !== "all" ||
+  selectedPersonnel !== "all";
 
   /* ================= FETCH LOGS ================= */
 
@@ -165,6 +178,18 @@ export default function AuditLogsPage() {
       }
     }
 
+    if (selectedPersonnel !== "all") {
+  const { data: personnel } = await supabase
+    .from("personnel")
+    .select("id")
+    .eq("name", selectedPersonnel)
+    .single();
+
+  if (personnel) {
+    query = query.eq("target_personnel_id", personnel.id);
+  }
+}
+
     const { data, error } = await query;
 
     if (error) {
@@ -185,7 +210,7 @@ export default function AuditLogsPage() {
     } else {
       setLogs([]);
     }
-  }, [selectedUser, selectedAction, selectedDate]);
+  }, [selectedUser, selectedAction, selectedDate, selectedPersonnel]);
 
   /* ================= HELPERS ================= */
 
@@ -272,7 +297,7 @@ export default function AuditLogsPage() {
         )}
 
         {/* FILTERS */}
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
           <select
             value={selectedUser}
             onChange={(e) => setSelectedUser(e.target.value)}
@@ -288,6 +313,22 @@ export default function AuditLogsPage() {
               </option>
             ))}
           </select>
+
+          <select
+  value={selectedPersonnel}
+  onChange={(e) => setSelectedPersonnel(e.target.value)}
+  className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 
+  text-white 
+  focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 
+  hover:border-[#00ff66] transition"
+>
+  <option value="all">All Personnel</option>
+  {personnelList.map((person) => (
+    <option key={person} value={person}>
+      {person}
+    </option>
+  ))}
+</select>
 
           <select
             value={selectedAction}
@@ -331,6 +372,7 @@ export default function AuditLogsPage() {
             setSelectedUser("all");
             setSelectedAction("all");
             setSelectedDate("all");
+            setSelectedPersonnel("all");
           }}
           className="mb-6 px-4 py-2 rounded-xl border border-red-500 text-red-400 hover:bg-red-500/10"
         >

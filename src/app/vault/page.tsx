@@ -21,6 +21,7 @@ export default function VaultPage() {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [landfallArchiveOpen, setLandfallArchiveOpen] = useState(false);
+  const [deviceInterdictionOpen, setDeviceInterdictionOpen] = useState(false);
 
   /* ========================================================= */
   /* ================= PASSWORD / HACK LOGIC ================== */
@@ -454,12 +455,151 @@ export default function VaultPage() {
     </div>
   </div>
 </div>
-          </div>
-        )}
 
+{/* ================= DEVICE INTERDICTION ARCHIVE ================= */}
 
+<div className="border border-blue-500/40 bg-black/60 rounded-3xl overflow-hidden">
+
+  <button
+    onClick={() => setDeviceInterdictionOpen(!deviceInterdictionOpen)}
+    className="w-full flex justify-between items-center p-6 hover:bg-blue-500/10 transition"
+  >
+    <div className="text-left">
+      <h3 className="text-xl text-blue-400 font-bold">
+        🔵 DEVICE INTERDICTION
+      </h3>
+
+      <div>
+        <span className="text-sm text-green-400">
+          STATUS: Operation Successful
+        </span>
+
+        <div className="text-sm text-blue-300 font-bold">
+          Enemy Logistics Severely Disrupted
+        </div>
+      </div>
+    </div>
+
+    <span className="text-blue-400 text-xl">
+      {deviceInterdictionOpen ? "▲" : "▼"}
+    </span>
+  </button>
+
+  <div
+    className={`transition-all duration-500 overflow-hidden ${
+      deviceInterdictionOpen
+        ? "max-h-[2000px] opacity-100 p-6"
+        : "max-h-0 opacity-0"
+    }`}
+  >
+    <div className="space-y-6 text-sm text-gray-300">
+
+      {/* MISSION SUMMARY */}
+
+      <div className="space-y-4">
+        <p className="text-green-400 font-semibold">
+          Operation Successful.
+        </p>
+
+        <p>
+          Clone Commando reconnaissance successfully tracked multiple
+          enemy device convoys operating across hostile territory.
+          Interdiction teams launched coordinated strikes along the
+          identified supply routes.
+        </p>
+
+        <p>
+          Escort forces were neutralized and the transport units
+          carrying the devices were destroyed before reaching
+          fortified enemy installations.
+        </p>
+
+        <p className="text-blue-400 font-semibold">
+          Enemy logistical capabilities have been significantly
+          degraded in the sector.
+        </p>
+      </div>
+
+      {/* TEAM ROSTER */}
+
+      <div className="border border-blue-500/30 rounded-xl p-4 bg-black/40 space-y-6">
+
+        <h3 className="text-blue-400 text-xl font-bold tracking-widest">
+          🛡 DEPLOYED TEAMS
+        </h3>
+
+        <TeamBlock
+          title="HQ ELEMENT"
+          members={[
+            "CO: Bearded",
+            "XO: Sicko",
+          ]}
+        />
+
+        <TeamBlock
+          title="TEAM 1"
+          members={[
+            "Squad Leader: Butter",
+            "Sniper: Sick",
+            "Demolitions: Shy",
+            "Medic: Advisor",
+          ]}
+        />
+
+        <TeamBlock
+          title="TEAM 2"
+          members={[
+            "Squad Leader: Snake",
+            "Sniper: Wulf",
+            "Demolitions: Blitz",
+            "Medic: Coco",
+          ]}
+        />
+
+        <TeamBlock
+          title="TEAM 3"
+          members={[
+            "Squad Leader: Akhari",
+            "Sniper: Sour",
+            "Demolitions: Yami",
+            "Medic: Vidar",
+          ]}
+        />
+
+        <TeamBlock
+          title="TEAM 4"
+          members={[
+            "Sniper: Eclipse",
+            "Demolitions: Griddle",
+            "Medic: Okami",
+          ]}
+        />
 
       </div>
+
+    </div>
+  </div>
+</div>
+
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamBlock({ title, members }: any) {
+  return (
+    <div className="border border-blue-500/30 rounded-lg p-3 bg-black/60">
+      <h4 className="text-blue-300 font-semibold mb-2">{title}</h4>
+
+      <ul className="space-y-1 text-sm text-gray-300">
+        {members.map((member: string, index: number) => (
+          <li key={index} className="pl-2 border-l border-blue-500/50">
+            {member}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -141,7 +141,7 @@ const filteredPersonnelItems = personnelItems.filter(
     "Week 3 Unit Stats - 104 clone casualties last week, 370 lost during Yoabos GC",
     "Week 3 Kill Stats - 3770+ clankers taken out, 5870+ destroyed during GC",
     "Kill stats reported innacurate as T1 zeus's fail to post their AAR",
-    "CC In deliberation over new Company Medic",
+    "Over 2000 clankers killed during C2",
     "Wild Bluejay angers medic with new Medical *Spicy* List",
   ];
 

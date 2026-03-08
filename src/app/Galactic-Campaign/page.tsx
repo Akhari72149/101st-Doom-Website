@@ -60,7 +60,7 @@ export default function GalacticCampaignPage() {
   /* ================= ANIMATED MILITARY COUNTERS ================= */
 
   const cloneTarget = 370;
-  const droidTarget = 8088;
+  const droidTarget = 10967;
 
   const [cloneDisplay, setCloneDisplay] = useState(0);
   const [droidDisplay, setDroidDisplay] = useState(0);
@@ -374,126 +374,7 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
   </div>
 </div>
 
-{/* ================= SIDE OPERATION ================= */}
 
-<div className="border border-blue-500/40 bg-black/50 rounded-2xl overflow-hidden mt-6">
-
-  <button
-    onClick={() => setSideOpOpen(!sideOpOpen)}
-    className="w-full flex justify-between items-center p-6 hover:bg-blue-500/10 transition"
-  >
-    <div className="text-left">
-      <h2 className="text-2xl text-blue-400 font-bold">
-        🔵 SIDE OP: DEVICE INTERDICTION
-      </h2>
-
-      <div className="mt-1">
-        <span className="text-sm text-blue-300">
-          Covert Interdiction Operation
-        </span>
-
-        <div className="text-xl text-blue-400 font-mono">
-          STATUS: DEPLOYMENT READY
-        </div>
-      </div>
-    </div>
-
-    <span className="text-xl text-blue-400">
-      {sideOpOpen ? "▲" : "▼"}
-    </span>
-  </button>
-
-  <div
-    className={`
-      overflow-hidden transition-all duration-500
-      ${sideOpOpen ? "max-h-[3000px] opacity-100 p-6" : "max-h-0 opacity-0"}
-    `}
-  >
-    <div className="text-sm text-gray-300 leading-relaxed space-y-6">
-
-      {/* ================= MISSION TEXT ================= */}
-
-      <div className="space-y-4">
-        <p className="text-blue-400 font-semibold">
-          Clone Commandos have identified live device convoys across hostile territory.
-        </p>
-
-        <p>
-          Teams will locate supply routes and intercept transport units before
-          devices reach fortified installations.
-        </p>
-
-        <p>
-          Once located, rapid assault units will disable escort forces and secure
-          the target assets for intelligence exploitation.
-        </p>
-
-        <p className="text-red-400 font-semibold">
-          Precision. Speed. Disruption.
-        </p>
-      </div>
-
-      {/* ================= TEAM ROSTER ================= */}
-
-      <div className="border border-blue-500/30 rounded-xl p-4 bg-black/40 space-y-6">
-
-        <h3 className="text-blue-400 text-xl font-bold tracking-widest">
-          🛡 TEAM ROSTER
-        </h3>
-
-        <TeamBlock
-          title="HQ ELEMENT"
-          members={[
-            "CO: Bearded",
-            "XO: Sicko",
-          ]}
-        />
-
-        <TeamBlock
-          title="TEAM 1"
-          members={[
-            "Squad Leader: Butter",
-            "Sniper: Sick",
-            "Demolitions: Shy",
-            "Medic: Advisor",
-          ]}
-        />
-
-        <TeamBlock
-          title="TEAM 2"
-          members={[
-            "Squad Leader: Snake",
-            "Sniper: Wulf",
-            "Demolitions: Blitz",
-            "Medic: Coco",
-          ]}
-        />
-
-        <TeamBlock
-          title="TEAM 3"
-          members={[
-            "Squad Leader: Akhari",
-            "Sniper: Sour",
-            "Demolitions: Yami",
-            "Medic: Vidar",
-          ]}
-        />
-
-        <TeamBlock
-          title="TEAM 4"
-          members={[
-            "Squad Leader:",
-            "Sniper: Eclipse",
-            "Demolitions: Griddle",
-            "Medic: Okami",
-          ]}
-        />
-
-      </div>
-
-    </div>
-  </div>
-</div>
 
 {/* ================= C2 LANDFALL — COMPLETED ================= */}
 

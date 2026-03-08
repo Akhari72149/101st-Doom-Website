@@ -142,7 +142,7 @@ const filteredPersonnelItems = personnelItems.filter(
     "Week 3 Kill Stats - 3770+ clankers taken out, 5870+ destroyed during GC",
     "Kill stats reported innacurate as T1 zeus's fail to post their AAR",
     "Over 2000 clankers killed during C2",
-    "Wild Bluejay angers medic with new Medical *Spicy* List",
+    "Company Pilot Confirmed best in the unit with 176 Air Kills at Dagger this week",
   ];
 
   const slides = [

@@ -32,6 +32,7 @@ export default function GCLogisticsHub() {
 
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [platoons, setPlatoons] = useState<Platoon[]>([]);
+  const [activeTab, setActiveTab] = useState<"shop" | "cart" | "owned">("shop");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [ownedAssets, setOwnedAssets] = useState<any[]>([]);
   const [selected, setSelected] = useState<Platoon | null>(null);
@@ -43,6 +44,7 @@ export default function GCLogisticsHub() {
   totalAssetValue: 0,
   tokensSpent: 0,
 });
+const [cart, setCart] = useState<Record<string, number>>({});
 
   /* ✅ Per asset quantity */
   const [buyQuantities, setBuyQuantities] =
@@ -213,11 +215,14 @@ useEffect(() => {
 
   /* ================= SELECT PLATOON ================= */
 
-  const selectPlatoon = (p: Platoon) => {
-    setSelected(p);
-    fetchTransactions(p.id);
-    fetchOwnedAssets(p.id);
-  };
+const selectPlatoon = (p: Platoon) => {
+  setCart({});
+  setBuyQuantities({});
+  setSelected(p);
+  fetchTransactions(p.id);
+  fetchOwnedAssets(p.id);
+  fetchAssets(p.id);
+};
 
   useEffect(() => {
   if (selected) {
@@ -311,6 +316,63 @@ useEffect(() => {
     await fetchTransactions(selected.id);
   };
 
+  /* ================= CART CHECKOUT ================= */
+const checkoutCart = async () => {
+  if (!selected) return;
+
+  const totalCost = Object.entries(cart).reduce((sum, [assetId, qty]) => {
+    const asset = assets.find((a) => a.id === assetId);
+    return sum + (asset?.token_cost || 0) * qty;
+  }, 0);
+
+  if (selected.tokens < totalCost) {
+    alert("Not enough tokens to buy everything in the cart.");
+    return;
+  }
+
+  // Deduct tokens
+  await supabase
+    .from("platoons")
+    .update({ tokens: selected.tokens - totalCost })
+    .eq("id", selected.id);
+
+  // Add assets to owned
+  for (const [assetId, qty] of Object.entries(cart)) {
+    const existing = ownedAssets.find((o) => o.asset?.id === assetId);
+
+    if (existing) {
+      await supabase
+        .from("platoon_assets")
+        .update({ quantity: existing.quantity + qty })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("platoon_assets").insert([
+        {
+          platoon_id: selected.id,
+          asset_id: assetId,
+          quantity: qty,
+        },
+      ]);
+    }
+  }
+
+  // Log transaction
+  await supabase.from("token_transactions").insert([
+    {
+      platoon_id: selected.id,
+      action: "BUY_ASSET",
+      amount: totalCost,
+      created_at: new Date().toISOString(),
+    },
+  ]);
+
+  // Clear cart and refresh
+  setCart({});
+  await fetchPlatoons();
+  await fetchOwnedAssets(selected.id);
+  await fetchTransactions(selected.id);
+};
+
   /* ================= REMOVE ASSET (WITH QUANTITY) ================= */
 
   const removeAsset = async (owned: any) => {
@@ -367,237 +429,272 @@ useEffect(() => {
     );
   }
 
-  return (
-    <div className="min-h-screen flex text-white bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]">
+return (
+  <div className="min-h-screen flex text-white bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]">
 
-      {/* ================= LEFT ================= */}
+    {/* ================= LEFT ================= */}
+    <div className="w-[300px] border-r border-[#00ff66]/30 p-6 space-y-4">
+      <button
+        onClick={() => router.push("/Galactic-Campaign")}
+        className="px-4 py-2 border border-[#00ff66] text-[#00ff66]"
+      >
+        ← Back
+      </button>
+      <h2 className="text-[#00ff66] text-xl mb-4">Platoons</h2>
 
-      <div className="w-[300px] border-r border-[#00ff66]/30 p-6 space-y-4">
-	  <button
-            onClick={() => router.push("/Galactic-Campaign")}
-            className="px-4 py-2 border border-[#00ff66] text-[#00ff66]"
-          >
-            ← Back
-          </button>
-        <h2 className="text-[#00ff66] text-xl mb-4">Platoons</h2>
+      {platoons.map((p) => (
+        <div
+          key={p.id}
+          onClick={() => selectPlatoon(p)}
+          className={`p-4 rounded-xl cursor-pointer transition ${
+            selected?.id === p.id
+              ? "bg-[#00ff66]/20 border border-[#00ff66]"
+              : "border border-[#00ff66]/20 hover:border-[#00ff66]/60"
+          }`}
+        >
+          <div className="font-bold">{p.name}</div>
+          <div className="text-sm">Tokens: {p.tokens}</div>
+        </div>
+      ))}
+    </div>
 
-        {platoons.map((p) => (
-          <div
-            key={p.id}
-            onClick={() => selectPlatoon(p)}
-            className={`p-4 rounded-xl cursor-pointer transition ${
-              selected?.id === p.id
-                ? "bg-[#00ff66]/20 border border-[#00ff66]"
-                : "border border-[#00ff66]/20 hover:border-[#00ff66]/60"
-            }`}
-          >
-            <div className="font-bold">{p.name}</div>
-            <div className="text-sm">Tokens: {p.tokens}</div>
+    {/* ================= CENTER ================= */}
+    <div className="flex-1 p-10 space-y-10">
+      {!selected ? (
+        <div className="text-gray-400">Select a platoon.</div>
+      ) : (
+        <>
+          {/* TOKEN BOX */}
+          <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+            <h2 className="text-2xl text-[#00ff66] mb-4">{selected.name}</h2>
+
+            <div className="text-xl">
+              Tokens:
+              <span className="ml-2 text-[#00ff66] font-bold">{selected.tokens}</span>
+            </div>
+
+            <div className="mt-6 flex gap-4">
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                className="bg-black border border-[#00ff66]/30 rounded-xl px-4 py-2"
+              />
+
+              <button
+                onClick={addTokens}
+                className="px-6 py-2 border border-[#00ff66] rounded-xl hover:bg-[#00ff66] hover:text-black transition"
+              >
+                Add Tokens
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
 
-      {/* ================= CENTER ================= */}
-
-      <div className="flex-1 p-10 space-y-10">
-
-        {!selected ? (
-          <div className="text-gray-400">Select a platoon.</div>
-        ) : (
-          <>
-            {/* TOKEN BOX */}
+          {/* ================= DASHBOARD STATS ================= */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-              <h2 className="text-2xl text-[#00ff66] mb-4">
-                {selected.name}
-              </h2>
-
-              <div className="text-xl">
-                Tokens:
-                <span className="ml-2 text-[#00ff66] font-bold">
-                  {selected.tokens}
-                </span>
-              </div>
-
-              <div className="mt-6 flex gap-4">
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) =>
-                    setAmount(Number(e.target.value))
-                  }
-                  className="bg-black border border-[#00ff66]/30 rounded-xl px-4 py-2"
-                />
-
-                <button
-                  onClick={addTokens}
-                  className="px-6 py-2 border border-[#00ff66] rounded-xl hover:bg-[#00ff66] hover:text-black transition"
-                >
-                  Add Tokens
-                </button>
-              </div>
+              <div className="text-gray-400 text-sm">Total Assets Owned</div>
+              <div className="text-2xl text-[#00ff66] font-bold">{stats.totalAssets}</div>
             </div>
 
-            {/* ================= DASHBOARD STATS ================= */}
-<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-  <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-    <div className="text-gray-400 text-sm">
-      Total Assets Owned
-    </div>
-    <div className="text-2xl text-[#00ff66] font-bold">
-      {stats.totalAssets}
-    </div>
-  </div>
-
-  <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-    <div className="text-gray-400 text-sm">
-      Total Asset Value
-    </div>
-    <div className="text-2xl text-[#00ff66] font-bold">
-      {stats.totalAssetValue}
-    </div>
-  </div>
-
-  <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-    <div className="text-gray-400 text-sm">
-      Tokens Spent
-    </div>
-    <div className="text-2xl text-red-400 font-bold">
-      {stats.tokensSpent}
-    </div>
-  </div>
-</div>
-
-            {/* ================= SHOP (RESTORED) ================= */}
-
-            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
-              <div
-                onClick={() => setShopOpen(!shopOpen)}
-                className="p-6 flex justify-between cursor-pointer hover:bg-[#00ff66]/10"
-              >
-                <h3 className="text-xl text-[#00ff66]">
-                  Asset Shop
-                </h3>
-                <span>{shopOpen ? "▲" : "▼"}</span>
-              </div>
-
-              {shopOpen && (
-                <div className="p-6 border-t border-[#00ff66]/30">
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={assetSearch}
-                    onChange={(e) =>
-                      setAssetSearch(e.target.value)
-                    }
-                    className="bg-black border border-[#00ff66]/30 rounded-xl px-4 py-2 mb-4"
-                  />
-
-                  <div className="grid grid-cols-3 gap-4">
-                    {filteredAssets.map((asset) => {
-                      const qty = buyQuantities[asset.id] || 1;
-
-                      return (
-                        <div
-                          key={asset.id}
-                          className="p-5 rounded-2xl border border-[#00ff66]/20 bg-black/50 space-y-3"
-                        >
-                          <div className="font-bold text-[#00ff66]">
-                            {asset.name}
-                          </div>
-
-                          <div>Cost: {asset.token_cost}</div>
-                          <div>Stock: {asset.inventory}</div>
-
-                          <input
-                            type="number"
-                            min={1}
-                            value={qty}
-                            onChange={(e) =>
-                              setBuyQuantities({
-                                ...buyQuantities,
-                                [asset.id]: Number(e.target.value),
-                              })
-                            }
-                            className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-2 py-1"
-                          />
-
-                          <button
-                            onClick={() => buyAsset(asset)}
-                            className="w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
-                          >
-                            Buy
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+            <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+              <div className="text-gray-400 text-sm">Total Asset Value</div>
+              <div className="text-2xl text-[#00ff66] font-bold">{stats.totalAssetValue}</div>
             </div>
 
-            {/* ================= OWNED (WITH QUANTITY REMOVE) ================= */}
+            <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+              <div className="text-gray-400 text-sm">Tokens Spent</div>
+              <div className="text-2xl text-red-400 font-bold">{stats.tokensSpent}</div>
+            </div>
+          </div>
 
-            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
-              <div
-                onClick={() => setOwnedOpen(!ownedOpen)}
-                className="p-6 flex justify-between cursor-pointer hover:bg-[#00ff66]/10"
-              >
-                <h3 className="text-xl text-[#00ff66]">
-                  Owned Assets
-                </h3>
-                <span>{ownedOpen ? "▲" : "▼"}</span>
-              </div>
+          {/* ================= TABS ================= */}
+          <div className="flex gap-4 mb-4">
+            <button
+              onClick={() => setActiveTab("shop")}
+              className={`px-4 py-2 rounded-xl border ${
+                activeTab === "shop" ? "border-[#00ff66] bg-[#00ff66]/20" : "border-[#00ff66]/20"
+              }`}
+            >
+              Asset Shop
+            </button>
 
-              {ownedOpen && (
-                <div className="p-6 border-t border-[#00ff66]/30 grid grid-cols-3 gap-4">
-                  {ownedAssets.length === 0 ? (
-                    <div className="text-gray-400">
-                      No assets owned.
+            <button
+              onClick={() => setActiveTab("cart")}
+              className={`px-4 py-2 rounded-xl border ${
+                activeTab === "cart" ? "border-[#00ff66] bg-[#00ff66]/20" : "border-[#00ff66]/20"
+              }`}
+            >
+              Cart ({Object.keys(cart).length})
+            </button>
+
+            <button
+              onClick={() => setActiveTab("owned")}
+              className={`px-4 py-2 rounded-xl border ${
+                activeTab === "owned" ? "border-[#00ff66] bg-[#00ff66]/20" : "border-[#00ff66]/20"
+              }`}
+            >
+              Owned Assets
+            </button>
+          </div>
+
+          {/* ================= TAB CONTENT ================= */}
+          {activeTab === "shop" && (
+            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={assetSearch}
+                onChange={(e) => setAssetSearch(e.target.value)}
+                className="bg-black border border-[#00ff66]/30 rounded-xl px-4 py-2 mb-4 w-full"
+              />
+
+              <div className="grid grid-cols-3 gap-4">
+                {filteredAssets.map((asset) => {
+                  const qty = buyQuantities[asset.id] || 1;
+
+                  return (
+                    <div
+                      key={asset.id}
+                      className="p-5 rounded-2xl border border-[#00ff66]/20 bg-black/50 space-y-3"
+                    >
+                      <div className="font-bold text-[#00ff66]">{asset.name}</div>
+                      <div>Cost: {asset.token_cost}</div>
+                      <div>Stock: {asset.inventory}</div>
+
+                      <input
+                        type="number"
+                        min={1}
+                        value={qty}
+                        onChange={(e) =>
+                          setBuyQuantities({
+                            ...buyQuantities,
+                            [asset.id]: Number(e.target.value),
+                          })
+                        }
+                        className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-2 py-1"
+                      />
+
+                      <button
+                        onClick={() => {
+                          setCart((prev) => ({
+                            ...prev,
+                            [asset.id]: (prev[asset.id] || 0) + qty,
+                          }));
+                          setBuyQuantities((prev) => ({ ...prev, [asset.id]: 1 }));
+                        }}
+                        className="w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
+                      >
+                        Add to Cart
+                      </button>
                     </div>
-                  ) : (
-                    ownedAssets.map((item) => {
-                      const removeQty =
-                        removeQuantities[item.id] || 1;
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-                      return (
-                        <div
-                          key={item.id}
-                          className="p-4 rounded-xl border border-[#00ff66]/30 space-y-3"
-                        >
-                          <div>{item.asset?.name}</div>
-                          <div>Quantity: {item.quantity}</div>
+          {activeTab === "cart" && (
+            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6">
+              <h3 className="text-xl text-[#00ff66] mb-4">Cart</h3>
 
-                          <input
-                            type="number"
-                            min={1}
-                            max={item.quantity}
-                            value={removeQty}
-                            onChange={(e) =>
-                              setRemoveQuantities({
-                                ...removeQuantities,
-                                [item.id]: Number(e.target.value),
-                              })
-                            }
-                            className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-2 py-1"
-                          />
+              {Object.keys(cart).length === 0 ? (
+                <div className="text-gray-400">Cart is empty.</div>
+              ) : (
+                <div className="space-y-3">
+                  {Object.entries(cart).map(([assetId, qty]) => {
+                    const asset = assets.find((a) => a.id === assetId);
+                    if (!asset) return null;
 
-                          <button
-                            onClick={() => removeAsset(item)}
-                            className="w-full px-4 py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition"
-                          >
-                            Remove
-                          </button>
+                    return (
+                      <div
+                        key={assetId}
+                        className="flex justify-between items-center border-b border-[#00ff66]/20 py-2"
+                      >
+                        <div>
+                          {asset.name} x {qty} ({asset.token_cost * qty} tokens)
                         </div>
-                      );
-                    })
-                  )}
+                        <button
+                          onClick={() => {
+                            setCart((prev) => {
+                              const newCart = { ...prev };
+                              delete newCart[assetId];
+                              return newCart;
+                            });
+                          }}
+                          className="px-2 py-1 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  <div className="mt-4 font-bold text-[#00ff66]">
+                    Total Cost:{" "}
+                    {Object.entries(cart).reduce((sum, [assetId, qty]) => {
+                      const asset = assets.find((a) => a.id === assetId);
+                      return sum + (asset?.token_cost || 0) * qty;
+                    }, 0)}
+                    {" "}tokens
+                  </div>
+
+                  <button
+                    onClick={checkoutCart}
+                    className="mt-4 w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
+                  >
+                    Checkout
+                  </button>
                 </div>
               )}
             </div>
+          )}
 
-          </>
-        )}
-      </div>
+          {activeTab === "owned" && (
+            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6 grid grid-cols-3 gap-4">
+              {ownedAssets.length === 0 ? (
+                <div className="text-gray-400">No assets owned.</div>
+              ) : (
+                ownedAssets.map((item) => {
+                  const removeQty = removeQuantities[item.id] || 1;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 rounded-xl border border-[#00ff66]/30 space-y-3"
+                    >
+                      <div>{item.asset?.name}</div>
+                      <div>Quantity: {item.quantity}</div>
+
+                      <input
+                        type="number"
+                        min={1}
+                        max={item.quantity}
+                        value={removeQty}
+                        onChange={(e) =>
+                          setRemoveQuantities({
+                            ...removeQuantities,
+                            [item.id]: Number(e.target.value),
+                          })
+                        }
+                        className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-2 py-1"
+                      />
+
+                      <button
+                        onClick={() => removeAsset(item)}
+                        className="w-full px-4 py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
-  );
+  </div>
+);
 }

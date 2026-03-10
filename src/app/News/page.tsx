@@ -16,33 +16,59 @@ export default function NewsPage() {
   const [issues, setIssues] = useState<
     { title: string; subtitle: string; cover: string; pages: string[] }[]
   >([]);
+  const [pagesCache, setPagesCache] = useState<{ [folder: string]: string[] }>({});
   const flipbookRef = useRef<any>(null);
 
+  // ------------------- Load initial covers -------------------
   useEffect(() => {
-    const loadIssues = async () => {
-      const loaded = await Promise.all(
-        issueFolders.map(async (issue) => {
-          const pages: string[] = [];
-          let index = 1;
-          while (true) {
-            try {
-              const path = `/news/${issue.folder}/page${index}.jpg`;
-              const res = await fetch(path, { method: "HEAD" });
-              if (!res.ok) break;
-              pages.push(path);
-              index++;
-            } catch {
-              break;
-            }
-          }
-          return { title: issue.title, subtitle: issue.subtitle, cover: issue.cover, pages };
-        })
-      );
+    const loadCovers = async () => {
+      const loaded = issueFolders.map(issue => ({
+        title: issue.title,
+        subtitle: issue.subtitle,
+        cover: issue.cover,
+        pages: [], // initially empty, pages load on-demand
+      }));
       setIssues(loaded);
     };
-    loadIssues();
+    loadCovers();
   }, []);
 
+  // ------------------- Load pages on-demand -------------------
+  useEffect(() => {
+    if (activeBook === null) return;
+
+    const folder = issueFolders[activeBook].folder;
+
+    const loadPages = async () => {
+      if (pagesCache[folder]) return; // already loaded
+
+      const pages: string[] = [];
+      let index = 1;
+      while (true) {
+        const path = `/news/${folder}/page${index}.jpg`;
+        try {
+          const res = await fetch(path, { method: "HEAD" });
+          if (!res.ok) break;
+          pages.push(path);
+          index++;
+        } catch {
+          break;
+        }
+      }
+
+      setPagesCache(prev => ({ ...prev, [folder]: pages }));
+
+      setIssues(prev => {
+        const updated = [...prev];
+        updated[activeBook] = { ...updated[activeBook], pages };
+        return updated;
+      });
+    };
+
+    loadPages();
+  }, [activeBook, pagesCache]);
+
+  // ------------------- Keyboard navigation -------------------
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!flipbookRef.current) return;
@@ -67,7 +93,6 @@ export default function NewsPage() {
 
       {/* ================= BACKGROUND ================= */}
       <div className="absolute inset-0 bg-black" />
-      {/* Animated grid overlay */}
       <div className="absolute inset-0 pointer-events-none opacity-10
         bg-[linear-gradient(#00ff66_1px,transparent_1px),linear-gradient(90deg,#00ff66_1px,transparent_1px)]
         bg-[size:40px_40px] animate-gridMove
@@ -90,7 +115,6 @@ export default function NewsPage() {
           .animate-gridMove { animation: gridMove 30s linear infinite; }
           .animate-gridMoveSlow { animation: gridMoveSlow 60s linear infinite; }
 
-          /* Flicker effect for main title */
           @keyframes flicker {
             0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
             20%, 22%, 24%, 55% { opacity: 0.5; }
@@ -128,7 +152,6 @@ export default function NewsPage() {
                   hover:rotate-y-3 hover:rotate-x-2 perspective-200
                 "
               >
-                {/* Dynamic Book Cover */}
                 <img
                   src={issue.cover}
                   className="absolute inset-0 w-full h-full object-cover rounded-md"
@@ -191,7 +214,12 @@ export default function NewsPage() {
               {/* PAGES */}
               {issues[activeBook].pages.map((img: string, pageIndex: number) => (
                 <div key={pageIndex} className="bg-black border border-[#00ff66]/30 flex items-center justify-center">
-                  <img src={img} alt="report page" className="w-full h-full object-contain" />
+                  <img
+                    src={img}
+                    alt="report page"
+                    loading="lazy"
+                    className="w-full h-full object-contain"
+                  />
                 </div>
               ))}
             </HTMLFlipBook>

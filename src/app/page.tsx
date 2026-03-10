@@ -649,7 +649,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
 
 
-          <div className="group mt-20 w-[95%] max-w-4xl h-[500px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
+          <div className="group mt-10 w-[95%] max-w-4xl h-[500px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
 
   {/* SLIDES */}
   {slides.map((slide, index) => (

@@ -91,6 +91,7 @@ export default function NavbarClient() {
       label: "Galactic Campaign",
       items: [
         { href: "/Galactic-Campaign", label: "GC Dashboard" },
+        { href: "/News", label: "Galactic Weekly" },
         { href: "/GC-Platoon-Logi", label: "GC Platoon Logistics" },
         { href: "/Randomiser", label: "Side-Operation Signup Sheet" },
       ],

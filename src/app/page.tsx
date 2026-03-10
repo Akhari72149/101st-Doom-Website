@@ -138,10 +138,8 @@ const filteredPersonnelItems = personnelItems.filter(
   /* ================= DATA ================= */
 
   const newsItems = [
-    "Week 3 Unit Stats - 104 clone casualties last week, 370 lost during Yoabos GC",
-    "Week 3 Kill Stats - 3770+ clankers taken out, 5870+ destroyed during GC",
-    "Kill stats reported innacurate as T1 zeus's fail to post their AAR",
-    "Over 2000 clankers killed during C2",
+    "Week 4 Unit Stats - 150 clone casualties last week, 526 lost during Yoabos GC",
+    "Week 4 Kill Stats - 8621+ clankers taken out, 14,491+ destroyed during GC",
     "Company Pilot Confirmed best in the unit with 176 Air Kills at Dagger this week",
   ];
 
@@ -362,7 +360,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
         ${justCameOnline(server) ? "animate-[glowBurst_1.2s_ease-out]" : ""}
         `}
          >
-        {/* HEADER (Always Visible) */}
+
         <div className="p-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <span
@@ -522,7 +520,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
 
 
-{/* Row With Offset Buttons */}
+
 <div className="flex gap-8">
 
   {/* ================= LEFT = How to Join ================= */}
@@ -608,6 +606,15 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
           Platoon Logistics
         </button>
 
+        <button
+          onClick={() => router.push("/News")}
+          className="w-full px-4 py-2 text-left rounded-md
+                     text-[#00ff66] hover:bg-[#00ff66]/10
+                     transition-all text-sm"
+        >
+          GC Weekly
+        </button>
+
         {/* Role Restricted */}
         {(roles.includes("admin") || roles.includes("logistics")) && (
           <button
@@ -627,7 +634,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
 </div>
 
-{/* ================= ART OF WAR (Now Below The Row) ================= */}
+{/* ================= ART OF WAR ================= */}
 <button
   onClick={() => router.push("/Art-of-War")}
   className="px-8 py-3 border border-[#00ff66] rounded-lg 

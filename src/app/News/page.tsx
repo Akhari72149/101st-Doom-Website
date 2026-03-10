@@ -13,10 +13,9 @@ const issueFolders = [
 
 export default function NewsPage() {
   const [activeBook, setActiveBook] = useState<number | null>(null);
-  const [issues, setIssues] = useState<
-    { title: string; subtitle: string; cover: string; pages: string[] }[]
-  >([]);
+  const [issues, setIssues] = useState<{ title: string; subtitle: string; cover: string; pages: string[] }[]>([]);
   const [pagesCache, setPagesCache] = useState<{ [folder: string]: string[] }>({});
+  const [loading, setLoading] = useState(false);
   const flipbookRef = useRef<any>(null);
 
   // ------------------- Load initial covers -------------------
@@ -26,7 +25,7 @@ export default function NewsPage() {
         title: issue.title,
         subtitle: issue.subtitle,
         cover: issue.cover,
-        pages: [], // initially empty, pages load on-demand
+        pages: [], // initially empty
       }));
       setIssues(loaded);
     };
@@ -38,9 +37,19 @@ export default function NewsPage() {
     if (activeBook === null) return;
 
     const folder = issueFolders[activeBook].folder;
+    setLoading(true);
 
     const loadPages = async () => {
-      if (pagesCache[folder]) return; // already loaded
+      // skip if cached
+      if (pagesCache[folder]) {
+        setIssues(prev => {
+          const updated = [...prev];
+          updated[activeBook] = { ...updated[activeBook], pages: pagesCache[folder] };
+          return updated;
+        });
+        setLoading(false);
+        return;
+      }
 
       const pages: string[] = [];
       let index = 1;
@@ -56,6 +65,16 @@ export default function NewsPage() {
         }
       }
 
+      // Preload all images
+      await Promise.all(
+        pages.map(src => new Promise<void>((resolve) => {
+          const img = new Image();
+          img.src = src;
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        }))
+      );
+
       setPagesCache(prev => ({ ...prev, [folder]: pages }));
 
       setIssues(prev => {
@@ -63,6 +82,8 @@ export default function NewsPage() {
         updated[activeBook] = { ...updated[activeBook], pages };
         return updated;
       });
+
+      setLoading(false);
     };
 
     loadPages();
@@ -141,21 +162,9 @@ export default function NewsPage() {
               <div
                 key={index}
                 onClick={() => setActiveBook(index)}
-                className="
-                  relative cursor-pointer
-                  transform transition duration-300 hover:scale-110
-                  w-[200px] h-[280px] shadow-[0_0_30px_rgba(0,255,100,0.4)]
-                  rounded-md overflow-hidden
-                  before:content-[''] before:absolute before:inset-0
-                  before:rounded-md before:bg-[#00ff66]/20 before:opacity-0
-                  before:transition before:duration-500 hover:before:opacity-40
-                  hover:rotate-y-3 hover:rotate-x-2 perspective-200
-                "
+                className="relative cursor-pointer transform transition duration-300 hover:scale-110 w-[200px] h-[280px] shadow-[0_0_30px_rgba(0,255,100,0.4)] rounded-md overflow-hidden hover:rotate-y-3 hover:rotate-x-2 perspective-200"
               >
-                <img
-                  src={issue.cover}
-                  className="absolute inset-0 w-full h-full object-cover rounded-md"
-                />
+                <img src={issue.cover} className="absolute inset-0 w-full h-full object-cover rounded-md" />
                 <div className="absolute inset-0 bg-black/30 rounded-md flex flex-col items-center justify-end text-center px-2 pb-4">
                   <div className="bg-black/50 rounded px-1 py-1">
                     <div className="text-[#00ff66] text-sm tracking-widest">{issue.title}</div>
@@ -168,61 +177,59 @@ export default function NewsPage() {
         )}
 
         {/* ================= READER VIEW ================= */}
-        {activeBook !== null && issues[activeBook] && (
-          <div className="flex flex-col items-center mt-10">
+        {activeBook !== null && (
+          <div className="flex flex-col items-center mt-10 relative">
+
+            {/* Loading overlay */}
+            {loading && (
+              <div className="absolute inset-0 bg-black/80 z-50 flex flex-col items-center justify-center">
+                <div className="animate-spin border-4 border-t-[#00ff66] border-gray-600 rounded-full w-16 h-16 mb-4"></div>
+                <div className="text-[#00ff66] tracking-widest">Loading Archive...</div>
+              </div>
+            )}
+
             <button
               onClick={() => setActiveBook(null)}
-              className="mb-10 px-6 py-2 border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition"
+              className="mb-10 px-6 py-2 border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition z-10"
             >
               RETURN TO ARCHIVE
             </button>
 
-            <HTMLFlipBook
-              ref={flipbookRef}
-              width={540}
-              height={720}
-              showCover
-              flippingTime={900}
-              drawShadow
-              maxShadowOpacity={0.5}
-              className="shadow-[0_0_60px_rgba(0,255,100,0.4)]"
-            >
-              {/* COVER */}
-              <div className="relative bg-black border border-[#00ff66]/40 flex items-center justify-center">
-                <img
-                  src={issues[activeBook].cover}
-                  className="absolute inset-0 w-full h-full object-cover opacity-40"
-                />
-                <div className="absolute bottom-6 w-full text-center px-6">
-                  <div className="bg-black/50 inline-block rounded px-3 py-2">
-                    <div className="text-[#00ff66] text-3xl tracking-widest font-orbitron">
-                      {issues[activeBook].title}
-                    </div>
-                    <div className="text-blue-400 text-sm mt-2 font-mono">
-                      {issues[activeBook].subtitle}
-                    </div>
-                    <div className="mt-4 text-xs text-[#00ff66]/70 tracking-widest font-mono">
-                      GRAND ARMY OF THE REPUBLIC
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1 font-mono">
-                      MILITARY ARCHIVE RECORD
+            {!loading && issues[activeBook] && (
+              <HTMLFlipBook
+                ref={flipbookRef}
+                width={540}
+                height={720}
+                showCover
+                flippingTime={900}
+                drawShadow
+                maxShadowOpacity={0.5}
+                className="shadow-[0_0_60px_rgba(0,255,100,0.4)]"
+              >
+                {/* COVER */}
+                <div className="relative bg-black border border-[#00ff66]/40 flex items-center justify-center">
+                  <img
+                    src={issues[activeBook].cover}
+                    className="absolute inset-0 w-full h-full object-cover opacity-40"
+                  />
+                  <div className="absolute bottom-6 w-full text-center px-6">
+                    <div className="bg-black/50 inline-block rounded px-3 py-2">
+                      <div className="text-[#00ff66] text-3xl tracking-widest font-orbitron">{issues[activeBook].title}</div>
+                      <div className="text-blue-400 text-sm mt-2 font-mono">{issues[activeBook].subtitle}</div>
+                      <div className="mt-4 text-xs text-[#00ff66]/70 tracking-widest font-mono">GRAND ARMY OF THE REPUBLIC</div>
+                      <div className="text-xs text-gray-400 mt-1 font-mono">MILITARY ARCHIVE RECORD</div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* PAGES */}
-              {issues[activeBook].pages.map((img: string, pageIndex: number) => (
-                <div key={pageIndex} className="bg-black border border-[#00ff66]/30 flex items-center justify-center">
-                  <img
-                    src={img}
-                    alt="report page"
-                    loading="lazy"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-              ))}
-            </HTMLFlipBook>
+                {/* PAGES */}
+                {issues[activeBook].pages.map((img: string, pageIndex: number) => (
+                  <div key={pageIndex} className="bg-black border border-[#00ff66]/30 flex items-center justify-center">
+                    <img src={img} alt="report page" loading="lazy" className="w-full h-full object-contain" />
+                  </div>
+                ))}
+              </HTMLFlipBook>
+            )}
           </div>
         )}
 

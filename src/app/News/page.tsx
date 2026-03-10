@@ -191,7 +191,7 @@ export default function NewsPage() {
               {/* PAGES */}
               {issues[activeBook].pages.map((img: string, pageIndex: number) => (
                 <div key={pageIndex} className="bg-black border border-[#00ff66]/30 flex items-center justify-center">
-                  <img src={img} loading="lazy" alt="report page" className="w-full h-full object-contain" />
+                  <img src={img} alt="report page" className="w-full h-full object-contain" />
                 </div>
               ))}
             </HTMLFlipBook>

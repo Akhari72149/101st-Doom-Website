@@ -261,6 +261,8 @@ const selectPlatoon = (p: Platoon) => {
     await fetchTransactions(selected.id);
   };
 
+  // Checkout system update
+
   const checkoutCart = async () => {
   if (!selected) return;
 
@@ -315,6 +317,14 @@ const selectPlatoon = (p: Platoon) => {
   await fetchTransactions(selected.id);
 };
 
+//ux update
+
+const cartTotal = Object.entries(cart).reduce((sum, [assetId, qty]) => {
+  const asset = assets.find((a) => a.id === assetId);
+  return sum + (asset?.token_cost || 0) * qty;
+}, 0);
+
+const tokensAfterPurchase = selected ? selected.tokens - cartTotal : 0;
 
   const filteredAssets = assets.filter((asset) =>
     asset.name.toLowerCase().includes(assetSearch.toLowerCase())
@@ -527,21 +537,35 @@ return (
           );
         })}
 
-        <div className="mt-4 font-bold text-[#00ff66]">
-          Total Cost:{" "}
-          {Object.entries(cart).reduce((sum, [assetId, qty]) => {
-            const asset = assets.find((a) => a.id === assetId);
-            return sum + (asset?.token_cost || 0) * qty;
-          }, 0)}
-          {" "}tokens
-        </div>
+<div className="mt-4 space-y-1">
+  <div className="font-bold text-[#00ff66]">
+    Total Cost: {cartTotal} tokens
+  </div>
 
-        <button
-          onClick={checkoutCart}
-          className="mt-4 w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
-        >
-          Buy
-        </button>
+  {selected && (
+    <div
+      className={`text-sm ${
+        tokensAfterPurchase < 0 ? "text-red-400" : "text-gray-400"
+      }`}
+    >
+      Tokens After Purchase: {tokensAfterPurchase}
+    </div>
+  )}
+</div>
+
+<button
+  onClick={checkoutCart}
+  disabled={tokensAfterPurchase < 0}
+  className={`mt-4 w-full px-4 py-2 border rounded-lg transition
+  ${
+    tokensAfterPurchase < 0
+      ? "border-red-500 text-red-400 cursor-not-allowed"
+      : "border-[#00ff66] hover:bg-[#00ff66] hover:text-black"
+  }`}
+>
+  Buy
+</button>
+
 
       </div>
     )}

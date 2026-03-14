@@ -261,6 +261,60 @@ const selectPlatoon = (p: Platoon) => {
     await fetchTransactions(selected.id);
   };
 
+  const checkoutCart = async () => {
+  if (!selected) return;
+
+  const totalCost = Object.entries(cart).reduce((sum, [assetId, qty]) => {
+    const asset = assets.find((a) => a.id === assetId);
+    return sum + (asset?.token_cost || 0) * qty;
+  }, 0);
+
+  if (selected.tokens < totalCost) {
+    alert("Not enough tokens to buy everything in the cart.");
+    return;
+  }
+
+  await supabase
+    .from("platoons")
+    .update({ tokens: selected.tokens - totalCost })
+    .eq("id", selected.id);
+
+  for (const [assetId, qty] of Object.entries(cart)) {
+    const existing = ownedAssets.find((o) => o.asset?.id === assetId);
+
+    if (existing) {
+      await supabase
+        .from("platoon_assets")
+        .update({ quantity: existing.quantity + qty })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("platoon_assets").insert([
+        {
+          platoon_id: selected.id,
+          asset_id: assetId,
+          quantity: qty,
+        },
+      ]);
+    }
+  }
+
+  // Log ONE transaction
+  await supabase.from("token_transactions").insert([
+    {
+      platoon_id: selected.id,
+      action: "BUY_ASSET",
+      amount: totalCost,
+      created_at: new Date().toISOString(),
+    },
+  ]);
+
+  // Refresh UI
+  setCart({});
+  await fetchPlatoons();
+  await fetchOwnedAssets(selected.id);
+  await fetchTransactions(selected.id);
+};
+
 
   const filteredAssets = assets.filter((asset) =>
     asset.name.toLowerCase().includes(assetSearch.toLowerCase())
@@ -483,13 +537,7 @@ return (
         </div>
 
         <button
-          onClick={() => {
-            Object.entries(cart).forEach(([assetId, qty]) => {
-              const asset = assets.find((a) => a.id === assetId);
-              if (asset) buyAsset(asset);
-            });
-            setCart({});
-          }}
+          onClick={checkoutCart}
           className="mt-4 w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
         >
           Buy

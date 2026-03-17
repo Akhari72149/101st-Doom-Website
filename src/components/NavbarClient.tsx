@@ -85,6 +85,7 @@ export default function NavbarClient() {
         { href: "/roster", label: "Slotted Roster" },
         { href: "/Tags", label: "Tag Lookup" },
         { href: "/certs", label: "What We Offer" },
+        { href: "/Workbench", label: "Animation Workbench" },
       ],
     },
 

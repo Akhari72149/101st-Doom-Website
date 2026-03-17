@@ -479,6 +479,7 @@ export default function CISLogisticsHub() {
             <div>Total Value: {(owned.asset?.token_cost || 0) * owned.quantity}</div>
           </div>
 
+
           <div className="flex gap-2 items-center">
             <input
               type="number"

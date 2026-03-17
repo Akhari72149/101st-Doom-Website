@@ -276,7 +276,7 @@ export default function SideOperationPage() {
             </div>
           ) : selected.length === 0 ? (
             <div className="text-gray-500 text-sm">
-              Awaiting selection from the omnisiah...
+              Awaiting selection from the omnissiah...
             </div>
           ) : (
             selected.map((s, index) => (

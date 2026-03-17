@@ -205,7 +205,7 @@ const tabs: Record<CategoryKey, TabItem[]> = {
     unit(
       "U26",
       "Forge",
-      "VCT",
+      "CST",
       "forge.jpg",
       `As a support focused cert, Forge operates commonly on the frontlines providing Repairs to damaged vehicles, Rearming and Refueling where required.
        

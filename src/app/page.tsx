@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { animate, stagger } from "animejs";
 
 type Event = {
   id: string;
@@ -158,7 +159,7 @@ const filteredPersonnelItems = personnelItems.filter(
     "/slideshow/halberd.jpg",
   ];
 
-  /* ================= CLOCK ================= */
+  /*================= CLOCK =================*/
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -168,7 +169,18 @@ const filteredPersonnelItems = personnelItems.filter(
     return () => clearInterval(interval);
   }, []);
 
-  /* ================= SLIDESHOW ================= */
+  /*================= PAGE LOAD ANIMATION =================*/
+useEffect(() => {
+  animate(".boot", {
+    opacity: [0, 1],
+    y: [20, 0],
+    duration: 800,
+    easing: "easeOutExpo",
+    delay: stagger(120),
+  });
+}, []);
+
+  /*================= SLIDESHOW =================*/
 
   useEffect(() => {
   const interval = setInterval(() => {
@@ -182,7 +194,7 @@ const filteredPersonnelItems = personnelItems.filter(
   return () => clearInterval(interval);
 }, [slides.length]);
   
-  /* ================= WEEKLY EVENTS (UTC BASED) ================= */
+  /*================= WEEKLY EVENTS (UTC BASED) =================*/
 
 const weeklyEvents = [
   { name: "Tomahawk 1", day: 0, hour: 20, minute:0 }, 
@@ -294,7 +306,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
   previousStatus[server.id] === false && server.online;
 
   return (
-    <div className="relative min-h-screen flex text-white font-orbitron pb-29">
+    <div className="boot relative min-h-screen flex text-white font-orbitron pb-20">
 
       {/* ================= BACKGROUND ================= */}
       <div
@@ -451,7 +463,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
         </div>
 
         {/* ================= CENTER ================= */}
-        <div className="flex-1 flex flex-col items-center pt-45">
+        <div className="flex-1 flex flex-col items-center pt-40">
 
           <h1 className="text-4xl md:text-6xl font-bold tracking-[0.4em] text-[#00ff66] text-center">
             101ST<br />
@@ -862,7 +874,7 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
       </div>
 
       {/* ================= NEWS TICKER ================= */}
-      <div className="fixed bottom-0 left-0 w-full bg-black/70 backdrop-blur-xl border-t border-[#00ff66]/30 overflow-hidden z-50">
+      <div className="fixed bottom-15 left-0 w-full bg-black/70 backdrop-blur-xl border-t border-[#00ff66]/30 overflow-hidden z-50">
         <div className="flex w-max animate-ticker gap-16 px-8 py-3 text-[#00ff66] whitespace-nowrap">
           {[...newsItems, ...newsItems].map((item, index) => (
             <span key={index} className="mr-16">

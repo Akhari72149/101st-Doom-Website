@@ -139,9 +139,9 @@ const filteredPersonnelItems = personnelItems.filter(
   /* ================= DATA ================= */
 
   const newsItems = [
-    "Week 4 Unit Stats - 150 clone casualties last week, 526 lost during Yoabos GC",
-    "Week 4 Kill Stats - 8621+ clankers taken out, 14,491+ destroyed during GC",
-    "Company Pilot Confirmed best in the unit with 176 Air Kills at Dagger this week",
+    "Week 5 Unit Stats - 112 clone casualties last week, 638 lost during Yoabos GC",
+    "Week 5 Kill Stats - 6000+ clankers taken out, 18200+ destroyed during GC",
+    "Latest numbers, CWO Sicko purged more Troopers from the unit, than the droids did last weekend, FKIN CWOS, they are the true threat",
   ];
 
   const slides = [

@@ -83,6 +83,7 @@ export default function NavbarClient() {
         { href: "/personnel-profile", label: "Personnel Profile" },
         { href: "/servers", label: "Server Booking" },
         { href: "/roster", label: "Slotted Roster" },
+        { href: "/Tags", label: "Tag Lookup" },
         { href: "/certs", label: "What We Offer" },
       ],
     },

@@ -24,6 +24,11 @@ type Transaction = {
   id: string;
   action: string;
   amount: number;
+  quantity?: number;
+  asset_id?: string | null;
+  asset_name?: string | null;
+  performed_by?: string | null;
+  notes?: string | null;
   created_at: string;
 };
 
@@ -39,18 +44,17 @@ export default function GCLogisticsHub() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [amount, setAmount] = useState(0);
   const [assetSearch, setAssetSearch] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [stats, setStats] = useState({
-  totalAssets: 0,
-  totalAssetValue: 0,
-  tokensSpent: 0,
-});
-const [cart, setCart] = useState<Record<string, number>>({});
+    totalAssets: 0,
+    totalAssetValue: 0,
+    tokensSpent: 0,
+  });
+  const [cart, setCart] = useState<Record<string, number>>({});
 
-  /* ✅ Per asset quantity */
   const [buyQuantities, setBuyQuantities] =
     useState<Record<string, number>>({});
 
-  /* ✅ Per owned asset remove quantity */
   const [removeQuantities, setRemoveQuantities] =
     useState<Record<string, number>>({});
 
@@ -59,19 +63,19 @@ const [cart, setCart] = useState<Record<string, number>>({});
 
   /* ================= AUTH ================= */
 
-  useEffect(() => {
+useEffect(() => {
   const checkAccess = async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // ❌ Not logged in
     if (!user) {
       router.replace("/login");
       return;
     }
 
-    // Fetch roles
+    setCurrentUserId(user.id);
+
     const { data } = await supabase
       .from("user_roles")
       .select("role")
@@ -83,62 +87,53 @@ const [cart, setCart] = useState<Record<string, number>>({});
       userRoles.includes("Akhari") ||
       userRoles.includes("logistics");
 
-    // ❌ Logged in but no permission
     if (!hasAccess) {
       router.replace("/GC-Platoon-Logi");
       return;
     }
 
-    // ✅ Allowed
     setLoadingAuth(false);
   };
 
   checkAccess();
 }, [router]);
 
-useEffect(() => {
-  if (!selected) return;
+  useEffect(() => {
+    if (!selected) return;
 
-  const updated = platoons.find(p => p.id === selected.id);
-  if (updated) {
-    setSelected(updated);
-  }
-}, [platoons]);
+    const updated = platoons.find((p) => p.id === selected.id);
+    if (updated) {
+      setSelected(updated);
+    }
+  }, [platoons, selected]);
 
   /* ================= STAT CALCS ================= */
   const calculateStats = () => {
-  if (!selected) return;
+    if (!selected) return;
 
-  // Total assets owned
-  const totalAssets = ownedAssets.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
-
-  // Total asset value (quantity × token_cost)
-  const totalAssetValue = ownedAssets.reduce((sum, item) => {
-    return (
-      sum +
-      item.quantity *
-        (item.asset?.token_cost || 0)
+    const totalAssets = ownedAssets.reduce(
+      (sum, item) => sum + item.quantity,
+      0
     );
-  }, 0);
 
-  // Tokens spent from transactions
-  const tokensSpent = transactions
-    .filter((tx) => tx.action === "BUY_ASSET")
-    .reduce((sum, tx) => sum + tx.amount, 0);
+    const totalAssetValue = ownedAssets.reduce((sum, item) => {
+      return sum + item.quantity * (item.asset?.token_cost || 0);
+    }, 0);
 
-  setStats({
-    totalAssets,
-    totalAssetValue,
-    tokensSpent,
-  });
-};
+    const tokensSpent = transactions
+      .filter((tx) => tx.action === "BUY_ASSET")
+      .reduce((sum, tx) => sum + tx.amount, 0);
 
-useEffect(() => {
-  calculateStats();
-}, [ownedAssets, transactions]);
+    setStats({
+      totalAssets,
+      totalAssetValue,
+      tokensSpent,
+    });
+  };
+
+  useEffect(() => {
+    calculateStats();
+  }, [ownedAssets, transactions, selected]);
 
   /* ================= FETCH DATA ================= */
 
@@ -152,33 +147,30 @@ useEffect(() => {
   };
 
   const fetchAssets = async (platoonId: string) => {
-  if (!platoonId) return;
+    if (!platoonId) return;
 
-  // Get platoon name to determine permission level
-  const { data: platoonData } = await supabase
-    .from("platoons")
-    .select("name")
-    .eq("id", platoonId)
-    .single();
+    const { data: platoonData } = await supabase
+      .from("platoons")
+      .select("name")
+      .eq("id", platoonId)
+      .single();
 
-  const platoonName = platoonData?.name?.toLowerCase();
+    const platoonName = platoonData?.name?.toLowerCase();
 
-  // Full access if Company OR Blinds Basket
-  const hasFullAccess =
-    platoonName?.includes("company") ||
-    platoonName?.includes("blinds basket");
+    const hasFullAccess =
+      platoonName?.includes("company") ||
+      platoonName?.includes("blinds basket");
 
-  let query = supabase.from("hq_assets").select("*");
+    let query = supabase.from("hq_assets").select("*");
 
-  // Restrict assets for normal platoons
-  if (!hasFullAccess) {
-    query = query.eq("category", "platoon");
-  }
+    if (!hasFullAccess) {
+      query = query.eq("category", "platoon");
+    }
 
-  const { data } = await query;
+    const { data } = await query;
 
-  setAssets(data || []);
-};
+    setAssets(data || []);
+  };
 
   const fetchTransactions = async (platoonId: string) => {
     const { data } = await supabase
@@ -215,20 +207,20 @@ useEffect(() => {
 
   /* ================= SELECT PLATOON ================= */
 
-const selectPlatoon = (p: Platoon) => {
-  setCart({});
-  setBuyQuantities({});
-  setSelected(p);
-  fetchTransactions(p.id);
-  fetchOwnedAssets(p.id);
-  fetchAssets(p.id);
-};
+  const selectPlatoon = (p: Platoon) => {
+    setCart({});
+    setBuyQuantities({});
+    setSelected(p);
+    fetchTransactions(p.id);
+    fetchOwnedAssets(p.id);
+    fetchAssets(p.id);
+  };
 
   useEffect(() => {
-  if (selected) {
-    fetchAssets(selected.id);
-  }
-}, [selected]);
+    if (selected) {
+      fetchAssets(selected.id);
+    }
+  }, [selected]);
 
   /* ================= ADD TOKENS ================= */
 
@@ -245,13 +237,18 @@ const selectPlatoon = (p: Platoon) => {
         platoon_id: selected.id,
         action: "ADD_TOKENS",
         amount,
+        quantity: 0,
+        asset_id: null,
+        asset_name: null,
+        performed_by: currentUserId,
+        notes: `Added ${amount} tokens to ${selected.name}`,
         created_at: new Date().toISOString(),
       },
     ]);
 
     setAmount(0);
-    fetchPlatoons();
-    fetchTransactions(selected.id);
+    await fetchPlatoons();
+    await fetchTransactions(selected.id);
   };
 
   /* ================= BUY ASSET ================= */
@@ -302,6 +299,11 @@ const selectPlatoon = (p: Platoon) => {
         platoon_id: selected.id,
         action: "BUY_ASSET",
         amount: totalCost,
+        quantity: qty,
+        asset_id: asset.id,
+        asset_name: asset.name,
+        performed_by: currentUserId,
+        notes: `Bought ${qty} x ${asset.name} for ${selected.name} (${totalCost} tokens)`,
         created_at: new Date().toISOString(),
       },
     ]);
@@ -317,61 +319,65 @@ const selectPlatoon = (p: Platoon) => {
   };
 
   /* ================= CART CHECKOUT ================= */
-const checkoutCart = async () => {
-  if (!selected) return;
+  const checkoutCart = async () => {
+    if (!selected) return;
 
-  const totalCost = Object.entries(cart).reduce((sum, [assetId, qty]) => {
-    const asset = assets.find((a) => a.id === assetId);
-    return sum + (asset?.token_cost || 0) * qty;
-  }, 0);
+    const totalCost = Object.entries(cart).reduce((sum, [assetId, qty]) => {
+      const asset = assets.find((a) => a.id === assetId);
+      return sum + (asset?.token_cost || 0) * qty;
+    }, 0);
 
-  if (selected.tokens < totalCost) {
-    alert("Not enough tokens to buy everything in the cart.");
-    return;
-  }
+    if (selected.tokens < totalCost) {
+      alert("Not enough tokens to buy everything in the cart.");
+      return;
+    }
 
-  // Deduct tokens
-  await supabase
-    .from("platoons")
-    .update({ tokens: selected.tokens - totalCost })
-    .eq("id", selected.id);
+    await supabase
+      .from("platoons")
+      .update({ tokens: selected.tokens - totalCost })
+      .eq("id", selected.id);
 
-  // Add assets to owned
-  for (const [assetId, qty] of Object.entries(cart)) {
-    const existing = ownedAssets.find((o) => o.asset?.id === assetId);
+    for (const [assetId, qty] of Object.entries(cart)) {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) continue;
 
-    if (existing) {
-      await supabase
-        .from("platoon_assets")
-        .update({ quantity: existing.quantity + qty })
-        .eq("id", existing.id);
-    } else {
-      await supabase.from("platoon_assets").insert([
+      const existing = ownedAssets.find((o) => o.asset?.id === assetId);
+
+      if (existing) {
+        await supabase
+          .from("platoon_assets")
+          .update({ quantity: existing.quantity + qty })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("platoon_assets").insert([
+          {
+            platoon_id: selected.id,
+            asset_id: assetId,
+            quantity: qty,
+          },
+        ]);
+      }
+
+      await supabase.from("token_transactions").insert([
         {
           platoon_id: selected.id,
-          asset_id: assetId,
+          action: "BUY_ASSET",
+          amount: asset.token_cost * qty,
           quantity: qty,
+          asset_id: asset.id,
+          asset_name: asset.name,
+          performed_by: currentUserId,
+          notes: `Bought ${qty} x ${asset.name} for ${selected.name} (${asset.token_cost * qty} tokens)`,
+          created_at: new Date().toISOString(),
         },
       ]);
     }
-  }
 
-  // Log transaction
-  await supabase.from("token_transactions").insert([
-    {
-      platoon_id: selected.id,
-      action: "BUY_ASSET",
-      amount: totalCost,
-      created_at: new Date().toISOString(),
-    },
-  ]);
-
-  // Clear cart and refresh
-  setCart({});
-  await fetchPlatoons();
-  await fetchOwnedAssets(selected.id);
-  await fetchTransactions(selected.id);
-};
+    setCart({});
+    await fetchPlatoons();
+    await fetchOwnedAssets(selected.id);
+    await fetchTransactions(selected.id);
+  };
 
   /* ================= REMOVE ASSET (WITH QUANTITY) ================= */
 
@@ -405,6 +411,11 @@ const checkoutCart = async () => {
         platoon_id: selected.id,
         action: "REMOVE_ASSET",
         amount: 0,
+        quantity: qtyToRemove,
+        asset_id: owned.asset?.id || null,
+        asset_name: owned.asset?.name || null,
+        performed_by: currentUserId,
+        notes: `Removed ${qtyToRemove} x ${owned.asset?.name || "asset"} from ${selected.name}`,
         created_at: new Date().toISOString(),
       },
     ]);
@@ -415,6 +426,7 @@ const checkoutCart = async () => {
     }));
 
     await fetchOwnedAssets(selected.id);
+    await fetchTransactions(selected.id);
   };
 
   const filteredAssets = assets.filter((asset) =>
@@ -429,272 +441,292 @@ const checkoutCart = async () => {
     );
   }
 
-return (
-  <div className="min-h-screen flex text-white bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]">
-
-    {/* ================= LEFT ================= */}
-    <div className="w-[300px] border-r border-[#00ff66]/30 p-6 space-y-4">
-      <button
-        onClick={() => router.push("/Galactic-Campaign")}
-        className="px-4 py-2 border border-[#00ff66] text-[#00ff66]"
-      >
-        ← Back
-      </button>
-      <h2 className="text-[#00ff66] text-xl mb-4">Platoons</h2>
-
-      {platoons.map((p) => (
-        <div
-          key={p.id}
-          onClick={() => selectPlatoon(p)}
-          className={`p-4 rounded-xl cursor-pointer transition ${
-            selected?.id === p.id
-              ? "bg-[#00ff66]/20 border border-[#00ff66]"
-              : "border border-[#00ff66]/20 hover:border-[#00ff66]/60"
-          }`}
+  return (
+    <div className="min-h-screen flex text-white bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]">
+      <div className="w-[300px] border-r border-[#00ff66]/30 p-6 space-y-4">
+        <button
+          onClick={() => router.push("/Galactic-Campaign")}
+          className="px-4 py-2 border border-[#00ff66] text-[#00ff66]"
         >
-          <div className="font-bold">{p.name}</div>
-          <div className="text-sm">Tokens: {p.tokens}</div>
-        </div>
-      ))}
-    </div>
+          ← Back
+        </button>
 
-    {/* ================= CENTER ================= */}
-    <div className="flex-1 p-10 space-y-10">
-      {!selected ? (
-        <div className="text-gray-400">Select a platoon.</div>
-      ) : (
-        <>
-          {/* TOKEN BOX */}
-          <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-            <h2 className="text-2xl text-[#00ff66] mb-4">{selected.name}</h2>
+        <button
+          onClick={() => router.push("/GC-Logistics-Transactions")}
+          className="w-full px-4 py-2 border border-[#00ff66] text-[#00ff66] rounded-xl hover:bg-[#00ff66] hover:text-black transition"
+        >
+          View Transaction History
+        </button>
 
-            <div className="text-xl">
-              Tokens:
-              <span className="ml-2 text-[#00ff66] font-bold">{selected.tokens}</span>
-            </div>
+        <h2 className="text-[#00ff66] text-xl mb-4">Platoons</h2>
 
-            <div className="mt-6 flex gap-4">
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
-                className="bg-black border border-[#00ff66]/30 rounded-xl px-4 py-2"
-              />
-
-              <button
-                onClick={addTokens}
-                className="px-6 py-2 border border-[#00ff66] rounded-xl hover:bg-[#00ff66] hover:text-black transition"
-              >
-                Add Tokens
-              </button>
-            </div>
+        {platoons.map((p) => (
+          <div
+            key={p.id}
+            onClick={() => selectPlatoon(p)}
+            className={`p-4 rounded-xl cursor-pointer transition ${
+              selected?.id === p.id
+                ? "bg-[#00ff66]/20 border border-[#00ff66]"
+                : "border border-[#00ff66]/20 hover:border-[#00ff66]/60"
+            }`}
+          >
+            <div className="font-bold">{p.name}</div>
+            <div className="text-sm">Tokens: {p.tokens}</div>
           </div>
+        ))}
+      </div>
 
-          {/* ================= DASHBOARD STATS ================= */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="flex-1 p-10 space-y-10">
+        {!selected ? (
+          <div className="text-gray-400">Select a platoon.</div>
+        ) : (
+          <>
             <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-              <div className="text-gray-400 text-sm">Total Assets Owned</div>
-              <div className="text-2xl text-[#00ff66] font-bold">{stats.totalAssets}</div>
-            </div>
+              <h2 className="text-2xl text-[#00ff66] mb-4">{selected.name}</h2>
 
-            <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-              <div className="text-gray-400 text-sm">Total Asset Value</div>
-              <div className="text-2xl text-[#00ff66] font-bold">{stats.totalAssetValue}</div>
-            </div>
+              <div className="text-xl">
+                Tokens:
+                <span className="ml-2 text-[#00ff66] font-bold">
+                  {selected.tokens}
+                </span>
+              </div>
 
-            <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-              <div className="text-gray-400 text-sm">Tokens Spent</div>
-              <div className="text-2xl text-red-400 font-bold">{stats.tokensSpent}</div>
-            </div>
-          </div>
+              <div className="mt-6 flex gap-4">
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(Number(e.target.value))}
+                  className="bg-black border border-[#00ff66]/30 rounded-xl px-4 py-2"
+                />
 
-          {/* ================= TABS ================= */}
-          <div className="flex gap-4 mb-4">
-            <button
-              onClick={() => setActiveTab("shop")}
-              className={`px-4 py-2 rounded-xl border ${
-                activeTab === "shop" ? "border-[#00ff66] bg-[#00ff66]/20" : "border-[#00ff66]/20"
-              }`}
-            >
-              Asset Shop
-            </button>
-
-            <button
-              onClick={() => setActiveTab("cart")}
-              className={`px-4 py-2 rounded-xl border ${
-                activeTab === "cart" ? "border-[#00ff66] bg-[#00ff66]/20" : "border-[#00ff66]/20"
-              }`}
-            >
-              Cart ({Object.keys(cart).length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab("owned")}
-              className={`px-4 py-2 rounded-xl border ${
-                activeTab === "owned" ? "border-[#00ff66] bg-[#00ff66]/20" : "border-[#00ff66]/20"
-              }`}
-            >
-              Owned Assets
-            </button>
-          </div>
-
-          {/* ================= TAB CONTENT ================= */}
-          {activeTab === "shop" && (
-            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6">
-              <input
-                type="text"
-                placeholder="Search..."
-                value={assetSearch}
-                onChange={(e) => setAssetSearch(e.target.value)}
-                className="bg-black border border-[#00ff66]/30 rounded-xl px-4 py-2 mb-4 w-full"
-              />
-
-              <div className="grid grid-cols-3 gap-4">
-                {filteredAssets.map((asset) => {
-                  const qty = buyQuantities[asset.id] || 1;
-
-                  return (
-                    <div
-                      key={asset.id}
-                      className="p-5 rounded-2xl border border-[#00ff66]/20 bg-black/50 space-y-3"
-                    >
-                      <div className="font-bold text-[#00ff66]">{asset.name}</div>
-                      <div>Cost: {asset.token_cost}</div>
-                      <div>Stock: {asset.inventory}</div>
-
-                      <input
-                        type="number"
-                        min={1}
-                        value={qty}
-                        onChange={(e) =>
-                          setBuyQuantities({
-                            ...buyQuantities,
-                            [asset.id]: Number(e.target.value),
-                          })
-                        }
-                        className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-2 py-1"
-                      />
-
-                      <button
-                        onClick={() => {
-                          setCart((prev) => ({
-                            ...prev,
-                            [asset.id]: (prev[asset.id] || 0) + qty,
-                          }));
-                          setBuyQuantities((prev) => ({ ...prev, [asset.id]: 1 }));
-                        }}
-                        className="w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
-                      >
-                        Add to Cart
-                      </button>
-                    </div>
-                  );
-                })}
+                <button
+                  onClick={addTokens}
+                  className="px-6 py-2 border border-[#00ff66] rounded-xl hover:bg-[#00ff66] hover:text-black transition"
+                >
+                  Add Tokens
+                </button>
               </div>
             </div>
-          )}
 
-          {activeTab === "cart" && (
-            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6">
-              <h3 className="text-xl text-[#00ff66] mb-4">Cart</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+                <div className="text-gray-400 text-sm">Total Assets Owned</div>
+                <div className="text-2xl text-[#00ff66] font-bold">
+                  {stats.totalAssets}
+                </div>
+              </div>
 
-              {Object.keys(cart).length === 0 ? (
-                <div className="text-gray-400">Cart is empty.</div>
-              ) : (
-                <div className="space-y-3">
-                  {Object.entries(cart).map(([assetId, qty]) => {
-                    const asset = assets.find((a) => a.id === assetId);
-                    if (!asset) return null;
+              <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+                <div className="text-gray-400 text-sm">Total Asset Value</div>
+                <div className="text-2xl text-[#00ff66] font-bold">
+                  {stats.totalAssetValue}
+                </div>
+              </div>
+
+              <div className="p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50">
+                <div className="text-gray-400 text-sm">Tokens Spent</div>
+                <div className="text-2xl text-red-400 font-bold">
+                  {stats.tokensSpent}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mb-4">
+              <button
+                onClick={() => setActiveTab("shop")}
+                className={`px-4 py-2 rounded-xl border ${
+                  activeTab === "shop"
+                    ? "border-[#00ff66] bg-[#00ff66]/20"
+                    : "border-[#00ff66]/20"
+                }`}
+              >
+                Asset Shop
+              </button>
+
+              <button
+                onClick={() => setActiveTab("cart")}
+                className={`px-4 py-2 rounded-xl border ${
+                  activeTab === "cart"
+                    ? "border-[#00ff66] bg-[#00ff66]/20"
+                    : "border-[#00ff66]/20"
+                }`}
+              >
+                Cart ({Object.keys(cart).length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab("owned")}
+                className={`px-4 py-2 rounded-xl border ${
+                  activeTab === "owned"
+                    ? "border-[#00ff66] bg-[#00ff66]/20"
+                    : "border-[#00ff66]/20"
+                }`}
+              >
+                Owned Assets
+              </button>
+            </div>
+
+            {activeTab === "shop" && (
+              <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6">
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={assetSearch}
+                  onChange={(e) => setAssetSearch(e.target.value)}
+                  className="bg-black border border-[#00ff66]/30 rounded-xl px-4 py-2 mb-4 w-full"
+                />
+
+                <div className="grid grid-cols-3 gap-4">
+                  {filteredAssets.map((asset) => {
+                    const qty = buyQuantities[asset.id] || 1;
 
                     return (
                       <div
-                        key={assetId}
-                        className="flex justify-between items-center border-b border-[#00ff66]/20 py-2"
+                        key={asset.id}
+                        className="p-5 rounded-2xl border border-[#00ff66]/20 bg-black/50 space-y-3"
                       >
-                        <div>
-                          {asset.name} x {qty} ({asset.token_cost * qty} tokens)
+                        <div className="font-bold text-[#00ff66]">
+                          {asset.name}
                         </div>
+                        <div>Cost: {asset.token_cost}</div>
+                        <div>Stock: {asset.inventory}</div>
+
+                        <input
+                          type="number"
+                          min={1}
+                          value={qty}
+                          onChange={(e) =>
+                            setBuyQuantities({
+                              ...buyQuantities,
+                              [asset.id]: Number(e.target.value),
+                            })
+                          }
+                          className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-2 py-1"
+                        />
+
                         <button
                           onClick={() => {
-                            setCart((prev) => {
-                              const newCart = { ...prev };
-                              delete newCart[assetId];
-                              return newCart;
-                            });
+                            setCart((prev) => ({
+                              ...prev,
+                              [asset.id]: (prev[asset.id] || 0) + qty,
+                            }));
+                            setBuyQuantities((prev) => ({
+                              ...prev,
+                              [asset.id]: 1,
+                            }));
                           }}
-                          className="px-2 py-1 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition"
+                          className="w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
+                        >
+                          Add to Cart
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "cart" && (
+              <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6">
+                <h3 className="text-xl text-[#00ff66] mb-4">Cart</h3>
+
+                {Object.keys(cart).length === 0 ? (
+                  <div className="text-gray-400">Cart is empty.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(cart).map(([assetId, qty]) => {
+                      const asset = assets.find((a) => a.id === assetId);
+                      if (!asset) return null;
+
+                      return (
+                        <div
+                          key={assetId}
+                          className="flex justify-between items-center border-b border-[#00ff66]/20 py-2"
+                        >
+                          <div>
+                            {asset.name} x {qty} ({asset.token_cost * qty} tokens)
+                          </div>
+                          <button
+                            onClick={() => {
+                              setCart((prev) => {
+                                const newCart = { ...prev };
+                                delete newCart[assetId];
+                                return newCart;
+                              });
+                            }}
+                            className="px-2 py-1 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    <div className="mt-4 font-bold text-[#00ff66]">
+                      Total Cost:{" "}
+                      {Object.entries(cart).reduce((sum, [assetId, qty]) => {
+                        const asset = assets.find((a) => a.id === assetId);
+                        return sum + (asset?.token_cost || 0) * qty;
+                      }, 0)}{" "}
+                      tokens
+                    </div>
+
+                    <button
+                      onClick={checkoutCart}
+                      className="mt-4 w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
+                    >
+                      Checkout
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "owned" && (
+              <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6 grid grid-cols-3 gap-4">
+                {ownedAssets.length === 0 ? (
+                  <div className="text-gray-400">No assets owned.</div>
+                ) : (
+                  ownedAssets.map((item) => {
+                    const removeQty = removeQuantities[item.id] || 1;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-4 rounded-xl border border-[#00ff66]/30 space-y-3"
+                      >
+                        <div>{item.asset?.name}</div>
+                        <div>Quantity: {item.quantity}</div>
+
+                        <input
+                          type="number"
+                          min={1}
+                          max={item.quantity}
+                          value={removeQty}
+                          onChange={(e) =>
+                            setRemoveQuantities({
+                              ...removeQuantities,
+                              [item.id]: Number(e.target.value),
+                            })
+                          }
+                          className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-2 py-1"
+                        />
+
+                        <button
+                          onClick={() => removeAsset(item)}
+                          className="w-full px-4 py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition"
                         >
                           Remove
                         </button>
                       </div>
                     );
-                  })}
-
-                  <div className="mt-4 font-bold text-[#00ff66]">
-                    Total Cost:{" "}
-                    {Object.entries(cart).reduce((sum, [assetId, qty]) => {
-                      const asset = assets.find((a) => a.id === assetId);
-                      return sum + (asset?.token_cost || 0) * qty;
-                    }, 0)}
-                    {" "}tokens
-                  </div>
-
-                  <button
-                    onClick={checkoutCart}
-                    className="mt-4 w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition"
-                  >
-                    Checkout
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "owned" && (
-            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6 grid grid-cols-3 gap-4">
-              {ownedAssets.length === 0 ? (
-                <div className="text-gray-400">No assets owned.</div>
-              ) : (
-                ownedAssets.map((item) => {
-                  const removeQty = removeQuantities[item.id] || 1;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="p-4 rounded-xl border border-[#00ff66]/30 space-y-3"
-                    >
-                      <div>{item.asset?.name}</div>
-                      <div>Quantity: {item.quantity}</div>
-
-                      <input
-                        type="number"
-                        min={1}
-                        max={item.quantity}
-                        value={removeQty}
-                        onChange={(e) =>
-                          setRemoveQuantities({
-                            ...removeQuantities,
-                            [item.id]: Number(e.target.value),
-                          })
-                        }
-                        className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-2 py-1"
-                      />
-
-                      <button
-                        onClick={() => removeAsset(item)}
-                        className="w-full px-4 py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </>
-      )}
+                  })
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
 }

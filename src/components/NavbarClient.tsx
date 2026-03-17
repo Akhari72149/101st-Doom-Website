@@ -108,6 +108,11 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "recruiter"],
         },
         {
+          href: "/GC-Asset-Log",
+          label: "Asset Purchase Log",
+          allowedRoles: ["Akhari", "logistics"],
+        },
+        {
           href: "/admin/attendance",
           label: "Attendance Roster",
           allowedRoles: ["admin", "nco"],
@@ -125,12 +130,12 @@ export default function NavbarClient() {
         {
           href: "/admin/certifications",
           label: "Certification Management",
-          allowedRoles: ["admin", "nco", "trainer", "di"],
+          allowedRoles: ["admin", "nco", "trainer"],
         },
         {
           href: "/GC-Logi",
           label: "GC Logistics",
-          allowedRoles: ["Akhari", "logistics"],
+          allowedRoles: ["Akhari", "logistics", "admin"],
         },
         {
           href: "/admin/positions",

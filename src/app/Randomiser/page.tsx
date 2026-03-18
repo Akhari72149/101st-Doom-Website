@@ -457,7 +457,7 @@ export default function SideOperationPage() {
         )}
       </div>
 
-      <div className="max-w-4xl mx-auto p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50 backdrop-blur-md">
+      <div className="relative z-20 max-w-4xl mx-auto p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50 backdrop-blur-md">
         <div className="flex gap-4 mb-6 items-start">
           <div className="relative flex-1" ref={nameDropdownRef}>
             <input
@@ -475,7 +475,7 @@ export default function SideOperationPage() {
             />
 
             {signupsOpen && showNameDropdown && (
-              <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-[#00ff66]/30 bg-black/95 shadow-[0_0_25px_rgba(0,255,102,0.12)] backdrop-blur-xl">
+              <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-[#00ff66]/30 bg-black/95 shadow-[0_0_25px_rgba(0,255,102,0.12)] backdrop-blur-xl">
                 <div className="border-b border-[#00ff66]/15 px-3 py-2 text-xs uppercase tracking-[0.2em] text-[#00ff66]/70">
                   Personnel Registry
                 </div>
@@ -554,7 +554,7 @@ export default function SideOperationPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto mt-8 p-6 rounded-2xl border border-[#00ff66]/40 bg-black/60 backdrop-blur-xl">
+      <div className="relative z-0 max-w-4xl mx-auto mt-8 p-6 rounded-2xl border border-[#00ff66]/40 bg-black/60 backdrop-blur-xl">
         <h2 className="text-[#00ff66] mb-6 tracking-widest text-xl flex justify-between items-center">
           <span>Selected Operators</span>
 

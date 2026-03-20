@@ -4,11 +4,39 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
+type JoinedDisplayName =
+  | { display_name: string | null }
+  | { display_name: string | null }[]
+  | null
+  | undefined;
+
+type JoinedName =
+  | { name: string | null }
+  | { name: string | null }[]
+  | null
+  | undefined;
+
+type RemovalLogRowRaw = {
+  id: string;
+  action: string;
+  details: string | null;
+  created_at: string;
+  user_id: string | null;
+  processed_by: string | null;
+  target_personnel_id: string | null;
+  profiles?: JoinedDisplayName;
+  processor?: JoinedName;
+  personnel?: JoinedName;
+};
+
 type RemovalLogRow = {
   id: string;
   action: string;
   details: string | null;
   created_at: string;
+  user_id: string | null;
+  processed_by: string | null;
+  target_personnel_id: string | null;
   profiles?: {
     display_name: string | null;
   } | null;
@@ -19,6 +47,22 @@ type RemovalLogRow = {
     name: string | null;
   } | null;
 };
+
+function normaliseDisplayNameRelation(
+  value: JoinedDisplayName
+): { display_name: string | null } | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
+
+function normaliseNameRelation(
+  value: JoinedName
+): { name: string | null } | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
 
 export default function RemovalLogsPage() {
   const router = useRouter();
@@ -40,7 +84,11 @@ export default function RemovalLogsPage() {
 
       const [{ data: roles }, { data: profile }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", user.id),
-        supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", user.id)
+          .maybeSingle(),
       ]);
 
       const roleList = roles?.map((r) => r.role?.toLowerCase()) || [];
@@ -74,6 +122,7 @@ export default function RemovalLogsPage() {
         created_at,
         user_id,
         processed_by,
+        target_personnel_id,
         profiles:user_id ( display_name ),
         processor:processed_by ( name ),
         personnel:target_personnel_id ( name )
@@ -89,7 +138,22 @@ export default function RemovalLogsPage() {
       return;
     }
 
-    setLogs((data as RemovalLogRow[]) || []);
+    const cleanedLogs: RemovalLogRow[] = ((data || []) as RemovalLogRowRaw[]).map(
+      (log) => ({
+        id: log.id,
+        action: log.action,
+        details: log.details,
+        created_at: log.created_at,
+        user_id: log.user_id,
+        processed_by: log.processed_by,
+        target_personnel_id: log.target_personnel_id,
+        profiles: normaliseDisplayNameRelation(log.profiles),
+        processor: normaliseNameRelation(log.processor),
+        personnel: normaliseNameRelation(log.personnel),
+      })
+    );
+
+    setLogs(cleanedLogs);
     setLoadingLogs(false);
   };
 
@@ -201,7 +265,6 @@ export default function RemovalLogsPage() {
                         </span>
                       </td>
 
-                      {/* ✅ UPDATED: no glow box */}
                       <td className="p-3 text-sm text-gray-300">
                         {detailsText}
                       </td>

@@ -143,6 +143,16 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "nco", "di"],
         },
         {
+          href: "/admin/removal",
+          label: "Account Removal",
+          allowedRoles: ["recruiter", "nco", "admin"],
+        },
+        {
+          href: "/admin/removal-log",
+          label: "Removal Log",
+          allowedRoles: ["recruiter", "nco", "admin"],
+        },
+        {
           href: "/admin/server-control",
           label: "Server Control Panel",
           allowedRoles: ["ServerMaintenance", "Akhari"],

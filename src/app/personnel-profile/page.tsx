@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
@@ -12,30 +12,31 @@ export default function PersonnelProfile() {
   const [selectedPerson, setSelectedPerson] = useState<any>(null);
   const [certifications, setCertifications] = useState<any[]>([]);
   const [plasmaParticles, setPlasmaParticles] = useState<
-  { x: number; size: number }[]
->([]);
+    { x: number; size: number }[]
+  >([]);
   const [rankHistory, setRankHistory] = useState<any[]>([]);
-const getServiceColor = (totalMonths: number) => {
-  if (totalMonths <= 12) return "#00ff66"; 
-  if (totalMonths <= 36) return "#aeff00";     
-  if (totalMonths <= 60) return "#ffcc00";
-   if (totalMonths <= 80) return "#ffa200";
-  return "#ff0000";
-};
-const getServiceGlow = (totalMonths: number) => {
-  if (totalMonths <= 12) return "0 0 6px #00ff66";
-  if (totalMonths <= 36) return "0 0 10px #aeff00";
-  if (totalMonths <= 60) return "0 0 14px #ffcc00";
-  if (totalMonths <= 80) return "0 0 18px #ffa200";
-  return "0 0 22px #ff0000";
-};
-const isTopTier = (totalMonths: number) => totalMonths > 80;
-
-  const [activeTab, setActiveTab] = useState<
-  "qual" | "trainer" | "rank"
->("qual");
+  const [statusAudit, setStatusAudit] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"qual" | "trainer" | "rank">("qual");
 
   const router = useRouter();
+
+  const getServiceColor = (totalMonths: number) => {
+    if (totalMonths <= 12) return "#00ff66";
+    if (totalMonths <= 36) return "#aeff00";
+    if (totalMonths <= 60) return "#ffcc00";
+    if (totalMonths <= 80) return "#ffa200";
+    return "#ff0000";
+  };
+
+  const getServiceGlow = (totalMonths: number) => {
+    if (totalMonths <= 12) return "0 0 6px #00ff66";
+    if (totalMonths <= 36) return "0 0 10px #aeff00";
+    if (totalMonths <= 60) return "0 0 14px #ffcc00";
+    if (totalMonths <= 80) return "0 0 18px #ffa200";
+    return "0 0 22px #ff0000";
+  };
+
+  const isTopTier = (totalMonths: number) => totalMonths > 80;
 
   /* ===================================================== */
   /* DATA */
@@ -46,13 +47,14 @@ const isTopTier = (totalMonths: number) => totalMonths > 80;
   }, []);
 
   const fetchData = async () => {
+    setStatusAudit(null);
+
     const { data: rankData } = await supabase.from("ranks").select("*");
     setRanks(rankData || []);
 
-
     setTimeout(() => {
-  setRanks((prev) => [...prev]);
-}, 0);
+      setRanks((prev) => [...prev]);
+    }, 0);
 
     const { data } = await supabase
       .from("personnel")
@@ -64,6 +66,7 @@ const isTopTier = (totalMonths: number) => totalMonths > 80;
 
   const loadProfile = async (person: any) => {
     setSelectedPerson(person);
+    setStatusAudit(null);
 
     const { data: certs } = await supabase
       .from("personnel_certifications")
@@ -73,17 +76,32 @@ const isTopTier = (totalMonths: number) => totalMonths > 80;
     setCertifications(certs || []);
 
     const { data: history } = await supabase
-  .from("rank_history")
-  .select(`
-    *,
-    old_rank:ranks!rank_history_old_rank_id_fkey(name),
-    new_rank:ranks!rank_history_new_rank_id_fkey(name)
-  `)
-  .eq("personnel_id", person.id)
-  .order("changed_at", { ascending: false });
+      .from("rank_history")
+      .select(`
+        *,
+        old_rank:ranks!rank_history_old_rank_id_fkey(name),
+        new_rank:ranks!rank_history_new_rank_id_fkey(name)
+      `)
+      .eq("personnel_id", person.id)
+      .order("changed_at", { ascending: false });
 
-setRankHistory(history || []);
+    setRankHistory(history || []);
 
+    const { data: auditData } = await supabase
+      .from("audit_logs")
+      .select(`
+        id,
+        action,
+        created_at,
+        processor:processed_by ( name )
+      `)
+      .eq("target_personnel_id", person.id)
+      .in("action", ["PERSONNEL_REMOVED", "PERSONNEL_RETIRED"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    setStatusAudit(auditData || null);
   };
 
   /* ===================================================== */
@@ -91,12 +109,12 @@ setRankHistory(history || []);
   /* ===================================================== */
 
   const getRankName = (rankId: string | null) => {
-  if (!rankId || ranks.length === 0) return "Loading...";
+    if (!rankId || ranks.length === 0) return "Loading...";
 
-  const rank = ranks.find((r) => r.id === rankId);
+    const rank = ranks.find((r) => r.id === rankId);
 
-  return rank?.name || "Unranked";
-};
+    return rank?.name || "Unranked";
+  };
 
   const getRankLevel = (rankId: string | null) => {
     const rank = ranks.find((r) => r.id === rankId);
@@ -109,26 +127,24 @@ setRankHistory(history || []);
   const formatDate = (date: string | null) =>
     date ? new Date(date).toLocaleDateString() : "N/A";
 
-const calculateServiceDuration = (date: string | null) => {
-  if (!date) return { years: 0, months: 0 };
+  const calculateServiceDuration = (date: string | null) => {
+    if (!date) return { years: 0, months: 0 };
 
-  const now = new Date();
-  const then = new Date(date);
+    const now = new Date();
+    const then = new Date(date);
 
-  let years = now.getFullYear() - then.getFullYear();
-  let months = now.getMonth() - then.getMonth();
+    let years = now.getFullYear() - then.getFullYear();
+    let months = now.getMonth() - then.getMonth();
 
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
 
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
+    if (years < 0) return { years: 0, months: 0 };
 
-  if (years < 0) return { years: 0, months: 0 };
-
-  return { years, months };
-};
-
+    return { years, months };
+  };
 
   const getBilletFromSlot = (slotId: string | null) => {
     if (!slotId) return "Unassigned";
@@ -153,22 +169,58 @@ const calculateServiceDuration = (date: string | null) => {
   );
 
   const calculateTimeInGrade = () => {
-  if (!selectedPerson || rankHistory.length === 0) return 0;
+    if (!selectedPerson || rankHistory.length === 0) return 0;
 
-  // Find the most recent time they received their current rank
-  const latestPromotion = rankHistory.find(
-    (h: any) => h.new_rank_id === selectedPerson.rank_id
-  );
+    const latestPromotion = rankHistory.find(
+      (h: any) => h.new_rank_id === selectedPerson.rank_id
+    );
 
-  if (!latestPromotion) return 0;
+    if (!latestPromotion) return 0;
 
-  const rankDate = new Date(latestPromotion.changed_at);
-  const now = new Date();
+    const rankDate = new Date(latestPromotion.changed_at);
+    const now = new Date();
 
-  const diff = now.getTime() - rankDate.getTime();
+    const diff = now.getTime() - rankDate.getTime();
 
-  return Math.floor(diff / (1000 * 60 * 60 * 24)); // days
-};
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  };
+
+  const statusValue = (selectedPerson?.status || "").trim().toLowerCase();
+  const isInactive = statusValue === "retired" || statusValue === "removed";
+
+  const theme = {
+    pageBg: isInactive
+      ? "bg-[radial-gradient(circle_at_center,#2a0000_0%,#0a0000_100%)]"
+      : "bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)]",
+    primaryText: isInactive ? "text-red-400" : "text-[#00ff66]",
+    primaryBorder: isInactive ? "border-red-500/40" : "border-[#00ff66]/30",
+    secondaryBorder: isInactive ? "border-red-500/30" : "border-[#00ff66]/40",
+    searchBorder: isInactive ? "border-red-500/40" : "border-[#00ff66]/40",
+    searchText: isInactive ? "text-red-300" : "text-[#00ff66]",
+    searchPlaceholder: isInactive
+      ? "placeholder:text-red-300/40"
+      : "placeholder:text-[#00ff66]/40",
+    hoverBg: isInactive ? "hover:bg-red-500/10" : "hover:bg-[#00ff66]/10",
+    hoverText: isInactive ? "hover:text-red-300" : "hover:text-[#00ff66]",
+    cardBg: "bg-black/50",
+    divider: isInactive ? "border-red-500/40" : "border-[#00ff66]/40",
+    softDivider: isInactive ? "border-red-500/20" : "border-[#00ff66]/20",
+    tabActive: isInactive
+      ? "text-red-400 border-b-2 border-red-400"
+      : "text-[#00ff66] border-b-2 border-[#00ff66]",
+    tabInactive: "text-gray-400",
+    accentText: isInactive ? "text-red-400" : "text-[#00ff66]",
+    buttonBorder: isInactive ? "border-red-500/50" : "border-[#00ff66]/50",
+    buttonText: isInactive ? "text-red-400" : "text-[#00ff66]",
+    buttonHover: isInactive ? "hover:bg-red-500/10" : "hover:bg-[#00ff66]/10",
+    resultBorder: isInactive ? "border-red-500/40" : "border-[#00ff66]/40",
+    resultItemBorder: isInactive ? "border-red-500/20" : "border-[#00ff66]/20",
+    rankBar: isInactive ? "bg-red-500" : "bg-[#00ff66]",
+    badgeBg:
+      statusValue === "removed"
+        ? "bg-red-500/15 text-red-300 border border-red-500/40"
+        : "bg-orange-500/15 text-orange-300 border border-orange-500/40",
+  };
 
   /* ===================================================== */
   /* CERT FILTERS FOR TABS */
@@ -179,8 +231,7 @@ const calculateServiceDuration = (date: string | null) => {
   );
 
   const normalCerts = certifications.filter(
-    (c: any) =>
-      !c.certification?.name?.toLowerCase().includes("trainer")
+    (c: any) => !c.certification?.name?.toLowerCase().includes("trainer")
   );
 
   /* ===================================================== */
@@ -188,16 +239,15 @@ const calculateServiceDuration = (date: string | null) => {
   /* ===================================================== */
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#eafff2] p-10">
-
+    <div className={`min-h-screen ${theme.pageBg} text-[#eafff2] p-10`}>
       <button
         onClick={() => router.push("/pcs")}
-        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
+        className={`mb-6 px-4 py-2 rounded-lg border ${theme.buttonBorder} ${theme.buttonText} font-semibold ${theme.buttonHover} hover:scale-105 transition`}
       >
         ← Return to Dashboard
       </button>
 
-      <h1 className="text-4xl font-bold mb-8 text-[#00ff66] tracking-widest">
+      <h1 className={`text-4xl font-bold mb-8 ${theme.primaryText} tracking-widest`}>
         PERSONNEL PROFILE
       </h1>
 
@@ -206,32 +256,44 @@ const calculateServiceDuration = (date: string | null) => {
         placeholder="Search by rank or name..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full mb-6 p-4 rounded-xl bg-black/40 border border-[#00ff66]/40 text-[#00ff66] placeholder:text-[#00ff66]/40"
+        className={`w-full mb-6 p-4 rounded-xl bg-black/40 border ${theme.searchBorder} ${theme.searchText} ${theme.searchPlaceholder}`}
       />
 
       {search && (
-        <div className="border border-[#00ff66]/40 bg-black/50 rounded-xl max-h-60 overflow-y-auto mb-6">
-          {filteredPersonnel.map((p) => (
-            <div
-              key={p.id}
-              onClick={() => {
-                setSearch("");
-                loadProfile(p);
-              }}
-              className="p-3 border-b border-[#00ff66]/20 cursor-pointer hover:bg-[#00ff66]/10 hover:text-[#00ff66] transition"
-            >
-              {getRankName(p.rank_id)} {p.name}
-            </div>
-          ))}
+        <div className={`border ${theme.resultBorder} bg-black/50 rounded-xl max-h-60 overflow-y-auto mb-6`}>
+          {filteredPersonnel.map((p) => {
+            const personStatus = (p.status || "").trim().toLowerCase();
+            const isPersonInactive =
+              personStatus === "retired" || personStatus === "removed";
+
+            return (
+              <div
+                key={p.id}
+                onClick={() => {
+                  setSearch("");
+                  loadProfile(p);
+                }}
+                className={`p-3 border-b ${theme.resultItemBorder} cursor-pointer transition ${
+                  isPersonInactive
+                    ? "hover:bg-red-500/10 hover:text-red-300"
+                    : "hover:bg-[#00ff66]/10 hover:text-[#00ff66]"
+                }`}
+              >
+                {getRankName(p.rank_id)} {p.name}
+                {isPersonInactive && (
+                  <span className="ml-2 text-sm text-red-300">
+                    {personStatus === "removed" ? "Removed" : "Retired"}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
       {selectedPerson && (
         <div className="space-y-10">
-
-          {/* PROFILE CARD */}
-          <div className="p-10 rounded-3xl bg-black/50 border border-[#00ff66]/30">
-
+          <div className={`p-10 rounded-3xl ${theme.cardBg} border ${theme.primaryBorder}`}>
             <p className="text-sm tracking-[0.4em] text-gray-400 uppercase">
               {getRankName(selectedPerson.rank_id)}
             </p>
@@ -240,50 +302,72 @@ const calculateServiceDuration = (date: string | null) => {
               {Array.from({
                 length: getRankBars(selectedPerson.rank_id),
               }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-1 w-10 bg-[#00ff66]"
-                />
+                <div key={i} className={`h-1 w-10 ${theme.rankBar}`} />
               ))}
             </div>
 
-            <h2 className="text-5xl font-bold text-[#00ff66]">
-              {selectedPerson.name}
-            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className={`text-5xl font-bold ${theme.primaryText}`}>
+                {selectedPerson.name}
+              </h2>
 
-            <div className="border-t border-[#00ff66]/40 my-8" />
+              {isInactive && (
+                <span className={`px-3 py-1 rounded-full text-sm font-semibold ${theme.badgeBg}`}>
+                  {statusValue === "removed" ? "Removed" : "Retired"}
+                </span>
+              )}
+            </div>
 
-            {/* ✅ CURRENT BILLET + TEAMSPEAK + YEARS STILL HERE */}
+            {isInactive && statusAudit && (
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs text-gray-400 tracking-widest uppercase">
+                    {statusValue === "removed" ? "REMOVED ON" : "RETIRED ON"}
+                  </p>
+                  <p className="text-lg text-red-300">
+                    {formatDate(statusAudit.created_at)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-400 tracking-widest uppercase">
+                    PROCESSED BY
+                  </p>
+                  <p className="text-lg text-red-300">
+                    {statusAudit.processor?.name || "Unknown"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className={`border-t ${theme.divider} my-8`} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
               <div>
-  {/* JOIN DATE */}
-  <div>
-    <p className="text-xs text-gray-400 tracking-widest">
-      JOIN DATE
-    </p>
-    <p className="text-lg">
-      {formatDate(selectedPerson.created_at)}
-    </p>
-  </div>
+                <div>
+                  <p className="text-xs text-gray-400 tracking-widest">
+                    JOIN DATE
+                  </p>
+                  <p className="text-lg">
+                    {formatDate(selectedPerson.created_at)}
+                  </p>
+                </div>
 
-  {/* TIME IN GRADE */}
-  <div className="mt-6">
-    <p className="text-xs text-gray-400 tracking-widest">
-      TIME IN GRADE
-    </p>
-    <p className="text-lg text-[#00ff66]">
-      {calculateTimeInGrade()} Days
-    </p>
-  </div>
-</div>
+                <div className="mt-6">
+                  <p className="text-xs text-gray-400 tracking-widest">
+                    TIME IN GRADE
+                  </p>
+                  <p className={`text-lg ${theme.accentText}`}>
+                    {calculateTimeInGrade()} Days
+                  </p>
+                </div>
+              </div>
 
               <div>
                 <p className="text-xs text-gray-400 tracking-widest">
                   CURRENT BILLET
                 </p>
-                <p className="text-lg text-[#00ff66]">
+                <p className={`text-lg ${theme.accentText}`}>
                   {getBilletFromSlot(selectedPerson.slotted_position)}
                 </p>
               </div>
@@ -292,64 +376,59 @@ const calculateServiceDuration = (date: string | null) => {
                 <p className="text-xs text-gray-400 tracking-widest">
                   TEAMSPEAK ID
                 </p>
-                <p className="text-lg text-[#00ff66]">
+                <p className={`text-lg ${theme.accentText}`}>
                   {selectedPerson.ts_id || "Not Set"}
                 </p>
               </div>
 
               <div>
-  <p className="text-xs text-gray-400 tracking-widest">
-    SERVICE DURATION
-  </p>
+                <p className="text-xs text-gray-400 tracking-widest">
+                  SERVICE DURATION
+                </p>
 
-  {(() => {
-    const { years, months } = calculateServiceDuration(
-      selectedPerson.created_at
-    );
+                {(() => {
+                  const { years, months } = calculateServiceDuration(
+                    selectedPerson.created_at
+                  );
 
-    const totalMonths = years * 12 + months;
-    const barColor = getServiceColor(totalMonths);
+                  const totalMonths = years * 12 + months;
+                  const barColor = isInactive ? "#ef4444" : getServiceColor(totalMonths);
 
-    return (
-      <>
-        <div className="w-full bg-[#001a0a] h-5 rounded-xl overflow-hidden mt-2 relative">
+                  return (
+                    <>
+                      <div
+                        className={`w-full ${
+                          isInactive ? "bg-[#220000]" : "bg-[#001a0a]"
+                        } h-5 rounded-xl overflow-hidden mt-2 relative`}
+                      >
+                        <div
+                          className="h-full relative overflow-hidden"
+                          style={{
+                            width: `${Math.min(totalMonths / 1.2, 100)}%`,
+                            backgroundColor: barColor,
+                          }}
+                        >
+                          <div className="shine-effect" />
+                        </div>
+                      </div>
 
-          <div
-            className="h-full relative overflow-hidden"
-            style={{
-              width: `${Math.min(totalMonths / 1.2, 100)}%`,
-              backgroundColor: barColor,
-            }}
-          >
-
-            <div className="shine-effect" />
-          </div>
-        </div>
-
-        <p className="text-sm mt-2" style={{ color: barColor }}>
-          {years} Year{years !== 1 ? "s" : ""}{" "}
-          {months} Month{months !== 1 ? "s" : ""}
-        </p>
-      </>
-    );
-  })()}
-</div>
-
+                      <p className="text-sm mt-2" style={{ color: barColor }}>
+                        {years} Year{years !== 1 ? "s" : ""} {months} Month
+                        {months !== 1 ? "s" : ""}
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 
-
-
-          <div className="p-8 rounded-2xl bg-black/50 border border-[#00ff66]/30">
-
-            <div className="flex gap-6 border-b border-[#00ff66]/40 pb-3 mb-6">
-
+          <div className={`p-8 rounded-2xl bg-black/50 border ${theme.primaryBorder}`}>
+            <div className={`flex gap-6 border-b ${theme.divider} pb-3 mb-6`}>
               <button
                 onClick={() => setActiveTab("qual")}
                 className={`tracking-widest text-sm ${
-                  activeTab === "qual"
-                    ? "text-[#00ff66] border-b-2 border-[#00ff66]"
-                    : "text-gray-400"
+                  activeTab === "qual" ? theme.tabActive : theme.tabInactive
                 }`}
               >
                 QUALIFICATIONS
@@ -358,85 +437,64 @@ const calculateServiceDuration = (date: string | null) => {
               <button
                 onClick={() => setActiveTab("trainer")}
                 className={`tracking-widest text-sm ${
-                  activeTab === "trainer"
-                    ? "text-[#00ff66] border-b-2 border-[#00ff66]"
-                    : "text-gray-400"
+                  activeTab === "trainer" ? theme.tabActive : theme.tabInactive
                 }`}
               >
                 TRAINER QUAL
               </button>
 
               <button
-  onClick={() => setActiveTab("rank")}
-  className={`tracking-widest text-sm ${
-    activeTab === "rank"
-      ? "text-[#00ff66] border-b-2 border-[#00ff66]"
-      : "text-gray-400"
-  }`}
->
-  RANK HISTORY
-</button>
-
+                onClick={() => setActiveTab("rank")}
+                className={`tracking-widest text-sm ${
+                  activeTab === "rank" ? theme.tabActive : theme.tabInactive
+                }`}
+              >
+                RANK HISTORY
+              </button>
             </div>
 
             {activeTab === "qual" ? (
-  normalCerts.length === 0 ? (
-    <p className="text-gray-400">
-      No certifications recorded.
-    </p>
-  ) : (
-    <div className="space-y-3">
-      {normalCerts.map((c: any, i: number) => (
-        <div
-          key={i}
-          className="border-b border-[#00ff66]/20 py-2"
-        >
-          {c.certification?.name}
-        </div>
-      ))}
-    </div>
-  )
-) : activeTab === "trainer" ? (
-  trainerCerts.length === 0 ? (
-    <p className="text-gray-400">
-      No trainer certifications recorded.
-    </p>
-  ) : (
-    <div className="space-y-3">
-      {trainerCerts.map((c: any, i: number) => (
-        <div
-          key={i}
-          className="border-b border-[#00ff66]/20 py-2"
-        >
-          {c.certification?.name}
-        </div>
-      ))}
-    </div>
-  )
-) : (
-  /* ========================== */
-  /* RANK HISTORY TAB */
-  /* ========================== */
+              normalCerts.length === 0 ? (
+                <p className="text-gray-400">No certifications recorded.</p>
+              ) : (
+                <div className="space-y-3">
+                  {normalCerts.map((c: any, i: number) => (
+                    <div key={i} className={`border-b ${theme.softDivider} py-2`}>
+                      {c.certification?.name}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : activeTab === "trainer" ? (
+              trainerCerts.length === 0 ? (
+                <p className="text-gray-400">No trainer certifications recorded.</p>
+              ) : (
+                <div className="space-y-3">
+                  {trainerCerts.map((c: any, i: number) => (
+                    <div key={i} className={`border-b ${theme.softDivider} py-2`}>
+                      {c.certification?.name}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              <div className="space-y-4">
+                {rankHistory.map((h: any) => (
+                  <div key={h.id} className={`border-b ${theme.softDivider} pb-3`}>
+                    <p className="text-sm">
+                      {getRankName(h.old_rank_id)}{" "}
+                      <span className={theme.accentText}>→</span>{" "}
+                      {getRankName(h.new_rank_id)}
+                    </p>
 
-  <div className="space-y-4">
-    {rankHistory.map((h: any) => (
-  <div key={h.id} className="border-b border-[#00ff66]/20 pb-3">
-    <p className="text-sm">
-  {getRankName(h.old_rank_id)}{" "}
-  <span className="text-[#00ff66]">→</span>{" "}
-  {getRankName(h.new_rank_id)}
-</p>
-
-    <p className="text-xs text-gray-400 mt-1">
-      {formatDate(h.changed_at)}
-    </p>
-  </div>
-))}
-  </div>
-)}
-
+                    <p className="text-xs text-gray-400 mt-1">
+                      {formatDate(h.changed_at)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-
         </div>
       )}
     </div>

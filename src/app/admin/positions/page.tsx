@@ -10,6 +10,7 @@ type Personnel = {
   name: string;
   rank_id: string | null;
   slotted_position: string | null;
+  status: string | null;
 };
 
 export default function PositionEditor() {
@@ -68,7 +69,7 @@ export default function PositionEditor() {
   const fetchData = async () => {
     const { data: personnelData } = await supabase
       .from("personnel")
-      .select("*")
+      .select("id, name, rank_id, slotted_position, status")
       .order("name", { ascending: true });
 
     const { data: rankData } = await supabase
@@ -76,7 +77,12 @@ export default function PositionEditor() {
       .select("*")
       .order("rank_level", { ascending: true });
 
-    setPersonnel(personnelData || []);
+    const activePersonnel = (personnelData || []).filter((person) => {
+      const status = (person.status || "").trim().toLowerCase();
+      return status !== "retired" && status !== "removed";
+    });
+
+    setPersonnel((activePersonnel as Personnel[]) || []);
     setRanks(rankData || []);
   };
 
@@ -181,39 +187,37 @@ export default function PositionEditor() {
   };
 
   const updateRank = async () => {
-  if (!selectedPerson) {
-    alert("Select a person first.");
-    return;
-  }
+    if (!selectedPerson) {
+      alert("Select a person first.");
+      return;
+    }
 
-  const oldRank = selectedPerson.rank_id;
+    const oldRank = selectedPerson.rank_id;
 
-  // 1️⃣ Update rank in database
-  const { error } = await supabase
-    .from("personnel")
-    .update({
-      rank_id: selectedRankId || null,
-    })
-    .eq("id", selectedPerson.id);
+    const { error } = await supabase
+      .from("personnel")
+      .update({
+        rank_id: selectedRankId || null,
+      })
+      .eq("id", selectedPerson.id);
 
-  if (error) {
-    alert("Rank update failed: " + error.message);
-    return;
-  }
+    if (error) {
+      alert("Rank update failed: " + error.message);
+      return;
+    }
 
-  // 2️⃣ Manually trigger rank sync (same pattern as slots)
-  await supabase.functions.invoke("discord-rank-sync", {
-    body: {
-      personnelId: selectedPerson.id,
-      oldRankId: oldRank,
-      newRankId: selectedRankId,
-    },
-  });
+    await supabase.functions.invoke("discord-rank-sync", {
+      body: {
+        personnelId: selectedPerson.id,
+        oldRankId: oldRank,
+        newRankId: selectedRankId,
+      },
+    });
 
-  alert("✅ Rank Updated + Discord Synced");
+    alert("✅ Rank Updated + Discord Synced");
 
-  fetchData();
-};
+    fetchData();
+  };
 
   const unassignPosition = async () => {
     if (!selectedPerson) return;
@@ -257,8 +261,7 @@ export default function PositionEditor() {
 
   return (
     <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
-
-            <button
+      <button
         onClick={() => router.push("/pcs")}
         className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
       >
@@ -348,7 +351,6 @@ export default function PositionEditor() {
       {/* POSITION */}
       {selectedPerson && (
         <div className="space-y-6">
-
           {/* Position Display */}
           <div className="p-6 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-md">
             <p className="text-xs text-gray-400 mb-2">
@@ -410,11 +412,8 @@ export default function PositionEditor() {
             </select>
           )}
 
-          {/* ✅ BUTTONS FIXED */}
           {selectedPerson && (
             <div className="flex gap-4">
-
-              {/* Save ONLY if unassigned + slot selected */}
               {!selectedPerson.slotted_position && selectedSlotId && (
                 <button
                   onClick={updatePosition}
@@ -424,7 +423,6 @@ export default function PositionEditor() {
                 </button>
               )}
 
-              {/* Unassign ONLY if assigned */}
               {selectedPerson.slotted_position && (
                 <button
                   onClick={unassignPosition}
@@ -433,10 +431,8 @@ export default function PositionEditor() {
                   Unassign
                 </button>
               )}
-
             </div>
           )}
-
         </div>
       )}
     </div>

@@ -58,7 +58,9 @@ export default function CertificationByPerson() {
     return rank ? rank.name : "Unranked";
   };
 
-  const filteredPersonnel = personnel.filter((p) =>
+const filteredPersonnel = personnel
+  .filter((p) => !["Retired", "Removed"].includes(p.status))
+  .filter((p) =>
     `${getRankName(p)} ${p.name}`
       .toLowerCase()
       .includes(search.toLowerCase())

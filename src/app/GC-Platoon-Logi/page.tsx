@@ -18,6 +18,7 @@ type Asset = {
   name: string;
   token_cost: number;
   inventory: number;
+  description?: string;
 };
 
 type Transaction = {
@@ -463,7 +464,14 @@ return (
                           key={asset.id}
                           className="p-5 rounded-2xl border border-[#00ff66]/20 bg-black/50 space-y-3"
                         >
-                          <div className="font-bold text-[#00ff66]">{asset.name}</div>
+                          <div className="font-bold text-[#00ff66]">
+                            {asset.name}
+                          </div>
+                          {asset.description && (
+                            <div className="text-sm text-gray-400">
+                              {asset.description}
+                              </div>
+                              )}
                           <div>Cost: {asset.token_cost}</div>
                           <div>Stock: {asset.inventory}</div>
 

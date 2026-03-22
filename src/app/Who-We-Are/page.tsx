@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
-type TabKey = "DB" | "T1" | "C2" | "B3" | "H" | "D";
+type TabKey = "DB" | "T1" | "C2" | "B3" | "D";
 
 const mainTab = {
   key: "DB",
@@ -65,17 +65,6 @@ When the pods hit the ground, the battle is already decided.
 Specializing in precision strikes, Dagger targets high-value enemy assets, infrastructure, and command elements to degrade enemy capability and secure strategic dominance for the wider campaign.
 
 Built for deep operations, Dagger can detach to reinforce allied platoons or execute independent missions as needed, excelling behind enemy lines and operating most effectively in a target-rich environment surrounded by hostile forces.
-    `,
-  },
-  {
-    key: "H",
-    label: "Hammer",
-    icon: "/icons/plane.png",
-    logo: "/WWA/Hammer.jpg",
-    content: `
-Hammer is the elite aviation element of the 101st, specializing in air superiority, rapid troop insertion, and close air support. Operating as a force multiplier, it provides precision overwatch, battlefield mobility, and sustained aerial dominance to enable mission success.
-
-By controlling the skies and delivering rapid response firepower, Hammer ensures ground forces can advance with protection, speed, and overwhelming tactical advantage.
     `,
   },
 ];

@@ -257,16 +257,23 @@ const tabs: Record<CategoryKey, TabItem[]> = {
 
     unit(
       "U2",
-      "CLS",
+      "Medic",
       "CR-C",
-      "sus.jpg"
+      "sus.jpg",
+      `Using KAT & ACE Medical, our medics operate in a high-fidelity combat medical enviromer.
+      
+      Surgical stabilsaiton, airway managment and advanced drug applications give medics fun gameplay, allowing them to live out their sergical dreams.`
     ),
 
     unit(
       "U17",
       "Hammer",
       "CR-C",
-      "hammer.jpg"
+      "hammer.jpg",
+      `Hammer is the elite aviation element of the 101st, specializing in air superiority, rapid troop insertion, and close air support. Operating as a force multiplier, it provides precision overwatch, battlefield mobility, and sustained aerial dominance to enable mission success.
+
+      By controlling the skies and delivering rapid response firepower, Hammer ensures ground forces can advance with protection, speed, and overwhelming tactical advantage.
+    `
     ),
   ],
 
@@ -324,7 +331,10 @@ const tabs: Record<CategoryKey, TabItem[]> = {
       "U25",
       "Server Maintenance",
       "N/A",
-      "server.jpg"
+      "server.jpg",
+      `The main brains of the unit, keeping the servers running and responding to server requests as needed.
+      
+       Not many people in the unit can rival the combined server & Arma knowledge of the server gods. `
     ),
   ],
 };

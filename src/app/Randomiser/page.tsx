@@ -30,6 +30,11 @@ export default function SideOperationPage() {
   const [name, setName] = useState("");
   const [showNameDropdown, setShowNameDropdown] = useState(false);
 
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editSlotCount, setEditSlotCount] = useState("1");
+  const [savingOperation, setSavingOperation] = useState(false);
+
   const nameDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const isPrivileged =
@@ -56,6 +61,14 @@ export default function SideOperationPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (operation) {
+      setEditTitle(operation.title ?? "");
+      setEditDescription(operation.description ?? "");
+      setEditSlotCount(String(operation.slot_count ?? 1));
+    }
+  }, [operation]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -231,6 +244,55 @@ export default function SideOperationPage() {
     }
 
     fetchData();
+  };
+
+  const handleSaveOperationDetails = async () => {
+    if (!isPrivileged || !operation) return;
+
+    const trimmedTitle = editTitle.trim();
+    const trimmedDescription = editDescription.trim();
+    const parsedSlotCount = Number(editSlotCount);
+
+    if (!trimmedTitle) {
+      alert("Title cannot be empty.");
+      return;
+    }
+
+    if (!trimmedDescription) {
+      alert("Description cannot be empty.");
+      return;
+    }
+
+    if (!Number.isInteger(parsedSlotCount) || parsedSlotCount < 1) {
+      alert("Slot count must be a whole number of at least 1.");
+      return;
+    }
+
+    setSavingOperation(true);
+
+    const { error } = await supabase
+      .from("side_operations")
+      .update({
+        title: trimmedTitle,
+        description: trimmedDescription,
+        slot_count: parsedSlotCount,
+      })
+      .eq("id", operation.id);
+
+    if (error) {
+      console.error("SAVE OPERATION DETAILS ERROR:", error);
+      setSavingOperation(false);
+      return;
+    }
+
+    setOperation((prev: any) => ({
+      ...prev,
+      title: trimmedTitle,
+      description: trimmedDescription,
+      slot_count: parsedSlotCount,
+    }));
+
+    setSavingOperation(false);
   };
 
   function weightedPick<T extends { id: string; weight: number }>(
@@ -598,10 +660,57 @@ export default function SideOperationPage() {
       </div>
 
       {isPrivileged && (
-        <div className="max-w-4xl mx-auto mt-10 p-6 rounded-2xl border border-[#00ff66]/40 bg-black/60 backdrop-blur-xl">
-          <h3 className="text-[#00ff66] mb-4 tracking-wider">
+        <div className="max-w-4xl mx-auto mt-10 p-6 rounded-2xl border border-[#00ff66]/40 bg-black/60 backdrop-blur-xl space-y-6">
+          <h3 className="text-[#00ff66] tracking-wider">
             Logistics Control Panel
           </h3>
+
+          <div className="grid gap-4">
+            <div>
+              <label className="block text-sm text-[#00ff66] mb-2">
+                Operation Title
+              </label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg bg-black/70 border border-[#00ff66]/40 text-white placeholder:text-[#00ff66]/45 focus:outline-none focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66]/40"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#00ff66] mb-2">
+                Operation Description
+              </label>
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-3 rounded-lg bg-black/70 border border-[#00ff66]/40 text-white placeholder:text-[#00ff66]/45 focus:outline-none focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66]/40 resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#00ff66] mb-2">
+                Number of People to Select
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={editSlotCount}
+                onChange={(e) => setEditSlotCount(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg bg-black/70 border border-[#00ff66]/40 text-white placeholder:text-[#00ff66]/45 focus:outline-none focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66]/40"
+              />
+            </div>
+
+            <button
+              onClick={handleSaveOperationDetails}
+              disabled={savingOperation}
+              className="px-4 py-2 border border-cyan-400 rounded-lg text-cyan-300 hover:bg-cyan-400 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingOperation ? "Saving..." : "Save Operation Details"}
+            </button>
+          </div>
 
           <div className="flex gap-4">
             <button

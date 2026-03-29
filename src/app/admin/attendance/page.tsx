@@ -17,9 +17,40 @@ type Member = {
 
 const assignmentOptions = ["Y", "N", "Excused", "LOA"];
 
-export default function AttendancePage() {
+const months = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
+function getDefaultAttendancePeriod() {
+  const today = new Date();
+  const currentDay = today.getDay(); // 0 = Sunday, 6 = Saturday
+
+  const daysUntilSaturday = currentDay === 6 ? 0 : (6 - currentDay + 7) % 7;
+
+  const targetDate = new Date(today);
+  targetDate.setDate(today.getDate() + daysUntilSaturday);
+
+  return {
+    month: months[targetDate.getMonth()],
+    week: Math.ceil(targetDate.getDate() / 7),
+  };
+}
+
+export default function AttendancePage() {
   const router = useRouter();
+
+  const defaultPeriod = getDefaultAttendancePeriod();
 
   /* ================= AUTH ================= */
 
@@ -64,8 +95,8 @@ export default function AttendancePage() {
   const [activeSquad, setActiveSquad] = useState<string | null>(null);
   const [expandedTab, setExpandedTab] = useState<string | null>(null);
 
-  const [selectedMonth, setSelectedMonth] = useState("February");
-  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [selectedMonth, setSelectedMonth] = useState(defaultPeriod.month);
+  const [selectedWeek, setSelectedWeek] = useState(defaultPeriod.week);
   const [selectedType, setSelectedType] = useState("Training");
 
   /* ================================================= */
@@ -73,7 +104,6 @@ export default function AttendancePage() {
   /* ================================================= */
 
   const fetchRoster = useCallback(async () => {
-
     if (!activeTab || loadingAuth) return;
 
     try {
@@ -109,13 +139,11 @@ export default function AttendancePage() {
       const filtered = data.filter((row: any) => {
         if (!row.platoon_slots) return false;
 
-        const matchesPlatoon =
-          row.platoon_slots.platoon_name === activeTab;
+        const matchesPlatoon = row.platoon_slots.platoon_name === activeTab;
 
-        const matchesSquad =
-          activeSquad
-            ? row.platoon_slots.squad_name === activeSquad
-            : true;
+        const matchesSquad = activeSquad
+          ? row.platoon_slots.squad_name === activeSquad
+          : true;
 
         return matchesPlatoon && matchesSquad;
       });
@@ -129,15 +157,20 @@ export default function AttendancePage() {
       }));
 
       setRoster(formatted);
-
     } catch (err) {
       console.error(err);
       setRoster([]);
     } finally {
       setLoading(false);
     }
-
-  }, [activeTab, activeSquad, selectedMonth, selectedWeek, selectedType, loadingAuth]);
+  }, [
+    activeTab,
+    activeSquad,
+    selectedMonth,
+    selectedWeek,
+    selectedType,
+    loadingAuth,
+  ]);
 
   useEffect(() => {
     if (!loadingAuth) {
@@ -150,7 +183,6 @@ export default function AttendancePage() {
   /* ================================================= */
 
   const updateAssignment = async (personnelId: string, value: string) => {
-
     await supabase
       .from("attendance_records")
       .update({ status: value })
@@ -166,7 +198,13 @@ export default function AttendancePage() {
   /* ================= UI STRUCTURE ================== */
   /* ================================================= */
 
-  const tabs = ["Company Command", "Tomahawk 1", "Claymore 2", "Broadsword 3", "Dagger"];
+  const tabs = [
+    "Company Command",
+    "Tomahawk 1",
+    "Claymore 2",
+    "Broadsword 3",
+    "Dagger",
+  ];
 
   const platoons: Record<string, string[]> = {
     Company: ["Company"],
@@ -183,9 +221,7 @@ export default function AttendancePage() {
         onChange={(e) => setSelectedMonth(e.target.value)}
         className="bg-black/60 border border-[#00ff66]/40 text-[#00ff66] px-4 py-2 rounded-lg backdrop-blur-md"
       >
-        {["January","February","March","April","May","June",
-          "July","August","September","October","November","December"
-        ].map((m) => (
+        {months.map((m) => (
           <option key={m}>{m}</option>
         ))}
       </select>
@@ -195,7 +231,7 @@ export default function AttendancePage() {
         onChange={(e) => setSelectedWeek(Number(e.target.value))}
         className="bg-black/60 border border-[#00ff66]/40 text-[#00ff66] px-4 py-2 rounded-lg backdrop-blur-md"
       >
-        {[1,2,3,4,5].map((w) => (
+        {[1, 2, 3, 4, 5].map((w) => (
           <option key={w} value={w}>
             Week {w}
           </option>
@@ -226,121 +262,108 @@ export default function AttendancePage() {
   /* ================= RENDER ================= */
 
   return (
-  <motion.div className="relative min-h-screen flex text-white font-orbitron">
+    <motion.div className="relative min-h-screen flex text-white font-orbitron">
+      <div
+        className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-20 pointer-events-none z-0"
+        style={{ backgroundImage: "url('/background/bg.jpg')" }}
+      />
 
-    {/* Background image */}
-    <div
-      className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-20 pointer-events-none z-0"
-      style={{ backgroundImage: "url('/background/bg.jpg')" }}
-    />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] z-0" />
 
-    {/* Radial gradient */}
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] z-0" />
+      <div className="relative z-10 w-full p-12">
+        <button
+          onClick={() => router.push("/pcs")}
+          className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
+        >
+          ← Return to Dashboard
+        </button>
 
-    <div className="relative z-10 w-full p-12">
+        <h1 className="text-4xl font-bold text-[#00ff66] tracking-widest text-center mb-10">
+          ROSTER ATTENDANCE
+        </h1>
 
+        <Filters />
 
-      <button
-        onClick={() => router.push("/pcs")}
-        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
-      >
-        ← Return to Dashboard
-      </button>
+        <div className="flex flex-col items-center gap-4 mb-12">
+          {tabs.map((tab) => {
+            const isOpen = expandedTab === tab;
 
-      <h1 className="text-4xl font-bold text-[#00ff66] tracking-widest text-center mb-10">
-        ROSTER ATTENDANCE
-      </h1>
+            return (
+              <div key={tab} className="w-full max-w-4xl">
+                <button
+                  onClick={() => {
+                    setExpandedTab(isOpen ? null : tab);
+                    setActiveTab(tab);
+                    setActiveSquad(null);
+                  }}
+                  className="w-full px-6 py-4 rounded-2xl
+                    border border-[#00ff66]/30
+                    bg-black/60 backdrop-blur-md
+                    text-[#00ff66]
+                    hover:border-[#00ff66]
+                    transition-all duration-300"
+                >
+                  {tab}
+                </button>
 
-      <Filters />
-
-      <div className="flex flex-col items-center gap-4 mb-12">
-        {tabs.map((tab) => {
-          const isOpen = expandedTab === tab;
-
-          return (
-            <div key={tab} className="w-full max-w-4xl">
-              <button
-                onClick={() => {
-                  setExpandedTab(isOpen ? null : tab);
-                  setActiveTab(tab);
-                  setActiveSquad(null);
-                }}
-                className="w-full px-6 py-4 rounded-2xl
-           border border-[#00ff66]/30
-           bg-black/60 backdrop-blur-md
-           text-[#00ff66]
-           hover:border-[#00ff66]
-           transition-all duration-300"
-              >
-                {tab}
-              </button>
-
-              {isOpen && platoons[tab]?.length > 0 && (
-                <div className="mt-3 ml-6 flex flex-col gap-2">
-                  {platoons[tab].map((squad) => (
-                    <button
-                      key={squad}
-                      onClick={() => {
-                        setActiveTab(tab);
-                        setActiveSquad(squad);
-                      }}
-                      className={`px-5 py-2 rounded-xl border text-sm text-left transition-all duration-300 ${
-                        activeSquad === squad
-                        ? "bg-[#00ff66] text-black"
-                        : "bg-black/60 backdrop-blur-md border-[#00ff66]/40 text-[#00ff66] hover:border-[#00ff66]"
+                {isOpen && platoons[tab]?.length > 0 && (
+                  <div className="mt-3 ml-6 flex flex-col gap-2">
+                    {platoons[tab].map((squad) => (
+                      <button
+                        key={squad}
+                        onClick={() => {
+                          setActiveTab(tab);
+                          setActiveSquad(squad);
+                        }}
+                        className={`px-5 py-2 rounded-xl border text-sm text-left transition-all duration-300 ${
+                          activeSquad === squad
+                            ? "bg-[#00ff66] text-black"
+                            : "bg-black/60 backdrop-blur-md border-[#00ff66]/40 text-[#00ff66] hover:border-[#00ff66]"
                         }`}
-                    >
-                      {squad}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                      >
+                        {squad}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
-      {loading ? (
-        <p className="text-center text-gray-400">
-          Loading roster...
-        </p>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {roster.map((member) => (
-            <div
-              key={member.id}
-              className="bg-black border border-green-500 rounded-2xl p-6"
-            >
-              <h2 className="text-xl text-green-400">
-                {member.name}
-              </h2>
-
-              <p className="text-gray-400">
-                {member.rank}
-              </p>
-
-              <p className="text-sm mt-1">
-                Slot: <span className="text-white">{member.slot}</span>
-              </p>
-
-              <select
-                value={member.status}
-                onChange={(e) =>
-                  updateAssignment(member.id, e.target.value)
-                }
-                className="mt-4 w-full bg-black border border-green-500 text-white p-2 rounded-lg"
+        {loading ? (
+          <p className="text-center text-gray-400">Loading roster...</p>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {roster.map((member) => (
+              <div
+                key={member.id}
+                className="bg-black border border-green-500 rounded-2xl p-6"
               >
-                {assignmentOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
-        </div>
-      )}
-        </div>
+                <h2 className="text-xl text-green-400">{member.name}</h2>
+
+                <p className="text-gray-400">{member.rank}</p>
+
+                <p className="text-sm mt-1">
+                  Slot: <span className="text-white">{member.slot}</span>
+                </p>
+
+                <select
+                  value={member.status}
+                  onChange={(e) => updateAssignment(member.id, e.target.value)}
+                  className="mt-4 w-full bg-black border border-green-500 text-white p-2 rounded-lg"
+                >
+                  {assignmentOptions.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }

@@ -198,7 +198,7 @@ useEffect(() => {
 
 const weeklyEvents = [
   { name: "Tomahawk 1", day: 0, hour: 19, minute:0 }, 
-  { name: "Claymore 2", day: 6, hour: 23, minute: 0 }, 
+  { name: "Claymore 2", day: 5, hour: 23, minute: 0 }, 
   { name: "Broadsword 3", day: 0, hour: 1, minute: 0 },
   { name: "Dagger", day: 6, hour: 22, minute: 0 },
 ];

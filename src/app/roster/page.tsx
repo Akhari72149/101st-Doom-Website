@@ -206,7 +206,6 @@ export default function Roster() {
       text-[#eafff2]
       p-10
     ">
-
       {/* BACK BUTTON */}
       <button
         onClick={() => router.push("/pcs")}
@@ -232,9 +231,7 @@ export default function Roster() {
       ">
         101ST DOOM BATTALION ROSTER
       </h1>
-
       {renderStructure()}
-
     </main>
   );
 }

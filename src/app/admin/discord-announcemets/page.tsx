@@ -28,7 +28,7 @@ type Announcement = {
   created_at: string;
 };
 
-const ROLE_ID = "1485779395019935794";
+const ROLE_ID = "446542700951633923";
 const DISCORD_MESSAGE_LIMIT = 2000;
 
 const repeatOptions = [

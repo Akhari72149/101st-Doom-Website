@@ -1,5 +1,6 @@
-import { createClient, User } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { User } from "@supabase/supabase-js";
 
 type AccessDenied = {
   ok: false;
@@ -15,36 +16,35 @@ type AccessGranted = {
 export async function requireDiscordAnnouncementAccess(): Promise<AccessDenied | AccessGranted> {
   const cookieStore = await cookies();
 
-  const supabase = createClient(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      global: {
-        headers: {
-          cookie: cookieStore.toString(),
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
         },
-      },
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+        set() {},
+        remove() {},
       },
     }
   );
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (userError || !user) {
     return { ok: false, status: 401, error: "Unauthorized" };
   }
 
-  const { data: roles, error } = await supabase
+  const { data: roles, error: roleError } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", user.id);
 
-  if (error) {
+  if (roleError) {
     return { ok: false, status: 500, error: "Failed to check roles" };
   }
 

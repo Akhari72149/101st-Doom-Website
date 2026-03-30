@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { animate, stagger } from "animejs";
+import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
 
 type DiscordChannel = {
   id: string;
@@ -63,7 +64,6 @@ export default function DiscordAnnouncementsPage() {
   const [user, setUser] = useState<any>(null);
   const [roles, setRoles] = useState<string[]>([]);
 
-  const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const [title, setTitle] = useState("");
@@ -79,9 +79,6 @@ export default function DiscordAnnouncementsPage() {
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [successPulse, setSuccessPulse] = useState(false);
-
-  const [channelSearch, setChannelSearch] = useState("");
-  const [showChannelDropdown, setShowChannelDropdown] = useState(false);
 
   const [listFilter, setListFilter] = useState<"all" | "active" | "inactive" | "repeating" | "one-time">("all");
   const [listSearch, setListSearch] = useState("");
@@ -143,7 +140,7 @@ export default function DiscordAnnouncementsPage() {
 
     const load = async () => {
       setLoadingPage(true);
-      await Promise.all([fetchChannels(), fetchAnnouncements()]);
+      await fetchAnnouncements();
       setLoadingPage(false);
     };
 
@@ -159,22 +156,6 @@ export default function DiscordAnnouncementsPage() {
 
     return () => clearTimeout(timer);
   }, [successPulse]);
-
-  const fetchChannels = async () => {
-    try {
-      const res = await fetch("/api/discord/channels");
-      const data = await res.json();
-
-      if (!res.ok) {
-        console.error(data?.error || "Failed to fetch Discord channels");
-        return;
-      }
-
-      setChannels(data.channels || []);
-    } catch (err) {
-      console.error("Channel fetch failed", err);
-    }
-  };
 
   const fetchAnnouncements = async () => {
     const { data, error } = await supabase
@@ -201,11 +182,10 @@ export default function DiscordAnnouncementsPage() {
     setRepeatIntervalMinutes("60");
     setPingRole(false);
     setEditingId(null);
-    setChannelSearch("");
-    setShowChannelDropdown(false);
   };
 
-  const selectedChannel = channels.find((c) => c.id === channelId) || null;
+const selectedChannel =
+  discordAnnouncementChannels.find((c) => c.id === channelId) || null;
 
   const previewMessage = pingRole ? `<@&${ROLE_ID}> ${message}` : message;
   const previewLength = previewMessage.length;
@@ -234,14 +214,6 @@ export default function DiscordAnnouncementsPage() {
     return "This announcement is set to repeat.";
   }, [scheduleEnabled, repeatEnabled, repeatType, repeatIntervalMinutes]);
 
-  const filteredChannels = useMemo(() => {
-    const search = channelSearch.trim().toLowerCase();
-    if (!search) return channels;
-
-    return channels.filter((channel) =>
-      channel.name.toLowerCase().includes(search)
-    );
-  }, [channels, channelSearch]);
 
   const filteredAndSortedAnnouncements = useMemo(() => {
     let result = [...announcements];
@@ -307,7 +279,6 @@ export default function DiscordAnnouncementsPage() {
     setTitle(item.title);
     setMessage(item.message);
     setChannelId(item.channel_id);
-    setChannelSearch(item.channel_name || "");
     setScheduleEnabled(true);
     setScheduledFor(toDatetimeLocalValue(item.scheduled_for));
     setRepeatEnabled(item.repeat_enabled);
@@ -323,7 +294,6 @@ export default function DiscordAnnouncementsPage() {
     );
     setRepeatIntervalMinutes(String(item.repeat_interval_minutes ?? 60));
     setPingRole(item.ping_role);
-    setShowChannelDropdown(false);
 
     window.scrollTo({
       top: 0,
@@ -614,48 +584,28 @@ export default function DiscordAnnouncementsPage() {
                 />
               </div>
 
-              <div className="relative">
-                <label className="block text-sm text-[#00ff66] mb-2">
-                  Discord Channel
-                </label>
+              <div>
+  <label className="block text-sm text-[#00ff66] mb-2">
+    Discord Channel
+  </label>
 
-                <input
-                  value={selectedChannel ? `#${selectedChannel.name}` : channelSearch}
-                  onChange={(e) => {
-                    setChannelId("");
-                    setChannelSearch(e.target.value);
-                    setShowChannelDropdown(true);
-                  }}
-                  onFocus={() => setShowChannelDropdown(true)}
-                  placeholder="Search for a channel..."
-                  className="w-full rounded-xl border border-[#00ff66]/30 bg-black/60 px-4 py-3 text-white outline-none focus:border-[#00ff66]"
-                />
+  <select
+    value={channelId}
+    onChange={(e) => setChannelId(e.target.value)}
+    className="w-full rounded-xl border border-[#00ff66]/30 bg-black/60 px-4 py-3 text-white outline-none focus:border-[#00ff66]"
+  >
+    <option value="">Select a channel...</option>
+    {discordAnnouncementChannels.map((channel) => (
+      <option key={channel.id} value={channel.id}>
+        #{channel.name}
+      </option>
+    ))}
+  </select>
 
-                {showChannelDropdown && (
-                  <div className="absolute z-50 mt-2 w-full rounded-xl border border-[#00ff66]/30 bg-black/95 backdrop-blur-xl max-h-64 overflow-y-auto shadow-[0_0_20px_rgba(0,255,100,0.12)]">
-                    {filteredChannels.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-gray-400">
-                        No matching channels found.
-                      </div>
-                    ) : (
-                      filteredChannels.map((channel) => (
-                        <button
-                          key={channel.id}
-                          type="button"
-                          onClick={() => {
-                            setChannelId(channel.id);
-                            setChannelSearch(channel.name);
-                            setShowChannelDropdown(false);
-                          }}
-                          className="w-full text-left px-4 py-3 text-sm text-white hover:bg-[#00ff66]/10 transition-all"
-                        >
-                          #{channel.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
+  <p className="mt-2 text-xs text-gray-400">
+    Only approved announcement channels are shown here.
+  </p>
+</div>
 
               <div className="rounded-2xl border border-[#00ff66]/25 bg-black/40 p-4">
                 <div className="flex items-center justify-between gap-4">

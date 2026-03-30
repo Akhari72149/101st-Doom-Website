@@ -18,7 +18,6 @@ type Asset = {
   name: string;
   token_cost: number;
   inventory: number;
-  description?: string;
 };
 
 type Transaction = {
@@ -453,7 +452,7 @@ useEffect(() => {
         </button>
 
         <button
-          onClick={() => router.push("/GC-Asset-Log")}
+          onClick={() => router.push("/GC-Logistics-Transactions")}
           className="w-full px-4 py-2 border border-[#00ff66] text-[#00ff66] rounded-xl hover:bg-[#00ff66] hover:text-black transition"
         >
           View Transaction History
@@ -589,13 +588,6 @@ useEffect(() => {
                         <div className="font-bold text-[#00ff66]">
                           {asset.name}
                         </div>
-
-                        {asset.description && (
-                          <div className="text-sm text-gray-400">
-                            {asset.description}
-                          </div>
-                          )}
-
                         <div>Cost: {asset.token_cost}</div>
                         <div>Stock: {asset.inventory}</div>
 

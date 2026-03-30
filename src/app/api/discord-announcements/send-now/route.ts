@@ -1,23 +1,18 @@
 import { NextResponse } from "next/server";
-import { requireDiscordAnnouncementAccess } from "@/lib/require-discord-announcement-access";
 import { sendDiscordMessage } from "@/lib/send-discord-message";
+import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
 
 const DISCORD_MESSAGE_LIMIT = 2000;
 
 export async function POST(req: Request) {
-  const auth = await requireDiscordAnnouncementAccess();
-
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-
   const body = await req.json();
 
   const title = String(body.title || "").trim();
   const message = String(body.message || "").trim();
   const channelId = String(body.channel_id || "").trim();
   const pingRole = Boolean(body.ping_role);
-  const pingRoleId = body.ping_role_id ? String(body.ping_role_id) : null;
+
+  const roleId = process.env.DISCORD_ANNOUNCEMENT_ROLE_ID || null;
 
   if (!title) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -31,9 +26,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Channel is required" }, { status: 400 });
   }
 
-  const finalMessage = pingRole && pingRoleId
-    ? `<@&${pingRoleId}> ${message}`
-    : message;
+  const allowedChannel = discordAnnouncementChannels.find((c) => c.id === channelId);
+
+  if (!allowedChannel) {
+    return NextResponse.json({ error: "Invalid channel selected" }, { status: 400 });
+  }
+
+  const finalMessage =
+    pingRole && roleId ? `<@&${roleId}> ${message}` : message;
 
   if (finalMessage.length > DISCORD_MESSAGE_LIMIT) {
     return NextResponse.json(

@@ -1,30 +1,24 @@
 import { NextResponse } from "next/server";
-import { requireDiscordAnnouncementAccess } from "@/lib/require-discord-announcement-access";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
 
 const VALID_REPEAT_TYPES = ["none", "daily", "weekly", "monthly", "custom"] as const;
 const DISCORD_MESSAGE_LIMIT = 2000;
 
 export async function POST(req: Request) {
-  const auth = await requireDiscordAnnouncementAccess();
-
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-
   const body = await req.json();
 
   const title = String(body.title || "").trim();
   const message = String(body.message || "").trim();
   const channelId = String(body.channel_id || "").trim();
-  const channelName = body.channel_name ? String(body.channel_name) : null;
   const scheduledFor = String(body.scheduled_for || "");
   const repeatEnabled = Boolean(body.repeat_enabled);
   const repeatType = String(body.repeat_type || "none");
   const repeatIntervalMinutes =
     body.repeat_interval_minutes == null ? null : Number(body.repeat_interval_minutes);
   const pingRole = Boolean(body.ping_role);
-  const pingRoleId = body.ping_role_id ? String(body.ping_role_id) : null;
+
+  const roleId = process.env.DISCORD_ANNOUNCEMENT_ROLE_ID || null;
 
   if (!title || !message || !channelId || !scheduledFor) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -34,7 +28,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid repeat type" }, { status: 400 });
   }
 
-  const preview = pingRole && pingRoleId ? `<@&${pingRoleId}> ${message}` : message;
+  const allowedChannel = discordAnnouncementChannels.find((c) => c.id === channelId);
+
+  if (!allowedChannel) {
+    return NextResponse.json({ error: "Invalid channel selected" }, { status: 400 });
+  }
+
+  const preview =
+    pingRole && roleId ? `<@&${roleId}> ${message}` : message;
+
   if (preview.length > DISCORD_MESSAGE_LIMIT) {
     return NextResponse.json(
       { error: `Message exceeds ${DISCORD_MESSAGE_LIMIT} characters` },
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
   }
 
   const scheduledDate = new Date(scheduledFor);
+
   if (Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now()) {
     return NextResponse.json(
       { error: "Scheduled time must be a valid future date" },
@@ -63,16 +66,15 @@ export async function POST(req: Request) {
     title,
     message,
     channel_id: channelId,
-    channel_name: channelName,
+    channel_name: allowedChannel.name,
     scheduled_for: scheduledDate.toISOString(),
     repeat_enabled: repeatEnabled,
     repeat_type: repeatEnabled ? repeatType : "none",
     repeat_interval_minutes:
       repeatEnabled && repeatType === "custom" ? repeatIntervalMinutes : null,
     ping_role: pingRole,
-    ping_role_id: pingRole ? pingRoleId : null,
+    ping_role_id: pingRole ? roleId : null,
     active: true,
-    created_by: auth.user.id,
   });
 
   if (error) {
@@ -83,15 +85,9 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const auth = await requireDiscordAnnouncementAccess();
-
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-
   const body = await req.json();
-  const id = String(body.id || "").trim();
 
+  const id = String(body.id || "").trim();
   if (!id) {
     return NextResponse.json({ error: "Missing announcement id" }, { status: 400 });
   }
@@ -99,14 +95,14 @@ export async function PUT(req: Request) {
   const title = String(body.title || "").trim();
   const message = String(body.message || "").trim();
   const channelId = String(body.channel_id || "").trim();
-  const channelName = body.channel_name ? String(body.channel_name) : null;
   const scheduledFor = String(body.scheduled_for || "");
   const repeatEnabled = Boolean(body.repeat_enabled);
   const repeatType = String(body.repeat_type || "none");
   const repeatIntervalMinutes =
     body.repeat_interval_minutes == null ? null : Number(body.repeat_interval_minutes);
   const pingRole = Boolean(body.ping_role);
-  const pingRoleId = body.ping_role_id ? String(body.ping_role_id) : null;
+
+  const roleId = process.env.DISCORD_ANNOUNCEMENT_ROLE_ID || null;
 
   if (!title || !message || !channelId || !scheduledFor) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -116,7 +112,15 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Invalid repeat type" }, { status: 400 });
   }
 
-  const preview = pingRole && pingRoleId ? `<@&${pingRoleId}> ${message}` : message;
+  const allowedChannel = discordAnnouncementChannels.find((c) => c.id === channelId);
+
+  if (!allowedChannel) {
+    return NextResponse.json({ error: "Invalid channel selected" }, { status: 400 });
+  }
+
+  const preview =
+    pingRole && roleId ? `<@&${roleId}> ${message}` : message;
+
   if (preview.length > DISCORD_MESSAGE_LIMIT) {
     return NextResponse.json(
       { error: `Message exceeds ${DISCORD_MESSAGE_LIMIT} characters` },
@@ -125,6 +129,7 @@ export async function PUT(req: Request) {
   }
 
   const scheduledDate = new Date(scheduledFor);
+
   if (Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now()) {
     return NextResponse.json(
       { error: "Scheduled time must be a valid future date" },
@@ -147,14 +152,14 @@ export async function PUT(req: Request) {
       title,
       message,
       channel_id: channelId,
-      channel_name: channelName,
+      channel_name: allowedChannel.name,
       scheduled_for: scheduledDate.toISOString(),
       repeat_enabled: repeatEnabled,
       repeat_type: repeatEnabled ? repeatType : "none",
       repeat_interval_minutes:
         repeatEnabled && repeatType === "custom" ? repeatIntervalMinutes : null,
       ping_role: pingRole,
-      ping_role_id: pingRole ? pingRoleId : null,
+      ping_role_id: pingRole ? roleId : null,
     })
     .eq("id", id);
 

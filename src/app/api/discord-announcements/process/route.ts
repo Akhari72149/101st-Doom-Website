@@ -29,12 +29,20 @@ function getNextScheduledFor(currentIso: string, repeatType: string, repeatInter
 }
 
 export async function POST(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  const expected = `Bearer ${process.env.CRON_SECRET}`;
+const authHeader = req.headers.get("authorization");
+const expected = `Bearer ${process.env.CRON_SECRET}`;
 
-  if (authHeader !== expected) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+if (authHeader !== expected) {
+  return NextResponse.json(
+    {
+      error: "Unauthorized",
+      received: authHeader,
+      expected,
+      hasSecret: !!process.env.CRON_SECRET,
+    },
+    { status: 401 }
+  );
+}
 
   const nowIso = new Date().toISOString();
 

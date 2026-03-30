@@ -687,7 +687,7 @@ const selectedChannel =
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={8}
-                  placeholder="Type the announcement your bot should send..."
+                  placeholder="Type the announcement The Superintendant should send..."
                   className="w-full rounded-xl border border-[#00ff66]/30 bg-black/60 px-4 py-3 text-white outline-none focus:border-[#00ff66] resize-y"
                 />
                 <div className="mt-2 flex items-center justify-between gap-3 text-xs">

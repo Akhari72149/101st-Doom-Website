@@ -37,7 +37,6 @@ const repeatOptions = [
   { value: "monthly", label: "Monthly" },
   { value: "custom", label: "Custom Minutes" },
 ] as const;
-
 const listFilters = [
   { value: "all", label: "All" },
   { value: "active", label: "Active" },

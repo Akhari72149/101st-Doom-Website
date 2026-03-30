@@ -28,7 +28,8 @@ type Announcement = {
   created_at: string;
 };
 
-const ROLE_ID = "446542700951633923";
+const CORRECT_ANNOUNCEMENT_ROLE_ID = "446542700951633923";
+const LEGACY_WRONG_SCHEDULED_ROLE_ID = "1485779395019935794";
 const DISCORD_MESSAGE_LIMIT = 2000;
 
 const repeatOptions = [
@@ -37,6 +38,7 @@ const repeatOptions = [
   { value: "monthly", label: "Monthly" },
   { value: "custom", label: "Custom Minutes" },
 ] as const;
+
 const listFilters = [
   { value: "all", label: "All" },
   { value: "active", label: "Active" },
@@ -52,6 +54,23 @@ const sortOptions = [
   { value: "created_asc", label: "Oldest Created" },
   { value: "active_first", label: "Active First" },
 ] as const;
+
+function getExpectedPingRoleId(isScheduled: boolean) {
+  return CORRECT_ANNOUNCEMENT_ROLE_ID;
+}
+
+function getDisplayPingRoleId(item: Announcement) {
+  if (!item.ping_role) return null;
+
+  if (
+    item.ping_role_id === LEGACY_WRONG_SCHEDULED_ROLE_ID ||
+    !item.ping_role_id
+  ) {
+    return getExpectedPingRoleId(true);
+  }
+
+  return item.ping_role_id;
+}
 
 export default function DiscordAnnouncementsPage() {
   const router = useRouter();
@@ -72,21 +91,27 @@ export default function DiscordAnnouncementsPage() {
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledFor, setScheduledFor] = useState("");
   const [repeatEnabled, setRepeatEnabled] = useState(false);
-  const [repeatType, setRepeatType] = useState<"daily" | "weekly" | "monthly" | "custom">("daily");
+  const [repeatType, setRepeatType] = useState<
+    "daily" | "weekly" | "monthly" | "custom"
+  >("daily");
   const [repeatIntervalMinutes, setRepeatIntervalMinutes] = useState("60");
   const [pingRole, setPingRole] = useState(false);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [successPulse, setSuccessPulse] = useState(false);
 
-  const [listFilter, setListFilter] = useState<"all" | "active" | "inactive" | "repeating" | "one-time">("all");
+  const [listFilter, setListFilter] = useState<
+    "all" | "active" | "inactive" | "repeating" | "one-time"
+  >("all");
   const [listSearch, setListSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"scheduled_asc" | "scheduled_desc" | "created_desc" | "created_asc" | "active_first">("scheduled_asc");
+  const [sortBy, setSortBy] = useState<
+    "scheduled_asc" | "scheduled_desc" | "created_desc" | "created_asc" | "active_first"
+  >("scheduled_asc");
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const canAccess = useMemo(
-    () => roles.includes("admin") || roles.includes("akhari"),
+    () => roles.includes("admin") || roles.includes("logistics"),
     [roles]
   );
 
@@ -183,10 +208,17 @@ export default function DiscordAnnouncementsPage() {
     setEditingId(null);
   };
 
-const selectedChannel =
-  discordAnnouncementChannels.find((c) => c.id === channelId) || null;
+  const selectedChannel =
+    discordAnnouncementChannels.find((c) => c.id === channelId) || null;
 
-  const previewMessage = pingRole ? `<@&${ROLE_ID}> ${message}` : message;
+  const currentPingRoleId = pingRole
+    ? getExpectedPingRoleId(scheduleEnabled)
+    : null;
+
+  const previewMessage = pingRole
+    ? `<@&${currentPingRoleId}> ${message}`
+    : message;
+
   const previewLength = previewMessage.length;
   const isOverLimit = previewLength > DISCORD_MESSAGE_LIMIT;
 
@@ -212,7 +244,6 @@ const selectedChannel =
 
     return "This announcement is set to repeat.";
   }, [scheduleEnabled, repeatEnabled, repeatType, repeatIntervalMinutes]);
-
 
   const filteredAndSortedAnnouncements = useMemo(() => {
     let result = [...announcements];
@@ -245,11 +276,17 @@ const selectedChannel =
 
     result.sort((a, b) => {
       if (sortBy === "scheduled_asc") {
-        return new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime();
+        return (
+          new Date(a.scheduled_for).getTime() -
+          new Date(b.scheduled_for).getTime()
+        );
       }
 
       if (sortBy === "scheduled_desc") {
-        return new Date(b.scheduled_for).getTime() - new Date(a.scheduled_for).getTime();
+        return (
+          new Date(b.scheduled_for).getTime() -
+          new Date(a.scheduled_for).getTime()
+        );
       }
 
       if (sortBy === "created_desc") {
@@ -262,7 +299,10 @@ const selectedChannel =
 
       if (sortBy === "active_first") {
         if (a.active === b.active) {
-          return new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime();
+          return (
+            new Date(a.scheduled_for).getTime() -
+            new Date(b.scheduled_for).getTime()
+          );
         }
         return a.active ? -1 : 1;
       }
@@ -337,7 +377,9 @@ const selectedChannel =
     }
 
     if (isOverLimit) {
-      setStatusMessage(`Message preview exceeds Discord's ${DISCORD_MESSAGE_LIMIT} character limit.`);
+      setStatusMessage(
+        `Message preview exceeds Discord's ${DISCORD_MESSAGE_LIMIT} character limit.`
+      );
       return;
     }
 
@@ -356,7 +398,7 @@ const selectedChannel =
             channel_id: channelId,
             channel_name: selectedChannel?.name || null,
             ping_role: pingRole,
-            ping_role_id: pingRole ? ROLE_ID : null,
+            ping_role_id: pingRole ? getExpectedPingRoleId(false) : null,
             created_by: user?.id || null,
           }),
         });
@@ -395,7 +437,7 @@ const selectedChannel =
               ? Number(repeatIntervalMinutes)
               : null,
           ping_role: pingRole,
-          ping_role_id: pingRole ? ROLE_ID : null,
+          ping_role_id: pingRole ? getExpectedPingRoleId(true) : null,
           created_by: user?.id || null,
         }),
       });
@@ -403,19 +445,32 @@ const selectedChannel =
       const data = await res.json();
 
       if (!res.ok) {
-        setStatusMessage(data?.error || `Failed to ${editingId ? "update" : "create"} announcement.`);
+        setStatusMessage(
+          data?.error ||
+            `Failed to ${editingId ? "update" : "create"} announcement.`
+        );
         setSaving(false);
         return;
       }
 
-      setStatusMessage(editingId ? "Announcement updated successfully." : "Announcement created successfully.");
+      setStatusMessage(
+        editingId
+          ? "Announcement updated successfully."
+          : "Announcement created successfully."
+      );
       setSuccessPulse(true);
       resetForm();
       await fetchAnnouncements();
     } catch (err) {
       console.error(err);
       setStatusMessage(
-        `Something went wrong while ${!scheduleEnabled && !editingId ? "sending" : editingId ? "updating" : "saving"}.`
+        `Something went wrong while ${
+          !scheduleEnabled && !editingId
+            ? "sending"
+            : editingId
+            ? "updating"
+            : "saving"
+        }.`
       );
     }
 
@@ -457,7 +512,9 @@ const selectedChannel =
     await fetchAnnouncements();
   };
 
-  const applyQuickTime = (mode: "10m" | "30m" | "tonight" | "tomorrow18" | "nextSunday18") => {
+  const applyQuickTime = (
+    mode: "10m" | "30m" | "tonight" | "tomorrow18" | "nextSunday18"
+  ) => {
     const now = new Date();
     const date = new Date(now);
 
@@ -584,27 +641,27 @@ const selectedChannel =
               </div>
 
               <div>
-  <label className="block text-sm text-[#00ff66] mb-2">
-    Discord Channel
-  </label>
+                <label className="block text-sm text-[#00ff66] mb-2">
+                  Discord Channel
+                </label>
 
-  <select
-    value={channelId}
-    onChange={(e) => setChannelId(e.target.value)}
-    className="w-full rounded-xl border border-[#00ff66]/30 bg-black/60 px-4 py-3 text-white outline-none focus:border-[#00ff66]"
-  >
-    <option value="">Select a channel...</option>
-    {discordAnnouncementChannels.map((channel) => (
-      <option key={channel.id} value={channel.id}>
-        #{channel.name}
-      </option>
-    ))}
-  </select>
+                <select
+                  value={channelId}
+                  onChange={(e) => setChannelId(e.target.value)}
+                  className="w-full rounded-xl border border-[#00ff66]/30 bg-black/60 px-4 py-3 text-white outline-none focus:border-[#00ff66]"
+                >
+                  <option value="">Select a channel...</option>
+                  {discordAnnouncementChannels.map((channel) => (
+                    <option key={channel.id} value={channel.id}>
+                      #{channel.name}
+                    </option>
+                  ))}
+                </select>
 
-  <p className="mt-2 text-xs text-gray-400">
-    Only approved announcement channels are shown here.
-  </p>
-</div>
+                <p className="mt-2 text-xs text-gray-400">
+                  Only approved announcement channels are shown here.
+                </p>
+              </div>
 
               <div className="rounded-2xl border border-[#00ff66]/25 bg-black/40 p-4">
                 <div className="flex items-center justify-between gap-4">
@@ -710,7 +767,7 @@ const selectedChannel =
                       Add the role mention at the very start of the message.
                     </div>
                     <div className="text-xs text-gray-500 mt-2 break-all">
-                      Role ID: {ROLE_ID}
+                      Role ID: {currentPingRoleId || CORRECT_ANNOUNCEMENT_ROLE_ID}
                     </div>
                   </div>
 
@@ -902,7 +959,12 @@ const selectedChannel =
                   value={sortBy}
                   onChange={(e) =>
                     setSortBy(
-                      e.target.value as "scheduled_asc" | "scheduled_desc" | "created_desc" | "created_asc" | "active_first"
+                      e.target.value as
+                        | "scheduled_asc"
+                        | "scheduled_desc"
+                        | "created_desc"
+                        | "created_asc"
+                        | "active_first"
                     )
                   }
                   className="w-full rounded-xl border border-[#00ff66]/30 bg-black/60 px-4 py-3 text-white outline-none focus:border-[#00ff66]"
@@ -938,89 +1000,93 @@ const selectedChannel =
               </div>
             ) : (
               <div className="space-y-4 max-h-[900px] overflow-y-auto pr-1">
-                {filteredAndSortedAnnouncements.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`rounded-xl border p-4 transition-all ${
-                      editingId === item.id
-                        ? "border-yellow-500/60 bg-yellow-500/5 shadow-[0_0_18px_rgba(234,179,8,0.15)]"
-                        : "border-[#00ff66]/25 bg-black/55 hover:border-[#00ff66]/50"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="text-lg text-[#00ff66] font-semibold">
-                          {item.title}
+                {filteredAndSortedAnnouncements.map((item) => {
+                  const displayPingRoleId = getDisplayPingRoleId(item);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-xl border p-4 transition-all ${
+                        editingId === item.id
+                          ? "border-yellow-500/60 bg-yellow-500/5 shadow-[0_0_18px_rgba(234,179,8,0.15)]"
+                          : "border-[#00ff66]/25 bg-black/55 hover:border-[#00ff66]/50"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-lg text-[#00ff66] font-semibold">
+                            {item.title}
+                          </div>
+                          <div className="text-sm text-gray-400 mt-1">
+                            #{item.channel_name || item.channel_id}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-400 mt-1">
-                          #{item.channel_name || item.channel_id}
+
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          <Badge text={item.active ? "ACTIVE" : "INACTIVE"} tone={item.active ? "green" : "red"} />
+                          <Badge text={item.repeat_enabled ? "REPEATING" : "ONE-TIME"} tone={item.repeat_enabled ? "blue" : "gray"} />
+                          {item.ping_role && <Badge text="ROLE PING" tone="purple" />}
+                          {item.last_sent_at && <Badge text="SENT BEFORE" tone="yellow" />}
+                          {editingId === item.id && <Badge text="EDITING" tone="yellow" />}
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2 justify-end">
-                        <Badge text={item.active ? "ACTIVE" : "INACTIVE"} tone={item.active ? "green" : "red"} />
-                        <Badge text={item.repeat_enabled ? "REPEATING" : "ONE-TIME"} tone={item.repeat_enabled ? "blue" : "gray"} />
-                        {item.ping_role && <Badge text="ROLE PING" tone="purple" />}
-                        {item.last_sent_at && <Badge text="SENT BEFORE" tone="yellow" />}
-                        {editingId === item.id && <Badge text="EDITING" tone="yellow" />}
+                      <div className="mt-3 text-sm text-gray-200 whitespace-pre-wrap break-words">
+                        {item.ping_role && displayPingRoleId ? `<@&${displayPingRoleId}> ` : ""}
+                        {item.message}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-400">
+                        <div>
+                          Scheduled: {new Date(item.scheduled_for).toLocaleString()}
+                        </div>
+                        <div>
+                          Repeat:{" "}
+                          {item.repeat_enabled
+                            ? item.repeat_type === "custom"
+                              ? `Every ${item.repeat_interval_minutes} minutes`
+                              : item.repeat_type
+                            : "No"}
+                        </div>
+                        <div>
+                          Ping role: {item.ping_role ? "Yes" : "No"}
+                        </div>
+                        <div>
+                          Last sent:{" "}
+                          {item.last_sent_at
+                            ? new Date(item.last_sent_at).toLocaleString()
+                            : "Never"}
+                        </div>
+                        <div>
+                          Created: {new Date(item.created_at).toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <button
+                          onClick={() => loadIntoEditor(item)}
+                          className="px-4 py-2 rounded-lg border border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/15 transition-all text-sm"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          onClick={() => toggleActive(item)}
+                          className="px-4 py-2 rounded-lg border border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all text-sm"
+                        >
+                          {item.active ? "Disable" : "Enable"}
+                        </button>
+
+                        <button
+                          onClick={() => deleteAnnouncement(item.id)}
+                          className="px-4 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white transition-all text-sm"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
-
-                    <div className="mt-3 text-sm text-gray-200 whitespace-pre-wrap break-words">
-                      {item.ping_role && item.ping_role_id ? `<@&${item.ping_role_id}> ` : ""}
-                      {item.message}
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-400">
-                      <div>
-                        Scheduled: {new Date(item.scheduled_for).toLocaleString()}
-                      </div>
-                      <div>
-                        Repeat:{" "}
-                        {item.repeat_enabled
-                          ? item.repeat_type === "custom"
-                            ? `Every ${item.repeat_interval_minutes} minutes`
-                            : item.repeat_type
-                          : "No"}
-                      </div>
-                      <div>
-                        Ping role: {item.ping_role ? "Yes" : "No"}
-                      </div>
-                      <div>
-                        Last sent:{" "}
-                        {item.last_sent_at
-                          ? new Date(item.last_sent_at).toLocaleString()
-                          : "Never"}
-                      </div>
-                      <div>
-                        Created: {new Date(item.created_at).toLocaleString()}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <button
-                        onClick={() => loadIntoEditor(item)}
-                        className="px-4 py-2 rounded-lg border border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/15 transition-all text-sm"
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        onClick={() => toggleActive(item)}
-                        className="px-4 py-2 rounded-lg border border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all text-sm"
-                      >
-                        {item.active ? "Disable" : "Enable"}
-                      </button>
-
-                      <button
-                        onClick={() => deleteAnnouncement(item.id)}
-                        className="px-4 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white transition-all text-sm"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

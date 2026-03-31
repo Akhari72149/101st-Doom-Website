@@ -140,6 +140,9 @@ export default function PlanOpsPage() {
   const [isDraggingMarker, setIsDraggingMarker] = useState(false);
 
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
+  const channelRef = useRef<any>(null);
+  const markersRef = useRef<PlanMarker[]>([]);
+  const selectedPlanIdRef = useRef<string>("");
 
   const panStartRef = useRef({
     mouseX: 0,
@@ -181,6 +184,14 @@ export default function PlanOpsPage() {
   const isMarkerOnActiveLayer = (marker: PlanMarker) => {
     return marker.layerId === activeLayerId;
   };
+
+  useEffect(() => {
+    markersRef.current = markers;
+  }, [markers]);
+
+  useEffect(() => {
+    selectedPlanIdRef.current = selectedPlanId;
+  }, [selectedPlanId]);
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -229,6 +240,80 @@ export default function PlanOpsPage() {
       setSelectedMarkerId(null);
     }
   }, [activeLayerId, selectedMarker]);
+
+  useEffect(() => {
+    if (!selectedPlanId) {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+      return;
+    }
+
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    const channel = supabase.channel(`planops:${selectedPlanId}`, {
+      config: {
+        broadcast: { self: false },
+        presence: userId ? { key: userId } : undefined,
+      },
+    });
+
+    channel
+      .on("broadcast", { event: "marker_move" }, ({ payload }) => {
+        if (!payload?.markerId) return;
+
+        setMarkers((prev) =>
+          prev.map((marker) =>
+            marker.id === payload.markerId
+              ? {
+                  ...marker,
+                  x: typeof payload.x === "number" ? payload.x : marker.x,
+                  y: typeof payload.y === "number" ? payload.y : marker.y,
+                  layerId:
+                    typeof payload.layerId === "string"
+                      ? payload.layerId
+                      : marker.layerId,
+                }
+              : marker
+          )
+        );
+      })
+      .on("broadcast", { event: "marker_create" }, ({ payload }) => {
+        if (!payload?.marker) return;
+
+        const incomingMarker = payload.marker as PlanMarker;
+
+        setMarkers((prev) => {
+          if (prev.some((marker) => marker.id === incomingMarker.id)) return prev;
+          return [...prev, incomingMarker];
+        });
+      })
+      .on("broadcast", { event: "marker_delete" }, ({ payload }) => {
+        if (!payload?.markerId) return;
+
+        setMarkers((prev) =>
+          prev.filter((marker) => marker.id !== payload.markerId)
+        );
+
+        setSelectedMarkerId((current) =>
+          current === payload.markerId ? null : current
+        );
+      })
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [selectedPlanId, userId]);
 
   const fetchPlans = async () => {
     setLoadingPlans(true);
@@ -291,6 +376,69 @@ export default function PlanOpsPage() {
     }
 
     setLoadingPlans(false);
+  };
+
+  const persistMarkers = async (nextMarkers: PlanMarker[]) => {
+    if (!selectedPlanIdRef.current) return;
+
+    const { error } = await supabase
+      .from("operation_plans")
+      .update({
+        markers: nextMarkers,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedPlanIdRef.current);
+
+    if (error) {
+      console.error("Failed to persist markers", error);
+    }
+  };
+
+  const broadcastMarkerMove = async (
+    markerId: string,
+    x: number,
+    y: number,
+    layerId: string
+  ) => {
+    if (!channelRef.current || !selectedPlanIdRef.current) return;
+
+    await channelRef.current.send({
+      type: "broadcast",
+      event: "marker_move",
+      payload: {
+        markerId,
+        x,
+        y,
+        layerId,
+        planId: selectedPlanIdRef.current,
+      },
+    });
+  };
+
+  const broadcastMarkerCreate = async (marker: PlanMarker) => {
+    if (!channelRef.current || !selectedPlanIdRef.current) return;
+
+    await channelRef.current.send({
+      type: "broadcast",
+      event: "marker_create",
+      payload: {
+        marker,
+        planId: selectedPlanIdRef.current,
+      },
+    });
+  };
+
+  const broadcastMarkerDelete = async (markerId: string) => {
+    if (!channelRef.current || !selectedPlanIdRef.current) return;
+
+    await channelRef.current.send({
+      type: "broadcast",
+      event: "marker_delete",
+      payload: {
+        markerId,
+        planId: selectedPlanIdRef.current,
+      },
+    });
   };
 
   const resetEditor = () => {
@@ -420,7 +568,7 @@ export default function PlanOpsPage() {
     };
   };
 
-  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMapClick = async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!canEdit) return;
     if (interactionMode !== "marker") return;
     if (isDraggingMarker || isPanning) return;
@@ -440,8 +588,12 @@ export default function PlanOpsPage() {
       layerId: activeLayerId,
     };
 
-    setMarkers((prev) => [...prev, newMarker]);
+    const nextMarkers = [...markersRef.current, newMarker];
+    setMarkers(nextMarkers);
     setSelectedMarkerId(newMarker.id);
+
+    await broadcastMarkerCreate(newMarker);
+    await persistMarkers(nextMarkers);
   };
 
   const startMarkerDrag = (
@@ -481,9 +633,11 @@ export default function PlanOpsPage() {
   };
 
   useEffect(() => {
-    const handleMove = (e: MouseEvent) => {
+    const handleMove = async (e: MouseEvent) => {
       if (isDraggingMarker && dragMarkerRef.current.markerId) {
-        const movingMarker = markers.find((m) => m.id === dragMarkerRef.current.markerId);
+        const movingMarker = markersRef.current.find(
+          (m) => m.id === dragMarkerRef.current.markerId
+        );
         if (!movingMarker || !isMarkerOnActiveLayer(movingMarker)) return;
 
         const point = getLocalMapPoint(e.clientX, e.clientY);
@@ -501,12 +655,20 @@ export default function PlanOpsPage() {
           point.height
         );
 
-        setMarkers((prev) =>
-          prev.map((m) =>
-            m.id === dragMarkerRef.current.markerId
-              ? { ...m, x: nextX, y: nextY }
-              : m
-          )
+        const nextMarkers = markersRef.current.map((m) =>
+          m.id === dragMarkerRef.current.markerId
+            ? { ...m, x: nextX, y: nextY }
+            : m
+        );
+
+        setMarkers(nextMarkers);
+        markersRef.current = nextMarkers;
+
+        await broadcastMarkerMove(
+          dragMarkerRef.current.markerId,
+          nextX,
+          nextY,
+          movingMarker.layerId
         );
         return;
       }
@@ -522,7 +684,9 @@ export default function PlanOpsPage() {
       }
     };
 
-    const handleUp = () => {
+    const handleUp = async () => {
+      const finishedDragMarkerId = dragMarkerRef.current.markerId;
+
       setIsDraggingMarker(false);
       setIsPanning(false);
       dragMarkerRef.current = {
@@ -530,6 +694,10 @@ export default function PlanOpsPage() {
         pointerOffsetX: 0,
         pointerOffsetY: 0,
       };
+
+      if (finishedDragMarkerId) {
+        await persistMarkers(markersRef.current);
+      }
     };
 
     window.addEventListener("mousemove", handleMove);
@@ -539,7 +707,7 @@ export default function PlanOpsPage() {
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("mouseup", handleUp);
     };
-  }, [isDraggingMarker, isPanning, zoom, offset, markers, activeLayerId]);
+  }, [isDraggingMarker, isPanning, zoom, offset, activeLayerId]);
 
   const handleWheelZoom = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -581,11 +749,18 @@ export default function PlanOpsPage() {
     );
   };
 
-  const deleteSelectedMarker = () => {
+  const deleteSelectedMarker = async () => {
     if (!selectedMarkerId) return;
 
-    setMarkers((prev) => prev.filter((m) => m.id !== selectedMarkerId));
+    const markerId = selectedMarkerId;
+    const nextMarkers = markersRef.current.filter((m) => m.id !== markerId);
+
+    setMarkers(nextMarkers);
+    markersRef.current = nextMarkers;
     setSelectedMarkerId(null);
+
+    await broadcastMarkerDelete(markerId);
+    await persistMarkers(nextMarkers);
   };
 
   const addLayer = () => {
@@ -633,13 +808,14 @@ export default function PlanOpsPage() {
     }
 
     if (fallbackLayerId) {
-      setMarkers((prev) =>
-        prev.map((marker) =>
-          marker.layerId === layerId
-            ? { ...marker, layerId: fallbackLayerId }
-            : marker
-        )
+      const nextMarkers = markersRef.current.map((marker) =>
+        marker.layerId === layerId
+          ? { ...marker, layerId: fallbackLayerId }
+          : marker
       );
+
+      setMarkers(nextMarkers);
+      markersRef.current = nextMarkers;
     }
 
     if (selectedMarker && selectedMarker.layerId === layerId) {
@@ -831,12 +1007,12 @@ export default function PlanOpsPage() {
                           />
 
                           <button
-                            onClick={() => deleteLayer(layer.id)}
-                            disabled={layers.length <= 1}
-                            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-300 disabled:opacity-40"
-                          >
-                            Delete
-                          </button>
+  onClick={() => deleteLayer(layer.id)}
+  disabled={layers.length <= 1}
+  className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-300 disabled:opacity-40"
+>
+  Delete
+</button>
                         </div>
                       </div>
                     ))}

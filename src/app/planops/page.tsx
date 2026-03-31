@@ -61,13 +61,14 @@ const MARKER_TYPES: PlanMarker["type"][] = [
 ];
 
 const DEFAULT_COLORS = [
-  "#00ff66",
-  "#2f6fff",
-  "#ff4444",
-  "#ffaa00",
-  "#bb66ff",
+  "#158000",
+  "#56d2ff",
+  "#840505",
+  "#9e6b04",
+  "#55009b",
   "#ffffff",
 ];
+
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -97,10 +98,10 @@ function getMarkerSymbol(type: PlanMarker["type"]) {
 function getDefaultLayers(): PlanLayer[] {
   return [
     { id: generateId(), name: "Base", visible: true },
-    { id: generateId(), name: "Phase 1", visible: true },
-    { id: generateId(), name: "Phase 2", visible: true },
-    { id: generateId(), name: "Support", visible: true },
-    { id: generateId(), name: "Enemy", visible: true },
+    { id: generateId(), name: "BlueFor", visible: false },
+    { id: generateId(), name: "OpFor", visible: false },
+    { id: generateId(), name: "Supply", visible: false },
+    { id: generateId(), name: "MB", visible: false },
   ];
 }
 
@@ -775,6 +776,8 @@ export default function PlanOpsPage() {
       visible: true,
     };
 
+
+
     setLayers((prev) => [...prev, newLayer]);
     setActiveLayerId(newLayer.id);
     setNewLayerName("");
@@ -822,6 +825,10 @@ export default function PlanOpsPage() {
       setSelectedMarkerId(null);
     }
   };
+
+      const getMarkerScale = () => {
+  return clamp(zoom * 2.0, 1.0, 1.4);
+};
 
   if (loadingAuth) {
     return (
@@ -1129,62 +1136,66 @@ export default function PlanOpsPage() {
                   <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,102,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.08)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none" />
 
                   {visibleMarkers.map((marker) => {
-                    const selected = marker.id === selectedMarkerId;
-                    const markerLayer = layers.find((layer) => layer.id === marker.layerId);
-                    const isActiveLayerMarker = isMarkerOnActiveLayer(marker);
+  const selected = marker.id === selectedMarkerId;
+  const markerLayer = layers.find((layer) => layer.id === marker.layerId);
+  const isActiveLayerMarker = isMarkerOnActiveLayer(marker);
 
-                    return (
-                      <div
-                        key={marker.id}
-                        data-marker="true"
-                        onMouseDown={(e) => startMarkerDrag(e, marker)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!isActiveLayerMarker) return;
-                          setSelectedMarkerId(marker.id);
-                        }}
-                        className={`group absolute -translate-x-1/2 -translate-y-1/2 ${
-                          isActiveLayerMarker ? "cursor-move" : "cursor-default"
-                        }`}
-                        style={{
-                          left: marker.x,
-                          top: marker.y,
-                        }}
-                      >
-                        <div
-                          className={`flex min-w-[34px] items-center justify-center rounded-full border px-2 py-1 text-sm font-bold shadow-lg transition ${
-                            selected ? "scale-110" : ""
-                          } ${!isActiveLayerMarker ? "opacity-55" : ""}`}
-                          style={{
-                            borderColor: marker.color,
-                            color: marker.color,
-                            background: "rgba(0,0,0,0.86)",
-                            boxShadow: `0 0 16px ${marker.color}66`,
-                            filter: isActiveLayerMarker ? "none" : "brightness(0.75) saturate(0.75)",
-                          }}
-                        >
-                          {getMarkerSymbol(marker.type)}
-                        </div>
+  const scale = getMarkerScale();
 
-                        <div
-                          className="mt-1 whitespace-nowrap rounded-lg border px-2 py-1 text-xs font-semibold transition"
-                          style={{
-                            borderColor: selected ? marker.color : "rgba(255,255,255,0.18)",
-                            background: "rgba(0,0,0,0.84)",
-                            color: "#fff",
-                            opacity: isActiveLayerMarker ? 1 : 0.6,
-                            filter: isActiveLayerMarker ? "none" : "brightness(0.8)",
-                          }}
-                        >
-                          {marker.label}
-                        </div>
+  return (
+    <div
+      key={marker.id}
+      data-marker="true"
+      onMouseDown={(e) => startMarkerDrag(e, marker)}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!isActiveLayerMarker) return;
+        setSelectedMarkerId(marker.id);
+      }}
+      className={`group absolute -translate-x-1/2 -translate-y-1/2 ${
+        isActiveLayerMarker ? "cursor-move" : "cursor-default"
+      }`}
+      style={{
+        left: marker.x,
+        top: marker.y,
+        transform: `translate(-50%, -50%) scale(${scale})`,
+      }}
+    >
+      <div
+        className={`font-bold transition ${
+          selected ? "scale-125" : ""
+        } ${!isActiveLayerMarker ? "opacity-50" : ""}`}
+        style={{
+          color: marker.color,
+          textShadow: `0 0 8px ${marker.color}, 0 0 16px ${marker.color}55`,
+          fontSize: "18px",
+          filter: isActiveLayerMarker
+            ? "none"
+            : "brightness(0.6) saturate(0.6)",
+        }}
+      >
+        {getMarkerSymbol(marker.type)}
+      </div>
 
-                        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-[#00ff66]/20 bg-black/90 px-2 py-1 text-[10px] text-gray-300 opacity-0 shadow-[0_0_12px_rgba(0,255,102,0.12)] transition-opacity duration-150 group-hover:opacity-100">
-                          {markerLayer?.name || "Layer"}
-                        </div>
-                      </div>
-                    );
-                  })}
+<div
+  className="absolute left-1/2 top-full mt-1 -translate-x-1/2 text-center whitespace-nowrap font-semibold pointer-events-none"
+  style={{
+    fontSize: "9px",
+    color: "#ffffff",
+    textShadow: "0 0 6px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.9)",
+    opacity: isActiveLayerMarker ? 1 : 0.6,
+    filter: isActiveLayerMarker ? "none" : "brightness(0.8)",
+  }}
+>
+  {marker.label}
+</div>
+
+      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-5 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/90 px-2 py-1 text-[10px] text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100">
+        {markerLayer?.name || "Layer"}
+      </div>
+    </div>
+  );
+})}
                 </div>
               </div>
 

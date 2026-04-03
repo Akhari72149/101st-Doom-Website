@@ -340,15 +340,41 @@ export const structure = [
 
       {
         type: "sub-header",
-        title: "Halberd",
+        title: "Halberd HQ",
         roles: [
-          { role: "Squad Lead", count: 1, slotId: "Halberd3-3-1a-squadlead", discordRoleIds: ["1026840188862869525", "848977413009834034", "692226671989751841"] },
-          { role: "ASL", count: 1, slotId: "Halberd3-3-1a-ASL", discordRoleIds: ["1026840188862869525", "848977413009834034", "692226671989751841"] },
-          { role: "RTO", count: 1, slotId: "Halberd3-3-1a-RTO", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
-          { role: "Trooper", count: 5, slotId: "Halberd3-3-1a-Trooper", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
-          { role: "Medic", count: 2, slotId: "Halberd3-3-1a-Medic", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+          { role: "Squad Lead", count: 1, slotId: "Halberd3-3-11a-squadlead", discordRoleIds: ["1026840188862869525", "848977413009834034", "692226671989751841"] },
+          { role: "RTO", count: 1, slotId: "Halberd3-3-11a-RTO", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+          { role: "Gunner", count: 1, slotId: "Halberd3-3-11a-Gunner", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
         ],
       },
+      {
+        type: "sub-header",
+        title: "Halberd 3-1",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Halberd3-3-1a-squadlead", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+          { role: "Gunner", count: 1, slotId: "Halberd3-3-1a-Gunner", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Halberd3-3-1a-Medic", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+        ],
+      },
+      {
+        type: "sub-header",
+        title: "Halberd 3-2",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Halberd3-3-2a-squadlead", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+          { role: "Gunner", count: 1, slotId: "Halberd3-3-2a-Gunner", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Halberd3-3-2a-Medic", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+        ],
+      },
+      {
+        type: "sub-header",
+        title: "Halberd 3-3",
+        roles: [
+          { role: "Team Lead", count: 1, slotId: "Halberd3-3-3a-squadlead", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+          { role: "Gunner", count: 1, slotId: "Halberd3-3-3a-Gunner", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Halberd3-3-3a-Medic", discordRoleIds: ["1026840188862869525", "848977413009834034"] },
+        ],
+      },
+
 
     ],
   },

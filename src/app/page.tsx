@@ -31,15 +31,38 @@ type WeeklyEvent = {
   minute: number;
 };
 
+type AuditHighlight = {
+  id: string;
+  action: string | null;
+  details: string | null;
+  created_at: string;
+  targetPersonnel?: {
+    name: string;
+  } | { name: string }[] | null;
+  targetCertification?: {
+    name: string;
+  } | { name: string }[] | null;
+  targetRank?: {
+    name: string;
+  } | { name: string }[] | null;
+};
+
 export default function HomePage() {
   const router = useRouter();
 
   const [events, setEvents] = useState<Event[]>([]);
   const [pastEvents, setPastEvents] = useState<Event[]>([]);
   const [pastEventsOpen, setPastEventsOpen] = useState(false);
+
   const [servers, setServers] = useState<Server[]>([]);
   const [initialLoad, setInitialLoad] = useState(true);
   const [expandedServer, setExpandedServer] = useState<number | null>(null);
+  const [serversOpen, setServersOpen] = useState(false);
+
+  const [dailyHighlights, setDailyHighlights] = useState<AuditHighlight[]>([]);
+  const [loadingHighlights, setLoadingHighlights] = useState(true);
+  const [highlightsOpen, setHighlightsOpen] = useState(false);
+
   const [currentSlide, setCurrentSlide] = useState(0);
   const [time, setTime] = useState(new Date());
   const [weeklyOpen, setWeeklyOpen] = useState(false);
@@ -121,8 +144,15 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchServers();
-    const interval = setInterval(fetchServers, 10000);
-    return () => clearInterval(interval);
+    fetchDailyHighlights();
+
+    const serverInterval = setInterval(fetchServers, 10000);
+    const highlightInterval = setInterval(fetchDailyHighlights, 60000);
+
+    return () => {
+      clearInterval(serverInterval);
+      clearInterval(highlightInterval);
+    };
   }, []);
 
   const isSameDay = (a: Date, b: Date) => {
@@ -176,6 +206,134 @@ export default function HomePage() {
 
     return `In ${minutes} min`;
   };
+
+  const unwrapRelationName = (
+    value:
+      | {
+          name: string;
+        }
+      | {
+          name: string;
+        }[]
+      | null
+      | undefined
+  ) => {
+    if (!value) return null;
+    if (Array.isArray(value)) {
+      return value[0]?.name ?? null;
+    }
+    return value.name ?? null;
+  };
+
+  const detectHighlightType = (row: AuditHighlight) => {
+    if (unwrapRelationName(row.targetRank)) return "promotion";
+    if (unwrapRelationName(row.targetCertification)) return "certification";
+
+    const haystack = `${row.action ?? ""} ${row.details ?? ""}`.toLowerCase();
+
+    if (haystack.includes("promot")) return "promotion";
+    if (
+      haystack.includes("cert") ||
+      haystack.includes("qualification") ||
+      haystack.includes("awarded") ||
+      haystack.includes("assigned")
+    ) {
+      return "certification";
+    }
+
+    return "unknown";
+  };
+
+const isPromotionOrCertLog = (row: AuditHighlight) => {
+  const action = (row.action ?? "").toLowerCase();
+
+  if (action === "certification_revoked") {
+    return false;
+  }
+
+  return detectHighlightType(row) !== "unknown";
+};
+
+  const formatHighlightTitle = (row: AuditHighlight) => {
+    const type = detectHighlightType(row);
+
+    if (type === "promotion") return "Promotion Earned";
+    if (type === "certification") return "Certification Earned";
+    return "Unit Achievement";
+  };
+
+const formatHighlightText = (row: AuditHighlight) => {
+  const name = unwrapRelationName(row.targetPersonnel);
+  const certName = unwrapRelationName(row.targetCertification);
+  const rankName = unwrapRelationName(row.targetRank);
+  const type = detectHighlightType(row);
+
+  const highlightClass = "text-[#00ff66] font-semibold";
+
+  if (type === "promotion") {
+    if (name && rankName) {
+      return (
+        <>
+          Congratulations to <span className={highlightClass}>{name}</span> on
+          your promotion to <span className={highlightClass}>{rankName}</span>
+        </>
+      );
+    }
+
+    if (name) {
+      return (
+        <>
+          Congratulations to <span className={highlightClass}>{name}</span> on
+          your promotion
+        </>
+      );
+    }
+
+    if (rankName) {
+      return (
+        <>
+          Congratulations on the promotion to{" "}
+          <span className={highlightClass}>{rankName}</span>
+        </>
+      );
+    }
+
+    return "Congratulations on your promotion";
+  }
+
+  if (type === "certification") {
+    if (name && certName) {
+      return (
+        <>
+          Congratulations <span className={highlightClass}>{name}</span>,{" "}
+          <span className={highlightClass}>{certName}</span> assigned
+        </>
+      );
+    }
+
+    if (name) {
+      return (
+        <>
+          Congratulations <span className={highlightClass}>{name}</span> on your
+          certification
+        </>
+      );
+    }
+
+    if (certName) {
+      return (
+        <>
+          Congratulations, <span className={highlightClass}>{certName}</span>{" "}
+          assigned
+        </>
+      );
+    }
+
+    return "Congratulations on your certification";
+  }
+
+  return "Congratulations on today’s achievement";
+};
 
   const fetchEvents = async (date: Date) => {
     const start = new Date(date);
@@ -248,6 +406,50 @@ export default function HomePage() {
       }
     } catch (err) {
       console.error("Server fetch failed", err);
+    }
+  };
+
+  const fetchDailyHighlights = async () => {
+    try {
+      setLoadingHighlights(true);
+
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+
+      const { data, error } = await supabase
+        .from("audit_logs")
+        .select(`
+          id,
+          action,
+          details,
+          created_at,
+          targetPersonnel:target_personnel_id ( name ),
+          targetCertification:target_certification_id ( name ),
+          targetRank:target_rank_id ( name )
+        `)
+        .gte("created_at", start.toISOString())
+        .lt("created_at", end.toISOString())
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Failed to fetch audit highlights", error);
+        setDailyHighlights([]);
+        return;
+      }
+
+      const filtered = ((data as AuditHighlight[]) || [])
+        .filter((row) => isPromotionOrCertLog(row))
+        .slice(0, 8);
+
+      setDailyHighlights(filtered);
+    } catch (err) {
+      console.error("Failed to fetch audit highlights", err);
+      setDailyHighlights([]);
+    } finally {
+      setLoadingHighlights(false);
     }
   };
 
@@ -342,10 +544,6 @@ export default function HomePage() {
 
       <div className="relative z-10 flex w-full">
         <div className="w-[320px] border-r border-[#00ff66]/30 p-6 bg-black/30 backdrop-blur-2xl">
-          <h2 className="text-xl text-[#00ff66] mb-6 tracking-widest">
-            Servers
-          </h2>
-
           <div className="mb-6 p-4 rounded-2xl border border-[#00ff66]/30 bg-black/50">
             <div className="text-sm mb-2">🟢 Online: {onlineCount}</div>
             <div className="text-sm mb-2">🔴 Offline: {offlineCount}</div>
@@ -357,122 +555,210 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mt-6 p-4 rounded-2xl border border-[#00ff66]/30 bg-black/50">
-            {initialLoad ? (
-              <div className="text-center text-gray-400 py-6 animate-pulse">
-                Checking server status...
-              </div>
-            ) : servers.length === 0 ? (
-              <div className="text-center text-gray-400 py-6">
-                No servers found.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {servers.map((server) => {
-                  const isOpen = expandedServer === server.id;
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
+              <button
+                onClick={() => setServersOpen((prev) => !prev)}
+                className="w-full flex items-center justify-between px-4 py-4 hover:bg-black/40 transition-all"
+              >
+                <span className="text-xl text-[#00ff66] tracking-widest">
+                  Servers
+                </span>
+                <span
+                  className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
+                    serversOpen ? "rotate-180" : "rotate-0"
+                  }`}
+                >
+                  ▼
+                </span>
+              </button>
 
-                  return (
-                    <div key={server.id}>
-                      <div
-                        onClick={() => toggleServer(server.id)}
-                        className={`cursor-pointer rounded-xl border bg-black/60 overflow-hidden transition-all duration-300 hover:border-[#00ff66]
-                        ${
-                          server.online
-                            ? "border-[#00ff66]/40 shadow-[0_0_20px_rgba(0,255,102,0.08)]"
-                            : "border-[#00ff66]/20"
-                        }
-                        ${
-                          justCameOnline(server)
-                            ? "animate-[glowBurst_1.2s_ease-out]"
-                            : ""
-                        }`}
-                      >
-                        <div className="p-4 flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`w-2.5 h-2.5 rounded-full ${
+              <div
+                className={`overflow-hidden transition-all duration-500 ${
+                  serversOpen ? "max-h-[1400px] opacity-100" : "max-h-0 opacity-0"
+                }`}
+              >
+                <div className="px-4 pb-4">
+                  {initialLoad ? (
+                    <div className="text-center text-gray-400 py-6 animate-pulse">
+                      Checking server status...
+                    </div>
+                  ) : servers.length === 0 ? (
+                    <div className="text-center text-gray-400 py-6">
+                      No servers found.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {servers.map((server) => {
+                        const isOpen = expandedServer === server.id;
+
+                        return (
+                          <div key={server.id}>
+                            <div
+                              onClick={() => toggleServer(server.id)}
+                              className={`cursor-pointer rounded-xl border bg-black/60 overflow-hidden transition-all duration-300 hover:border-[#00ff66]
+                              ${
                                 server.online
-                                  ? "bg-[#00ff66] shadow-[0_0_10px_#00ff66]"
-                                  : "bg-red-500 shadow-[0_0_8px_red]"
+                                  ? "border-[#00ff66]/40 shadow-[0_0_20px_rgba(0,255,102,0.08)]"
+                                  : "border-[#00ff66]/20"
+                              }
+                              ${
+                                justCameOnline(server)
+                                  ? "animate-[glowBurst_1.2s_ease-out]"
+                                  : ""
                               }`}
-                            />
-                            <span>Server {server.id}</span>
-                          </div>
-
-                          <div
-                            className={`text-[10px] px-2 py-1 rounded-full ${
-                              server.online
-                                ? "bg-green-500/20 text-green-400"
-                                : "bg-red-500/20 text-red-400"
-                            }`}
-                          >
-                            {server.online ? "ONLINE" : "OFFLINE"}
-                          </div>
-                        </div>
-
-                        <div
-                          className={`grid transition-all duration-300 ${
-                            isOpen && server.online
-                              ? "grid-rows-[1fr] opacity-100"
-                              : "grid-rows-[0fr] opacity-0"
-                          }`}
-                        >
-                          <div className="overflow-hidden">
-                            <div className="border-t border-[#00ff66]/20 p-5 text-sm text-gray-300">
-                              <div className="text-[#00ff66] mb-3 tracking-wide">
-                                Server Population
-                              </div>
-
-                              {server.missionFile && (
-                                <div className="text-xs text-gray-400 mt-2">
-                                  Map: {server.missionFile}
+                            >
+                              <div className="p-4 flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`w-2.5 h-2.5 rounded-full ${
+                                      server.online
+                                        ? "bg-[#00ff66] shadow-[0_0_10px_#00ff66]"
+                                        : "bg-red-500 shadow-[0_0_8px_red]"
+                                    }`}
+                                  />
+                                  <span>Server {server.id}</span>
                                 </div>
-                              )}
 
-                              <div className="flex items-center justify-between text-white text-lg font-semibold">
-                                <span>
-                                  {server.players ?? 0} /{" "}
-                                  {server.maxPlayers || "?"}
-                                </span>
-
-                                <span className="text-xs text-gray-400">
-                                  Players Online
-                                </span>
-                              </div>
-
-                              <div className="mt-3 w-full h-3 bg-black/70 rounded-full overflow-hidden border border-[#00ff66]/30">
                                 <div
-                                  className="h-full bg-[#00ff66] transition-all duration-500"
-                                  style={{
-                                    width:
-                                      server.maxPlayers &&
-                                      server.maxPlayers > 0
-                                        ? `${
-                                            (server.players /
-                                              server.maxPlayers) *
-                                            100
-                                          }%`
-                                        : "0%",
-                                  }}
-                                />
+                                  className={`text-[10px] px-2 py-1 rounded-full ${
+                                    server.online
+                                      ? "bg-green-500/20 text-green-400"
+                                      : "bg-red-500/20 text-red-400"
+                                  }`}
+                                >
+                                  {server.online ? "ONLINE" : "OFFLINE"}
+                                </div>
                               </div>
 
-                              <div className="mt-2 text-xs text-gray-400">
-                                {server.players === 0
-                                  ? "Server is empty"
-                                  : server.players === server.maxPlayers
-                                  ? "Server is full"
-                                  : "Server is active"}
+                              <div
+                                className={`grid transition-all duration-300 ${
+                                  isOpen && server.online
+                                    ? "grid-rows-[1fr] opacity-100"
+                                    : "grid-rows-[0fr] opacity-0"
+                                }`}
+                              >
+                                <div className="overflow-hidden">
+                                  <div className="border-t border-[#00ff66]/20 p-5 text-sm text-gray-300">
+                                    <div className="text-[#00ff66] mb-3 tracking-wide">
+                                      Server Population
+                                    </div>
+
+                                    {server.missionFile && (
+                                      <div className="text-xs text-gray-400 mt-2">
+                                        Map: {server.missionFile}
+                                      </div>
+                                    )}
+
+                                    <div className="flex items-center justify-between text-white text-lg font-semibold">
+                                      <span>
+                                        {server.players ?? 0} /{" "}
+                                        {server.maxPlayers || "?"}
+                                      </span>
+
+                                      <span className="text-xs text-gray-400">
+                                        Players Online
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-3 w-full h-3 bg-black/70 rounded-full overflow-hidden border border-[#00ff66]/30">
+                                      <div
+                                        className="h-full bg-[#00ff66] transition-all duration-500"
+                                        style={{
+                                          width:
+                                            server.maxPlayers &&
+                                            server.maxPlayers > 0
+                                              ? `${
+                                                  (server.players /
+                                                    server.maxPlayers) *
+                                                  100
+                                                }%`
+                                              : "0%",
+                                        }}
+                                      />
+                                    </div>
+
+                                    <div className="mt-2 text-xs text-gray-400">
+                                      {server.players === 0
+                                        ? "Server is empty"
+                                        : server.players === server.maxPlayers
+                                        ? "Server is full"
+                                        : "Server is active"}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
-            )}
+            </div>
+
+            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
+              <button
+                onClick={() => setHighlightsOpen((prev) => !prev)}
+                className="w-full flex items-center justify-between px-4 py-4 hover:bg-black/40 transition-all"
+              >
+                <span className="text-base text-[#00ff66] tracking-[0.2em] uppercase">
+                  Today&apos;s Commendations
+                </span>
+                <span
+                  className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
+                    highlightsOpen ? "rotate-180" : "rotate-0"
+                  }`}
+                >
+                  ▼
+                </span>
+              </button>
+
+              <div
+                className={`overflow-hidden transition-all duration-500 ${
+                  highlightsOpen
+                    ? "max-h-[1000px] opacity-100"
+                    : "max-h-0 opacity-0"
+                }`}
+              >
+                <div className="px-4 pb-4">
+                  {loadingHighlights ? (
+                    <div className="text-center text-gray-400 py-6 animate-pulse">
+                      Loading today&apos;s commendations...
+                    </div>
+                  ) : dailyHighlights.length === 0 ? (
+                    <div className="text-sm text-gray-400 py-4">
+                      No promotions or certifications logged today yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {dailyHighlights.map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-xl border border-[#00ff66]/20 bg-black/55 p-4"
+                        >
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
+                            {formatHighlightTitle(item)}
+                          </div>
+
+                          <div className="mt-2 text-sm text-white leading-relaxed">
+                            {formatHighlightText(item)}
+                          </div>
+
+                          <div className="mt-3 text-[11px] text-gray-500">
+                            {new Date(item.created_at).toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

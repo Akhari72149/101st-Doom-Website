@@ -118,6 +118,7 @@ export default function TaskboardPage() {
         router.replace("/Task-Viewer");
         return;
       }
+      
 
       setUserId(user.id);
 

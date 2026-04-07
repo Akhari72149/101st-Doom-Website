@@ -255,6 +255,13 @@ export default function NavbarClient() {
   >
     FAQ
   </Link>
+
+          <Link
+    href="/admin/Taskboard"
+    className="text-[#00ff66] hover:opacity-70 transition"
+  >
+    TaskBoard
+  </Link>
       </div>
 
       {/* ================= RIGHT = USER INFO ================= */}

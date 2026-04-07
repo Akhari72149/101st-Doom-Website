@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
+const DEFAULT_RECENT_DAYS = 5;
+
 export default function AuditLogsPage() {
   const router = useRouter();
 
@@ -19,10 +21,8 @@ export default function AuditLogsPage() {
   const [selectedUser, setSelectedUser] = useState<string>("all");
   const [selectedAction, setSelectedAction] = useState<string>("all");
   const [selectedDate, setSelectedDate] = useState<string>("all");
-
   const [personnelList, setPersonnelList] = useState<string[]>([]);
   const [selectedPersonnel, setSelectedPersonnel] = useState<string>("all");
-  
 
   /* ================= AUTH ================= */
 
@@ -58,96 +58,85 @@ export default function AuditLogsPage() {
   }, [router]);
 
   const renderName = (name: string) => {
-  if (!name) return null;
+    if (!name) return null;
 
-  if (name === "Mommy Doombot") {
-    return <span className="text-green-500 font-semibold">{name}</span>;
-  }
-  if (name === "Akhari") {
-    return <span className="text-yellow-600 font-semibold">{name}</span>;
-  }
-  if (name === "Blind") {
-    return <span className="text-green-600 font-semibold">{name}</span>;
-  }
+    if (name === "Mommy Doombot") {
+      return <span className="text-green-500 font-semibold">{name}</span>;
+    }
+    if (name === "Akhari") {
+      return <span className="text-yellow-600 font-semibold">{name}</span>;
+    }
+    if (name === "Blind") {
+      return <span className="text-green-600 font-semibold">{name}</span>;
+    }
 
-  return name;
-};
+    return name;
+  };
 
   /* ================= FETCH FILTER OPTIONS ================= */
 
   const fetchFilterOptions = async () => {
-  const { data: userData } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .order("display_name");
+    const { data: userData } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .order("display_name");
 
-  if (userData) {
-    setUsers(
-      userData
-        .map((u) => u.display_name)
-        .filter(Boolean)
-    );
-  }
+    if (userData) {
+      setUsers(userData.map((u) => u.display_name).filter(Boolean));
+    }
 
-  const { data: actionData } = await supabase
-    .from("audit_logs")
-    .select("action");
+    const { data: actionData } = await supabase
+      .from("audit_logs")
+      .select("action");
 
-  if (actionData) {
-    const uniqueActions = Array.from(
-      new Set(actionData.map((a) => a.action).filter(Boolean))
-    );
-    setActions(uniqueActions);
-  }
+    if (actionData) {
+      const uniqueActions = Array.from(
+        new Set(actionData.map((a) => a.action).filter(Boolean))
+      );
+      setActions(uniqueActions);
+    }
 
-  const { data: personnelData } = await supabase
-    .from("personnel")
-    .select("name")
-    .order("name");
+    const { data: personnelData } = await supabase
+      .from("personnel")
+      .select("name")
+      .order("name");
 
-  if (personnelData) {
-    setPersonnelList(
-      personnelData.map((p) => p.name).filter(Boolean)
-    );
-  }
-};
+    if (personnelData) {
+      setPersonnelList(personnelData.map((p) => p.name).filter(Boolean));
+    }
+  };
 
   /* ================= FILTER DETECTION ================= */
 
-const hasActiveFilter =
-  selectedUser !== "all" ||
-  selectedAction !== "all" ||
-  selectedDate !== "all" ||
-  selectedPersonnel !== "all";
+  const hasManualFilter =
+    selectedUser !== "all" ||
+    selectedAction !== "all" ||
+    selectedDate !== "all" ||
+    selectedPersonnel !== "all";
 
   /* ================= FETCH LOGS ================= */
 
   const fetchLogs = async () => {
-    if (!hasActiveFilter) {
-      setLogs([]);
-      return;
-    }
-
     setLoadingLogs(true);
 
     let query = supabase
       .from("audit_logs")
       .select(`
-  id,
-  action,
-  created_at,
-  user_id,
-  processed_by,
-  profiles:user_id ( display_name ),
-  processor:processed_by ( name ),
-  personnel:target_personnel_id ( name ),
-  ranks:target_rank_id ( name ),
-  oldRank:old_rank_id ( name ),
-  certifications:target_certification_id ( name ),
-  target_slot_label,
-  target_slot_section,
-  target_slot_subsection
-`)
+        id,
+        action,
+        created_at,
+        user_id,
+        processed_by,
+        profiles:user_id ( display_name ),
+        processor:processed_by ( name ),
+        personnel:target_personnel_id ( name ),
+        ranks:target_rank_id ( name ),
+        oldRank:old_rank_id ( name ),
+        certifications:target_certification_id ( name ),
+        target_slot_label,
+        target_slot_section,
+        target_slot_subsection
+      `)
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -157,16 +146,23 @@ const hasActiveFilter =
 
     if (selectedDate !== "all") {
       const start = new Date(selectedDate);
+      start.setHours(0, 0, 0, 0);
+
       const end = new Date(selectedDate);
       end.setHours(23, 59, 59, 999);
 
       query = query
         .gte("created_at", start.toISOString())
         .lte("created_at", end.toISOString());
+    } else {
+      const recentStart = new Date();
+      recentStart.setDate(recentStart.getDate() - DEFAULT_RECENT_DAYS);
+      recentStart.setHours(0, 0, 0, 0);
+
+      query = query.gte("created_at", recentStart.toISOString());
     }
 
     if (selectedUser !== "all") {
-      // Get user_id from profile
       const { data: profile } = await supabase
         .from("profiles")
         .select("id")
@@ -179,16 +175,16 @@ const hasActiveFilter =
     }
 
     if (selectedPersonnel !== "all") {
-  const { data: personnel } = await supabase
-    .from("personnel")
-    .select("id")
-    .eq("name", selectedPersonnel)
-    .single();
+      const { data: personnel } = await supabase
+        .from("personnel")
+        .select("id")
+        .eq("name", selectedPersonnel)
+        .single();
 
-  if (personnel) {
-    query = query.eq("target_personnel_id", personnel.id);
-  }
-}
+      if (personnel) {
+        query = query.eq("target_personnel_id", personnel.id);
+      }
+    }
 
     const { data, error } = await query;
 
@@ -202,15 +198,25 @@ const hasActiveFilter =
     setLoadingLogs(false);
   };
 
-  /* ================= FETCH WHEN FILTER CHANGES ================= */
+  /* ================= FETCH WHEN FILTERS CHANGE ================= */
 
   useEffect(() => {
-    if (hasActiveFilter) {
+    if (!loadingAuth) {
       fetchLogs();
-    } else {
-      setLogs([]);
     }
-  }, [selectedUser, selectedAction, selectedDate, selectedPersonnel]);
+  }, [loadingAuth, selectedUser, selectedAction, selectedDate, selectedPersonnel]);
+
+  /* ================= AUTO REFRESH ================= */
+
+  useEffect(() => {
+    if (loadingAuth) return;
+
+    const interval = setInterval(() => {
+      fetchLogs();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [loadingAuth, selectedUser, selectedAction, selectedDate, selectedPersonnel]);
 
   /* ================= HELPERS ================= */
 
@@ -287,24 +293,23 @@ const hasActiveFilter =
       </button>
 
       <div className="max-w-7xl mx-auto p-8 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg shadow-[0_0_60px_rgba(0,255,100,0.15)]">
-        <h1 className="text-3xl font-bold text-[#00ff66] mb-6">
+        <h1 className="text-3xl font-bold text-[#00ff66] mb-3">
           Audit Logs
         </h1>
-        {hasActiveFilter && (
-           <div className="text-sm text-gray-400 mb-4">
-                Showing {logs.length} log entries
-           </div>
-        )}
 
-        {/* FILTERS */}
+        <div className="text-sm text-gray-400 mb-6">
+          {selectedDate === "all"
+            ? `Showing recent changes from the last ${DEFAULT_RECENT_DAYS} days`
+            : `Showing changes for ${selectedDate}`}
+          {" • "}
+          {logs.length} log entries
+        </div>
+
         <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
           <select
             value={selectedUser}
             onChange={(e) => setSelectedUser(e.target.value)}
-            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 
-           text-white 
-           focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 
-           hover:border-[#00ff66] transition"
+            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 hover:border-[#00ff66] transition"
           >
             <option value="all">All Users</option>
             {users.map((user) => (
@@ -315,28 +320,22 @@ const hasActiveFilter =
           </select>
 
           <select
-  value={selectedPersonnel}
-  onChange={(e) => setSelectedPersonnel(e.target.value)}
-  className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 
-  text-white 
-  focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 
-  hover:border-[#00ff66] transition"
->
-  <option value="all">All Personnel</option>
-  {personnelList.map((person) => (
-    <option key={person} value={person}>
-      {person}
-    </option>
-  ))}
-</select>
+            value={selectedPersonnel}
+            onChange={(e) => setSelectedPersonnel(e.target.value)}
+            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 hover:border-[#00ff66] transition"
+          >
+            <option value="all">All Personnel</option>
+            {personnelList.map((person) => (
+              <option key={person} value={person}>
+                {person}
+              </option>
+            ))}
+          </select>
 
           <select
             value={selectedAction}
             onChange={(e) => setSelectedAction(e.target.value)}
-            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 
-           text-white 
-           focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 
-           hover:border-[#00ff66] transition"
+            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 hover:border-[#00ff66] transition"
           >
             <option value="all">All Actions</option>
             {actions.map((action) => (
@@ -349,23 +348,18 @@ const hasActiveFilter =
           <input
             type="date"
             value={selectedDate === "all" ? "" : selectedDate}
-            onChange={(e) =>
-              setSelectedDate(e.target.value || "all")
-            }
-            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 
-           text-white 
-           focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 
-           hover:border-[#00ff66] transition"
+            onChange={(e) => setSelectedDate(e.target.value || "all")}
+            className="px-4 py-2 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 hover:border-[#00ff66] transition"
           />
         </div>
 
-        {hasActiveFilter && (
-           <div className="mb-4">
+        {hasManualFilter && (
+          <div className="mb-4">
             <span className="px-3 py-1 rounded-full bg-[#00ff66]/10 border border-[#00ff66]/30 text-sm text-[#00ff66]">
-          Filters Active
-        </span>
-      </div>
-    )}
+              Manual Filters Active
+            </span>
+          </div>
+        )}
 
         <button
           onClick={() => {
@@ -379,7 +373,6 @@ const hasActiveFilter =
           Reset Filters
         </button>
 
-        {/* TABLE */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -393,13 +386,7 @@ const hasActiveFilter =
             </thead>
 
             <tbody>
-              {!hasActiveFilter ? (
-                <tr>
-                  <td colSpan={5} className="p-6 text-center text-gray-400">
-                    Apply at least one filter to view audit logs.
-                  </td>
-                </tr>
-              ) : loadingLogs ? (
+              {loadingLogs ? (
                 <tr>
                   <td colSpan={5} className="p-6 text-center text-gray-400">
                     Loading logs...
@@ -408,52 +395,52 @@ const hasActiveFilter =
               ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-10 text-center">
-  <div className="flex flex-col items-center justify-center text-gray-400">
-    <div className="text-4xl mb-3 opacity-50">📭</div>
-    <div className="text-lg font-medium">No logs found</div>
-    <div className="text-sm opacity-60">
-      Try adjusting your filters
-    </div>
-  </div>
-</td>
+                    <div className="flex flex-col items-center justify-center text-gray-400">
+                      <div className="text-4xl mb-3 opacity-50">📭</div>
+                      <div className="text-lg font-medium">No logs found</div>
+                      <div className="text-sm opacity-60">
+                        Try adjusting your filters
+                      </div>
+                    </div>
+                  </td>
                 </tr>
               ) : (
                 logs.map((log) => {
                   let userName = "Mommy Doombot";
 
+                  if (
+                    log.action === "CERTIFICATION_ASSIGNED" ||
+                    log.action === "CERTIFICATION_REVOKED"
+                  ) {
+                    userName =
+                      log.processor?.name ||
+                      log.profiles?.display_name ||
+                      "Mommy Doombot";
+                  } else if (log.action === "NEW_MEMBER") {
+                    userName = log.processor?.name || "Mommy Doombot";
+                  } else {
+                    userName = log.profiles?.display_name || "Mommy Doombot";
+                  }
 
-if (
-  log.action === "CERTIFICATION_ASSIGNED" ||
-  log.action === "CERTIFICATION_REVOKED"
-) {
-  userName =
-    log.processor?.name ||
-    log.profiles?.display_name ||
-    "Mommy Doombot";
-} else if (log.action === "NEW_MEMBER") {
-  userName = log.processor?.name || "Mommy Doombot";
-} else {
-  userName = log.profiles?.display_name || "Mommy Doombot";
-}
                   const personnelName = log.personnel?.name || "Mommy Doombot";
 
                   return (
                     <tr
                       key={log.id}
-                      className="border-b border-[#00ff66]/10 
-           odd:bg-black/40 
-           even:bg-black/60 
-           hover:bg-[#00ff66]/10 
-           transition"
+                      className="border-b border-[#00ff66]/10 odd:bg-black/40 even:bg-black/60 hover:bg-[#00ff66]/10 transition"
                     >
                       <td className="p-3">{renderName(userName)}</td>
                       <td className="p-3">{renderName(personnelName)}</td>
 
                       <td className="p-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getActionStyle(log.action)} bg-black/40 border`}>
-                           {log.action}
-                          </span>
-                       </td>
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-semibold ${getActionStyle(
+                            log.action
+                          )} bg-black/40 border`}
+                        >
+                          {log.action}
+                        </span>
+                      </td>
 
                       <td className="p-3 text-sm">
                         <span className="px-2 py-1 rounded-lg bg-[#00ff66]/10 border border-[#00ff66]/20">

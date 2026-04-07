@@ -786,7 +786,7 @@ export default function TaskboardPage() {
                 Taskboard
               </h1>
               <p className="text-gray-400">
-                Track jobs, assignments and progress across the unit.
+                Track Ideas, changes, requests etc.
               </p>
             </div>
 

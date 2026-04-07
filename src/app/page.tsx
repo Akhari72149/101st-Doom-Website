@@ -763,7 +763,7 @@ const formatHighlightText = (row: AuditHighlight) => {
         </div>
 
         <div className="flex-1 flex flex-col items-center pt-40 px-8">
-          <h1 className="text-4xl md:text-6xl font-bold tracking-[0.4em] text-[#00ff66] text-center">
+          <h1 className="mt-10 text-4xl md:text-6xl font-bold tracking-[0.4em] text-[#00ff66] text-center">
             101ST
             <br />
             DOOM BATTALION
@@ -772,39 +772,6 @@ const formatHighlightText = (row: AuditHighlight) => {
           <p className="mt-4 text-gray-300 text-center">
             Operational Command & Personnel Management System
           </p>
-
-          <div className="mt-6 w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/45 backdrop-blur-xl px-4 py-3 text-center">
-              <div className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
-                Active Servers
-              </div>
-              <div className="mt-2 text-2xl font-bold text-[#00ff66]">
-                {onlineCount}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/45 backdrop-blur-xl px-4 py-3 text-center">
-              <div className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
-                Players Online
-              </div>
-              <div className="mt-2 text-2xl font-bold text-[#00ff66]">
-                {totalPlayers}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/45 backdrop-blur-xl px-4 py-3 text-center">
-              <div className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
-                UK Time
-              </div>
-              <div className="mt-2 text-2xl font-bold text-[#00ff66]">
-                {time.toLocaleTimeString("en-GB", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })}
-              </div>
-            </div>
-          </div>
 
           <div className="group mt-10 w-[95%] max-w-5xl h-[540px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
             {slides.map((slide, index) => (

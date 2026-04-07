@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { animate, stagger } from "animejs";
@@ -12,7 +12,7 @@ type Event = {
   start_time: string;
   personnel?: {
     name: string;
-  };
+  } | null;
 };
 
 type Server = {
@@ -24,119 +24,33 @@ type Server = {
   missionFile?: string;
 };
 
+type WeeklyEvent = {
+  name: string;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
 export default function HomePage() {
   const router = useRouter();
 
   const [events, setEvents] = useState<Event[]>([]);
+  const [pastEvents, setPastEvents] = useState<Event[]>([]);
+  const [pastEventsOpen, setPastEventsOpen] = useState(false);
   const [servers, setServers] = useState<Server[]>([]);
   const [initialLoad, setInitialLoad] = useState(true);
   const [expandedServer, setExpandedServer] = useState<number | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [time, setTime] = useState(new Date());
   const [weeklyOpen, setWeeklyOpen] = useState(false);
-  const [previousStatus, setPreviousStatus] = useState<Record<number, boolean>>({});
-  const [user, setUser] = useState<any>(null);
-  const [roles, setRoles] = useState<string[]>([]);
-  
-/* ================= AUTH ================= */
-
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      setUser(user);
-
-      if (user) {
-        const { data } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id);
-
-        setRoles(data?.map((r) => r.role) || []);
-      }
-    };
-
-    getUser();
-  }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    router.push("/login");
-  };
-
- /* ================= Page Const ================= */
-
-const personnelItems = [
-  {
-    href: "/personnel-profile",
-    title: "Personnel Profile",
-  },
-  {
-    href: "/grand-orbat",
-    title: "Grand ORBAT",
-  },
-  {
-    href: "/roster",
-    title: "Slotted Roster",
-  },
-  {
-    href: "/admin/positions",
-    title: "Slotting & Rank",
-    allowedRoles: ["admin", "nco", "di"],
-  },
-  {
-    href: "/admin/create",
-    title: "User Creation",
-    allowedRoles: ["admin", "recruiter"],
-  },
-  {
-    href: "/admin/certifications",
-    title: "Certification Management",
-    allowedRoles: ["admin", "nco", "trainer"],
-  },
-  {
-    href: "/certifications",
-    title: "Certification Lookup",
-  },
-  {
-    href: "/servers",
-    title: "Server Booking",
-  },
-  {
-    href: "/audit",
-    title: "Audit Log",
-    allowedRoles: ["nco", "admin", "trainer", "di"],
-  },
-  {
-    href: "/admin/attendance",
-    title: "Attendance Roster",
-    allowedRoles: ["nco", "admin"],
-  },
-];
-
-/* ================= How to Join  ================= */
-
-const whoWeAreLinks = [
-  {
-    label: "Who We Are",
-    href: "/Who-We-Are",
-  },
-  {
-    label: "What we Offer",
-    href: "/certs",
-  },
-];
-
-const filteredPersonnelItems = personnelItems.filter(
-  (item) =>
-    !item.allowedRoles ||
-    item.allowedRoles.some((role) => roles.includes(role))
-);
-
-  /* ================= DATA ================= */
+  const [previousStatus, setPreviousStatus] = useState<Record<number, boolean>>(
+    {}
+  );
+  const [selectedEventDate, setSelectedEventDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
 
   const newsItems = [
     "Week 5 Unit Stats - 112 clone casualties last week, 638 lost during Yoabos GC",
@@ -159,7 +73,20 @@ const filteredPersonnelItems = personnelItems.filter(
     "/slideshow/halberd.jpg",
   ];
 
-  /*================= CLOCK =================*/
+  const weeklyEvents: WeeklyEvent[] = [
+    { name: "Tomahawk 1", day: 0, hour: 19, minute: 0 },
+    { name: "Claymore 2", day: 5, hour: 23, minute: 0 },
+    { name: "Broadsword 3", day: 0, hour: 1, minute: 0 },
+    { name: "Dagger", day: 6, hour: 22, minute: 0 },
+  ];
+
+  useEffect(() => {
+    const getUser = async () => {
+      await supabase.auth.getUser();
+    };
+
+    getUser();
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -169,70 +96,93 @@ const filteredPersonnelItems = personnelItems.filter(
     return () => clearInterval(interval);
   }, []);
 
-  /*================= PAGE LOAD ANIMATION =================*/
-useEffect(() => {
-  animate(".boot", {
-    opacity: [0, 1],
-    y: [20, 0],
-    duration: 800,
-    easing: "easeOutExpo",
-    delay: stagger(120),
-  });
-}, []);
-
-  /*================= SLIDESHOW =================*/
-
   useEffect(() => {
-  const interval = setInterval(() => {
-    if (document.hidden) return;
-
-    setCurrentSlide((prev) =>
-      prev === slides.length - 1 ? 0 : prev + 1
-    );
-  }, 5000);
-
-  return () => clearInterval(interval);
-}, [slides.length]);
-  
-  /*================= WEEKLY EVENTS (UTC BASED) =================*/
-
-const weeklyEvents = [
-  { name: "Tomahawk 1", day: 0, hour: 19, minute:0 }, 
-  { name: "Claymore 2", day: 5, hour: 23, minute: 0 }, 
-  { name: "Broadsword 3", day: 0, hour: 1, minute: 0 },
-  { name: "Dagger", day: 6, hour: 22, minute: 0 },
-];
-
-const getNextOccurrence = (day: number, hour: number, minute: number) => {
-  const now = new Date();
-  const result = new Date();
-
-  result.setUTCHours(hour, minute, 0, 0);
-
-  const currentDay = result.getUTCDay();
-  const diff = (day - currentDay + 7) % 7;
-
-  result.setUTCDate(result.getUTCDate() + diff);
-
-  if (result < now) {
-    result.setUTCDate(result.getUTCDate() + 7);
-  }
-
-  return result;
-};
-
-  /* ================= EVENTS ================= */
-
-  useEffect(() => {
-    fetchEvents();
+    animate(".boot", {
+      opacity: [0, 1],
+      y: [20, 0],
+      duration: 800,
+      easing: "easeOutExpo",
+      delay: stagger(120),
+    });
   }, []);
 
-  const fetchEvents = async () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+    }, 5000);
 
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    return () => clearInterval(interval);
+  }, [slides.length]);
+
+  useEffect(() => {
+    fetchEvents(selectedEventDate);
+  }, [selectedEventDate]);
+
+  useEffect(() => {
+    fetchServers();
+    const interval = setInterval(fetchServers, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isSameDay = (a: Date, b: Date) => {
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  };
+
+  const getNextOccurrence = (day: number, hour: number, minute: number) => {
+    const now = new Date();
+    const result = new Date();
+
+    result.setUTCHours(hour, minute, 0, 0);
+
+    const currentDay = result.getUTCDay();
+    const diff = (day - currentDay + 7) % 7;
+
+    result.setUTCDate(result.getUTCDate() + diff);
+
+    if (result < now) {
+      result.setUTCDate(result.getUTCDate() + 7);
+    }
+
+    return result;
+  };
+
+  const getRelativeCountdown = (targetDate: Date) => {
+    const now = new Date();
+    const diffMs = targetDate.getTime() - now.getTime();
+
+    if (diffMs <= 0) return "Started";
+
+    const totalMinutes = Math.floor(diffMs / 60000);
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) {
+      return hours > 0
+        ? `In ${days}d ${hours}h`
+        : `In ${days} day${days > 1 ? "s" : ""}`;
+    }
+
+    if (hours > 0) {
+      return minutes > 0
+        ? `In ${hours}h ${minutes}m`
+        : `In ${hours} hour${hours > 1 ? "s" : ""}`;
+    }
+
+    return `In ${minutes} min`;
+  };
+
+  const fetchEvents = async (date: Date) => {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
 
     const { data: bookings } = await supabase
       .from("server_bookings")
@@ -243,8 +193,8 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
         start_time,
         personnel:booked_for ( name )
       `)
-      .gte("start_time", today.toISOString())
-      .lt("start_time", tomorrow.toISOString())
+      .gte("start_time", start.toISOString())
+      .lt("start_time", end.toISOString())
       .order("start_time", { ascending: true });
 
     const safeEvents: Event[] = (bookings || []).map((b: any) => ({
@@ -252,48 +202,69 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
       personnel: b.personnel ?? null,
     }));
 
-    setEvents(safeEvents);
+    const now = new Date();
+    const selectedIsToday = isSameDay(start, now);
+
+    if (selectedIsToday) {
+      const upcoming = safeEvents.filter(
+        (event) => new Date(event.start_time).getTime() >= now.getTime()
+      );
+      const earlier = safeEvents.filter(
+        (event) => new Date(event.start_time).getTime() < now.getTime()
+      );
+
+      setEvents(upcoming);
+      setPastEvents(earlier.reverse());
+    } else {
+      setEvents(safeEvents);
+      setPastEvents([]);
+      setPastEventsOpen(false);
+    }
   };
 
-  /* ================= SERVERS ================= */
-
-  useEffect(() => {
-    fetchServers();
-    const interval = setInterval(fetchServers, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
   const fetchServers = async () => {
-  try {
-    const res = await fetch("/api/server-status");
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/server-status");
+      const data = await res.json();
 
-    // Track status transitions
-    setPreviousStatus((prev) => {
-      const updated: Record<number, boolean> = { ...prev };
+      setPreviousStatus((prev) => {
+        const updated: Record<number, boolean> = { ...prev };
 
-      data.forEach((server: Server) => {
-        if (prev[server.id] === false && server.online === true) {
-          // Server just came online
-          updated[server.id] = true;
-        } else {
-          // Store current status for next comparison
-          updated[server.id] = server.online;
-        }
+        data.forEach((server: Server) => {
+          if (prev[server.id] === false && server.online === true) {
+            updated[server.id] = true;
+          } else {
+            updated[server.id] = server.online;
+          }
+        });
+
+        return updated;
       });
 
-      return updated;
-    });
+      setServers(data);
 
-    setServers(data);
-
-    if (initialLoad) {
-      setInitialLoad(false);
+      if (initialLoad) {
+        setInitialLoad(false);
+      }
+    } catch (err) {
+      console.error("Server fetch failed", err);
     }
-  } catch (err) {
-    console.error("Server fetch failed", err);
-  }
-};
+  };
+
+  const changeEventDate = (days: number) => {
+    setSelectedEventDate((prev) => {
+      const next = new Date(prev);
+      next.setDate(next.getDate() + days);
+      next.setHours(0, 0, 0, 0);
+      return next;
+    });
+  };
+
+  const jumpToToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    setSelectedEventDate(today);
+  };
 
   const toggleServer = (id: number) => {
     setExpandedServer((prev) => (prev === id ? null : id));
@@ -301,21 +272,68 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
   const onlineCount = servers.filter((s) => s.online).length;
   const offlineCount = servers.length - onlineCount;
-  
+  const totalPlayers = servers.reduce(
+    (sum, server) => sum + (server.players || 0),
+    0
+  );
+
   const justCameOnline = (server: Server) =>
-  previousStatus[server.id] === false && server.online;
+    previousStatus[server.id] === false && server.online;
+
+  const selectedEventDateLabel = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (selectedEventDate.toDateString() === today.toDateString()) {
+      return "Today";
+    }
+
+    if (selectedEventDate.toDateString() === tomorrow.toDateString()) {
+      return "Tomorrow";
+    }
+
+    if (selectedEventDate.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    }
+
+    return selectedEventDate.toLocaleDateString(undefined, {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }, [selectedEventDate]);
+
+  const featuredEvent = useMemo(() => {
+    if (events.length === 0) return null;
+    return [...events].sort(
+      (a, b) =>
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    )[0];
+  }, [events]);
+
+  const regularEvents = useMemo(() => {
+    if (!featuredEvent) return events;
+    return events.filter((event) => event.id !== featuredEvent.id);
+  }, [events, featuredEvent]);
+
+  const showEarlierTodaySection =
+    isSameDay(selectedEventDate, new Date()) && pastEvents.length > 0;
 
   return (
     <div className="boot relative min-h-screen flex text-white font-orbitron pb-20">
-
-      {/* ================= BACKGROUND ================= */}
       <div
         className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-20 pointer-events-none z-0"
         style={{ backgroundImage: "url('/background/bg.jpg')" }}
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] z-0" />
 
-      {/* ================= LOGO ================= */}
       <img
         src="/background/bg.jpg"
         alt="Logo"
@@ -323,27 +341,23 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
       />
 
       <div className="relative z-10 flex w-full">
-
-        {/* ================= LEFT PANEL ================= */}
-        <div className="w-[320px] border-r border-[#00ff66]/30 p-6 bg-black/40 backdrop-blur-xl">
-
+        <div className="w-[320px] border-r border-[#00ff66]/30 p-6 bg-black/30 backdrop-blur-2xl">
           <h2 className="text-xl text-[#00ff66] mb-6 tracking-widest">
             Servers
           </h2>
 
-          {/* SUMMARY */}
-          <div className="mb-6 p-4 rounded-2xl border border-[#00ff66]/30 bg-black/60">
+          <div className="mb-6 p-4 rounded-2xl border border-[#00ff66]/30 bg-black/50">
             <div className="text-sm mb-2">🟢 Online: {onlineCount}</div>
             <div className="text-sm mb-2">🔴 Offline: {offlineCount}</div>
-            <div className="text-sm mb-2">📅 Events: {events.length}</div>
+            <div className="text-sm mb-2">
+              📅 Upcoming Events: {events.length}
+            </div>
             <div className="mt-2 text-[#00ff66] text-sm">
               {time.toLocaleTimeString()}
             </div>
           </div>
 
-          {/* SERVER LIST */}
-          <div className="mt-6 p-4 rounded-2xl border border-[#00ff66]/30 bg-black/60">
-
+          <div className="mt-6 p-4 rounded-2xl border border-[#00ff66]/30 bg-black/50">
             {initialLoad ? (
               <div className="text-center text-gray-400 py-6 animate-pulse">
                 Checking server status...
@@ -355,487 +369,473 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
             ) : (
               <div className="space-y-4">
                 {servers.map((server) => {
-  const isOpen = expandedServer === server.id;
-  console.log(
-    "RENDERING SERVER",
-    server.id,
-    "PLAYER LIST:",
-    server.playerList
-  );
-  
+                  const isOpen = expandedServer === server.id;
 
-  return (
-    <div key={server.id}>
-      <div
-       onClick={() => toggleServer(server.id)}
-       className={`cursor-pointer rounded-xl border border-[#00ff66]/30 bg-black/60 overflow-hidden transition-all duration-300 hover:border-[#00ff66]
-        ${justCameOnline(server) ? "animate-[glowBurst_1.2s_ease-out]" : ""}
-        `}
-         >
+                  return (
+                    <div key={server.id}>
+                      <div
+                        onClick={() => toggleServer(server.id)}
+                        className={`cursor-pointer rounded-xl border bg-black/60 overflow-hidden transition-all duration-300 hover:border-[#00ff66]
+                        ${
+                          server.online
+                            ? "border-[#00ff66]/40 shadow-[0_0_20px_rgba(0,255,102,0.08)]"
+                            : "border-[#00ff66]/20"
+                        }
+                        ${
+                          justCameOnline(server)
+                            ? "animate-[glowBurst_1.2s_ease-out]"
+                            : ""
+                        }`}
+                      >
+                        <div className="p-4 flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-2.5 h-2.5 rounded-full ${
+                                server.online
+                                  ? "bg-[#00ff66] shadow-[0_0_10px_#00ff66]"
+                                  : "bg-red-500 shadow-[0_0_8px_red]"
+                              }`}
+                            />
+                            <span>Server {server.id}</span>
+                          </div>
 
-        <div className="p-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                server.online
-                  ? "bg-[#00ff66] shadow-[0_0_8px_#00ff66]"
-                  : "bg-red-500 shadow-[0_0_8px_red]"
-              }`}
-            />
-            <span>Server {server.id}</span>
-          </div>
+                          <div
+                            className={`text-[10px] px-2 py-1 rounded-full ${
+                              server.online
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-red-500/20 text-red-400"
+                            }`}
+                          >
+                            {server.online ? "ONLINE" : "OFFLINE"}
+                          </div>
+                        </div>
 
-          <div className={`text-[10px] px-2 py-1 rounded-full ${
-            server.online
-            ? "bg-green-500/20 text-green-400"
-            : "bg-red-500/20 text-red-400"
-            }`}>
-           {server.online ? "ONLINE" : "OFFLINE"}
-          </div>
-        </div>
+                        <div
+                          className={`grid transition-all duration-300 ${
+                            isOpen && server.online
+                              ? "grid-rows-[1fr] opacity-100"
+                              : "grid-rows-[0fr] opacity-0"
+                          }`}
+                        >
+                          <div className="overflow-hidden">
+                            <div className="border-t border-[#00ff66]/20 p-5 text-sm text-gray-300">
+                              <div className="text-[#00ff66] mb-3 tracking-wide">
+                                Server Population
+                              </div>
 
-        {/* ✅ EXPANDING SECTION */}
-<div
-  className={`grid transition-all duration-300 ${
-    isOpen && server.online
-      ? "grid-rows-[1fr] opacity-100"
-      : "grid-rows-[0fr] opacity-0"
-  }`}
->
-  <div className="overflow-hidden">
-    <div className="border-t border-[#00ff66]/20 p-5 text-sm text-gray-300">
+                              {server.missionFile && (
+                                <div className="text-xs text-gray-400 mt-2">
+                                  Map: {server.missionFile}
+                                </div>
+                              )}
 
-      {/* HEADER */}
-      <div className="text-[#00ff66] mb-3 tracking-wide">
-        Server Population
-      </div>
+                              <div className="flex items-center justify-between text-white text-lg font-semibold">
+                                <span>
+                                  {server.players ?? 0} /{" "}
+                                  {server.maxPlayers || "?"}
+                                </span>
 
-    {server.missionFile && (
-  <div className="text-xs text-gray-400 mt-2">
-    Map: {server.missionFile}
-  </div>
-)}
+                                <span className="text-xs text-gray-400">
+                                  Players Online
+                                </span>
+                              </div>
 
-      {/* PLAYER COUNT TEXT */}
-      <div className="flex items-center justify-between text-white text-lg font-semibold">
-        <span>
-          {server.players ?? 0} / {server.maxPlayers || "?"}
-        </span>
+                              <div className="mt-3 w-full h-3 bg-black/70 rounded-full overflow-hidden border border-[#00ff66]/30">
+                                <div
+                                  className="h-full bg-[#00ff66] transition-all duration-500"
+                                  style={{
+                                    width:
+                                      server.maxPlayers &&
+                                      server.maxPlayers > 0
+                                        ? `${
+                                            (server.players /
+                                              server.maxPlayers) *
+                                            100
+                                          }%`
+                                        : "0%",
+                                  }}
+                                />
+                              </div>
 
-        <span className="text-xs text-gray-400">
-          Players Online
-        </span>
-      </div>
-
-      {/* PROGRESS BAR */}
-      <div className="mt-3 w-full h-3 bg-black/70 rounded-full overflow-hidden border border-[#00ff66]/30">
-        <div
-          className="h-full bg-[#00ff66] transition-all duration-500"
-          style={{
-            width:
-              server.maxPlayers && server.maxPlayers > 0
-                ? `${(server.players / server.maxPlayers) * 100}%`
-                : "0%",
-          }}
-        />
-      </div>
-
-      {/* OPTIONAL STATUS TEXT */}
-      <div className="mt-2 text-xs text-gray-400">
-        {server.players === 0
-          ? "Server is empty"
-          : server.players === server.maxPlayers
-          ? "Server is full"
-          : "Server is active"}
-      </div>
-
-    </div>
-  </div>
-</div>
-      </div>
-    </div>
-  );
-})}
+                              <div className="mt-2 text-xs text-gray-400">
+                                {server.players === 0
+                                  ? "Server is empty"
+                                  : server.players === server.maxPlayers
+                                  ? "Server is full"
+                                  : "Server is active"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
-
           </div>
         </div>
 
-        {/* ================= CENTER ================= */}
-        <div className="flex-1 flex flex-col items-center pt-40">
-
+        <div className="flex-1 flex flex-col items-center pt-40 px-8">
           <h1 className="text-4xl md:text-6xl font-bold tracking-[0.4em] text-[#00ff66] text-center">
-            101ST<br />
+            101ST
+            <br />
             DOOM BATTALION
           </h1>
 
           <p className="mt-4 text-gray-300 text-center">
             Operational Command & Personnel Management System
           </p>
-          
 
-          <div className="mt-8 flex flex-col items-center gap-4">
+          <div className="mt-6 w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/45 backdrop-blur-xl px-4 py-3 text-center">
+              <div className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
+                Active Servers
+              </div>
+              <div className="mt-2 text-2xl font-bold text-[#00ff66]">
+                {onlineCount}
+              </div>
+            </div>
 
-            
+            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/45 backdrop-blur-xl px-4 py-3 text-center">
+              <div className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
+                Players Online
+              </div>
+              <div className="mt-2 text-2xl font-bold text-[#00ff66]">
+                {totalPlayers}
+              </div>
+            </div>
 
-  {/* Main Button */}
-  {/* ================= PERSONNEL COMMAND DROPDOWN ================= */}
+            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/45 backdrop-blur-xl px-4 py-3 text-center">
+              <div className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
+                UK Time
+              </div>
+              <div className="mt-2 text-2xl font-bold text-[#00ff66]">
+                {time.toLocaleTimeString("en-GB", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                })}
+              </div>
+            </div>
+          </div>
 
-<div className="relative group z-52">
-  
+          <div className="group mt-10 w-[95%] max-w-5xl h-[540px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
+            {slides.map((slide, index) => (
+              <div
+                key={slide}
+                className={`absolute inset-0 transition-all duration-1000 ${
+                  index === currentSlide
+                    ? "opacity-100 scale-105"
+                    : "opacity-0 scale-100"
+                }`}
+              >
+                <img
+                  loading="lazy"
+                  src={slide}
+                  alt="slideshow"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+              </div>
+            ))}
 
-  {/* MAIN BUTTON */}
-  <button
-    onClick={() => router.push("/pcs")}
-    className="px-8 py-3 border border-[#00ff66] rounded-lg 
-               text-[#00ff66] hover:bg-[#00ff66] 
-               hover:text-black hover:scale-105 
-               transition-all w-full"
-  >
-    Enter Personnel Command
-  </button>
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+              {slides.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentSlide(index)}
+                  className={`h-2 rounded-full transition-all ${
+                    index === currentSlide
+                      ? "w-8 bg-[#00ff66]"
+                      : "w-2 bg-gray-500 hover:bg-gray-300"
+                  }`}
+                />
+              ))}
+            </div>
 
-  
+            <button
+              onClick={() =>
+                setCurrentSlide((prev) =>
+                  prev === 0 ? slides.length - 1 : prev - 1
+                )
+              }
+              className="absolute left-4 top-1/2 -translate-y-1/2 
+                         bg-black/60 text-[#00ff66] p-3 rounded-full 
+                         opacity-0 group-hover:opacity-100 
+                         transition-all duration-300 
+                         hover:scale-110 hover:bg-black/80 z-20"
+            >
+              ◀
+            </button>
 
-  {/* DROPDOWN MENU */}
-  <div
-    className="
-      absolute left-0 top-full w-full pt-2
-      opacity-0 invisible
-      group-hover:opacity-100
-      group-hover:visible
-      transition-all duration-200
-      pointer-events-none
-      group-hover:pointer-events-auto
-    "
-  >
-    <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2 max-h-[400px] overflow-y-auto">
-
-
-      {filteredPersonnelItems.map((item) => (
-        <button
-          key={item.href}
-          onClick={() => router.push(item.href)}
-          className="w-full text-left px-4 py-2 rounded-md 
-                     text-[#00ff66] hover:bg-[#00ff66]/10 
-                     transition-all text-sm"
-        >
-          {item.title}
-        </button>
-      ))}
-
-    </div>
-  </div>
-
-</div>
-
-
-
-
-<div className="flex gap-8">
-
-  {/* ================= LEFT = How to Join ================= */}
-  <div className="relative group translate-x-[-20px] z-50">
-
-    {/* MAIN BUTTON */}
-    <button
-      onClick={() => router.push("/Join")}
-      className="px-8 py-3 border border-[#00ff66] rounded-lg 
-                 text-[#00ff66] hover:bg-[#00ff66] 
-                 hover:text-black hover:scale-105 
-                 transition-all w-full"
-    >
-      How to Join
-    </button>
-
-    {/* DROPDOWN */}
-    <div
-      className="
-        absolute left-0 top-full w-full pt-2
-        opacity-0 invisible
-        group-hover:opacity-100
-        group-hover:visible
-        transition-all duration-200
-        pointer-events-none
-        group-hover:pointer-events-auto
-      "
-    >
-      <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2">
-
-        {whoWeAreLinks.map((item) => (
-          <button
-            key={item.href}
-            onClick={() => router.push(item.href)}
-            className="w-full text-left px-4 py-2 rounded-md 
-                       text-[#00ff66] hover:bg-[#00ff66]/10 
-                       transition-all text-sm"
-          >
-            {item.label}
-          </button>
-        ))}
-
-      </div>
-    </div>
-
-  </div>
-
-  {/* ================= RIGHT = GALACTIC CAMPAIGN ================= */}
-  <div className="relative group translate-x-[20px] z-51">
-
-    {/* MAIN BUTTON */}
-    <button
-      onClick={() => router.push("/Galactic-Campaign")}
-      className="px-8 py-3 border border-[#00ff66] rounded-lg 
-                 text-[#00ff66] hover:bg-[#00ff66] 
-                 hover:text-black hover:scale-105 
-                 transition-all w-full"
-    >
-      Galactic Campaign
-    </button>
-
-    {/* DROPDOWN MENU */}
-    <div
-      className="
-        absolute left-0 top-full w-full pt-2
-        opacity-0 invisible
-        group-hover:opacity-100
-        group-hover:visible
-        transition-all duration-200
-        pointer-events-none
-        group-hover:pointer-events-auto
-      "
-    >
-      <div className="bg-black/95 border border-[#00ff66]/40 rounded-lg p-2 space-y-2">
-
-        {/* Always Visible */}
-        <button
-          onClick={() => router.push("/GC-Platoon-Logi")}
-          className="w-full px-4 py-2 text-left rounded-md
-                     text-[#00ff66] hover:bg-[#00ff66]/10
-                     transition-all text-sm"
-        >
-          Platoon Logistics
-        </button>
-
-        <button
-          onClick={() => router.push("/News")}
-          className="w-full px-4 py-2 text-left rounded-md
-                     text-[#00ff66] hover:bg-[#00ff66]/10
-                     transition-all text-sm"
-        >
-          GC Weekly
-        </button>
-
-        {/* Role Restricted */}
-        {(roles.includes("admin") || roles.includes("logistics")) && (
-          <button
-            onClick={() => router.push("/GC-Logi")}
-            className="w-full px-4 py-2 text-left rounded-md
-                       text-[#00ff66] hover:bg-[#00ff66]/10
-                       transition-all text-sm"
-          >
-            Battalion Logistics
-          </button>
-        )}
-
-      </div>
-    </div>
-
-  </div>
-
-</div>
-
-{/* ================= ART OF WAR ================= */}
-<button
-  onClick={() => router.push("/Art-of-War")}
-  className="px-8 py-3 border border-[#00ff66] rounded-lg 
-             text-[#00ff66] hover:bg-[#00ff66] 
-             hover:text-black hover:scale-105 
-             transition-all"
->
-  Art of War
-</button>
-
-</div>
-
-
-
-          <div className="group mt-10 w-[95%] max-w-4xl h-[500px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
-
-  {/* SLIDES */}
-  {slides.map((slide, index) => (
-    <img
-      loading="lazy"
-      key={slide}
-      src={slide}
-      alt="slideshow"
-      className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${
-        index === currentSlide
-          ? "opacity-100 scale-105"
-          : "opacity-0 scale-100"
-      }`}
-    />
-  ))}
-  
-  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-  {slides.map((_, index) => (
-    <div
-      key={index}
-      className={`h-2 rounded-full transition-all ${
-        index === currentSlide
-          ? "w-6 bg-[#00ff66]"
-          : "w-2 bg-gray-500"
-      }`}
-    />
-  ))}
-</div>
-
-  {/* ================= LEFT ARROW ================= */}
-  <button
-    onClick={() =>
-      setCurrentSlide((prev) =>
-        prev === 0 ? slides.length - 1 : prev - 1
-      )
-    }
-    className="absolute left-4 top-1/2 -translate-y-1/2 
-               bg-black/60 text-[#00ff66] p-3 rounded-full 
-               opacity-0 group-hover:opacity-100 
-               transition-all duration-300 
-               hover:scale-110 hover:bg-black/80"
-  >
-    ◀
-  </button>
-
-  {/* ================= RIGHT ARROW ================= */}
-  <button
-    onClick={() =>
-      setCurrentSlide((prev) =>
-        prev === slides.length - 1 ? 0 : prev + 1
-      )
-    }
-    className="absolute right-4 top-1/2 -translate-y-1/2 
-               bg-black/60 text-[#00ff66] p-3 rounded-full 
-               opacity-0 group-hover:opacity-100 
-               transition-all duration-300 
-               hover:scale-110 hover:bg-black/80"
-  >
-    ▶
-  </button>
-
-</div>
-
+            <button
+              onClick={() =>
+                setCurrentSlide((prev) =>
+                  prev === slides.length - 1 ? 0 : prev + 1
+                )
+              }
+              className="absolute right-4 top-1/2 -translate-y-1/2 
+                         bg-black/60 text-[#00ff66] p-3 rounded-full 
+                         opacity-0 group-hover:opacity-100 
+                         transition-all duration-300 
+                         hover:scale-110 hover:bg-black/80 z-20"
+            >
+              ▶
+            </button>
+          </div>
         </div>
 
-        {/* ================= RIGHT PANEL ================= */}
-        <div className="w-[380px] border-l border-[#00ff66]/30 p-6 bg-black/50 backdrop-blur-2xl shadow-2xl flex flex-col">
+        <div className="w-[400px] border-l border-[#00ff66]/30 p-6 bg-black/35 backdrop-blur-2xl shadow-2xl flex flex-col">
+          <div className="mb-4">
+            <h2 className="text-xl text-[#00ff66] tracking-widest">
+              Upcoming Events
+            </h2>
 
-          <h2 className="text-xl text-[#00ff66] mb-4 tracking-widest">
-            Upcoming Events Today
-          </h2>
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[#00ff66]/30 bg-black/50 px-3 py-3">
+              <button
+                onClick={() => changeEventDate(-1)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#00ff66]/30 text-[#00ff66] hover:bg-[#00ff66]/10 hover:scale-105 transition-all"
+              >
+                ◀
+              </button>
+
+              <div className="flex-1 text-center">
+                <div className="text-sm text-[#00ff66] font-semibold">
+                  {selectedEventDateLabel}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {selectedEventDate.toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </div>
+              </div>
+
+              <button
+                onClick={() => changeEventDate(1)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#00ff66]/30 text-[#00ff66] hover:bg-[#00ff66]/10 hover:scale-105 transition-all"
+              >
+                ▶
+              </button>
+            </div>
+
+            <button
+              onClick={jumpToToday}
+              className="mt-3 w-full rounded-xl border border-[#00ff66]/25 bg-black/40 px-4 py-2 text-sm text-[#00ff66] hover:bg-[#00ff66]/10 transition-all"
+            >
+              Jump to Today
+            </button>
+          </div>
+
+          {featuredEvent && (
+            <div className="mb-5 rounded-2xl border border-[#00ff66]/40 bg-[linear-gradient(135deg,rgba(0,255,102,0.12),rgba(0,0,0,0.5))] p-4 shadow-[0_0_18px_rgba(0,255,102,0.12)]">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] tracking-[0.2em] uppercase text-[#00ff66]">
+                  Next Operation
+                </div>
+                <div className="rounded-full border border-[#00ff66]/30 px-2 py-1 text-[10px] text-[#00ff66]">
+                  SERVER {featuredEvent.server_id}
+                </div>
+              </div>
+
+              <div className="mt-3 text-lg font-semibold text-white">
+                {featuredEvent.title}
+              </div>
+
+              <div className="mt-1 text-sm text-gray-300">
+                {featuredEvent.personnel?.name || "Unknown"}
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="rounded-lg bg-black/50 px-3 py-1 text-xs text-gray-200 border border-[#00ff66]/20">
+                  {new Date(featuredEvent.start_time).toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </div>
+
+                <div className="text-xs text-[#00ff66]">
+                  {getRelativeCountdown(new Date(featuredEvent.start_time))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {events.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-gray-400">
-              No events scheduled today.
+            <div className="text-gray-400 py-4 text-center">
+              No upcoming events for this date.
             </div>
           ) : (
             <div className="space-y-4">
-              {events.map((event) => (
+              {regularEvents.map((event) => (
                 <div
                   key={event.id}
                   className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
                 >
-                  <div className="text-sm text-[#00ff66]">
-                    SERVER {event.server_id}
-                  </div>
-                  <div className="font-semibold mt-1">
-                    {event.personnel?.name || "Unknown"}
-                  </div>
-                  <div className="text-gray-300 text-sm">
-                    {event.title}
-                  </div>
-                  <div className="text-xs text-gray-400 mt-2">
-                    {new Date(event.start_time).toLocaleTimeString()}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
+                        Server {event.server_id}
+                      </div>
+                      <div className="font-semibold mt-2 text-white">
+                        {event.title}
+                      </div>
+                      <div className="text-gray-300 text-sm mt-1">
+                        {event.personnel?.name || "Unknown"}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 rounded-lg border border-[#00ff66]/25 bg-black/50 px-3 py-1 text-xs text-[#00ff66]">
+                      {new Date(event.start_time).toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-          <div className="hidden">
-  101st Doom Battalion  
-  Star Wars MilSim  
-  Military Roleplay  
-  Arma Unit  
-  Tactical Gaming Community  
-</div>
 
-{/* ================= WEEKLY EVENTS ================= */}
-<div className="mt-8">
-  
-  {/* CLICKABLE HEADER */}
-  <button
-    onClick={() => setWeeklyOpen(!weeklyOpen)}
-    className="w-full flex items-center justify-between p-4 rounded-2xl border border-[#00ff66]/60 bg-black/50 hover:bg-black/70 transition-all cursor-pointer"
-  >
-    <span className="text-xl text-[#00ff66] tracking-widest">
-      Weekly Events
-    </span>
+          {showEarlierTodaySection && (
+            <div className="mt-5">
+              <button
+                onClick={() => setPastEventsOpen((prev) => !prev)}
+                className="w-full flex items-center justify-between p-4 rounded-2xl border border-[#00ff66]/35 bg-black/40 hover:bg-black/55 transition-all"
+              >
+                <span className="text-sm text-[#00ff66] tracking-[0.2em] uppercase">
+                  Earlier Today ({pastEvents.length})
+                </span>
 
-    <span
-      className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
-        weeklyOpen ? "rotate-180" : "rotate-0"
-      }`}
-    >
-      ▼
-    </span>
-  </button>
+                <span
+                  className={`text-[#00ff66] text-xl transition-transform duration-300 ${
+                    pastEventsOpen ? "rotate-180" : "rotate-0"
+                  }`}
+                >
+                  ▼
+                </span>
+              </button>
 
-  {/* COLLAPSIBLE CONTENT */}
-  <div
-    className={`overflow-hidden transition-all duration-500 ${
-      weeklyOpen ? "max-h-[1000px] opacity-100 mt-4" : "max-h-0 opacity-0"
-    }`}
-  >
-    <div className="p-4 rounded-2xl border border-[#00ff66]/40 bg-black/40">
-      <div className="space-y-4">
-        {weeklyEvents.map((event) => {
-          const nextOccurrence = getNextOccurrence(
-            event.day,
-            event.hour,
-            event.minute
-          );
+              <div
+                className={`overflow-hidden transition-all duration-500 ${
+                  pastEventsOpen
+                    ? "max-h-[1000px] opacity-100 mt-4"
+                    : "max-h-0 opacity-0"
+                }`}
+              >
+                <div className="space-y-4">
+                  {pastEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="p-4 rounded-xl border border-[#00ff66]/15 bg-black/35 opacity-80 hover:opacity-100 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]/80">
+                            Server {event.server_id}
+                          </div>
+                          <div className="font-semibold mt-2 text-white/90">
+                            {event.title}
+                          </div>
+                          <div className="text-gray-400 text-sm mt-1">
+                            {event.personnel?.name || "Unknown"}
+                          </div>
+                        </div>
 
-          return (
-            <div
-              key={event.name}
-              className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
-            >
-              <div className="text-[#00ff66] font-semibold">
-                {event.name}
-              </div>
+                        <div className="shrink-0 rounded-lg border border-[#00ff66]/15 bg-black/40 px-3 py-1 text-xs text-gray-300">
+                          {new Date(event.start_time).toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      </div>
 
-              <div className="text-sm text-gray-300 mt-1">
-                {nextOccurrence.toLocaleDateString(undefined, {
-                  weekday: "long",
-                })}
-              </div>
-
-              <div className="text-xs text-gray-400 mt-1">
-                {nextOccurrence.toLocaleTimeString([], {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
+                      <div className="mt-3 text-[11px] uppercase tracking-[0.18em] text-gray-500">
+                        Completed Earlier Today
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  </div>
+          )}
 
-</div>
+          <div className="hidden">
+            101st Doom Battalion Star Wars MilSim Military Roleplay Arma Unit
+            Tactical Gaming Community
+          </div>
 
-          {/* UNIT CONNECTIONS */}
+          <div className="mt-8">
+            <button
+              onClick={() => setWeeklyOpen(!weeklyOpen)}
+              className="w-full flex items-center justify-between p-4 rounded-2xl border border-[#00ff66]/60 bg-black/50 hover:bg-black/70 transition-all cursor-pointer"
+            >
+              <span className="text-xl text-[#00ff66] tracking-widest">
+                Weekly Events
+              </span>
+
+              <span
+                className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
+                  weeklyOpen ? "rotate-180" : "rotate-0"
+                }`}
+              >
+                ▼
+              </span>
+            </button>
+
+            <div
+              className={`overflow-hidden transition-all duration-500 ${
+                weeklyOpen ? "max-h-[1000px] opacity-100 mt-4" : "max-h-0 opacity-0"
+              }`}
+            >
+              <div className="p-4 rounded-2xl border border-[#00ff66]/40 bg-black/40">
+                <div className="space-y-4">
+                  {weeklyEvents.map((event) => {
+                    const nextOccurrence = getNextOccurrence(
+                      event.day,
+                      event.hour,
+                      event.minute
+                    );
+
+                    return (
+                      <div
+                        key={event.name}
+                        className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-[#00ff66] font-semibold">
+                              {event.name}
+                            </div>
+
+                            <div className="text-sm text-gray-300 mt-1">
+                              {nextOccurrence.toLocaleDateString(undefined, {
+                                weekday: "long",
+                              })}
+                            </div>
+
+                            <div className="text-xs text-gray-400 mt-1">
+                              {nextOccurrence.toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-[#00ff66]/25 bg-black/50 px-3 py-1 text-[11px] text-[#00ff66] whitespace-nowrap">
+                            {getRelativeCountdown(nextOccurrence)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-6 border-t border-[#00ff66]/30 pt-6">
             <h3 className="text-[#00ff66] tracking-widest mb-4">
               Unit Connections
@@ -843,19 +843,19 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
             {[
               {
-                label: "Join Our Discord",
+                label: "💬 Join Our Discord",
                 href: "https://discord.gg/dZhRghrDfX",
               },
               {
-                label: "Unit Reddit",
+                label: "📘 Unit Reddit",
                 href: "https://www.reddit.com/user/101stDBMediaTeam/",
               },
               {
-                label: "Unit Instagram",
+                label: "📸 Unit Instagram",
                 href: "https://www.instagram.com/101stdoombattalion_mediateam?igsh=MWk2d2t5cWd1amFhZw==",
               },
               {
-                label: "Join TeamSpeak Server",
+                label: "🎧 Join TeamSpeak Server",
                 href: "ts3server://199.33.118.13",
               },
             ].map((item) => (
@@ -869,11 +869,9 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
               </a>
             ))}
           </div>
-
         </div>
       </div>
 
-      {/* ================= NEWS TICKER ================= */}
       <div className="fixed bottom-15 left-0 w-full bg-black/70 backdrop-blur-xl border-t border-[#00ff66]/30 overflow-hidden z-50">
         <div className="flex w-max animate-ticker gap-16 px-8 py-3 text-[#00ff66] whitespace-nowrap">
           {[...newsItems, ...newsItems].map((item, index) => (
@@ -885,8 +883,12 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
 
         <style jsx global>{`
           @keyframes ticker {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(-50%); }
+            0% {
+              transform: translateX(0);
+            }
+            100% {
+              transform: translateX(-50%);
+            }
           }
 
           .animate-ticker {
@@ -894,7 +896,6 @@ const getNextOccurrence = (day: number, hour: number, minute: number) => {
           }
         `}</style>
       </div>
-
     </div>
   );
 }

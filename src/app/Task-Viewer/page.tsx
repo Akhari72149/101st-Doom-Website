@@ -333,99 +333,141 @@ export default function TaskboardViewerPage() {
     return { total, overdue, dueToday, inReview, completed };
   }, [filteredTasks]);
 
-  const renderTaskCard = (task: Task) => {
-    const taskComments = commentsByTask[task.id] || [];
-    const isExpanded = expandedTaskId === task.id;
-    const latestCommentPreview = getLatestCommentPreview(task.id);
-    const overdue = isOverdue(task);
-    const dueToday = isDueToday(task);
+const renderTaskCard = (task: Task) => {
+  const taskComments = commentsByTask[task.id] || [];
+  const isExpanded = expandedTaskId === task.id;
+  const latestCommentPreview = getLatestCommentPreview(task.id);
+  const overdue = isOverdue(task);
+  const dueToday = isDueToday(task);
+  const isCompactDoneCard = viewMode === "kanban" && task.status === "done" && !isExpanded;
 
+  if (isCompactDoneCard) {
     return (
       <div
         key={task.id}
-        className={`rounded-2xl border p-4 transition shadow-[0_0_20px_rgba(0,0,0,0.25)] ${getTaskCardStyle(
-          task.status
-        )} ${overdue ? "ring-1 ring-red-500/40" : ""}`}
+        className="rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/35 via-black/80 to-black/70 p-3 transition hover:border-emerald-400/40 hover:bg-emerald-950/20 hover:shadow-[0_0_20px_rgba(16,185,129,0.12)]"
       >
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <h4 className="text-white text-base font-semibold leading-snug">
-            {task.title}
-          </h4>
-          <span
-            className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getPriorityStyle(task.priority)}`}
-          >
-            {task.priority.toUpperCase()}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-3">
-          {task.label && (
-            <span
-              className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getLabelStyle(task.label)}`}
-            >
-              {task.label}
-            </span>
-          )}
-
-          {overdue && (
-            <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-500/30 bg-red-500/15 text-red-300">
-              Overdue
-            </span>
-          )}
-
-          {!overdue && dueToday && (
-            <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-amber-500/30 bg-amber-500/15 text-amber-300">
-              Due Today
-            </span>
-          )}
-        </div>
-
-        {task.description && (
-          <p className="text-sm text-gray-300 mb-4 whitespace-pre-wrap">
-            {task.description}
-          </p>
-        )}
-
-        <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 mb-4">
-          <div>
-            <span className="text-[#00ff66]">Assigned:</span> {getProfileName(task.assigned_to)}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex items-center gap-3">
+            <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]" />
+            <h4 className="truncate text-sm font-semibold text-emerald-50">
+              {task.title}
+            </h4>
           </div>
-          <div>
-            <span className="text-[#00ff66]">Due:</span> {formatDate(task.due_date)}
-          </div>
-          <div>
-            <span className="text-[#00ff66]">Status:</span>{" "}
-            {columns.find((c) => c.key === task.status)?.label}
-          </div>
-          <div>
-            <span className="text-[#00ff66]">Comments:</span> {taskComments.length}
-          </div>
-        </div>
 
-        {latestCommentPreview && !isExpanded && (
-          <div className="mb-4 rounded-xl border border-white/10 bg-black/30 px-3 py-2">
-            <div className="text-[11px] uppercase tracking-wide text-violet-300 mb-1">
-              Latest Comment
-            </div>
-            <div className="text-sm text-gray-300 line-clamp-2">
-              {latestCommentPreview}
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
-            className="px-3 py-1 rounded-lg border border-violet-500/30 text-xs text-violet-300 hover:bg-violet-500/10"
+            onClick={() => setExpandedTaskId(task.id)}
+            className="shrink-0 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:border-violet-400/40 hover:bg-violet-500/10 hover:text-violet-300"
           >
-            {isExpanded ? "Collapse" : "Expand"}
+            Expand
           </button>
         </div>
+      </div>
+    );
+  }
 
-        {isExpanded && (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 p-4">
-            <div className="mb-4 text-xs text-gray-400">
-              <span className="text-[#00ff66]">Updated:</span> {formatDateTime(task.updated_at)}
+  return (
+    <div
+      key={task.id}
+      className={`rounded-2xl border p-4 transition shadow-[0_0_20px_rgba(0,0,0,0.25)] ${getTaskCardStyle(
+        task.status
+      )} ${overdue ? "ring-1 ring-red-500/40" : ""}`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <h4 className="text-white text-base font-semibold leading-snug">
+          {task.title}
+        </h4>
+        <span
+          className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getPriorityStyle(task.priority)}`}
+        >
+          {task.priority.toUpperCase()}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        {task.label && (
+          <span
+            className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getLabelStyle(task.label)}`}
+          >
+            {task.label}
+          </span>
+        )}
+
+        {overdue && (
+          <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-500/30 bg-red-500/15 text-red-300">
+            Overdue
+          </span>
+        )}
+
+        {!overdue && dueToday && (
+          <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-amber-500/30 bg-amber-500/15 text-amber-300">
+            Due Today
+          </span>
+        )}
+      </div>
+
+      {task.description && (
+        <p className="text-sm text-gray-300 mb-4 whitespace-pre-wrap">
+          {task.description}
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 mb-4">
+        <div>
+          <span className="text-[#00ff66]">Assigned:</span> {getProfileName(task.assigned_to)}
+        </div>
+        <div>
+          <span className="text-[#00ff66]">Due:</span> {formatDate(task.due_date)}
+        </div>
+        <div>
+          <span className="text-[#00ff66]">Status:</span>{" "}
+          {columns.find((c) => c.key === task.status)?.label}
+        </div>
+        <div>
+          <span className="text-[#00ff66]">Comments:</span> {taskComments.length}
+        </div>
+      </div>
+
+      {latestCommentPreview && !isExpanded && (
+        <div className="mb-4 rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+          <div className="text-[11px] uppercase tracking-wide text-violet-300 mb-1">
+            Latest Comment
+          </div>
+          <div className="text-sm text-gray-300 line-clamp-2">
+            {latestCommentPreview}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {!isExpanded && (
+          <button
+            onClick={() => setExpandedTaskId(task.id)}
+            className="px-3 py-1 rounded-lg border border-violet-500/30 text-xs text-violet-300 hover:bg-violet-500/10"
+          >
+            Expand
+          </button>
+        )}
+      </div>
+
+      <div
+        className={`grid transition-all duration-300 ease-in-out ${
+          isExpanded ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0 mt-0"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="text-xs text-gray-400">
+                <span className="text-[#00ff66]">Updated:</span> {formatDateTime(task.updated_at)}
+              </div>
+
+              <button
+                onClick={() => setExpandedTaskId(null)}
+                className="shrink-0 px-3 py-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 text-xs font-semibold text-violet-300 hover:bg-violet-500/20"
+              >
+                Collapse
+              </button>
             </div>
 
             <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
@@ -449,10 +491,11 @@ export default function TaskboardViewerPage() {
               )}
             </div>
           </div>
-        )}
+        </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   if (loadingPage) {
     return (
@@ -759,14 +802,14 @@ export default function TaskboardViewerPage() {
                           </td>
                           <td className="p-3 text-sm text-gray-300">{commentCount}</td>
                           <td className="p-3">
-                            <button
-                              onClick={() =>
-                                setExpandedTaskId(isExpanded ? null : task.id)
-                              }
-                              className="px-3 py-1 rounded-lg border border-violet-500/30 text-xs text-violet-300 hover:bg-violet-500/10"
-                            >
-                              {isExpanded ? "Collapse" : "Expand"}
-                            </button>
+                            {!isExpanded && (
+                              <button
+                                onClick={() => setExpandedTaskId(task.id)}
+                                className="px-3 py-1 rounded-lg border border-violet-500/30 text-xs text-violet-300 hover:bg-violet-500/10"
+                              >
+                                Expand
+                              </button>
+                            )}
                           </td>
                         </tr>,
                       ];
@@ -779,26 +822,35 @@ export default function TaskboardViewerPage() {
                           >
                             <td colSpan={8} className="p-4">
                               <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                                <div className="mb-4 flex flex-wrap gap-2">
-                                  {task.label && (
-                                    <span
-                                      className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getLabelStyle(task.label)}`}
-                                    >
-                                      {task.label}
-                                    </span>
-                                  )}
+                                <div className="mb-4 flex items-start justify-between gap-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    {task.label && (
+                                      <span
+                                        className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getLabelStyle(task.label)}`}
+                                      >
+                                        {task.label}
+                                      </span>
+                                    )}
 
-                                  {overdue && (
-                                    <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-500/30 bg-red-500/15 text-red-300">
-                                      Overdue
-                                    </span>
-                                  )}
+                                    {overdue && (
+                                      <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-500/30 bg-red-500/15 text-red-300">
+                                        Overdue
+                                      </span>
+                                    )}
 
-                                  {!overdue && dueToday && (
-                                    <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-amber-500/30 bg-amber-500/15 text-amber-300">
-                                      Due Today
-                                    </span>
-                                  )}
+                                    {!overdue && dueToday && (
+                                      <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-amber-500/30 bg-amber-500/15 text-amber-300">
+                                        Due Today
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <button
+                                    onClick={() => setExpandedTaskId(null)}
+                                    className="shrink-0 px-3 py-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 text-xs font-semibold text-violet-300 hover:bg-violet-500/20"
+                                  >
+                                    Collapse
+                                  </button>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm text-gray-300 mb-4">

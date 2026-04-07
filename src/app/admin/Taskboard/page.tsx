@@ -118,7 +118,6 @@ export default function TaskboardPage() {
         router.replace("/Task-Viewer");
         return;
       }
-      
 
       setUserId(user.id);
 
@@ -1184,16 +1183,20 @@ export default function TaskboardPage() {
                   filteredTasks
                     .slice()
                     .sort((a, b) => {
-                      const statusOrder = columns.findIndex((c) => c.key === a.status) - columns.findIndex((c) => c.key === b.status);
+                      const statusOrder =
+                        columns.findIndex((c) => c.key === a.status) -
+                        columns.findIndex((c) => c.key === b.status);
                       if (statusOrder !== 0) return statusOrder;
                       return a.position - b.position;
                     })
-                    .map((task) => {
+                    .flatMap((task) => {
                       const commentCount = commentsByTask[task.id]?.length || 0;
                       const overdue = isOverdue(task);
                       const dueToday = isDueToday(task);
+                      const isExpanded = expandedTaskId === task.id;
+                      const taskComments = commentsByTask[task.id] || [];
 
-                      return (
+                      const rows = [
                         <tr
                           key={task.id}
                           className="border-b border-white/5 hover:bg-white/5 transition"
@@ -1254,30 +1257,180 @@ export default function TaskboardPage() {
                               </button>
                               <button
                                 onClick={() =>
-                                  setExpandedTaskId(expandedTaskId === task.id ? null : task.id)
+                                  setExpandedTaskId(isExpanded ? null : task.id)
                                 }
                                 className="px-3 py-1 rounded-lg border border-violet-500/30 text-xs text-violet-300 hover:bg-violet-500/10"
                               >
-                                {expandedTaskId === task.id ? "Collapse" : "Expand"}
+                                {isExpanded ? "Collapse" : "Expand"}
                               </button>
                             </div>
                           </td>
-                        </tr>
-                      );
+                        </tr>,
+                      ];
+
+                      if (isExpanded) {
+                        rows.push(
+                          <tr
+                            key={`${task.id}-expanded`}
+                            className="border-b border-white/10 bg-white/[0.03]"
+                          >
+                            <td colSpan={8} className="p-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                                <div className="mb-4 flex flex-wrap gap-2">
+                                  {task.label && (
+                                    <span
+                                      className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getLabelStyle(task.label)}`}
+                                    >
+                                      {task.label}
+                                    </span>
+                                  )}
+
+                                  {overdue && (
+                                    <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-500/30 bg-red-500/15 text-red-300">
+                                      Overdue
+                                    </span>
+                                  )}
+
+                                  {!overdue && dueToday && (
+                                    <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-amber-500/30 bg-amber-500/15 text-amber-300">
+                                      Due Today
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm text-gray-300 mb-4">
+                                  <div>
+                                    <span className="text-[#00ff66]">Assigned:</span>{" "}
+                                    {getProfileName(task.assigned_to)}
+                                  </div>
+                                  <div>
+                                    <span className="text-[#00ff66]">Due:</span>{" "}
+                                    {formatDate(task.due_date)}
+                                  </div>
+                                  <div>
+                                    <span className="text-[#00ff66]">Status:</span>{" "}
+                                    {columns.find((c) => c.key === task.status)?.label}
+                                  </div>
+                                  <div>
+                                    <span className="text-[#00ff66]">Updated:</span>{" "}
+                                    {formatDateTime(task.updated_at)}
+                                  </div>
+                                </div>
+
+                                {task.description && (
+                                  <div className="mb-4 rounded-xl border border-white/10 bg-black/30 p-3">
+                                    <div className="text-[11px] uppercase tracking-wide text-cyan-300 mb-1">
+                                      Description
+                                    </div>
+                                    <div className="text-sm text-gray-300 whitespace-pre-wrap">
+                                      {task.description}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="mb-4">
+                                  <div className="text-[11px] uppercase tracking-wide text-violet-300 mb-2">
+                                    Comments ({taskComments.length})
+                                  </div>
+
+                                  <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
+                                    {taskComments.length === 0 ? (
+                                      <div className="text-sm text-gray-500">No comments yet</div>
+                                    ) : (
+                                      taskComments.map((comment) => (
+                                        <div
+                                          key={comment.id}
+                                          className="rounded-xl border border-white/10 bg-black/40 p-3"
+                                        >
+                                          <div className="text-xs text-[#00ff66] mb-1">
+                                            {comment.profiles?.display_name || "Unknown"} •{" "}
+                                            {formatDateTime(comment.created_at)}
+                                          </div>
+                                          <div className="text-sm text-gray-300 whitespace-pre-wrap">
+                                            {comment.content}
+                                          </div>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <textarea
+                                    value={newComment[task.id] || ""}
+                                    onChange={(e) =>
+                                      setNewComment((prev) => ({
+                                        ...prev,
+                                        [task.id]: e.target.value,
+                                      }))
+                                    }
+                                    rows={3}
+                                    placeholder="Add comment..."
+                                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-[#00ff66]/20 text-white focus:outline-none focus:ring-2 focus:ring-[#00ff66]/30 resize-none"
+                                  />
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      onClick={() => addComment(task.id)}
+                                      className="px-3 py-2 rounded-lg border border-[#00ff66]/30 text-sm text-[#00ff66] hover:bg-[#00ff66]/10"
+                                    >
+                                      Add Comment
+                                    </button>
+
+                                    {task.status !== "todo" && (
+                                      <button
+                                        onClick={() => moveTaskToStatus(task.id, "todo")}
+                                        className="px-3 py-2 rounded-lg border border-cyan-500/30 text-sm text-cyan-300 hover:bg-cyan-500/10"
+                                      >
+                                        To Do
+                                      </button>
+                                    )}
+
+                                    {task.status !== "in_progress" && (
+                                      <button
+                                        onClick={() => moveTaskToStatus(task.id, "in_progress")}
+                                        className="px-3 py-2 rounded-lg border border-blue-500/30 text-sm text-blue-300 hover:bg-blue-500/10"
+                                      >
+                                        In Progress
+                                      </button>
+                                    )}
+
+                                    {task.status !== "review" && (
+                                      <button
+                                        onClick={() => moveTaskToStatus(task.id, "review")}
+                                        className="px-3 py-2 rounded-lg border border-amber-500/30 text-sm text-amber-300 hover:bg-amber-500/10"
+                                      >
+                                        Review
+                                      </button>
+                                    )}
+
+                                    {task.status !== "done" && (
+                                      <button
+                                        onClick={() => moveTaskToStatus(task.id, "done")}
+                                        className="px-3 py-2 rounded-lg border border-emerald-500/30 text-sm text-emerald-300 hover:bg-emerald-500/10"
+                                      >
+                                        Done
+                                      </button>
+                                    )}
+
+                                    <button
+                                      onClick={() => deleteTask(task.id)}
+                                      className="px-3 py-2 rounded-lg border border-red-500/30 text-sm text-red-400 hover:bg-red-500/10"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return rows;
                     })
                 )}
               </tbody>
             </table>
-
-            {expandedTaskId && (
-              <div className="mt-6">
-                {filteredTasks
-                  .filter((task) => task.id === expandedTaskId)
-                  .map((task) => (
-                    <div key={task.id}>{renderTaskCard(task)}</div>
-                  ))}
-              </div>
-            )}
           </div>
         )}
       </div>

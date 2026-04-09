@@ -133,6 +133,11 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "nco", "trainer"],
         },
         {
+          href: "/CIS-Logi",
+          label: "CIS Logistics",
+          allowedRoles: ["logistics", "Akhari"],
+        },
+        {
           href: "/GC-Logi",
           label: "GC Logistics",
           allowedRoles: ["Akhari", "logistics", "admin"],

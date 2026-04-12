@@ -700,66 +700,66 @@ const formatHighlightText = (row: AuditHighlight) => {
             </div>
 
             <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
-              <button
-                onClick={() => setHighlightsOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between px-4 py-4 hover:bg-black/40 transition-all"
-              >
-                <span className="text-base text-[#00ff66] tracking-[0.2em] uppercase">
-                  Today&apos;s Commendations
-                </span>
-                <span
-                  className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
-                    highlightsOpen ? "rotate-180" : "rotate-0"
-                  }`}
-                >
-                  ▼
-                </span>
-              </button>
+  <button
+    onClick={() => setHighlightsOpen((prev) => !prev)}
+    className="w-full flex items-center justify-between px-4 py-4 hover:bg-black/40 transition-all"
+  >
+    <span className="text-base text-[#00ff66] tracking-[0.2em] uppercase">
+      Today&apos;s Commendations
+    </span>
+    <span
+      className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
+        highlightsOpen ? "rotate-180" : "rotate-0"
+      }`}
+    >
+      ▼
+    </span>
+  </button>
 
-              <div
-                className={`overflow-hidden transition-all duration-500 ${
-                  highlightsOpen
-                    ? "max-h-[1000px] opacity-100"
-                    : "max-h-0 opacity-0"
-                }`}
-              >
-                <div className="px-4 pb-4">
-                  {loadingHighlights ? (
-                    <div className="text-center text-gray-400 py-6 animate-pulse">
-                      Loading today&apos;s commendations...
-                    </div>
-                  ) : dailyHighlights.length === 0 ? (
-                    <div className="text-sm text-gray-400 py-4">
-                      No promotions or certifications logged today yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {dailyHighlights.map((item) => (
-                        <div
-                          key={item.id}
-                          className="rounded-xl border border-[#00ff66]/20 bg-black/55 p-4"
-                        >
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
-                            {formatHighlightTitle(item)}
-                          </div>
+  <div
+    className={`overflow-hidden transition-all duration-500 ${
+      highlightsOpen
+        ? "max-h-[420px] opacity-100"
+        : "max-h-0 opacity-0"
+    }`}
+  >
+    <div className="px-4 pb-4 max-h-[360px] overflow-y-auto pr-2">
+      {loadingHighlights ? (
+        <div className="text-center text-gray-400 py-6 animate-pulse">
+          Loading today&apos;s commendations...
+        </div>
+      ) : dailyHighlights.length === 0 ? (
+        <div className="text-sm text-gray-400 py-4">
+          No promotions or certifications logged today yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {dailyHighlights.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-xl border border-[#00ff66]/20 bg-black/55 p-4"
+            >
+              <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
+                {formatHighlightTitle(item)}
+              </div>
 
-                          <div className="mt-2 text-sm text-white leading-relaxed">
-                            {formatHighlightText(item)}
-                          </div>
+              <div className="mt-2 text-sm text-white leading-relaxed">
+                {formatHighlightText(item)}
+              </div>
 
-                          <div className="mt-3 text-[11px] text-gray-500">
-                            {new Date(item.created_at).toLocaleTimeString([], {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              <div className="mt-3 text-[11px] text-gray-500">
+                {new Date(item.created_at).toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
               </div>
             </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+</div>
           </div>
         </div>
 

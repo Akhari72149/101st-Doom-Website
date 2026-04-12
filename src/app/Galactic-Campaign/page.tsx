@@ -1,176 +1,192 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-/* ================= PHASE CONFIG ================= */
+type ObjectiveStatus = "complete" | "active" | "pending";
 
-const initialPhases = [
+type Objective = {
+  id: string;
+  name: string;
+  status: ObjectiveStatus;
+};
+
+type Phase = {
+  id: number;
+  name: string;
+  codename: string;
+  description: string;
+  objectives: Objective[];
+};
+
+type LoreKey = "planet" | "philosophy" | "enemy";
+
+type Star = {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  speed: number;
+};
+
+const phases: Phase[] = [
   {
     id: 1,
     name: "Phase 1 — Moon Securing",
+    codename: "ORBITAL DOMINANCE",
     description:
-      "Secure Triton and Oberon to establish orbital dominance.",
+      "Secure Triton and Oberon to establish orbital superiority and staging control.",
     objectives: [
-      { id: "t1", name: "Triton: Secure Guns - Secured by Dagger 02/28/2026", complete: true },
-      { id: "t2", name: "Triton: Secure Shipyard", complete: false },
-      { id: "o1", name: "Oberon: Secure Radar Facilities", complete: false },
-      { id: "o2", name: "Oberon: Secure Supply Depots", complete: false },
+      {
+        id: "t1",
+        name: "Triton: Secure Guns — Secured by Dagger 02/28/2026",
+        status: "complete",
+      },
+      {
+        id: "t2",
+        name: "Triton: Secure Shipyard",
+        status: "complete",
+      },
+      {
+        id: "o1",
+        name: "Oberon: Secure Radar Facilities",
+        status: "pending",
+      },
+      {
+        id: "o2",
+        name: "Oberon: Secure Supply Depots",
+        status: "pending",
+      },
     ],
   },
   {
     id: 2,
     name: "Phase 2 — Industrial Collapse",
+    codename: "BROKEN FORGE",
     description:
-      "Destroy droid factories and capture mining infrastructure.",
+      "Destroy droid production chains and seize critical mining infrastructure.",
     objectives: [
-      { id: "f1", name: "Destroy Droid Factories", complete: false },
-      { id: "m1", name: "Capture Mining Operations", complete: false },
+      {
+        id: "f1",
+        name: "Destroy Droid Factories",
+        status: "pending",
+      },
+      {
+        id: "m1",
+        name: "Capture Mining Operations",
+        status: "pending",
+      },
     ],
   },
   {
     id: 3,
     name: "Phase 3 — Population Control",
+    codename: "IRON QUIET",
     description:
-      "Subdue corporate security and civilian militia resistance.",
+      "Crush organized resistance from security contractors and civilian militia elements.",
     objectives: [
-      { id: "s1", name: "Neutralize Security Corporation", complete: false },
-      { id: "c1", name: "Suppress Civilian Militia", complete: false },
+      {
+        id: "s1",
+        name: "Neutralize Security Corporation",
+        status: "pending",
+      },
+      {
+        id: "c1",
+        name: "Suppress Civilian Militia",
+        status: "pending",
+      },
     ],
+  },
+];
+
+const timelineEntries = [
+  {
+    id: 1,
+    date: "Complete",
+    title: "Triton Guns Secured",
+    detail: "Dagger established control over orbital artillery positions.",
+    tone: "success",
+  },
+  {
+    id: 2,
+    date: "Complete",
+    title: "Triton Shipyard Assault Pending",
+    detail: "Fleet command awaiting final strike window confirmation.",
+    tone: "success",
+  },
+  {
+    id: 3,
+    date: "UPCOMING",
+    title: "Oberon Radar Strike",
+    detail: "Recon indicates radar disruption is required before major insertion.",
+    tone: "pending",
+  },
+] as const;
+
+const alerts = [
+  {
+    id: 1,
+    label: "WARNING",
+    text: "Enemy militia resistance expected to intensify on Oberon.",
+    color: "text-yellow-300 border-yellow-500/40 bg-yellow-500/10",
   },
 ];
 
 export default function GalacticCampaignPage() {
   const router = useRouter();
 
-  const [phases] = useState(initialPhases);
   const [activePhase, setActivePhase] = useState(1);
-
-  /* ================= CINEMATIC INTRO ================= */
-
   const [showIntro, setShowIntro] = useState(true);
+  const [cloneDisplay, setCloneDisplay] = useState(0);
+  const [droidDisplay, setDroidDisplay] = useState(0);
+  const [openLore, setOpenLore] = useState<LoreKey | null>(null);
+  const [stars, setStars] = useState<Star[]>([]);
+
+  const cloneTarget = 670;
+  const droidTarget = 25210;
+  const powCount = 0;
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowIntro(false);
     }, 1500);
+
     return () => clearTimeout(timer);
   }, []);
-
-  /* ================= ANIMATED MILITARY COUNTERS ================= */
-
-  const cloneTarget = 670;
-  const droidTarget = 25210;
-
-  const [cloneDisplay, setCloneDisplay] = useState(0);
-  const [droidDisplay, setDroidDisplay] = useState(0);
-  const [cloneShake, setCloneShake] = useState(false);
-  const [droidShake, setDroidShake] = useState(false);
-  const [sideOpOpen, setSideOpOpen] = useState(false);
-  const [landfallOpen, setLandfallOpen] = useState(false);
-  const powCount = 2;
-  const [extractionOpen, setExtractionOpen] = useState(false);
-
-  const animateCounter = (
-    target: number,
-    setValue: React.Dispatch<React.SetStateAction<number>>,
-    triggerShake: React.Dispatch<React.SetStateAction<boolean>>
-  ) => {
-    let current = 0;
-
-    const interval = setInterval(() => {
-      const step = Math.max(1, Math.floor(target * 0.01));
-      current += step;
-
-      if (current >= target) {
-        current = target;
-        setValue(current);
-        triggerShake(true);
-        setTimeout(() => triggerShake(false), 300);
-        clearInterval(interval);
-        return;
-      }
-
-      setValue(current);
-    }, 80);
-  };
 
   useEffect(() => {
     if (showIntro) return;
 
-    animateCounter(cloneTarget, setCloneDisplay, setCloneShake);
-    animateCounter(droidTarget, setDroidDisplay, setDroidShake);
+    const animateCounter = (
+      target: number,
+      setValue: React.Dispatch<React.SetStateAction<number>>
+    ) => {
+      let current = 0;
+
+      const interval = setInterval(() => {
+        const step = Math.max(1, Math.floor(target * 0.01));
+        current += step;
+
+        if (current >= target) {
+          setValue(target);
+          clearInterval(interval);
+          return;
+        }
+
+        setValue(current);
+      }, 40);
+
+      return interval;
+    };
+
+    const cloneInterval = animateCounter(cloneTarget, setCloneDisplay);
+    const droidInterval = animateCounter(droidTarget, setDroidDisplay);
+
+    return () => {
+      if (cloneInterval) clearInterval(cloneInterval);
+      if (droidInterval) clearInterval(droidInterval);
+    };
   }, [showIntro]);
-
-  /* ================= SIDE OP COUNTDOWN ================= */
-
-  
-
-  const [timeLeft, setTimeLeft] = useState("Loading...");
-  const [isActive, setIsActive] = useState(false);
-
-  useEffect(() => {
-  const interval = setInterval(() => {
-    const diff = SIDE_OP_TARGET.getTime() - Date.now();
-
-    if (diff <= 0) {
-      setIsActive(true);
-      setTimeLeft("00:00:00");
-      return;
-    }
-
-    const h = Math.floor(diff / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    const s = Math.floor((diff % 60000) / 1000);
-
-    setTimeLeft(
-      `${String(h).padStart(2, "0")}:${String(m).padStart(
-        2,
-        "0"
-      )}:${String(s).padStart(2, "0")}`
-    );
-  }, 1000);
-
-  return () => clearInterval(interval);
-}, []);
-
-  /* ================= FIXED EVENT TIME ================= */
-
-const SIDE_OP_TARGET = new Date("2026-02-27T00:00:00Z");  
-const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
-
- 
-
-  const [landfallTime, setLandfallTime] = useState("Loading...");
-  const [landfallActive, setLandfallActive] = useState(false);
-
-  useEffect(() => {
-  const interval = setInterval(() => {
-    const diff = LANDFALL_TARGET.getTime() - Date.now();
-
-    if (diff <= 0) {
-      setLandfallActive(true);
-      setLandfallTime("00:00:00");
-      return;
-    }
-
-    const h = Math.floor(diff / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    const s = Math.floor((diff % 60000) / 1000);
-
-    setLandfallTime(
-      `${String(h).padStart(2, "0")}:${String(m).padStart(
-        2,
-        "0"
-      )}:${String(s).padStart(2, "0")}`
-    );
-  }, 1000);
-
-  return () => clearInterval(interval);
-}, []);
-  /* ================= STARFIELD ================= */
-
-  const [stars, setStars] = useState<any[]>([]);
 
   useEffect(() => {
     const generated = Array.from({ length: 120 }).map((_, i) => ({
@@ -180,6 +196,7 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
       size: Math.random() * 2 + 1,
       speed: Math.random() * 0.05 + 0.02,
     }));
+
     setStars(generated);
   }, []);
 
@@ -192,77 +209,76 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
         }))
       );
     }, 16);
+
     return () => clearInterval(interval);
   }, []);
 
-  /* ================= PHASE LOCK LOGIC (UPDATED ONLY) ================= */
-
-  const phase1Complete = phases[0]?.objectives.every(
-    (o: any) => o.complete
+  const phase1Complete = phases[0].objectives.every(
+    (objective) => objective.status === "complete"
   );
 
-  const phase2Complete = phases[1]?.objectives.every(
-    (o: any) => o.complete
+  const phase2Complete = phases[1].objectives.every(
+    (objective) => objective.status === "complete"
   );
 
-  /* ================= METRICS ================= */
-
-  const totalObjectives = phases.reduce(
-    (acc, phase) => acc + phase.objectives.length,
-    0
+  const totalObjectives = useMemo(
+    () => phases.reduce((acc, phase) => acc + phase.objectives.length, 0),
+    []
   );
 
-  const completedObjectives = phases.reduce(
-    (acc, phase) =>
-      acc + phase.objectives.filter((o) => o.complete).length,
-    0
+  const completedObjectives = useMemo(
+    () =>
+      phases.reduce(
+        (acc, phase) =>
+          acc +
+          phase.objectives.filter((objective) => objective.status === "complete")
+            .length,
+        0
+      ),
+    []
   );
 
-  const planetControl = Math.floor(
+  const activeObjectives = useMemo(
+    () =>
+      phases.reduce(
+        (acc, phase) =>
+          acc +
+          phase.objectives.filter((objective) => objective.status === "active")
+            .length,
+        0
+      ),
+    []
+  );
+
+  const campaignCompletion = Math.floor(
     (completedObjectives / totalObjectives) * 100
   );
 
-  const enemyStrength = 100 - planetControl;
+  const enemyStrength = 100 - campaignCompletion;
+  const currentPhase = phases.find((phase) => phase.id === activePhase)!;
 
-  const currentPhase = phases.find((p) => p.id === activePhase)!;
-
-  /* ================= LORE ================= */
-
-  const [openLore, setOpenLore] = useState<string | null>(null);
-
-  const toggleLore = (section: string) => {
+  const toggleLore = (section: LoreKey) => {
     setOpenLore(openLore === section ? null : section);
   };
-  
-
-  /* ================= UI ================= */
 
   return (
-    <div className="relative min-h-screen text-white font-orbitron overflow-hidden">
-
-      {/* CINEMATIC INTRO */}
+    <div className="relative min-h-screen overflow-hidden bg-black font-orbitron text-white">
       <div
-        className={`absolute inset-0 flex items-center justify-center z-50 bg-black transition-opacity duration-1000 ${
-          showIntro ? "opacity-100" : "opacity-0 pointer-events-none"
+        className={`absolute inset-0 z-50 flex items-center justify-center bg-black transition-opacity duration-1000 ${
+          showIntro ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <div className="text-center animate-pulse">
-          <h1 className="text-4xl md:text-6xl text-[#00ff66] font-bold tracking-widest mb-6">
+        <div className="animate-pulse text-center">
+          <h1 className="mb-6 text-4xl font-bold tracking-widest text-[#00ff66] md:text-6xl">
             REPUBLIC MILITARY COMMAND
           </h1>
-          <p className="text-xl text-yellow-400 mb-2">
-            OPERATION: YOABOS
-          </p>
-          <p className="text-m text-red-500">
-            Clearance Level: High Command
-          </p>
+          <p className="mb-2 text-xl text-yellow-400">OPERATION: YOABOS</p>
+          <p className="text-red-500">Clearance Level: High Command</p>
         </div>
       </div>
 
-      {/* BACKGROUND */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_50%,#000000_100%)]" />
 
-      {/* STARFIELD */}
       <div className="absolute inset-0 pointer-events-none">
         {stars.map((star) => (
           <div
@@ -274,7 +290,7 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
               width: star.size,
               height: star.size,
               background: "#00ff66",
-              borderRadius: "50%",
+              borderRadius: "9999px",
               opacity: 0.7,
               boxShadow: "0 0 6px #00ff66",
             }}
@@ -282,244 +298,371 @@ const LANDFALL_TARGET = new Date("2026-02-28T00:00:00Z");
         ))}
       </div>
 
-      <div className="relative z-10 flex">
-        <div className="flex-1 p-10 space-y-10">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,102,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.04)_1px,transparent_1px)] bg-[size:38px_38px] opacity-20" />
 
-          <button
-            onClick={() => router.push("/")}
-            className="px-4 py-2 border border-[#00ff66] text-[#00ff66]"
-          >
-            ← Back
-          </button>
+      <div className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
+        <div className="mb-6 rounded-2xl border border-[#00ff66]/30 bg-black/50 p-3 backdrop-blur-md">
+          <div className="flex flex-col gap-3 md:flex-row md:flex-wrap">
+            <button
+              onClick={() => router.push("/")}
+              className="rounded-xl border border-[#00ff66]/40 px-4 py-3 text-sm font-semibold tracking-wider text-[#00ff66] transition-all duration-200 hover:scale-[1.02] hover:bg-[#00ff66]/10"
+            >
+              ← RETURN TO COMMAND
+            </button>
 
-          <button
-            onClick={() => router.push("/GC-Logi")}
-            className="px-4 py-2 border border-[#00ff66] text-[#00ff66] hover:scale-105 transition-all duration-200"
-          >
-          GC Logistics Hub
-          </button>
+            <button
+              onClick={() => router.push("/GC-Logi")}
+              className="rounded-xl border border-[#00ff66]/40 px-4 py-3 text-sm font-semibold tracking-wider text-[#00ff66] transition-all duration-200 hover:scale-[1.02] hover:bg-[#00ff66]/10"
+            >
+              GC LOGISTICS HUB
+            </button>
 
-          <button
-  onClick={() => router.push("/vault")}
-  className="px-6 py-3 border border-purple-500 text-purple-400 
-             hover:bg-purple-500/20 hover:scale-105 
-             transition-all duration-300 
-             shadow-[0_0_15px_rgba(128,0,255,0.4)]
-             font-bold tracking-widest"
->
-  📁 ENTER WAR ARCHIVE
-</button>
+            <button
+              onClick={() => router.push("/vault")}
+              className="rounded-xl border border-purple-500/40 px-4 py-3 text-sm font-semibold tracking-wider text-purple-300 transition-all duration-200 hover:scale-[1.02] hover:bg-purple-500/10"
+            >
+              📁 ENTER WAR ARCHIVE
+            </button>
 
-          <h1 className="text-5xl text-red-500 font-bold">
-               Planetfall Imminent - Prepare for War
-          </h1>
-
-
-{/* ================= EXTRACTION OPERATION TEASER ================= */}
-
-<div className="border border-yellow-500/40 bg-black/50 rounded-2xl overflow-hidden">
-
-  <button
-    onClick={() => setExtractionOpen(!extractionOpen)}
-    className="w-full flex justify-between items-center p-6 hover:bg-yellow-500/10 transition"
-  >
-    <div className="text-left">
-      <h2 className="text-2xl text-yellow-400 font-bold">
-        🟡 OPERATION: RETRIBUTION
-      </h2>
-
-      <div className="mt-1">
-        <span className="text-sm text-yellow-300">
-          Classified Recovery Mission
-        </span>
-
-        <div className="text-xl text-yellow-400 font-mono">
-          STATUS: PLANNING PHASE
-        </div>
-      </div>
-    </div>
-
-    <span className="text-xl text-yellow-400">
-      {extractionOpen ? "▲" : "▼"}
-    </span>
-  </button>
-
-  <div
-    className={`
-      overflow-hidden transition-all duration-500
-      ${extractionOpen ? "max-h-[2000px] opacity-100 p-6" : "max-h-0 opacity-0"}
-    `}
-  >
-    <div className="text-sm text-gray-300 leading-relaxed space-y-4">
-
-      <p className="text-yellow-400 font-semibold">
-        Republic High Command has confirmed two captured personnel.
-      </p>
-
-      <p>
-        Intelligence reports indicate they are being held at a
-        fortified detention complex deep within hostile territory.
-      </p>
-
-      <p>
-        Recon teams are gathering surveillance data.
-        A precision strike team will be assembled.
-      </p>
-
-      <p className="text-red-400 font-semibold">
-        Failure is not an option.
-      </p>
-
-    </div>
-  </div>
-</div>
-
-
-
-{/* ================= C2 LANDFALL — COMPLETED ================= */}
-
-
-
-          {/* PHASES (LOCKED LOGIC ONLY CHANGED) */}
-          <div className="flex gap-4">
-            {phases.map((phase) => {
-              const isLocked =
-                (phase.id === 2 && !phase1Complete) ||
-                (phase.id === 3 &&
-                  !(phase1Complete && phase2Complete));
-
-              return (
-                <button
-                  key={phase.id}
-                  disabled={isLocked}
-                  onClick={() =>
-                    !isLocked && setActivePhase(phase.id)
-                  }
-                  className={`px-4 py-2 border transition-all duration-200 ${
-                    activePhase === phase.id
-                      ? "bg-[#00ff66] text-black"
-                      : "border-[#00ff66] text-[#00ff66]"
-                  } ${
-                    isLocked
-                      ? "opacity-30 cursor-not-allowed"
-                      : "hover:scale-105"
-                  }`}
-                >
-                  Phase {phase.id}
-                  {isLocked && " 🔒"}
-                </button>
-              );
-            })}
+            <div className="md:ml-auto flex items-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold tracking-widest text-red-300">
+              THEATRE STATUS: PLANETFALL IMMINENT
+            </div>
           </div>
+        </div>
 
-          {/* CURRENT PHASE */}
-          <div>
-            <h2 className="text-2xl text-[#00ff66]">
-              {currentPhase.name}
-            </h2>
-            <p className="mb-4">{currentPhase.description}</p>
+        <div className="grid gap-6 xl:grid-cols-[1.55fr_0.8fr]">
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-[#00ff66]/30 bg-black/45 p-6 shadow-[0_0_30px_rgba(0,255,102,0.08)] backdrop-blur-md">
+              <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
+                <div>
+                  <div className="mb-3 inline-flex rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs font-bold tracking-[0.25em] text-red-300">
+                    HIGH COMMAND PRIORITY
+                  </div>
 
-            {currentPhase.objectives.map((obj) => (
-              <div
-                key={obj.id}
-                className="border border-[#00ff66]/40 p-3 rounded mb-2 bg-black/30"
-              >
-                <span
-                  className={
-                    obj.complete ? "line-through text-green-400" : ""
-                  }
-                >
-                  {obj.name}
-                </span>
+                  <h1 className="mb-3 text-4xl font-bold text-red-500 md:text-5xl">
+                    Operation: Yoabos
+                  </h1>
+
+                  <p className="max-w-3xl text-sm leading-7 text-gray-300 md:text-base">
+                    Republic forces are entering the decisive opening phase of
+                    the Yoabos campaign. Orbital staging, industrial denial, and
+                    population suppression remain the three pillars of total
+                    control.
+                  </p>
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MetricCard
+                      label="Current Phase"
+                      value={`Phase ${activePhase}`}
+                      subtext={currentPhase.codename}
+                      tone="green"
+                    />
+                    <MetricCard
+                      label="Campaign Completion"
+                      value={`${campaignCompletion}%`}
+                      subtext={`${completedObjectives}/${totalObjectives} objectives complete`}
+                      tone="green"
+                    />
+                    <MetricCard
+                      label="Active Tasks"
+                      value={String(activeObjectives)}
+                      subtext="Immediate operational priority"
+                      tone="yellow"
+                    />
+                    <MetricCard
+                      label="Enemy Pressure"
+                      value={`${enemyStrength}%`}
+                      subtext="Residual hostile capability"
+                      tone="red"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#00ff66]/20 bg-black/50 p-5">
+                  <h2 className="mb-4 text-lg font-bold tracking-widest text-[#00ff66]">
+                    COMMAND SUMMARY
+                  </h2>
+
+                  <div className="space-y-4 text-sm">
+                    <SummaryRow
+                      label="Primary Objective"
+                      value="Secure Final Areas on Triton"
+                    />
+                    <SummaryRow
+                      label="Threat Outlook"
+                      value="Severe but manageable"
+                    />
+                    <SummaryRow
+                      label="Enemy Composition"
+                      value="CIS, corporate security, militia"
+                    />
+                    <SummaryRow
+                      label="Recommended Action"
+                      value="Maintain pressure before reinforcement window"
+                    />
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-200">
+                    Command directive: secure orbital control before committing
+                    mass landfall resources.
+                  </div>
+                </div>
               </div>
-            ))}
+            </section>
+
+            <section className="grid gap-3">
+              {alerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`rounded-2xl border p-4 text-sm tracking-wide ${alert.color}`}
+                >
+                  <span className="mr-2 font-bold">{alert.label}:</span>
+                  {alert.text}
+                </div>
+              ))}
+            </section>
+
+            <section className="rounded-3xl border border-[#00ff66]/30 bg-black/45 p-6 backdrop-blur-md">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-[#00ff66]">
+                    Phase Overview
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-400">
+                    Select a campaign phase to review current objectives and
+                    campaign progression.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                {phases.map((phase) => {
+                  const isLocked =
+                    (phase.id === 2 && !phase1Complete) ||
+                    (phase.id === 3 && !(phase1Complete && phase2Complete));
+
+                  const phaseCompleted =
+                    phase.objectives.filter((objective) => objective.status === "complete")
+                      .length;
+                  const phasePercent = Math.floor(
+                    (phaseCompleted / phase.objectives.length) * 100
+                  );
+
+                  return (
+                    <button
+                      key={phase.id}
+                      disabled={isLocked}
+                      onClick={() => !isLocked && setActivePhase(phase.id)}
+                      className={`rounded-2xl border p-4 text-left transition-all duration-200 ${
+                        activePhase === phase.id
+                          ? "border-[#00ff66] bg-[#00ff66]/10 shadow-[0_0_24px_rgba(0,255,102,0.18)]"
+                          : "border-[#00ff66]/20 bg-black/40"
+                      } ${
+                        isLocked
+                          ? "cursor-not-allowed opacity-35"
+                          : "hover:scale-[1.02] hover:border-[#00ff66]/60 hover:bg-[#00ff66]/5"
+                      }`}
+                    >
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold tracking-[0.25em] text-gray-400">
+                            PHASE {phase.id}
+                          </div>
+                          <h3 className="mt-1 text-lg font-bold text-white">
+                            {phase.codename}
+                          </h3>
+                        </div>
+                        <div className="text-lg">
+                          {isLocked ? "🔒" : activePhase === phase.id ? "●" : "○"}
+                        </div>
+                      </div>
+
+                      <p className="mb-3 text-sm text-gray-300">{phase.name}</p>
+
+                      <div className="mb-2 h-2 w-full rounded-full bg-gray-800">
+                        <div
+                          className="h-2 rounded-full bg-[#00ff66]"
+                          style={{ width: `${phasePercent}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-gray-400">
+                        <span>{phaseCompleted}/{phase.objectives.length} complete</span>
+                        <span>{phasePercent}%</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-[#00ff66]/30 bg-black/45 p-6 backdrop-blur-md">
+              <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-[#00ff66]">
+                    {currentPhase.name}
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-400">
+                    {currentPhase.description}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[#00ff66]/20 bg-black/50 px-4 py-2 text-xs tracking-[0.2em] text-[#00ff66]">
+                  {currentPhase.codename}
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                {currentPhase.objectives.map((objective) => (
+                  <ObjectiveCard key={objective.id} objective={objective} />
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-[#00ff66]/30 bg-black/45 p-6 backdrop-blur-md">
+              <h2 className="mb-5 text-2xl font-bold text-[#00ff66]">
+                Campaign Timeline
+              </h2>
+
+              <div className="space-y-4">
+                {timelineEntries.map((entry, index) => (
+                  <div key={entry.id} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className={`mt-1 h-3 w-3 rounded-full ${
+                          entry.tone === "success"
+                            ? "bg-green-400 shadow-[0_0_12px_rgba(74,222,128,0.8)]"
+                            : entry.tone === "pending"
+                            ? "bg-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.8)]"
+                            : "bg-[#00ff66] shadow-[0_0_12px_rgba(0,255,102,0.8)]"
+                        }`}
+                      />
+                      {index < timelineEntries.length - 1 && (
+                        <div className="mt-2 h-full w-px bg-[#00ff66]/20" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 rounded-2xl border border-[#00ff66]/20 bg-black/40 p-4">
+                      <div className="mb-1 text-xs font-bold tracking-[0.25em] text-gray-400">
+                        {entry.date}
+                      </div>
+                      <h3 className="text-lg font-semibold text-white">
+                        {entry.title}
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-300">{entry.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-5 rounded-3xl border border-[#00ff66]/30 bg-black/45 p-6 backdrop-blur-md">
+              <h2 className="text-2xl font-bold text-[#00ff66]">
+                Intelligence Dossiers
+              </h2>
+
+              <LoreSection
+                title="Planet Lore — Yoabos"
+                meta="Source: Republic Intelligence // Sector: Mid Rim // Classification: Strategic"
+                isOpen={openLore === "planet"}
+                onClick={() => toggleLore("planet")}
+              >
+                Yoabos was once a major raw material processing world aligned
+                with corporate interests and CIS logistics. Positioned along the
+                Mid-Rim trade corridor, it evolved into a strategic military and
+                economic hub with major industrial throughput.
+              </LoreSection>
+
+              <LoreSection
+                title="Campaign Philosophy"
+                meta="Directive: Occupation Through Overwhelming Control"
+                isOpen={openLore === "philosophy"}
+                onClick={() => toggleLore("philosophy")}
+              >
+                This operation marks a shift from liberation to dominance. Full
+                military capability is authorized, with command intent focused
+                on speed, suppression, and irreversible control over hostile
+                infrastructure.
+              </LoreSection>
+
+              <LoreSection
+                title="Enemy Forces"
+                meta="Threat Rating: High"
+                isOpen={openLore === "enemy"}
+                onClick={() => toggleLore("enemy")}
+              >
+                CIS remnants, corporate security divisions, and armed civilian
+                militia forces remain active across the theatre. Expect mixed
+                resistance, entrenched hardpoints, and fragmented but dangerous
+                counterattacks.
+              </LoreSection>
+            </section>
           </div>
 
-          {/* LORE */}
-          <div className="space-y-6 pt-10">
-            <LoreSection
-              title="Planet Lore — Yoabos"
-              isOpen={openLore === "planet"}
-              onClick={() => toggleLore("planet")}
-            >
-              Yoabos was once a major raw material processing world aligned
-              with corporate interests and CIS logistics.
-              Positioned along the Mid-Rim trade corridor, it became
-              a strategic military and economic hub.
-            </LoreSection>
+          <aside className="space-y-6">
+            <div className="rounded-3xl border border-[#00ff66]/30 bg-black/50 p-6 backdrop-blur-md">
+              <h3 className="mb-5 text-xl font-bold text-[#00ff66]">
+                Campaign Status
+              </h3>
 
-            <LoreSection
-              title="Campaign Philosophy"
-              isOpen={openLore === "philosophy"}
-              onClick={() => toggleLore("philosophy")}
-            >
-              This operation marks a shift from liberation to dominance.
-              Full military capability is authorized.
-            </LoreSection>
+              <StatusBar label="System Control" value={campaignCompletion} />
+              <StatusBar label="Enemy Strength" value={enemyStrength} />
+            </div>
 
-            <LoreSection
-              title="Enemy Forces"
-              isOpen={openLore === "enemy"}
-              onClick={() => toggleLore("enemy")}
-            >
-              CIS remnants, corporate security divisions, and armed
-              civilian militia forces actively resist Republic occupation.
-            </LoreSection>
-          </div>
-        </div>
-
-        {/* SIDEBAR */}
-        <div className="w-80 bg-black/50 p-6 border-l border-[#00ff66]/30 backdrop-blur-md">
-          <h3 className="text-xl text-[#00ff66] mb-4">
-            Campaign Status
-          </h3>
-
-          <StatusBar label="System Control" value={planetControl} />
-          <StatusBar label="Enemy Strength" value={enemyStrength} />
-          
-
-          <div className="mt-6 space-y-6">
-            <div>
+            <IntelCard title="Casualty Report" tone="red">
               <p className="text-gray-400">Clone Losses</p>
-              <p className="text-red-400 text-3xl font-bold tracking-widest">
+              <p className="text-3xl font-bold tracking-widest text-red-400">
                 {cloneDisplay.toLocaleString()}
               </p>
-            </div>
+            </IntelCard>
 
-            <div>
+            <IntelCard title="Combat Report" tone="green">
               <p className="text-gray-400">Droid Kills</p>
-              <p className="text-green-400 text-3xl font-bold tracking-widest">
+              <p className="text-3xl font-bold tracking-widest text-green-400">
                 {droidDisplay.toLocaleString()}
               </p>
-            </div>
+            </IntelCard>
 
-<div>
-  <p className="text-gray-400">Prisoners of War</p>
-  <p className="text-yellow-400 text-3xl font-bold tracking-widest animate-pulse">
-    {powCount}
-  </p>
-</div>
-            
-          </div>
+            <IntelCard title="POW Status" tone="yellow">
+              <p className="text-gray-400">Prisoners of War</p>
+              <p className="text-3xl font-bold tracking-widest text-yellow-400">
+                {powCount}
+              </p>
+            </IntelCard>
 
-          <p className="text-sm mt-6">
-            Objectives: {completedObjectives}/{totalObjectives}
-          </p>
+            <IntelCard title="Objective Summary" tone="green">
+              <div className="space-y-3 text-sm">
+                <SummaryRow
+                  label="Objectives Complete"
+                  value={`${completedObjectives}/${totalObjectives}`}
+                />
+                <SummaryRow
+                  label="Current Focus"
+                  value="Orbital staging and shipyard denial"
+                />
+                <SummaryRow
+                  label="Theatre Outlook"
+                  value="Favourable if momentum is maintained"
+                />
+              </div>
+            </IntelCard>
+          </aside>
         </div>
       </div>
     </div>
   );
 }
 
-/* ================= COMPONENTS ================= */
-
-function StatusBar({ label, value }: any) {
+function StatusBar({ label, value }: { label: string; value: number }) {
   return (
-    <div className="mb-4">
-      <p className="text-sm">{label}</p>
-      <div className="w-full bg-gray-800 h-3 rounded">
+    <div className="mb-5">
+      <div className="mb-2 flex items-center justify-between text-sm">
+        <p className="text-gray-300">{label}</p>
+        <span className="font-bold text-[#00ff66]">{value}%</span>
+      </div>
+      <div className="h-3 w-full rounded-full bg-gray-800">
         <div
-          className="bg-[#00ff66] h-3 rounded"
+          className="h-3 rounded-full bg-[#00ff66] shadow-[0_0_12px_rgba(0,255,102,0.4)]"
           style={{ width: `${value}%` }}
         />
       </div>
@@ -527,34 +670,165 @@ function StatusBar({ label, value }: any) {
   );
 }
 
-/* ================= LORE COMPONENT ================= */
+function ObjectiveCard({ objective }: { objective: Objective }) {
+  const statusMap: Record<
+    ObjectiveStatus,
+    {
+      icon: string;
+      label: string;
+      border: string;
+      bg: string;
+      text: string;
+    }
+  > = {
+    complete: {
+      icon: "✔",
+      label: "Complete",
+      border: "border-green-500/30",
+      bg: "bg-green-500/10",
+      text: "text-green-300",
+    },
+    active: {
+      icon: "◉",
+      label: "Active",
+      border: "border-yellow-500/30",
+      bg: "bg-yellow-500/10",
+      text: "text-yellow-300",
+    },
+    pending: {
+      icon: "○",
+      label: "Pending",
+      border: "border-[#00ff66]/20",
+      bg: "bg-black/40",
+      text: "text-gray-300",
+    },
+  };
 
-function LoreSection({ title, children, isOpen, onClick }: any) {
+  const style = statusMap[objective.status];
+
   return (
-    <div className="border border-[#00ff66]/30 rounded p-4 bg-black/40">
-      <button
-        onClick={onClick}
-        className="text-[#00ff66] font-semibold w-full text-left"
-      >
-        {isOpen ? "▼ " : "► "} {title}
-      </button>
-      {isOpen && <div className="mt-4 text-sm">{children}</div>}
+    <div
+      className={`rounded-2xl border p-4 transition-all duration-200 hover:border-[#00ff66]/50 ${style.border} ${style.bg}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 text-lg font-bold ${style.text}`}>
+            {style.icon}
+          </div>
+          <div>
+            <p
+              className={`text-sm md:text-base ${
+                objective.status === "complete"
+                  ? "text-green-300 line-through"
+                  : "text-white"
+              }`}
+            >
+              {objective.name}
+            </p>
+          </div>
+        </div>
+
+        <div
+          className={`rounded-full border px-3 py-1 text-xs font-semibold tracking-wider ${style.border} ${style.text}`}
+        >
+          {style.label}
+        </div>
+      </div>
     </div>
   );
 }
 
-function TeamBlock({ title, members }: any) {
+function LoreSection({
+  title,
+  meta,
+  children,
+  isOpen,
+  onClick,
+}: {
+  title: string;
+  meta: string;
+  children: React.ReactNode;
+  isOpen: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="border border-blue-500/30 rounded-lg p-3 bg-black/60">
-      <h4 className="text-blue-300 font-semibold mb-2">{title}</h4>
+    <div className="rounded-2xl border border-[#00ff66]/25 bg-black/40 p-4">
+      <button onClick={onClick} className="w-full text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold text-[#00ff66]">
+              {isOpen ? "▼ " : "► "} {title}
+            </div>
+            <div className="mt-1 text-xs tracking-wide text-gray-500">
+              {meta}
+            </div>
+          </div>
+        </div>
+      </button>
 
-      <ul className="space-y-1 text-sm text-gray-300">
-        {members.map((member: string, index: number) => (
-          <li key={index} className="pl-2 border-l border-blue-500/50">
-            {member}
-          </li>
-        ))}
-      </ul>
+      {isOpen && (
+        <div className="mt-4 text-sm leading-7 text-gray-300">{children}</div>
+      )}
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  subtext,
+  tone,
+}: {
+  label: string;
+  value: string;
+  subtext: string;
+  tone: "green" | "yellow" | "red";
+}) {
+  const toneClasses =
+    tone === "green"
+      ? "border-[#00ff66]/25 bg-[#00ff66]/5 text-[#00ff66]"
+      : tone === "yellow"
+      ? "border-yellow-500/25 bg-yellow-500/5 text-yellow-300"
+      : "border-red-500/25 bg-red-500/5 text-red-300";
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneClasses}`}>
+      <p className="text-xs font-bold tracking-[0.2em] opacity-80">{label}</p>
+      <p className="mt-2 text-2xl font-bold">{value}</p>
+      <p className="mt-1 text-xs text-gray-400">{subtext}</p>
+    </div>
+  );
+}
+
+function IntelCard({
+  title,
+  tone,
+  children,
+}: {
+  title: string;
+  tone: "green" | "yellow" | "red";
+  children: React.ReactNode;
+}) {
+  const toneClasses =
+    tone === "green"
+      ? "border-[#00ff66]/30"
+      : tone === "yellow"
+      ? "border-yellow-500/30"
+      : "border-red-500/30";
+
+  return (
+    <div className={`rounded-3xl border bg-black/50 p-6 backdrop-blur-md ${toneClasses}`}>
+      <h3 className="mb-4 text-lg font-bold tracking-widest text-white">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-white/5 pb-2">
+      <span className="text-gray-400">{label}</span>
+      <span className="max-w-[60%] text-right text-white">{value}</span>
     </div>
   );
 }

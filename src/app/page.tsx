@@ -430,6 +430,7 @@ const formatHighlightText = (row: AuditHighlight) => {
           targetCertification:target_certification_id ( name ),
           targetRank:target_rank_id ( name )
         `)
+        .in("action", ["CERTIFICATION_ASSIGNED", "RANK_CHANGED"])
         .gte("created_at", start.toISOString())
         .lt("created_at", end.toISOString())
         .order("created_at", { ascending: false });

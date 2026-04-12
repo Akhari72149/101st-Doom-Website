@@ -61,7 +61,7 @@ export default function RemovePersonnelPage() {
 
       const roleList = roles?.map((r) => r.role) || [];
 
-      if (!hasRole(roleList, ["recruiter", "nco", "admin"])) {
+      if (!hasRole(roleList, ["nco", "admin"])) {
         router.replace("/");
         return;
       }

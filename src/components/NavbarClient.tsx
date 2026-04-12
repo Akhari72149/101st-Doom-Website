@@ -150,7 +150,7 @@ export default function NavbarClient() {
         {
           href: "/admin/removal",
           label: "Account Removal",
-          allowedRoles: ["recruiter", "nco", "admin"],
+          allowedRoles: ["nco", "admin"],
         },
         {
           href: "/admin/removal-log",

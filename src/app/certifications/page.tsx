@@ -1,41 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 
+type Person = {
+  id: string;
+  name: string;
+  rank_id: string | null;
+  status?: string | null;
+  slotted_position?: string | null;
+};
+
+type Rank = {
+  id: string;
+  name: string;
+};
+
+type CertificationRow = {
+  id: string;
+  awarded_at: string | null;
+  certification?: {
+    id?: string;
+    name?: string | null;
+  } | null;
+};
+
+type ActiveTab = "normal" | "trainer";
+
 export default function CertificationByPerson() {
-  const [personnel, setPersonnel] = useState<any[]>([]);
-  const [ranks, setRanks] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
-  const [selectedPerson, setSelectedPerson] = useState<any>(null);
-  const [certifications, setCertifications] = useState<any[]>([]);
   const router = useRouter();
 
-  /* ===================================================== */
-  /* FETCH */
-  /* ===================================================== */
+  const [personnel, setPersonnel] = useState<Person[]>([]);
+  const [ranks, setRanks] = useState<Rank[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const [certifications, setCertifications] = useState<CertificationRow[]>([]);
+  const [loadingCertifications, setLoadingCertifications] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("normal");
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-    const { data: people } = await supabase
-      .from("personnel")
-      .select("*")
-      .order("name");
+    const [{ data: people }, { data: rankData }] = await Promise.all([
+      supabase.from("personnel").select("*").order("name"),
+      supabase.from("ranks").select("*"),
+    ]);
 
-    const { data: rankData } = await supabase
-      .from("ranks")
-      .select("*");
-
-    setPersonnel(people || []);
-    setRanks(rankData || []);
+    setPersonnel((people as Person[]) || []);
+    setRanks((rankData as Rank[]) || []);
   };
 
-  const fetchCertifications = async (personId: string) => {
+  const fetchCertifications = async (person: Person) => {
+    setSelectedPerson(person);
+    setLoadingCertifications(true);
+    setCertifications([]);
+    setActiveTab("normal");
+
     const { data } = await supabase
       .from("personnel_certifications")
       .select(`
@@ -43,196 +67,376 @@ export default function CertificationByPerson() {
         awarded_at,
         certification:certification_id ( id, name )
       `)
-      .eq("personnel_id", personId)
+      .eq("personnel_id", person.id)
       .order("awarded_at", { ascending: false });
 
-    setCertifications(data || []);
+    setCertifications((data as CertificationRow[]) || []);
+    setLoadingCertifications(false);
   };
 
-  /* ===================================================== */
-  /* HELPERS */
-  /* ===================================================== */
+  const rankMap = useMemo(() => {
+    return Object.fromEntries(ranks.map((rank) => [rank.id, rank.name]));
+  }, [ranks]);
 
-  const getRankName = (person: any) => {
-    const rank = ranks.find((r) => r.id === person.rank_id);
-    return rank ? rank.name : "Unranked";
+  const getRankName = (person: Person | null) => {
+    if (!person?.rank_id) return "Unranked";
+    return rankMap[person.rank_id] || "Unranked";
   };
 
-const filteredPersonnel = personnel
-  .filter((p) => !["Retired", "Removed"].includes(p.status))
-  .filter((p) =>
-    `${getRankName(p)} ${p.name}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
+  const normalizedSearch = search.trim().toLowerCase();
 
-  /* ===================================================== */
-  /* UI */
-  /* ===================================================== */
+  const filteredPersonnel = useMemo(() => {
+    return personnel
+      .filter((p) => {
+        const status = (p.status || "").trim().toLowerCase();
+        return status !== "retired" && status !== "removed";
+      })
+      .filter((p) => {
+        if (!normalizedSearch) return true;
+
+        return `${getRankName(p)} ${p.name}`
+          .toLowerCase()
+          .includes(normalizedSearch);
+      });
+  }, [personnel, normalizedSearch, rankMap]);
+
+  const trainerCerts = useMemo(() => {
+    return certifications.filter((c) =>
+      c.certification?.name?.toLowerCase().includes("trainer")
+    );
+  }, [certifications]);
+
+  const normalCerts = useMemo(() => {
+    return certifications.filter(
+      (c) => !c.certification?.name?.toLowerCase().includes("trainer")
+    );
+  }, [certifications]);
+
+  const visibleCerts = activeTab === "trainer" ? trainerCerts : normalCerts;
 
   return (
-    <div className="
-      min-h-screen
-      bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
-      text-[#eafff2]
-      p-10
-    ">
-      <div className="max-w-6xl mx-auto">
+    <div
+      className="
+        min-h-screen
+        bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
+        px-4 py-8 text-[#eafff2]
+        sm:px-6 lg:px-10
+      "
+    >
+      <div className="mx-auto max-w-[1600px]">
+        <button
+          onClick={() => router.push("/pcs")}
+          className="mb-6 rounded-lg border border-[#00ff66]/50 px-4 py-2 font-semibold text-[#00ff66] transition hover:scale-105 hover:bg-[#00ff66]/10"
+        >
+          ← Return to Dashboard
+        </button>
 
-      <button
-        onClick={() => router.push("/pcs")}
-        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
-      >
-        ← Return to Dashboard
-      </button>
+        <div className="mb-8">
+          <div className="text-xs uppercase tracking-[0.4em] text-[#7fa08e]">
+            Personnel Command System
+          </div>
 
-      {/* TITLE */}
-      <h1 className="
-        text-4xl font-extrabold mb-8
-        text-transparent bg-clip-text
-        bg-gradient-to-r from-[#00ff66] to-[#00ffaa]
-        tracking-[0.5em]
-        drop-shadow-[0_0_10px_rgba(0,255,100,0.6)]
-       ">
-        CERTIFICATION LOOKUP
-      </h1>
+          <h1
+            className="
+              mt-3
+              bg-gradient-to-r from-[#00ff66] to-[#00ffaa]
+              bg-clip-text
+              text-4xl font-extrabold tracking-[0.3em] text-transparent
+              drop-shadow-[0_0_10px_rgba(0,255,100,0.6)]
+            "
+          >
+            CERTIFICATION LOOKUP
+          </h1>
 
-      {/* SEARCH */}
-      <div className="relative mb-6">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00ff66]/50 w-5 h-5" />
-        <input
-          type="text"
-          placeholder="Search by name or rank..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="
-            w-full pl-12 p-4 rounded-xl
-            bg-black/40 backdrop-blur-md
-            border border-[#00ff66]/40
-            text-[#00ff66]
-            placeholder:text-[#00ff66]/40
-            focus:border-[#00ff66]
-            focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]
-            transition-all duration-300
-          "
-        />
-      </div>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#8eaa9b]">
+            Search active personnel by rank or name and view their awarded
+            certifications in a single dossier-style panel.
+          </p>
+        </div>
 
-      {/* SEARCH RESULTS */}
-      {search && (
-        <div className="
-          mb-8
-          border border-[#00ff66]/30
-          g-black/60 backdrop-blur-lg
-          rounded-xl
-          shadow-[0_0_40px_rgba(0,255,100,0.1)]
-          max-h-64 overflow-y-auto
-          transition-all duration-300
-        ">
-          {filteredPersonnel.length === 0 ? (
-            <p className="p-4 text-gray-400">
-              No personnel found.
-            </p>
-          ) : (
-            filteredPersonnel.map((p) => (
+        <div className="grid grid-cols-1 gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <aside className="xl:sticky xl:top-6 xl:self-start">
+            <div className="rounded-3xl border border-[#00ff66]/30 bg-black/55 p-5 backdrop-blur-xl shadow-[0_0_40px_rgba(0,255,100,0.08)]">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.25em] text-[#7fa08e]">
+                    Directory
+                  </div>
+                  <h2 className="mt-2 text-xl font-bold text-[#00ff66]">
+                    Personnel Search
+                  </h2>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-gray-500">
+                    Active
+                  </div>
+                  <div className="text-sm font-semibold text-white">
+                    {filteredPersonnel.length}
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative mb-4">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#00ff66]/50" />
+                <input
+                  type="text"
+                  placeholder="Search by name or rank..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="
+                    w-full rounded-xl border border-[#00ff66]/40 bg-black/40
+                    py-4 pl-12 pr-4 text-[#00ff66]
+                    placeholder:text-[#00ff66]/40
+                    transition-all duration-300
+                    focus:border-[#00ff66]
+                    focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]
+                    outline-none
+                  "
+                />
+              </div>
+
               <div
-                key={p.id}
-                onClick={() => {
-                  setSelectedPerson(p);
-                  fetchCertifications(p.id);
-                  setSearch("");
-                }}
                 className="
-                  px-4 py-3
-                  border-b border-[#00ff66]/20
-                  cursor-pointer
-                  transition-all duration-200
-                  hover:bg-[#00ff66]/10
-                  hover:text-[#00ff66]
-                  hover:pl-6
+                  max-h-[70vh] overflow-y-auto rounded-2xl border border-[#00ff66]/25
+                  bg-black/60 backdrop-blur-lg
+                  shadow-[0_0_40px_rgba(0,255,100,0.08)]
                 "
               >
-                {getRankName(p)} {p.name}
+                {filteredPersonnel.length === 0 ? (
+                  <p className="p-4 text-sm text-gray-400">
+                    No personnel found.
+                  </p>
+                ) : (
+                  filteredPersonnel.map((p) => {
+                    const isSelected = selectedPerson?.id === p.id;
+
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          fetchCertifications(p);
+                          setSearch("");
+                        }}
+                        className={`w-full border-b px-4 py-4 text-left transition-all duration-200 last:border-b-0 ${
+                          isSelected
+                            ? "border-[#00ff66]/30 bg-[#00ff66]/12"
+                            : "border-[#00ff66]/15 hover:bg-[#00ff66]/10"
+                        }`}
+                      >
+                        <div className="text-xs uppercase tracking-[0.16em] text-[#00ff66]">
+                          {getRankName(p)}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-white">
+                          {p.name}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
               </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* PROFILE CARD */}
-      {selectedPerson && (
-        <div className="
-          p-8 rounded-3xl
-          bg-black/60 backdrop-blur-2xl
-          border border-[#00ff66]/40
-          shadow-[0_0_80px_rgba(0,255,100,0.25)]
-          animate-fade-in
-        ">
-          <h2 className="
-            text-2xl font-bold mb-6
-            text-[#00ff66]
-            tracking-widest
-            border-b border-[#00ff66]/40
-          ">
-            {getRankName(selectedPerson)} {selectedPerson.name}
-          </h2>
-
-          {/* CERTIFICATIONS TABLE */}
-          {certifications.length === 0 ? (
-            <div className="py-10 text-center text-[#00ff66]/60">
-              <p className="text-lg font-medium">
-                No certifications assigned yet
-                 </p>
-                  <p className="text-sm opacity-70">
-                   Assign certifications to this person to see them listed here
-                </p>
             </div>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-[#00ff66]/40">
-              <table className="w-full">
-                <thead className="bg-[#00ff66]/20 backdrop-blur-md text-[#00ff66]">
-                  <tr>
-                    
-                    <th className="px-4 py-3 text-left">
-                      
-                      Certification
-                    </th>
-                    <th className="px-4 py-3 text-left">
-                      Awarded
-                    </th>
-                    
-                  </tr>
-                </thead>
+          </aside>
 
-                <tbody>
-                  {certifications.map((c) => (
-                    <tr
-                      key={c.id}
+          <section className="min-w-0">
+            {!selectedPerson ? (
+              <div
+                className="
+                  rounded-3xl border border-[#00ff66]/30 bg-black/55
+                  p-8 backdrop-blur-2xl
+                  shadow-[0_0_60px_rgba(0,255,100,0.12)]
+                "
+              >
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.25em] text-[#7fa08e]">
+                      Certification Viewer
+                    </div>
+                    <h2 className="mt-3 text-3xl font-bold text-[#00ff66]">
+                      Select a person to view certifications
+                    </h2>
+                    <p className="mt-4 max-w-2xl text-sm leading-7 text-[#8eaa9b]">
+                      Search by rank or name from the directory panel and open a
+                      personnel record to review all certifications awarded to
+                      that person.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 p-5">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-gray-500">
+                        Active Personnel
+                      </div>
+                      <div className="mt-2 text-3xl font-bold text-[#00ff66]">
+                        {filteredPersonnel.length}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/40 p-5">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-gray-500">
+                        Search Ready
+                      </div>
+                      <div className="mt-2 text-3xl font-bold text-white">
+                        Yes
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="
+                  rounded-3xl border border-[#00ff66]/40 bg-black/60
+                  p-8 backdrop-blur-2xl
+                  shadow-[0_0_80px_rgba(0,255,100,0.2)]
+                "
+              >
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-xs uppercase tracking-[0.25em] text-[#7fa08e]">
+                      Personnel Record
+                    </div>
+
+                    <h2
                       className="
-                        border-t border-[#00ff66]/20
-                        transition-all duration-200
-                        hover:bg-[#00ff66]/10
-                        even:bg-[#00ff66]/5
+                        mt-3 border-b border-[#00ff66]/30 pb-4
+                        text-2xl font-bold tracking-[0.15em] text-[#00ff66]
                       "
                     >
-                      <td className="px-4 py-3">
-                        {c.certification?.name || "Unknown"}
-                      </td>
+                      {getRankName(selectedPerson)} {selectedPerson.name}
+                    </h2>
 
-                      <td className="px-4 py-3 text-[#00ff66]">
-                        {c.awarded_at
-                          ? new Date(c.awarded_at).toLocaleDateString()
-                          : "N/A"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <span className="rounded-full border border-[#00ff66]/30 bg-[#00ff66]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#00ff66]">
+                        {certifications.length} Certification
+                        {certifications.length !== 1 ? "s" : ""}
+                      </span>
+
+                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-gray-300">
+                        {normalCerts.length} Normal
+                      </span>
+
+                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-gray-300">
+                        {trainerCerts.length} Trainer
+                      </span>
+
+                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-gray-300">
+                        Active
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedPerson(null);
+                      setCertifications([]);
+                      setActiveTab("normal");
+                    }}
+                    className="rounded-xl border border-red-500/50 px-4 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-500/10"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+
+                <div className="mt-8">
+                  {loadingCertifications ? (
+                    <div className="space-y-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-14 animate-pulse rounded-xl border border-[#00ff66]/15 bg-white/[0.03]"
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-5 flex flex-wrap gap-3 border-b border-[#00ff66]/20 pb-4">
+                        <button
+                          onClick={() => setActiveTab("normal")}
+                          className={`rounded-xl border px-4 py-2 text-sm font-semibold tracking-[0.14em] transition ${
+                            activeTab === "normal"
+                              ? "border-[#00ff66]/40 bg-[#00ff66]/10 text-[#00ff66]"
+                              : "border-white/10 bg-white/[0.03] text-gray-400 hover:text-white"
+                          }`}
+                        >
+                          QUALIFICATIONS ({normalCerts.length})
+                        </button>
+
+                        <button
+                          onClick={() => setActiveTab("trainer")}
+                          className={`rounded-xl border px-4 py-2 text-sm font-semibold tracking-[0.14em] transition ${
+                            activeTab === "trainer"
+                              ? "border-[#00ff66]/40 bg-[#00ff66]/10 text-[#00ff66]"
+                              : "border-white/10 bg-white/[0.03] text-gray-400 hover:text-white"
+                          }`}
+                        >
+                          TRAINER QUALIFICATIONS ({trainerCerts.length})
+                        </button>
+                      </div>
+
+                      {visibleCerts.length === 0 ? (
+                        <div className="py-12 text-center text-[#00ff66]/60">
+                          <p className="text-lg font-medium">
+                            {activeTab === "trainer"
+                              ? "No trainer certifications assigned yet"
+                              : "No certifications assigned yet"}
+                          </p>
+                          <p className="mt-2 text-sm opacity-70">
+                            {activeTab === "trainer"
+                              ? "Trainer certifications will appear here when awarded"
+                              : "Assign certifications to this person to see them listed here"}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="overflow-hidden rounded-xl border border-[#00ff66]/35">
+                          <div className="max-h-[520px] overflow-y-auto">
+                            <table className="w-full">
+                              <thead className="sticky top-0 bg-[#00ff66]/18 backdrop-blur-md text-[#00ff66]">
+                                <tr>
+                                  <th className="px-4 py-3 text-left font-semibold">
+                                    Certification
+                                  </th>
+                                  <th className="w-[180px] px-4 py-3 text-left font-semibold">
+                                    Awarded
+                                  </th>
+                                </tr>
+                              </thead>
+
+                              <tbody>
+                                {visibleCerts.map((c, index) => (
+                                  <tr
+                                    key={c.id}
+                                    className={`
+                                      border-t border-[#00ff66]/15
+                                      transition-all duration-200
+                                      hover:bg-[#00ff66]/10
+                                      ${index % 2 === 1 ? "bg-[#00ff66]/5" : ""}
+                                    `}
+                                  >
+                                    <td className="px-4 py-3 text-white">
+                                      {c.certification?.name || "Unknown"}
+                                    </td>
+
+                                    <td className="px-4 py-3 text-[#00ff66]">
+                                      {c.awarded_at
+                                        ? new Date(c.awarded_at).toLocaleDateString()
+                                        : "N/A"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
         </div>
-      )}
+      </div>
     </div>
-</div>
   );
 }

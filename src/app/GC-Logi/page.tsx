@@ -18,6 +18,7 @@ type Asset = {
   name: string;
   token_cost: number;
   inventory: number;
+  description?: string;
 };
 
 type Transaction = {
@@ -51,52 +52,47 @@ export default function GCLogisticsHub() {
     tokensSpent: 0,
   });
   const [cart, setCart] = useState<Record<string, number>>({});
-
-  const [buyQuantities, setBuyQuantities] =
-    useState<Record<string, number>>({});
-
-  const [removeQuantities, setRemoveQuantities] =
-    useState<Record<string, number>>({});
-
+  const [buyQuantities, setBuyQuantities] = useState<Record<string, number>>({});
+  const [removeQuantities, setRemoveQuantities] = useState<Record<string, number>>({});
   const [shopOpen, setShopOpen] = useState(false);
   const [ownedOpen, setOwnedOpen] = useState(false);
 
   /* ================= AUTH ================= */
 
-useEffect(() => {
-  const checkAccess = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  useEffect(() => {
+    const checkAccess = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
 
-    setCurrentUserId(user.id);
+      setCurrentUserId(user.id);
 
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id);
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
 
-    const userRoles = data?.map((r) => r.role) || [];
+      const userRoles = data?.map((r) => r.role) || [];
 
-    const hasAccess =
-      userRoles.includes("Akhari") ||
-      userRoles.includes("logistics");
+      const hasAccess =
+        userRoles.includes("Akhari") ||
+        userRoles.includes("logistics");
 
-    if (!hasAccess) {
-      router.replace("/GC-Platoon-Logi");
-      return;
-    }
+      if (!hasAccess) {
+        router.replace("/GC-Platoon-Logi");
+        return;
+      }
 
-    setLoadingAuth(false);
-  };
+      setLoadingAuth(false);
+    };
 
-  checkAccess();
-}, [router]);
+    checkAccess();
+  }, [router]);
 
   useEffect(() => {
     if (!selected) return;
@@ -108,6 +104,7 @@ useEffect(() => {
   }, [platoons, selected]);
 
   /* ================= STAT CALCS ================= */
+
   const calculateStats = () => {
     if (!selected) return;
 
@@ -319,6 +316,7 @@ useEffect(() => {
   };
 
   /* ================= CART CHECKOUT ================= */
+
   const checkoutCart = async () => {
     if (!selected) return;
 
@@ -379,7 +377,7 @@ useEffect(() => {
     await fetchTransactions(selected.id);
   };
 
-  /* ================= REMOVE ASSET (WITH QUANTITY) ================= */
+  /* ================= REMOVE ASSET ================= */
 
   const removeAsset = async (owned: any) => {
     if (!selected) return;
@@ -588,6 +586,13 @@ useEffect(() => {
                         <div className="font-bold text-[#00ff66]">
                           {asset.name}
                         </div>
+
+                        {asset.description && (
+                          <div className="text-sm text-gray-400">
+                            {asset.description}
+                          </div>
+                        )}
+
                         <div>Cost: {asset.token_cost}</div>
                         <div>Stock: {asset.inventory}</div>
 

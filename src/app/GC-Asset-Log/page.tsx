@@ -20,9 +20,10 @@ type TransactionRow = {
   profile?: {
     display_name: string;
   } | null;
+  description: string;
 };
 
-type FilterType = "all" | "tokens" | "removed";
+type FilterType = "all" | "tokens" | "purchased" | "removed";
 
 type GroupedTransactions = {
   label: string;
@@ -38,12 +39,17 @@ export default function GCLogisticsTransactionsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let mounted = true;
+
     const checkAccess = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      if (!mounted) return;
 
       if (!user) {
         router.replace("/login");
@@ -54,6 +60,8 @@ export default function GCLogisticsTransactionsPage() {
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id);
+
+      if (!mounted) return;
 
       const userRoles = data?.map((r) => r.role) || [];
 
@@ -71,10 +79,45 @@ export default function GCLogisticsTransactionsPage() {
     };
 
     checkAccess();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
+
+  const buildDescription = (tx: {
+    action: string;
+    amount?: number | null;
+    quantity?: number | null;
+    asset_name?: string | null;
+    notes?: string | null;
+    platoon?: { name: string } | null;
+    profile?: { display_name: string } | null;
+  }) => {
+    const actor = tx.profile?.display_name || "Unknown user";
+    const platoonName = tx.platoon?.name || "Unknown platoon";
+
+    if (tx.notes) return tx.notes;
+
+    switch (tx.action) {
+      case "ADD_TOKENS":
+        return `${actor} added ${tx.amount ?? 0} tokens to ${platoonName}`;
+      case "BUY_ASSET":
+        return `${actor} bought ${tx.quantity ?? 0} x ${
+          tx.asset_name || "asset"
+        } for ${platoonName} for ${tx.amount ?? 0} tokens`;
+      case "REMOVE_ASSET":
+        return `${actor} removed ${tx.quantity ?? 0} x ${
+          tx.asset_name || "asset"
+        } from ${platoonName}`;
+      default:
+        return `${actor} performed ${tx.action} on ${platoonName}`;
+    }
+  };
 
   const fetchTransactions = async () => {
     setLoading(true);
+    setError(null);
 
     const { data, error } = await supabase
       .from("token_transactions")
@@ -95,42 +138,62 @@ export default function GCLogisticsTransactionsPage() {
           display_name
         )
       `)
-      .in("action", ["ADD_TOKENS", "REMOVE_ASSET"])
+      .in("action", ["ADD_TOKENS", "BUY_ASSET", "REMOVE_ASSET"])
       .order("created_at", { ascending: false });
 
-    if (!error && data) {
-      const formatted: TransactionRow[] = data.map((tx: any) => ({
+    if (error) {
+      setTransactions([]);
+      setError("Failed to load transactions.");
+      setLoading(false);
+      return;
+    }
+
+    const formatted: TransactionRow[] = (data || []).map((tx: any) => {
+      const platoon = Array.isArray(tx.platoon) ? tx.platoon[0] ?? null : tx.platoon;
+      const profile = Array.isArray(tx.profile) ? tx.profile[0] ?? null : tx.profile;
+
+      const formattedTx: TransactionRow = {
         id: tx.id,
         action: tx.action,
-        amount: tx.amount,
+        amount: Number(tx.amount) || 0,
         quantity: tx.quantity,
         asset_name: tx.asset_name,
         performed_by: tx.performed_by,
         notes: tx.notes,
         created_at: tx.created_at,
         platoon_id: tx.platoon_id,
-        platoon: Array.isArray(tx.platoon) ? tx.platoon[0] ?? null : tx.platoon,
-        profile: Array.isArray(tx.profile) ? tx.profile[0] ?? null : tx.profile,
-      }));
+        platoon,
+        profile,
+        description: "",
+      };
 
-      setTransactions(formatted);
-    } else {
-      setTransactions([]);
-    }
+      formattedTx.description = buildDescription(formattedTx);
 
+      return formattedTx;
+    });
+
+    setTransactions(formatted);
     setLoading(false);
   };
 
   useEffect(() => {
-    if (!loadingAuth) {
+    if (loadingAuth) return;
+
+    fetchTransactions();
+
+    const interval = setInterval(() => {
       fetchTransactions();
-    }
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [loadingAuth]);
 
   const getActionLabel = (tx: TransactionRow) => {
     switch (tx.action) {
       case "ADD_TOKENS":
         return "Added Tokens";
+      case "BUY_ASSET":
+        return "Purchased Asset";
       case "REMOVE_ASSET":
         return "Removed Asset";
       default:
@@ -142,26 +205,21 @@ export default function GCLogisticsTransactionsPage() {
     switch (action) {
       case "REMOVE_ASSET":
         return "border-red-500 text-red-400 bg-red-500/10";
+      case "BUY_ASSET":
+        return "border-blue-500 text-blue-400 bg-blue-500/10";
       default:
         return "border-[#00ff66]/30 text-[#00ff66] bg-[#00ff66]/5";
     }
   };
 
-  const getDescription = (tx: TransactionRow) => {
-    const actor = tx.profile?.display_name || "Unknown user";
-    const platoonName = tx.platoon?.name || "Unknown platoon";
-
-    if (tx.notes) return tx.notes;
-
-    switch (tx.action) {
-      case "ADD_TOKENS":
-        return `${actor} added ${tx.amount ?? 0} tokens to ${platoonName}`;
+  const getExpandedBorderStyle = (action: string) => {
+    switch (action) {
       case "REMOVE_ASSET":
-        return `${actor} removed ${tx.quantity ?? 0} x ${
-          tx.asset_name || "asset"
-        } from ${platoonName}`;
+        return "border-l-4 border-red-500";
+      case "BUY_ASSET":
+        return "border-l-4 border-blue-500";
       default:
-        return `${actor} performed ${tx.action} on ${platoonName}`;
+        return "border-l-4 border-[#00ff66]";
     }
   };
 
@@ -172,7 +230,7 @@ export default function GCLogisticsTransactionsPage() {
   const renderHighlightedText = (
     text: string,
     query: string,
-    variant: "green" | "red" = "green"
+    variant: "green" | "red" | "blue" = "green"
   ) => {
     if (!query.trim()) return text;
 
@@ -190,6 +248,8 @@ export default function GCLogisticsTransactionsPage() {
           className={
             variant === "red"
               ? "bg-red-500/20 text-red-300 px-1 rounded"
+              : variant === "blue"
+              ? "bg-blue-500/20 text-blue-300 px-1 rounded"
               : "bg-[#00ff66]/20 text-[#7dffb2] px-1 rounded"
           }
         >
@@ -229,6 +289,7 @@ export default function GCLogisticsTransactionsPage() {
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
       if (filter === "tokens" && tx.action !== "ADD_TOKENS") return false;
+      if (filter === "purchased" && tx.action !== "BUY_ASSET") return false;
       if (filter === "removed" && tx.action !== "REMOVE_ASSET") return false;
 
       const target = [
@@ -237,7 +298,7 @@ export default function GCLogisticsTransactionsPage() {
         tx.asset_name || "",
         tx.profile?.display_name || "",
         tx.notes || "",
-        getDescription(tx),
+        tx.description,
       ]
         .join(" ")
         .toLowerCase();
@@ -247,30 +308,35 @@ export default function GCLogisticsTransactionsPage() {
   }, [transactions, filter, search]);
 
   const groupedTransactions = useMemo(() => {
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    const isSameDay = (a: Date, b: Date) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const sevenDaysAgo = new Date(startOfToday);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const groups: GroupedTransactions[] = [
       { label: "Today", items: [] },
       { label: "Yesterday", items: [] },
+      { label: "Last 7 Days", items: [] },
+      { label: "This Month", items: [] },
       { label: "Older", items: [] },
     ];
 
     filteredTransactions.forEach((tx) => {
       const txDate = new Date(tx.created_at);
 
-      if (isSameDay(txDate, today)) {
+      if (txDate >= startOfToday) {
         groups[0].items.push(tx);
-      } else if (isSameDay(txDate, yesterday)) {
+      } else if (txDate >= startOfYesterday && txDate < startOfToday) {
         groups[1].items.push(tx);
-      } else {
+      } else if (txDate >= sevenDaysAgo && txDate < startOfYesterday) {
         groups[2].items.push(tx);
+      } else if (txDate >= startOfMonth && txDate < sevenDaysAgo) {
+        groups[3].items.push(tx);
+      } else {
+        groups[4].items.push(tx);
       }
     });
 
@@ -278,33 +344,55 @@ export default function GCLogisticsTransactionsPage() {
   }, [filteredTransactions]);
 
   const stats = useMemo(() => {
-    const totalTokensAdded = transactions
+    const totalTokensAdded = filteredTransactions
       .filter((tx) => tx.action === "ADD_TOKENS")
       .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 
-    const totalAssetsRemoved = transactions
+    const totalTokensSpent = filteredTransactions
+      .filter((tx) => tx.action === "BUY_ASSET")
+      .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
+    const totalAssetsRemoved = filteredTransactions
       .filter((tx) => tx.action === "REMOVE_ASSET")
       .reduce((sum, tx) => sum + (Number(tx.quantity) || 0), 0);
 
     const today = new Date();
     const todayString = today.toDateString();
 
-    const actionsToday = transactions.filter(
+    const actionsToday = filteredTransactions.filter(
       (tx) => new Date(tx.created_at).toDateString() === todayString
     ).length;
 
     return {
       totalTokensAdded,
+      totalTokensSpent,
       totalAssetsRemoved,
       actionsToday,
     };
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   const toggleRow = (id: string) => {
     setExpandedRows((prev) => ({
       ...prev,
       [id]: !prev[id],
     }));
+  };
+
+  const allExpanded =
+    filteredTransactions.length > 0 &&
+    filteredTransactions.every((tx) => expandedRows[tx.id]);
+
+  const toggleAllRows = () => {
+    if (allExpanded) {
+      setExpandedRows({});
+      return;
+    }
+
+    const nextState: Record<string, boolean> = {};
+    filteredTransactions.forEach((tx) => {
+      nextState[tx.id] = true;
+    });
+    setExpandedRows(nextState);
   };
 
   if (loadingAuth) {
@@ -318,13 +406,13 @@ export default function GCLogisticsTransactionsPage() {
   return (
     <div className="min-h-screen text-white bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] p-8">
       <div className="max-w-[1650px] mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold text-[#00ff66]">
               Logistics Transaction History
             </h1>
             <p className="text-gray-400 mt-2">
-              Full audit trail of token additions and removed assets
+              Full audit trail of token additions, asset purchases, and removed assets
             </p>
           </div>
 
@@ -336,13 +424,22 @@ export default function GCLogisticsTransactionsPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <div className="rounded-2xl border border-[#00ff66]/25 bg-black/40 p-5 shadow-[0_0_20px_rgba(0,255,102,0.08)]">
             <p className="text-sm uppercase tracking-wide text-gray-400">
-              Total Tokens Added
+              Tokens Added
             </p>
             <p className="mt-2 text-3xl font-bold text-[#00ff66]">
               {stats.totalTokensAdded.toLocaleString()}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-blue-500/25 bg-black/40 p-5 shadow-[0_0_20px_rgba(59,130,246,0.08)]">
+            <p className="text-sm uppercase tracking-wide text-gray-400">
+              Tokens Spent
+            </p>
+            <p className="mt-2 text-3xl font-bold text-blue-400">
+              {stats.totalTokensSpent.toLocaleString()}
             </p>
           </div>
 
@@ -355,66 +452,115 @@ export default function GCLogisticsTransactionsPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-blue-500/25 bg-black/40 p-5 shadow-[0_0_20px_rgba(59,130,246,0.08)]">
+          <div className="rounded-2xl border border-cyan-500/25 bg-black/40 p-5 shadow-[0_0_20px_rgba(34,211,238,0.08)]">
             <p className="text-sm uppercase tracking-wide text-gray-400">
               Actions Today
             </p>
-            <p className="mt-2 text-3xl font-bold text-blue-400">
+            <p className="mt-2 text-3xl font-bold text-cyan-400">
               {stats.actionsToday.toLocaleString()}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-6">
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => setFilter("all")}
-              className={`px-4 py-2 rounded-xl border transition ${
-                filter === "all"
-                  ? "border-[#00ff66] bg-[#00ff66]/15 text-[#00ff66] shadow-[0_0_18px_rgba(0,255,102,0.15)]"
-                  : "border-[#00ff66]/20 bg-black/40 text-gray-300 hover:border-[#00ff66]/40 hover:text-white"
-              }`}
-            >
-              All
-            </button>
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-col xl:flex-row xl:items-center gap-4">
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setFilter("all")}
+                className={`px-4 py-2 rounded-xl border transition ${
+                  filter === "all"
+                    ? "border-[#00ff66] bg-[#00ff66]/15 text-[#00ff66] shadow-[0_0_18px_rgba(0,255,102,0.15)]"
+                    : "border-[#00ff66]/20 bg-black/40 text-gray-300 hover:border-[#00ff66]/40 hover:text-white"
+                }`}
+              >
+                All
+              </button>
+
+              <button
+                onClick={() => setFilter("tokens")}
+                className={`px-4 py-2 rounded-xl border transition ${
+                  filter === "tokens"
+                    ? "border-[#00ff66] bg-[#00ff66]/15 text-[#00ff66] shadow-[0_0_18px_rgba(0,255,102,0.15)]"
+                    : "border-[#00ff66]/20 bg-black/40 text-gray-300 hover:border-[#00ff66]/40 hover:text-white"
+                }`}
+              >
+                Tokens Added
+              </button>
+
+              <button
+                onClick={() => setFilter("purchased")}
+                className={`px-4 py-2 rounded-xl border transition ${
+                  filter === "purchased"
+                    ? "border-blue-500 bg-blue-500/10 text-blue-400 shadow-[0_0_18px_rgba(59,130,246,0.12)]"
+                    : "border-[#00ff66]/20 bg-black/40 text-gray-300 hover:border-blue-500/40 hover:text-white"
+                }`}
+              >
+                Assets Purchased
+              </button>
+
+              <button
+                onClick={() => setFilter("removed")}
+                className={`px-4 py-2 rounded-xl border transition ${
+                  filter === "removed"
+                    ? "border-red-500 bg-red-500/10 text-red-400 shadow-[0_0_18px_rgba(239,68,68,0.12)]"
+                    : "border-[#00ff66]/20 bg-black/40 text-gray-300 hover:border-red-500/40 hover:text-white"
+                }`}
+              >
+                Assets Removed
+              </button>
+            </div>
+
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Search platoon, user, asset, action, notes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-black border border-[#00ff66]/30 rounded-xl pl-11 pr-10 py-3 text-white outline-none focus:border-[#00ff66]"
+              />
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                ⌕
+              </span>
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition"
+                >
+                  ×
+                </button>
+              )}
+            </div>
 
             <button
-              onClick={() => setFilter("tokens")}
-              className={`px-4 py-2 rounded-xl border transition ${
-                filter === "tokens"
-                  ? "border-[#00ff66] bg-[#00ff66]/15 text-[#00ff66] shadow-[0_0_18px_rgba(0,255,102,0.15)]"
-                  : "border-[#00ff66]/20 bg-black/40 text-gray-300 hover:border-[#00ff66]/40 hover:text-white"
-              }`}
+              onClick={toggleAllRows}
+              className="px-4 py-3 rounded-xl border border-[#00ff66]/25 bg-black/40 text-gray-300 hover:border-[#00ff66]/40 hover:text-white transition"
             >
-              Tokens Added
-            </button>
-
-            <button
-              onClick={() => setFilter("removed")}
-              className={`px-4 py-2 rounded-xl border transition ${
-                filter === "removed"
-                  ? "border-red-500 bg-red-500/10 text-red-400 shadow-[0_0_18px_rgba(239,68,68,0.12)]"
-                  : "border-[#00ff66]/20 bg-black/40 text-gray-300 hover:border-red-500/40 hover:text-white"
-              }`}
-            >
-              Assets Removed
+              {allExpanded ? "Collapse All" : "Expand All"}
             </button>
           </div>
 
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search by platoon, user, asset, action..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-black border border-[#00ff66]/30 rounded-xl px-4 py-3 text-white"
-            />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-gray-400">
+              Showing {filteredTransactions.length} transaction
+              {filteredTransactions.length === 1 ? "" : "s"}
+            </p>
+
+            <p className="text-xs uppercase tracking-[0.2em] text-gray-500">
+              Auto-refreshing every 30 seconds
+            </p>
           </div>
         </div>
 
         <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
           {loading ? (
             <div className="p-8 text-gray-400">Loading transactions...</div>
+          ) : error ? (
+            <div className="p-10 text-center">
+              <div className="text-lg text-red-400">{error}</div>
+              <div className="text-sm text-gray-500 mt-2">
+                Please try refreshing the page or checking Supabase access.
+              </div>
+            </div>
           ) : groupedTransactions.length === 0 ? (
             <div className="p-10 text-center">
               <div className="text-lg text-gray-300">No matching transactions</div>
@@ -454,16 +600,27 @@ export default function GCLogisticsTransactionsPage() {
                       {group.items.map((tx) => {
                         const isExpanded = !!expandedRows[tx.id];
                         const highlightVariant =
-                          tx.action === "REMOVE_ASSET" ? "red" : "green";
+                          tx.action === "REMOVE_ASSET"
+                            ? "red"
+                            : tx.action === "BUY_ASSET"
+                            ? "blue"
+                            : "green";
 
                         return (
                           <React.Fragment key={tx.id}>
                             <tr
                               onClick={() => toggleRow(tx.id)}
-                              className="group border-b border-[#00ff66]/10 hover:bg-[#00ff66]/5 transition cursor-pointer"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  toggleRow(tx.id);
+                                }
+                              }}
+                              tabIndex={0}
+                              className="group border-b border-[#00ff66]/10 hover:bg-[#00ff66]/5 transition cursor-pointer outline-none focus:bg-[#00ff66]/5"
                             >
                               <td
-                                className="px-4 py-4 text-sm text-gray-300"
+                                className="px-4 py-4 text-sm text-gray-300 whitespace-nowrap"
                                 title={new Date(tx.created_at).toLocaleString()}
                               >
                                 {formatRelativeTime(tx.created_at)}
@@ -495,20 +652,28 @@ export default function GCLogisticsTransactionsPage() {
                                 className={`px-4 py-4 font-medium ${
                                   tx.action === "ADD_TOKENS"
                                     ? "text-[#00ff66]"
+                                    : tx.action === "BUY_ASSET"
+                                    ? "text-blue-400"
                                     : "text-gray-400"
                                 }`}
                               >
-                                {tx.action === "ADD_TOKENS" ? tx.amount ?? 0 : "-"}
+                                {tx.action === "ADD_TOKENS"
+                                  ? `+${tx.amount.toLocaleString()}`
+                                  : tx.action === "BUY_ASSET"
+                                  ? `-${tx.amount.toLocaleString()}`
+                                  : "-"}
                               </td>
 
                               <td
                                 className={`px-4 py-4 font-medium ${
-                                  tx.action === "REMOVE_ASSET"
-                                    ? "text-red-400"
+                                  tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET"
+                                    ? tx.action === "REMOVE_ASSET"
+                                      ? "text-red-400"
+                                      : "text-blue-400"
                                     : "text-gray-400"
                                 }`}
                               >
-                                {tx.action === "REMOVE_ASSET"
+                                {tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET"
                                   ? tx.quantity ?? "-"
                                   : "-"}
                               </td>
@@ -517,6 +682,8 @@ export default function GCLogisticsTransactionsPage() {
                                 className={`px-4 py-4 ${
                                   tx.action === "REMOVE_ASSET"
                                     ? "text-red-300"
+                                    : tx.action === "BUY_ASSET"
+                                    ? "text-blue-300"
                                     : "text-gray-300"
                                 }`}
                               >
@@ -535,21 +702,23 @@ export default function GCLogisticsTransactionsPage() {
                                 )}
                               </td>
 
-                              <td className="px-4 py-4 text-gray-300 max-w-[320px] truncate">
-                                {renderHighlightedText(
-                                  getDescription(tx),
-                                  search,
-                                  highlightVariant
-                                )}
+                              <td className="px-4 py-4 text-gray-300 max-w-[340px]">
+                                <div className="line-clamp-2">
+                                  {renderHighlightedText(
+                                    tx.description,
+                                    search,
+                                    highlightVariant
+                                  )}
+                                </div>
                               </td>
 
                               <td className="px-4 py-4">
                                 <div
-                                  className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition"
+                                  className="flex items-center justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <button
-                                    onClick={() => copyToClipboard(getDescription(tx))}
+                                    onClick={() => copyToClipboard(tx.description)}
                                     className="text-xs px-2 py-1 rounded-lg border border-[#00ff66]/20 text-gray-300 hover:border-[#00ff66]/40 hover:text-[#00ff66] transition"
                                   >
                                     Copy Details
@@ -568,7 +737,9 @@ export default function GCLogisticsTransactionsPage() {
                               <tr className="bg-black/35">
                                 <td
                                   colSpan={9}
-                                  className="px-6 py-5 border-b border-[#00ff66]/10"
+                                  className={`px-6 py-5 border-b border-[#00ff66]/10 ${getExpandedBorderStyle(
+                                    tx.action
+                                  )}`}
                                 >
                                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4">
@@ -650,7 +821,7 @@ export default function GCLogisticsTransactionsPage() {
                                         Full Notes
                                       </div>
                                       <div className="text-sm text-gray-300 whitespace-pre-wrap">
-                                        {tx.notes || getDescription(tx)}
+                                        {tx.notes || tx.description}
                                       </div>
                                     </div>
                                   </div>

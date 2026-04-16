@@ -223,6 +223,30 @@ export default function GCLogisticsTransactionsPage() {
     }
   };
 
+  const getCardBorderStyle = (action: string) => {
+    switch (action) {
+      case "REMOVE_ASSET":
+        return "border-red-500/30";
+      case "BUY_ASSET":
+        return "border-blue-500/30";
+      default:
+        return "border-[#00ff66]/25";
+    }
+  };
+
+  const getAmountTextStyle = (action: string) => {
+    switch (action) {
+      case "ADD_TOKENS":
+        return "text-[#00ff66]";
+      case "BUY_ASSET":
+        return "text-blue-400";
+      case "REMOVE_ASSET":
+        return "text-red-400";
+      default:
+        return "text-gray-300";
+    }
+  };
+
   const escapeRegExp = (value: string) => {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   };
@@ -404,14 +428,14 @@ export default function GCLogisticsTransactionsPage() {
   }
 
   return (
-    <div className="min-h-screen text-white bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] p-8">
+    <div className="min-h-screen text-white bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] p-4 sm:p-6 lg:p-8">
       <div className="max-w-[1650px] mx-auto">
         <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold text-[#00ff66]">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#00ff66]">
               Logistics Transaction History
             </h1>
-            <p className="text-gray-400 mt-2">
+            <p className="text-gray-400 mt-2 text-sm sm:text-base">
               Full audit trail of token additions, asset purchases, and removed assets
             </p>
           </div>
@@ -424,7 +448,7 @@ export default function GCLogisticsTransactionsPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <div className="rounded-2xl border border-[#00ff66]/25 bg-black/40 p-5 shadow-[0_0_20px_rgba(0,255,102,0.08)]">
             <p className="text-sm uppercase tracking-wide text-gray-400">
               Tokens Added
@@ -569,34 +593,15 @@ export default function GCLogisticsTransactionsPage() {
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[75vh]">
-              <table className="w-full">
-                <thead className="sticky top-0 z-20 border-b border-[#00ff66]/20 bg-[#03150b]/95 backdrop-blur">
-                  <tr className="text-left">
-                    <th className="px-4 py-3 text-[#00ff66]">Date</th>
-                    <th className="px-4 py-3 text-[#00ff66]">Platoon</th>
-                    <th className="px-4 py-3 text-[#00ff66]">Action</th>
-                    <th className="px-4 py-3 text-[#00ff66]">Amount</th>
-                    <th className="px-4 py-3 text-[#00ff66]">Qty</th>
-                    <th className="px-4 py-3 text-[#00ff66]">Asset</th>
-                    <th className="px-4 py-3 text-[#00ff66]">Performed By</th>
-                    <th className="px-4 py-3 text-[#00ff66]">Details</th>
-                    <th className="px-4 py-3 text-[#00ff66] text-right">Actions</th>
-                  </tr>
-                </thead>
+            <>
+              <div className="block lg:hidden">
+                {groupedTransactions.map((group) => (
+                  <div key={group.label} className="border-t border-[#00ff66]/10 first:border-t-0">
+                    <div className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-gray-400 bg-black/60">
+                      {group.label}
+                    </div>
 
-                <tbody>
-                  {groupedTransactions.map((group) => (
-                    <React.Fragment key={group.label}>
-                      <tr className="bg-black/70">
-                        <td
-                          colSpan={9}
-                          className="px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-gray-400 border-b border-[#00ff66]/10"
-                        >
-                          {group.label}
-                        </td>
-                      </tr>
-
+                    <div className="p-4 space-y-4">
                       {group.items.map((tx) => {
                         const isExpanded = !!expandedRows[tx.id];
                         const highlightVariant =
@@ -607,235 +612,463 @@ export default function GCLogisticsTransactionsPage() {
                             : "green";
 
                         return (
-                          <React.Fragment key={tx.id}>
-                            <tr
+                          <div
+                            key={tx.id}
+                            className={`rounded-2xl border bg-black/40 p-4 ${getCardBorderStyle(
+                              tx.action
+                            )}`}
+                          >
+                            <button
                               onClick={() => toggleRow(tx.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  toggleRow(tx.id);
-                                }
-                              }}
-                              tabIndex={0}
-                              className="group border-b border-[#00ff66]/10 hover:bg-[#00ff66]/5 transition cursor-pointer outline-none focus:bg-[#00ff66]/5"
+                              className="w-full text-left"
                             >
-                              <td
-                                className="px-4 py-4 text-sm text-gray-300 whitespace-nowrap"
-                                title={new Date(tx.created_at).toLocaleString()}
-                              >
-                                {formatRelativeTime(tx.created_at)}
-                              </td>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                                    <span
+                                      className={`px-2 py-1 rounded-lg border text-xs ${getActionStyle(
+                                        tx.action
+                                      )}`}
+                                    >
+                                      {getActionLabel(tx)}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      {formatRelativeTime(tx.created_at)}
+                                    </span>
+                                  </div>
 
-                              <td className="px-4 py-4">
-                                {renderHighlightedText(
-                                  tx.platoon?.name || "Unknown",
-                                  search,
-                                  highlightVariant
-                                )}
-                              </td>
+                                  <div className="text-sm font-semibold text-white">
+                                    {renderHighlightedText(
+                                      tx.platoon?.name || "Unknown",
+                                      search,
+                                      highlightVariant
+                                    )}
+                                  </div>
 
-                              <td className="px-4 py-4">
-                                <span
-                                  className={`px-2 py-1 rounded-lg border text-sm ${getActionStyle(
-                                    tx.action
-                                  )}`}
-                                >
-                                  {renderHighlightedText(
-                                    getActionLabel(tx),
-                                    search,
-                                    highlightVariant
-                                  )}
-                                </span>
-                              </td>
-
-                              <td
-                                className={`px-4 py-4 font-medium ${
-                                  tx.action === "ADD_TOKENS"
-                                    ? "text-[#00ff66]"
-                                    : tx.action === "BUY_ASSET"
-                                    ? "text-blue-400"
-                                    : "text-gray-400"
-                                }`}
-                              >
-                                {tx.action === "ADD_TOKENS"
-                                  ? `+${tx.amount.toLocaleString()}`
-                                  : tx.action === "BUY_ASSET"
-                                  ? `-${tx.amount.toLocaleString()}`
-                                  : "-"}
-                              </td>
-
-                              <td
-                                className={`px-4 py-4 font-medium ${
-                                  tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET"
-                                    ? tx.action === "REMOVE_ASSET"
-                                      ? "text-red-400"
-                                      : "text-blue-400"
-                                    : "text-gray-400"
-                                }`}
-                              >
-                                {tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET"
-                                  ? tx.quantity ?? "-"
-                                  : "-"}
-                              </td>
-
-                              <td
-                                className={`px-4 py-4 ${
-                                  tx.action === "REMOVE_ASSET"
-                                    ? "text-red-300"
-                                    : tx.action === "BUY_ASSET"
-                                    ? "text-blue-300"
-                                    : "text-gray-300"
-                                }`}
-                              >
-                                {renderHighlightedText(
-                                  tx.asset_name || "-",
-                                  search,
-                                  highlightVariant
-                                )}
-                              </td>
-
-                              <td className="px-4 py-4">
-                                {renderHighlightedText(
-                                  tx.profile?.display_name || "Unknown",
-                                  search,
-                                  highlightVariant
-                                )}
-                              </td>
-
-                              <td className="px-4 py-4 text-gray-300 max-w-[340px]">
-                                <div className="line-clamp-2">
-                                  {renderHighlightedText(
-                                    tx.description,
-                                    search,
-                                    highlightVariant
-                                  )}
+                                  <div className="mt-1 text-sm text-gray-400">
+                                    By{" "}
+                                    {renderHighlightedText(
+                                      tx.profile?.display_name || "Unknown",
+                                      search,
+                                      highlightVariant
+                                    )}
+                                  </div>
                                 </div>
-                              </td>
 
-                              <td className="px-4 py-4">
-                                <div
-                                  className="flex items-center justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    onClick={() => copyToClipboard(tx.description)}
-                                    className="text-xs px-2 py-1 rounded-lg border border-[#00ff66]/20 text-gray-300 hover:border-[#00ff66]/40 hover:text-[#00ff66] transition"
+                                <div className="text-right shrink-0">
+                                  <div
+                                    className={`text-sm font-semibold ${getAmountTextStyle(
+                                      tx.action
+                                    )}`}
                                   >
-                                    Copy Details
-                                  </button>
-                                  <button
-                                    onClick={() => copyToClipboard(tx.id)}
-                                    className="text-xs px-2 py-1 rounded-lg border border-[#00ff66]/20 text-gray-300 hover:border-[#00ff66]/40 hover:text-[#00ff66] transition"
-                                  >
-                                    Copy ID
-                                  </button>
+                                    {tx.action === "ADD_TOKENS"
+                                      ? `+${tx.amount.toLocaleString()}`
+                                      : tx.action === "BUY_ASSET"
+                                      ? `-${tx.amount.toLocaleString()}`
+                                      : tx.quantity
+                                      ? `${tx.quantity}x`
+                                      : "-"}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {isExpanded ? "Hide" : "View"}
+                                  </div>
                                 </div>
-                              </td>
-                            </tr>
+                              </div>
+
+                              <div className="mt-3 text-sm text-gray-300 line-clamp-3">
+                                {renderHighlightedText(
+                                  tx.description,
+                                  search,
+                                  highlightVariant
+                                )}
+                              </div>
+                            </button>
+
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                onClick={() => copyToClipboard(tx.description)}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-[#00ff66]/20 text-gray-300 hover:border-[#00ff66]/40 hover:text-[#00ff66] transition"
+                              >
+                                Copy Details
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(tx.id)}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-[#00ff66]/20 text-gray-300 hover:border-[#00ff66]/40 hover:text-[#00ff66] transition"
+                              >
+                                Copy ID
+                              </button>
+                            </div>
 
                             {isExpanded && (
-                              <tr className="bg-black/35">
-                                <td
-                                  colSpan={9}
-                                  className={`px-6 py-5 border-b border-[#00ff66]/10 ${getExpandedBorderStyle(
-                                    tx.action
-                                  )}`}
-                                >
-                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4">
-                                      <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">
-                                        Entry Details
-                                      </div>
-                                      <div className="space-y-2 text-sm">
-                                        <div>
-                                          <span className="text-gray-500">Action:</span>{" "}
-                                          <span className="text-white">{getActionLabel(tx)}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">Platoon:</span>{" "}
-                                          <span className="text-white">
-                                            {tx.platoon?.name || "Unknown"}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">Performed By:</span>{" "}
-                                          <span className="text-white">
-                                            {tx.profile?.display_name || "Unknown"}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">Amount:</span>{" "}
-                                          <span className="text-white">{tx.amount ?? 0}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">Quantity:</span>{" "}
-                                          <span className="text-white">{tx.quantity ?? "-"}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">Asset:</span>{" "}
-                                          <span className="text-white">
-                                            {tx.asset_name || "-"}
-                                          </span>
-                                        </div>
-                                      </div>
+                              <div
+                                className={`mt-4 rounded-xl border border-white/5 bg-black/45 p-4 ${getExpandedBorderStyle(
+                                  tx.action
+                                )}`}
+                              >
+                                <div className="space-y-4 text-sm">
+                                  <div>
+                                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-2">
+                                      Entry Details
                                     </div>
-
-                                    <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4">
-                                      <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">
-                                        Audit Info
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Action</span>
+                                        <span className="text-white text-right">
+                                          {getActionLabel(tx)}
+                                        </span>
                                       </div>
-                                      <div className="space-y-2 text-sm">
-                                        <div>
-                                          <span className="text-gray-500">Transaction ID:</span>{" "}
-                                          <span className="text-white break-all">{tx.id}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">Platoon ID:</span>{" "}
-                                          <span className="text-white break-all">
-                                            {tx.platoon_id}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">Performed By ID:</span>{" "}
-                                          <span className="text-white break-all">
-                                            {tx.performed_by || "-"}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">Timestamp:</span>{" "}
-                                          <span className="text-white">
-                                            {new Date(tx.created_at).toLocaleString()}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-500">ISO Time:</span>{" "}
-                                          <span className="text-white break-all">
-                                            {new Date(tx.created_at).toISOString()}
-                                          </span>
-                                        </div>
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Platoon</span>
+                                        <span className="text-white text-right">
+                                          {tx.platoon?.name || "Unknown"}
+                                        </span>
                                       </div>
-                                    </div>
-
-                                    <div className="lg:col-span-2 rounded-xl border border-[#00ff66]/15 bg-black/40 p-4">
-                                      <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">
-                                        Full Notes
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Performed By</span>
+                                        <span className="text-white text-right">
+                                          {tx.profile?.display_name || "Unknown"}
+                                        </span>
                                       </div>
-                                      <div className="text-sm text-gray-300 whitespace-pre-wrap">
-                                        {tx.notes || tx.description}
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Amount</span>
+                                        <span className="text-white text-right">
+                                          {tx.amount ?? 0}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Quantity</span>
+                                        <span className="text-white text-right">
+                                          {tx.quantity ?? "-"}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Asset</span>
+                                        <span className="text-white text-right break-all">
+                                          {tx.asset_name || "-"}
+                                        </span>
                                       </div>
                                     </div>
                                   </div>
-                                </td>
-                              </tr>
+
+                                  <div>
+                                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-2">
+                                      Audit Info
+                                    </div>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Transaction ID</span>
+                                        <span className="text-white text-right break-all">
+                                          {tx.id}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Platoon ID</span>
+                                        <span className="text-white text-right break-all">
+                                          {tx.platoon_id}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Performed By ID</span>
+                                        <span className="text-white text-right break-all">
+                                          {tx.performed_by || "-"}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500">Timestamp</span>
+                                        <span className="text-white text-right">
+                                          {new Date(tx.created_at).toLocaleString()}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-2">
+                                      Full Notes
+                                    </div>
+                                    <div className="text-gray-300 whitespace-pre-wrap">
+                                      {tx.notes || tx.description}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                             )}
-                          </React.Fragment>
+                          </div>
                         );
                       })}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden lg:block overflow-x-auto max-h-[75vh]">
+                <table className="w-full">
+                  <thead className="sticky top-0 z-20 border-b border-[#00ff66]/20 bg-[#03150b]/95 backdrop-blur">
+                    <tr className="text-left">
+                      <th className="px-4 py-3 text-[#00ff66]">Date</th>
+                      <th className="px-4 py-3 text-[#00ff66]">Platoon</th>
+                      <th className="px-4 py-3 text-[#00ff66]">Action</th>
+                      <th className="px-4 py-3 text-[#00ff66]">Amount</th>
+                      <th className="px-4 py-3 text-[#00ff66]">Qty</th>
+                      <th className="px-4 py-3 text-[#00ff66]">Asset</th>
+                      <th className="px-4 py-3 text-[#00ff66]">Performed By</th>
+                      <th className="px-4 py-3 text-[#00ff66]">Details</th>
+                      <th className="px-4 py-3 text-[#00ff66] text-right">Actions</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {groupedTransactions.map((group) => (
+                      <React.Fragment key={group.label}>
+                        <tr className="bg-black/70">
+                          <td
+                            colSpan={9}
+                            className="px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-gray-400 border-b border-[#00ff66]/10"
+                          >
+                            {group.label}
+                          </td>
+                        </tr>
+
+                        {group.items.map((tx) => {
+                          const isExpanded = !!expandedRows[tx.id];
+                          const highlightVariant =
+                            tx.action === "REMOVE_ASSET"
+                              ? "red"
+                              : tx.action === "BUY_ASSET"
+                              ? "blue"
+                              : "green";
+
+                          return (
+                            <React.Fragment key={tx.id}>
+                              <tr
+                                onClick={() => toggleRow(tx.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    toggleRow(tx.id);
+                                  }
+                                }}
+                                tabIndex={0}
+                                className="group border-b border-[#00ff66]/10 hover:bg-[#00ff66]/5 transition cursor-pointer outline-none focus:bg-[#00ff66]/5"
+                              >
+                                <td
+                                  className="px-4 py-4 text-sm text-gray-300 whitespace-nowrap"
+                                  title={new Date(tx.created_at).toLocaleString()}
+                                >
+                                  {formatRelativeTime(tx.created_at)}
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  {renderHighlightedText(
+                                    tx.platoon?.name || "Unknown",
+                                    search,
+                                    highlightVariant
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  <span
+                                    className={`px-2 py-1 rounded-lg border text-sm ${getActionStyle(
+                                      tx.action
+                                    )}`}
+                                  >
+                                    {renderHighlightedText(
+                                      getActionLabel(tx),
+                                      search,
+                                      highlightVariant
+                                    )}
+                                  </span>
+                                </td>
+
+                                <td
+                                  className={`px-4 py-4 font-medium ${
+                                    tx.action === "ADD_TOKENS"
+                                      ? "text-[#00ff66]"
+                                      : tx.action === "BUY_ASSET"
+                                      ? "text-blue-400"
+                                      : "text-gray-400"
+                                  }`}
+                                >
+                                  {tx.action === "ADD_TOKENS"
+                                    ? `+${tx.amount.toLocaleString()}`
+                                    : tx.action === "BUY_ASSET"
+                                    ? `-${tx.amount.toLocaleString()}`
+                                    : "-"}
+                                </td>
+
+                                <td
+                                  className={`px-4 py-4 font-medium ${
+                                    tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET"
+                                      ? tx.action === "REMOVE_ASSET"
+                                        ? "text-red-400"
+                                        : "text-blue-400"
+                                      : "text-gray-400"
+                                  }`}
+                                >
+                                  {tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET"
+                                    ? tx.quantity ?? "-"
+                                    : "-"}
+                                </td>
+
+                                <td
+                                  className={`px-4 py-4 ${
+                                    tx.action === "REMOVE_ASSET"
+                                      ? "text-red-300"
+                                      : tx.action === "BUY_ASSET"
+                                      ? "text-blue-300"
+                                      : "text-gray-300"
+                                  }`}
+                                >
+                                  {renderHighlightedText(
+                                    tx.asset_name || "-",
+                                    search,
+                                    highlightVariant
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  {renderHighlightedText(
+                                    tx.profile?.display_name || "Unknown",
+                                    search,
+                                    highlightVariant
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-4 text-gray-300 max-w-[340px]">
+                                  <div className="line-clamp-2">
+                                    {renderHighlightedText(
+                                      tx.description,
+                                      search,
+                                      highlightVariant
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="px-4 py-4">
+                                  <div
+                                    className="flex items-center justify-end gap-2 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      onClick={() => copyToClipboard(tx.description)}
+                                      className="text-xs px-2 py-1 rounded-lg border border-[#00ff66]/20 text-gray-300 hover:border-[#00ff66]/40 hover:text-[#00ff66] transition"
+                                    >
+                                      Copy Details
+                                    </button>
+                                    <button
+                                      onClick={() => copyToClipboard(tx.id)}
+                                      className="text-xs px-2 py-1 rounded-lg border border-[#00ff66]/20 text-gray-300 hover:border-[#00ff66]/40 hover:text-[#00ff66] transition"
+                                    >
+                                      Copy ID
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {isExpanded && (
+                                <tr className="bg-black/35">
+                                  <td
+                                    colSpan={9}
+                                    className={`px-6 py-5 border-b border-[#00ff66]/10 ${getExpandedBorderStyle(
+                                      tx.action
+                                    )}`}
+                                  >
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                      <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4">
+                                        <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">
+                                          Entry Details
+                                        </div>
+                                        <div className="space-y-2 text-sm">
+                                          <div>
+                                            <span className="text-gray-500">Action:</span>{" "}
+                                            <span className="text-white">{getActionLabel(tx)}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Platoon:</span>{" "}
+                                            <span className="text-white">
+                                              {tx.platoon?.name || "Unknown"}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Performed By:</span>{" "}
+                                            <span className="text-white">
+                                              {tx.profile?.display_name || "Unknown"}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Amount:</span>{" "}
+                                            <span className="text-white">{tx.amount ?? 0}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Quantity:</span>{" "}
+                                            <span className="text-white">{tx.quantity ?? "-"}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Asset:</span>{" "}
+                                            <span className="text-white">
+                                              {tx.asset_name || "-"}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4">
+                                        <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">
+                                          Audit Info
+                                        </div>
+                                        <div className="space-y-2 text-sm">
+                                          <div>
+                                            <span className="text-gray-500">Transaction ID:</span>{" "}
+                                            <span className="text-white break-all">{tx.id}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Platoon ID:</span>{" "}
+                                            <span className="text-white break-all">
+                                              {tx.platoon_id}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Performed By ID:</span>{" "}
+                                            <span className="text-white break-all">
+                                              {tx.performed_by || "-"}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Timestamp:</span>{" "}
+                                            <span className="text-white">
+                                              {new Date(tx.created_at).toLocaleString()}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">ISO Time:</span>{" "}
+                                            <span className="text-white break-all">
+                                              {new Date(tx.created_at).toISOString()}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="lg:col-span-2 rounded-xl border border-[#00ff66]/15 bg-black/40 p-4">
+                                        <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">
+                                          Full Notes
+                                        </div>
+                                        <div className="text-sm text-gray-300 whitespace-pre-wrap">
+                                          {tx.notes || tx.description}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>

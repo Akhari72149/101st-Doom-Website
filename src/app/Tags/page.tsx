@@ -1,35 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 
+type RankRow = {
+  id: string;
+  name: string;
+};
+
+type CertificationRow = {
+  id: string;
+  name: string;
+};
+
+type PersonRow = {
+  id: string;
+  name: string;
+  rank_id: string | null;
+  status?: string | null;
+  slotted_position?: string | null;
+  reservist_since?: string | null;
+  awarded_at?: string | null;
+  personnelCertificationId: string;
+};
+
 export default function CertificationLookupByTag() {
-  const [ranks, setRanks] = useState<any[]>([]);
+  const [ranks, setRanks] = useState<RankRow[]>([]);
   const [search, setSearch] = useState("");
-  const [certificationResults, setCertificationResults] = useState<any[]>([]);
-  const [selectedCertification, setSelectedCertification] = useState<any>(null);
-  const [personnel, setPersonnel] = useState<any[]>([]);
+  const [certificationResults, setCertificationResults] = useState<CertificationRow[]>([]);
+  const [selectedCertification, setSelectedCertification] = useState<CertificationRow | null>(null);
+  const [personnel, setPersonnel] = useState<PersonRow[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
+  const [loadingPersonnel, setLoadingPersonnel] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     fetchRanks();
   }, []);
 
-  const fetchRanks = async () => {
-    const { data } = await supabase
-      .from("ranks")
-      .select("*");
+  useEffect(() => {
+    const trimmed = search.trim();
 
+    if (!trimmed) {
+      setCertificationResults([]);
+      setLoadingResults(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      fetchCertifications(trimmed);
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [search]);
+
+  const fetchRanks = async () => {
+    const { data } = await supabase.from("ranks").select("id, name").order("name");
     setRanks(data || []);
   };
 
   const fetchCertifications = async (value: string) => {
-    if (!value.trim()) {
-      setCertificationResults([]);
-      return;
-    }
+    setLoadingResults(true);
 
     const { data, error } = await supabase
       .from("certifications")
@@ -40,16 +73,20 @@ export default function CertificationLookupByTag() {
     if (error) {
       console.error("Error fetching certifications:", error);
       setCertificationResults([]);
+      setLoadingResults(false);
       return;
     }
 
     const results = [...(data || [])];
-
     const lower = value.toLowerCase();
-    const shouldShowReservist =
-      "reservist".includes(lower) || lower.includes("reserv");
 
-    if (shouldShowReservist) {
+    const shouldShowReservist =
+      lower.includes("reservist") || lower.includes("reserv");
+
+    if (
+      shouldShowReservist &&
+      !results.some((item) => item.id === "special-reservist")
+    ) {
       results.unshift({
         id: "special-reservist",
         name: "Reservist",
@@ -57,9 +94,12 @@ export default function CertificationLookupByTag() {
     }
 
     setCertificationResults(results);
+    setLoadingResults(false);
   };
 
   const fetchPersonnelByCertification = async (certificationId: string) => {
+    setLoadingPersonnel(true);
+
     const { data, error } = await supabase
       .from("personnel_certifications")
       .select(`
@@ -68,7 +108,8 @@ export default function CertificationLookupByTag() {
         personnel:personnel_id (
           id,
           name,
-          rank_id
+          rank_id,
+          status
         )
       `)
       .eq("certification_id", certificationId)
@@ -77,52 +118,76 @@ export default function CertificationLookupByTag() {
     if (error) {
       console.error("Error fetching personnel by certification:", error);
       setPersonnel([]);
+      setLoadingPersonnel(false);
       return;
     }
 
     const people = (data || [])
-      .map((row) => ({
-        ...row.personnel,
-        awarded_at: row.awarded_at,
-        personnelCertificationId: row.id,
-      }))
-      .filter(Boolean);
+      .map((row: any) => {
+        const person = Array.isArray(row.personnel)
+          ? row.personnel[0] ?? null
+          : row.personnel;
+
+        if (!person) return null;
+
+        return {
+          ...person,
+          awarded_at: row.awarded_at,
+          personnelCertificationId: row.id,
+        } as PersonRow;
+      })
+      .filter(Boolean) as PersonRow[];
 
     setPersonnel(people);
+    setLoadingPersonnel(false);
   };
 
   const fetchReservists = async () => {
+    setLoadingPersonnel(true);
+
     const { data, error } = await supabase
       .from("personnel")
-      .select("id, name, rank_id, slotted_position, reservist_since")
+      .select("id, name, rank_id, status, slotted_position, reservist_since")
       .is("slotted_position", null)
       .order("name");
 
     if (error) {
       console.error("Error fetching reservists:", error);
       setPersonnel([]);
+      setLoadingPersonnel(false);
       return;
     }
 
-    const people = (data || []).map((p) => ({
+    const people = (data || []).map((p: any) => ({
       ...p,
       awarded_at: null,
       personnelCertificationId: `reservist-${p.id}`,
-    }));
+    })) as PersonRow[];
 
     setPersonnel(people);
+    setLoadingPersonnel(false);
   };
 
-  const getRankName = (person: any) => {
-    const rank = ranks.find((r) => r.id === person.rank_id);
-    return rank ? rank.name : "Unranked";
+  const rankMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    ranks.forEach((rank) => {
+      map[rank.id] = rank.name;
+    });
+    return map;
+  }, [ranks]);
+
+  const getRankName = (person: PersonRow) => {
+    if (!person.rank_id) return "Unranked";
+    return rankMap[person.rank_id] || "Unranked";
   };
 
-  const getReservistDuration = (dateString: string | null) => {
+  const getReservistDuration = (dateString: string | null | undefined) => {
     if (!dateString) return "Unknown";
 
     const start = new Date(dateString);
     const now = new Date();
+
+    if (Number.isNaN(start.getTime())) return "Unknown";
 
     const diffMs = now.getTime() - start.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -145,15 +210,24 @@ export default function CertificationLookupByTag() {
     return `${years}y ${remainingMonths}m`;
   };
 
+  const clearSelection = () => {
+    setSelectedCertification(null);
+    setPersonnel([]);
+    setSearch("");
+    setCertificationResults([]);
+  };
+
   const isReservistView = selectedCertification?.id === "special-reservist";
 
   return (
-    <div className="
-      min-h-screen
-      bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
-      text-[#eafff2]
-      p-10
-    ">
+    <div
+      className="
+        min-h-screen
+        bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
+        text-[#eafff2]
+        p-4 sm:p-6 lg:p-10
+      "
+    >
       <div className="max-w-6xl mx-auto">
         <button
           onClick={() => router.push("/pcs")}
@@ -162,13 +236,15 @@ export default function CertificationLookupByTag() {
           ← Return to Dashboard
         </button>
 
-        <h1 className="
-          text-4xl font-extrabold mb-8
-          text-transparent bg-clip-text
-          bg-gradient-to-r from-[#00ff66] to-[#00ffaa]
-          tracking-[0.5em]
-          drop-shadow-[0_0_10px_rgba(0,255,100,0.6)]
-        ">
+        <h1
+          className="
+            text-2xl sm:text-3xl lg:text-4xl font-extrabold mb-8
+            text-transparent bg-clip-text
+            bg-gradient-to-r from-[#00ff66] to-[#00ffaa]
+            tracking-[0.35em] sm:tracking-[0.5em]
+            drop-shadow-[0_0_10px_rgba(0,255,100,0.6)]
+          "
+        >
           TAG LOOKUP
         </h1>
 
@@ -178,13 +254,9 @@ export default function CertificationLookupByTag() {
             type="text"
             placeholder="Search certification or Reservist..."
             value={search}
-            onChange={(e) => {
-              const value = e.target.value;
-              setSearch(value);
-              fetchCertifications(value);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
             className="
-              w-full pl-12 p-4 rounded-xl
+              w-full pl-12 pr-4 p-4 rounded-xl
               bg-black/40 backdrop-blur-md
               border border-[#00ff66]/40
               text-[#00ff66]
@@ -192,43 +264,45 @@ export default function CertificationLookupByTag() {
               focus:border-[#00ff66]
               focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]
               transition-all duration-300
+              outline-none
             "
           />
         </div>
 
-        {search && (
-          <div className="
-            mb-8
-            border border-[#00ff66]/30
-            bg-black/60 backdrop-blur-lg
-            rounded-xl
-            shadow-[0_0_40px_rgba(0,255,100,0.1)]
-            max-h-64 overflow-y-auto
-            transition-all duration-300
-          ">
-            {certificationResults.length === 0 ? (
-              <p className="p-4 text-gray-400">
-                No certifications found.
-              </p>
+        {search.trim() && (
+          <div
+            className="
+              mb-8
+              border border-[#00ff66]/30
+              bg-black/60 backdrop-blur-lg
+              rounded-xl
+              shadow-[0_0_40px_rgba(0,255,100,0.1)]
+              max-h-64 overflow-y-auto
+              transition-all duration-300
+            "
+          >
+            {loadingResults ? (
+              <p className="p-4 text-gray-400">Searching tags...</p>
+            ) : certificationResults.length === 0 ? (
+              <p className="p-4 text-gray-400">No certifications found.</p>
             ) : (
               certificationResults.map((cert) => (
                 <div
                   key={cert.id}
                   onClick={() => {
                     setSelectedCertification(cert);
+                    setSearch("");
+                    setCertificationResults([]);
 
                     if (cert.id === "special-reservist") {
                       fetchReservists();
                     } else {
                       fetchPersonnelByCertification(cert.id);
                     }
-
-                    setSearch("");
-                    setCertificationResults([]);
                   }}
                   className="
                     px-4 py-3
-                    border-b border-[#00ff66]/20
+                    border-b last:border-b-0 border-[#00ff66]/20
                     cursor-pointer
                     transition-all duration-200
                     hover:bg-[#00ff66]/10
@@ -244,36 +318,69 @@ export default function CertificationLookupByTag() {
         )}
 
         {selectedCertification && (
-          <div className="
-            p-8 rounded-3xl
-            bg-black/60 backdrop-blur-2xl
-            border border-[#00ff66]/40
-            shadow-[0_0_80px_rgba(0,255,100,0.25)]
-            animate-fade-in
-          ">
-            <h2 className="
-              text-2xl font-bold mb-6
-              text-[#00ff66]
-              tracking-widest
-              border-b border-[#00ff66]/40
-            ">
-              {isReservistView
-                ? "Personnel with: Reservist"
-                : `Personnel with: ${selectedCertification.name}`}
-            </h2>
+          <div
+            className="
+              p-6 sm:p-8 rounded-3xl
+              bg-black/60 backdrop-blur-2xl
+              border border-[#00ff66]/40
+              shadow-[0_0_80px_rgba(0,255,100,0.25)]
+            "
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2
+                  className="
+                    text-xl sm:text-2xl font-bold
+                    text-[#00ff66]
+                    tracking-widest
+                  "
+                >
+                  {isReservistView
+                    ? "Personnel with: Reservist"
+                    : `Personnel with: ${selectedCertification.name}`}
+                </h2>
 
-            {personnel.length === 0 ? (
+                <span
+                  className={`px-3 py-1 rounded-full border text-sm ${
+                    isReservistView
+                      ? "border-cyan-400/40 bg-cyan-400/10 text-cyan-300"
+                      : "border-[#00ff66]/40 bg-[#00ff66]/10 text-[#00ff66]"
+                  }`}
+                >
+                  {selectedCertification.name}
+                </span>
+              </div>
+
+              <button
+                onClick={clearSelection}
+                className="px-3 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 transition"
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="mb-6 border-b border-[#00ff66]/40 pb-4">
+              <p className="text-sm text-[#00ff66]/70">
+                {loadingPersonnel
+                  ? "Loading personnel..."
+                  : `${personnel.length} result${personnel.length === 1 ? "" : "s"} found`}
+              </p>
+            </div>
+
+            {loadingPersonnel ? (
               <div className="py-10 text-center text-[#00ff66]/60">
-                <p className="text-lg font-medium">
-                  No personnel found
-                </p>
+                <p className="text-lg font-medium">Loading personnel...</p>
+              </div>
+            ) : personnel.length === 0 ? (
+              <div className="py-10 text-center text-[#00ff66]/60">
+                <p className="text-lg font-medium">No personnel found</p>
                 <p className="text-sm opacity-70">
                   Try another certification or check your data
                 </p>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-[#00ff66]/40">
-                <table className="w-full">
+              <div className="overflow-x-auto rounded-xl border border-[#00ff66]/40">
+                <table className="w-full min-w-[520px]">
                   <thead className="bg-[#00ff66]/20 backdrop-blur-md text-[#00ff66]">
                     <tr>
                       <th className="px-4 py-3 text-left">Rank</th>
@@ -300,12 +407,10 @@ export default function CertificationLookupByTag() {
                         <td className="px-4 py-3 text-[#00ff66]">
                           {getRankName(p)}
                         </td>
-                        <td className="px-4 py-3">
-                          {p.name}
-                        </td>
+                        <td className="px-4 py-3">{p.name}</td>
 
                         {isReservistView ? (
-                          <td className="px-4 py-3 text-[#00ff66]">
+                          <td className="px-4 py-3 text-cyan-300">
                             {getReservistDuration(p.reservist_since)}
                           </td>
                         ) : (

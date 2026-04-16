@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
@@ -13,19 +13,41 @@ type Personnel = {
   status: string | null;
 };
 
+type Rank = {
+  id: string;
+  name: string;
+  rank_level: number;
+};
+
+type StructureRole = {
+  role: string;
+  slotId: string;
+};
+
+type StructureChild = {
+  title: string;
+  roles?: StructureRole[];
+};
+
+type StructureSection = {
+  title: string;
+  children?: StructureChild[];
+};
+
 export default function PositionEditor() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [personnel, setPersonnel] = useState<Personnel[]>([]);
-  const [ranks, setRanks] = useState<any[]>([]);
-  const [selectedPerson, setSelectedPerson] =
-    useState<Personnel | null>(null);
+  const [processing, setProcessing] = useState(false);
 
-  const [selectedHeader, setSelectedHeader] = useState<string>("");
-  const [selectedSubHeader, setSelectedSubHeader] = useState<string>("");
-  const [selectedSlotId, setSelectedSlotId] = useState<string>("");
-  const [selectedRankId, setSelectedRankId] = useState<string>("");
+  const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [ranks, setRanks] = useState<Rank[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
+
+  const [selectedHeader, setSelectedHeader] = useState("");
+  const [selectedSubHeader, setSelectedSubHeader] = useState("");
+  const [selectedSlotId, setSelectedSlotId] = useState("");
+  const [selectedRankId, setSelectedRankId] = useState("");
 
   const [personSearch, setPersonSearch] = useState("");
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
@@ -43,10 +65,15 @@ export default function PositionEditor() {
         return;
       }
 
-      const { data: roles } = await supabase
+      const { data: roles, error } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id);
+
+      if (error) {
+        router.replace("/");
+        return;
+      }
 
       const roleList = roles?.map((r) => r.role) || [];
       const allowedRoles = ["admin", "nco", "di"];
@@ -62,20 +89,22 @@ export default function PositionEditor() {
     checkAccess();
   }, [router]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  /* ================= DATA ================= */
 
   const fetchData = async () => {
-    const { data: personnelData } = await supabase
+    const { data: personnelData, error: personnelError } = await supabase
       .from("personnel")
       .select("id, name, rank_id, slotted_position, status")
       .order("name", { ascending: true });
 
-    const { data: rankData } = await supabase
+    const { data: rankData, error: rankError } = await supabase
       .from("ranks")
-      .select("*")
+      .select("id, name, rank_level")
       .order("rank_level", { ascending: true });
+
+    if (personnelError || rankError) {
+      return;
+    }
 
     const activePersonnel = (personnelData || []).filter((person) => {
       const status = (person.status || "").trim().toLowerCase();
@@ -83,30 +112,44 @@ export default function PositionEditor() {
     });
 
     setPersonnel((activePersonnel as Personnel[]) || []);
-    setRanks(rankData || []);
+    setRanks((rankData as Rank[]) || []);
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedPerson) return;
+
+    const updated = personnel.find((p) => p.id === selectedPerson.id);
+    if (!updated) return;
+
+    setSelectedPerson(updated);
+    setSelectedRankId(updated.rank_id || "");
+  }, [personnel, selectedPerson]);
 
   /* ================= STRUCTURE ================= */
 
   const headers = useMemo(
-    () => structure.map((section: any) => section.title),
+    () => (structure as StructureSection[]).map((section) => section.title),
     []
   );
 
   const subHeaders = useMemo(() => {
-    const section = structure.find(
-      (s: any) => s.title === selectedHeader
+    const section = (structure as StructureSection[]).find(
+      (s) => s.title === selectedHeader
     );
-    return section?.children?.map((child: any) => child.title) || [];
+    return section?.children?.map((child) => child.title) || [];
   }, [selectedHeader]);
 
   const roles = useMemo(() => {
-    const section = structure.find(
-      (s: any) => s.title === selectedHeader
+    const section = (structure as StructureSection[]).find(
+      (s) => s.title === selectedHeader
     );
 
     const sub = section?.children?.find(
-      (c: any) => c.title === selectedSubHeader
+      (c) => c.title === selectedSubHeader
     );
 
     return sub?.roles || [];
@@ -114,27 +157,10 @@ export default function PositionEditor() {
 
   /* ================= HELPERS ================= */
 
-  const resolveSlotMetadata = (slotId: string) => {
-    for (const section of structure) {
-      for (const sub of section.children || []) {
-        for (const role of sub.roles || []) {
-          if (role.slotId === slotId) {
-            return {
-              label: role.role,
-              section: section.title,
-              subsection: sub.title,
-            };
-          }
-        }
-      }
-    }
-    return null;
-  };
-
   const formatSlotToBillet = (slotId: string | null) => {
     if (!slotId) return "Unassigned";
 
-    for (const section of structure) {
+    for (const section of structure as StructureSection[]) {
       for (const sub of section.children || []) {
         for (const role of sub.roles || []) {
           if (role.slotId === slotId) {
@@ -152,6 +178,20 @@ export default function PositionEditor() {
     return rank ? rank.name : "Unranked";
   };
 
+  const filteredPersonnel = useMemo(() => {
+    const search = personSearch.trim().toLowerCase();
+
+    return personnel.filter((p) =>
+      `${getRankName(p.rank_id)} ${p.name}`.toLowerCase().includes(search)
+    );
+  }, [personnel, personSearch, ranks]);
+
+  const hasPositionChange =
+    !!selectedPerson && selectedSlotId !== (selectedPerson.slotted_position || "");
+
+  const hasRankChange =
+    !!selectedPerson && selectedRankId !== (selectedPerson.rank_id || "");
+
   /* ================= ACTIONS ================= */
 
   const updatePosition = async () => {
@@ -160,7 +200,9 @@ export default function PositionEditor() {
       return;
     }
 
-    const metadata = resolveSlotMetadata(selectedSlotId);
+    setProcessing(true);
+
+    const oldSlot = selectedPerson.slotted_position;
 
     const { error } = await supabase
       .from("personnel")
@@ -170,6 +212,7 @@ export default function PositionEditor() {
       .eq("id", selectedPerson.id);
 
     if (error) {
+      setProcessing(false);
       alert("Update failed: " + error.message);
       return;
     }
@@ -178,12 +221,14 @@ export default function PositionEditor() {
       body: {
         personnelId: selectedPerson.id,
         slotId: selectedSlotId,
+        oldSlotId: oldSlot,
         forceDefaultRole: false,
       },
     });
 
-    alert("✅ Position Assigned + Logged");
-    fetchData();
+    await fetchData();
+    setProcessing(false);
+    alert("✅ Position Updated + Logged");
   };
 
   const updateRank = async () => {
@@ -191,6 +236,8 @@ export default function PositionEditor() {
       alert("Select a person first.");
       return;
     }
+
+    setProcessing(true);
 
     const oldRank = selectedPerson.rank_id;
 
@@ -202,6 +249,7 @@ export default function PositionEditor() {
       .eq("id", selectedPerson.id);
 
     if (error) {
+      setProcessing(false);
       alert("Rank update failed: " + error.message);
       return;
     }
@@ -210,17 +258,19 @@ export default function PositionEditor() {
       body: {
         personnelId: selectedPerson.id,
         oldRankId: oldRank,
-        newRankId: selectedRankId,
+        newRankId: selectedRankId || null,
       },
     });
 
+    await fetchData();
+    setProcessing(false);
     alert("✅ Rank Updated + Discord Synced");
-
-    fetchData();
   };
 
   const unassignPosition = async () => {
     if (!selectedPerson) return;
+
+    setProcessing(true);
 
     const oldSlot = selectedPerson.slotted_position;
 
@@ -230,6 +280,7 @@ export default function PositionEditor() {
       .eq("id", selectedPerson.id);
 
     if (error) {
+      setProcessing(false);
       alert("Unassign failed: " + error.message);
       return;
     }
@@ -243,8 +294,12 @@ export default function PositionEditor() {
       },
     });
 
+    await fetchData();
+    setSelectedSlotId("");
+    setSelectedHeader("");
+    setSelectedSubHeader("");
+    setProcessing(false);
     alert("✅ Unassigned + Logged");
-    fetchData();
   };
 
   /* ================= LOADING ================= */
@@ -272,16 +327,13 @@ export default function PositionEditor() {
         Slotting Management
       </h1>
 
-      {/* PERSON SEARCH */}
       <div className="mb-8 relative">
-        <label className="block mb-2 text-[#00ff66]">
-          Select Person
-        </label>
+        <label className="block mb-2 text-[#00ff66]">Select Person</label>
 
         <input
           type="text"
           placeholder="Search person..."
-          className="w-full px-4 py-3 rounded-2xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
+          className="w-full px-4 py-3 rounded-2xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66] outline-none"
           value={personSearch}
           onFocus={() => setShowPersonDropdown(true)}
           onChange={(e) => {
@@ -292,13 +344,10 @@ export default function PositionEditor() {
 
         {showPersonDropdown && (
           <div className="absolute w-full mt-2 bg-black/80 border border-[#00ff66]/40 rounded-2xl max-h-60 overflow-y-auto z-50">
-            {personnel
-              .filter((p) =>
-                `${getRankName(p.rank_id)} ${p.name}`
-                  .toLowerCase()
-                  .includes(personSearch.toLowerCase())
-              )
-              .map((p) => (
+            {filteredPersonnel.length === 0 ? (
+              <div className="px-4 py-3 text-gray-400">No matches found.</div>
+            ) : (
+              filteredPersonnel.map((p) => (
                 <div
                   key={p.id}
                   className="px-4 py-3 hover:bg-[#00ff66]/20 cursor-pointer"
@@ -306,25 +355,41 @@ export default function PositionEditor() {
                     setSelectedPerson(p);
                     setSelectedSlotId(p.slotted_position || "");
                     setSelectedRankId(p.rank_id || "");
-                    setPersonSearch(
-                      `${getRankName(p.rank_id)} ${p.name}`
-                    );
+                    setPersonSearch(`${getRankName(p.rank_id)} ${p.name}`);
+                    setSelectedHeader("");
+                    setSelectedSubHeader("");
                     setShowPersonDropdown(false);
                   }}
                 >
                   {getRankName(p.rank_id)} {p.name}
                 </div>
-              ))}
+              ))
+            )}
           </div>
         )}
       </div>
 
-      {/* RANK */}
+      {selectedPerson && (
+        <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="p-6 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-md">
+            <p className="text-xs text-gray-400 mb-2">SELECTED PERSON</p>
+            <p className="text-xl text-[#00ff66] font-semibold">
+              {getRankName(selectedPerson.rank_id)} {selectedPerson.name}
+            </p>
+          </div>
+
+          <div className="p-6 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-md">
+            <p className="text-xs text-gray-400 mb-2">CURRENT POSITION</p>
+            <p className="text-xl text-[#00ff66]">
+              {formatSlotToBillet(selectedPerson.slotted_position)}
+            </p>
+          </div>
+        </div>
+      )}
+
       {selectedPerson && (
         <div className="mb-10 p-8 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg">
-          <h2 className="text-2xl text-[#00ff66] mb-6">
-            Rank Management
-          </h2>
+          <h2 className="text-2xl text-[#00ff66] mb-6">Rank Management</h2>
 
           <select
             className="w-full p-3 mb-5 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
@@ -341,27 +406,20 @@ export default function PositionEditor() {
 
           <button
             onClick={updateRank}
-            className="px-6 py-2 rounded-xl bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black font-semibold hover:scale-105 transition"
+            disabled={!hasRankChange || processing}
+            className={`px-6 py-2 rounded-xl font-semibold transition ${
+              !hasRankChange || processing
+                ? "border border-[#00ff66]/20 text-gray-500 cursor-not-allowed"
+                : "bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black hover:scale-105"
+            }`}
           >
-            Save Rank
+            {processing ? "Saving..." : "Save Rank"}
           </button>
         </div>
       )}
 
-      {/* POSITION */}
       {selectedPerson && (
         <div className="space-y-6">
-          {/* Position Display */}
-          <div className="p-6 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-md">
-            <p className="text-xs text-gray-400 mb-2">
-              CURRENT POSITION
-            </p>
-            <p className="text-xl text-[#00ff66]">
-              {formatSlotToBillet(selectedPerson.slotted_position)}
-            </p>
-          </div>
-
-          {/* Slot Selection */}
           <select
             className="w-full p-3 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
             value={selectedHeader}
@@ -404,7 +462,7 @@ export default function PositionEditor() {
               onChange={(e) => setSelectedSlotId(e.target.value)}
             >
               <option value="">-- Select Role --</option>
-              {roles.map((r: any) => (
+              {roles.map((r) => (
                 <option key={r.slotId} value={r.slotId}>
                   {r.role}
                 </option>
@@ -412,27 +470,39 @@ export default function PositionEditor() {
             </select>
           )}
 
-          {selectedPerson && (
-            <div className="flex gap-4">
-              {!selectedPerson.slotted_position && selectedSlotId && (
-                <button
-                  onClick={updatePosition}
-                  className="px-6 py-2 rounded-xl bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black font-semibold hover:scale-105 transition"
-                >
-                  Save Position
-                </button>
-              )}
+          <div className="flex gap-4 flex-wrap">
+            {selectedSlotId && (
+              <button
+                onClick={updatePosition}
+                disabled={!hasPositionChange || processing}
+                className={`px-6 py-2 rounded-xl font-semibold transition ${
+                  !hasPositionChange || processing
+                    ? "border border-[#00ff66]/20 text-gray-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black hover:scale-105"
+                }`}
+              >
+                {processing
+                  ? "Saving..."
+                  : selectedPerson.slotted_position
+                  ? "Update Position"
+                  : "Save Position"}
+              </button>
+            )}
 
-              {selectedPerson.slotted_position && (
-                <button
-                  onClick={unassignPosition}
-                  className="px-6 py-2 rounded-xl border border-red-500 text-red-400 hover:bg-red-500/20 transition"
-                >
-                  Unassign
-                </button>
-              )}
-            </div>
-          )}
+            {selectedPerson.slotted_position && (
+              <button
+                onClick={unassignPosition}
+                disabled={processing}
+                className={`px-6 py-2 rounded-xl border transition ${
+                  processing
+                    ? "border-red-500/30 text-red-400/50 cursor-not-allowed"
+                    : "border-red-500 text-red-400 hover:bg-red-500/20"
+                }`}
+              >
+                {processing ? "Working..." : "Unassign"}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

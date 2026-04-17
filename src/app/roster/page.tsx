@@ -23,7 +23,6 @@ type DisplayMode = "all" | "filled" | "empty";
 type StructureRole = {
   role: string;
   slotId: string;
-  count: number;
 };
 
 type StructureChild = {
@@ -36,6 +35,11 @@ type StructureSection = {
   type: "header";
   title: string;
   children?: StructureChild[];
+};
+
+type GroupedRole = {
+  role: string;
+  slots: StructureRole[];
 };
 
 export default function Roster() {
@@ -73,95 +77,101 @@ export default function Roster() {
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const matchesSearch = (
-    person: Personnel | undefined,
-    role: StructureRole,
+  const personBySlotId = useMemo(() => {
+    const map = new Map<string, Personnel>();
+
+    personnel.forEach((person) => {
+      if (!person.slotted_position) return;
+      map.set(person.slotted_position.toLowerCase(), person);
+    });
+
+    return map;
+  }, [personnel]);
+
+  const groupRoles = (roles: StructureRole[] = []): GroupedRole[] => {
+    const map = new Map<string, StructureRole[]>();
+
+    roles.forEach((role) => {
+      if (!map.has(role.role)) {
+        map.set(role.role, []);
+      }
+      map.get(role.role)!.push(role);
+    });
+
+    return Array.from(map.entries()).map(([role, slots]) => ({
+      role,
+      slots,
+    }));
+  };
+
+  const getGroupedRoleSlots = (
+    group: GroupedRole,
     subTitle: string,
     sectionTitle: string
   ) => {
-    if (!normalizedSearch) return true;
+    return group.slots.map((slot, slotIndex) => {
+      const person = personBySlotId.get(slot.slotId.toLowerCase());
 
-    const fields = [
-      person?.name || "",
-      person ? getRankName(person.rank_id) : "",
-      person?.slotted_position || "",
-      role.role || "",
-      role.slotId || "",
-      subTitle || "",
-      sectionTitle || "",
-    ]
-      .join(" ")
-      .toLowerCase();
+      const fields = [
+        person?.name || "",
+        person ? getRankName(person.rank_id) : "",
+        person?.slotted_position || "",
+        group.role || "",
+        slot.slotId || "",
+        subTitle || "",
+        sectionTitle || "",
+      ]
+        .join(" ")
+        .toLowerCase();
 
-    return fields.includes(normalizedSearch);
-  };
+      const matches = !normalizedSearch || fields.includes(normalizedSearch);
+      const filled = !!person;
 
-  const slotVisible = (
-    person: Personnel | undefined,
-    role: StructureRole,
-    subTitle: string,
-    sectionTitle: string
-  ) => {
-    const filled = !!person;
-
-    if (displayMode === "filled" && !filled) return false;
-    if (displayMode === "empty" && filled) return false;
-
-    return matchesSearch(person, role, subTitle, sectionTitle);
-  };
-
-  const getRoleMatchedPeople = (role: StructureRole) => {
-    return personnel.filter((person) =>
-      person.slotted_position?.startsWith(role.slotId)
-    );
-  };
-
-  const getRoleVisibleSlots = (
-    role: StructureRole,
-    subTitle: string,
-    sectionTitle: string
-  ) => {
-    const matchedPeople = getRoleMatchedPeople(role);
-
-    return Array.from({ length: role.count }).map((_, slotIndex) => {
-      const person = matchedPeople[slotIndex];
-      const visible = slotVisible(person, role, subTitle, sectionTitle);
+      const visible =
+        matches &&
+        !(
+          (displayMode === "filled" && !filled) ||
+          (displayMode === "empty" && filled)
+        );
 
       return {
         slotIndex,
+        slot,
         person,
         visible,
       };
     });
   };
 
-  const getRoleCounts = (
-    role: StructureRole,
+  const getGroupedRoleCounts = (
+    group: GroupedRole,
     subTitle: string,
     sectionTitle: string
   ) => {
-    const visibleSlots = getRoleVisibleSlots(role, subTitle, sectionTitle);
-    const renderedSlots = visibleSlots.filter((slot) => slot.visible);
-    const filled = renderedSlots.filter((slot) => slot.person).length;
-    const empty = renderedSlots.filter((slot) => !slot.person).length;
+    const visibleSlots = getGroupedRoleSlots(group, subTitle, sectionTitle).filter(
+      (slot) => slot.visible
+    );
+
+    const filled = visibleSlots.filter((slot) => slot.person).length;
+    const empty = visibleSlots.filter((slot) => !slot.person).length;
 
     return {
-      total: renderedSlots.length,
+      total: visibleSlots.length,
       filled,
       empty,
-      visibleSlots: renderedSlots,
+      visibleSlots,
     };
   };
 
   const getSubSectionCounts = (section: StructureSection, child: StructureChild) => {
-    const roles = child.roles || [];
+    const groupedRoles = groupRoles(child.roles || []);
 
     let total = 0;
     let filled = 0;
     let empty = 0;
 
-    roles.forEach((role) => {
-      const counts = getRoleCounts(role, child.title, section.title);
+    groupedRoles.forEach((group) => {
+      const counts = getGroupedRoleCounts(group, child.title, section.title);
       total += counts.total;
       filled += counts.filled;
       empty += counts.empty;
@@ -246,12 +256,12 @@ export default function Roster() {
   };
 
   const renderRoleCard = (
-    role: StructureRole,
+    group: GroupedRole,
     subTitle: string,
     sectionTitle: string,
-    roleIndex: number
+    groupIndex: number
   ) => {
-    const counts = getRoleCounts(role, subTitle, sectionTitle);
+    const counts = getGroupedRoleCounts(group, subTitle, sectionTitle);
 
     if (counts.total === 0) return null;
 
@@ -264,7 +274,7 @@ export default function Roster() {
 
     return (
       <div
-        key={`${role.slotId}-${roleIndex}`}
+        key={`${group.role}-${groupIndex}`}
         className="
           rounded-3xl
           border border-[#00ff66]/15
@@ -283,7 +293,7 @@ export default function Roster() {
               Role
             </div>
             <div className="mt-1 text-base font-bold tracking-wide text-[#00ff66]">
-              {role.role}
+              {group.role}
             </div>
             <div className="mt-2 text-xs text-[#9eb7a8]">
               {counts.filled}/{counts.total} filled
@@ -304,9 +314,9 @@ export default function Roster() {
         </div>
 
         <div className="space-y-3">
-          {counts.visibleSlots.map(({ slotIndex, person }) => (
+          {counts.visibleSlots.map(({ slotIndex, slot, person }) => (
             <div
-              key={slotIndex}
+              key={slot.slotId}
               className={`rounded-2xl border px-4 py-3 transition-all duration-200 ${
                 person
                   ? "border-[#00ff66]/20 bg-black/35 hover:border-[#00ff66]/45"
@@ -324,7 +334,7 @@ export default function Roster() {
                         {person.name}
                       </div>
                       <div className="mt-1 text-xs tracking-wide text-[#8ea595]">
-                        {person.slotted_position}
+                        {slot.slotId}
                       </div>
                     </>
                   ) : (
@@ -336,7 +346,7 @@ export default function Roster() {
                         Empty Slot
                       </div>
                       <div className="mt-1 text-xs tracking-wide text-[#777]">
-                        {role.slotId}-{slotIndex + 1}
+                        {slot.slotId}
                       </div>
                     </>
                   )}
@@ -422,6 +432,8 @@ export default function Roster() {
 
                 if (subCounts.total === 0) return null;
 
+                const groupedRoles = groupRoles(child.roles || []);
+
                 return (
                   <div key={subKey}>
                     <button
@@ -462,8 +474,8 @@ export default function Roster() {
 
                     {subOpen && (
                       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-                        {child.roles?.map((role, roleIndex) =>
-                          renderRoleCard(role, child.title, section.title, roleIndex)
+                        {groupedRoles.map((group, groupIndex) =>
+                          renderRoleCard(group, child.title, section.title, groupIndex)
                         )}
                       </div>
                     )}

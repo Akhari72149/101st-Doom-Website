@@ -6,6 +6,40 @@ import { buildTree } from "@/utils/buildTree";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { useRouter } from "next/navigation";
 
+/* ===================================================== */
+/* TYPES */
+/* ===================================================== */
+
+type Rank = {
+  id: string;
+  name: string;
+  rank_level: number;
+};
+
+type Personnel = {
+  id: string;
+  name: string;
+  slotted_position: string | null;
+  ranks?: Rank | null;
+};
+
+type OrgRole = {
+  role: string;
+  slotId?: string | null;
+  discordRoleIds?: string[];
+};
+
+type OrgNode = {
+  id: string;
+  name: string;
+  roles?: OrgRole[];
+  children?: OrgNode[];
+};
+
+type RoleGroup = {
+  role: string;
+  slots: OrgRole[];
+};
 
 /* ===================================================== */
 /* MAIN COMPONENT */
@@ -13,10 +47,10 @@ import { useRouter } from "next/navigation";
 
 export default function GrandOrbat() {
   const router = useRouter();
-  const [orgTree, setOrgTree] = useState<any[]>([]);
+  const [orgTree, setOrgTree] = useState<OrgNode[]>([]);
   const [openNodes, setOpenNodes] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
-  const [personnel, setPersonnel] = useState<any[]>([]);
+  const [personnel, setPersonnel] = useState<Personnel[]>([]);
 
   const transformRef = useRef<any>(null);
   const treeContainerRef = useRef<HTMLDivElement>(null);
@@ -32,13 +66,12 @@ export default function GrandOrbat() {
         .select("*")
         .order("order_index", { ascending: true });
 
-      const tree = buildTree(data || []);
+      const tree = buildTree((data || []) as any[]) as OrgNode[];
       setOrgTree(tree);
 
-      /* ✅ AUTO EXPAND EVERYTHING ON LOAD */
       const map: Record<string, boolean> = {};
 
-      const expand = (nodes: any[]) => {
+      const expand = (nodes: OrgNode[]) => {
         nodes.forEach((node) => {
           map[node.id] = true;
           if (node.children?.length) expand(node.children);
@@ -50,28 +83,34 @@ export default function GrandOrbat() {
 
       const { data: personnelData } = await supabase
         .from("personnel")
-        .select("*, ranks(*)");
+        .select("id, name, slotted_position, ranks(*)");
 
-      setPersonnel(personnelData || []);
+      const normalizedPersonnel: Personnel[] = (personnelData || []).map(
+        (person: any) => ({
+          id: person.id,
+          name: person.name,
+          slotted_position: person.slotted_position,
+          ranks: Array.isArray(person.ranks)
+            ? person.ranks[0] || null
+            : person.ranks || null,
+        })
+      );
+
+      setPersonnel(normalizedPersonnel);
     }
 
     fetchData();
   }, []);
 
   /* ===================================================== */
-  /*  MANUAL POSITION + SCALE ON LOAD */
+  /* MANUAL POSITION + SCALE ON LOAD */
   /* ===================================================== */
 
   useEffect(() => {
     if (!transformRef.current) return;
 
     const timer = setTimeout(() => {
-      transformRef.current.setTransform(
-        -200,    // X
-        100,    // Y
-        0.3,  // Scale
-        800   // Animation duration
-      );
+      transformRef.current.setTransform(-200, 100, 0.3, 800);
     }, 300);
 
     return () => clearTimeout(timer);
@@ -82,14 +121,11 @@ export default function GrandOrbat() {
   /* ===================================================== */
 
   const slotMap = useMemo(() => {
-    const map: Record<string, any[]> = {};
+    const map: Record<string, Personnel> = {};
 
     personnel.forEach((person) => {
       if (!person.slotted_position) return;
-
-      const key = person.slotted_position.toLowerCase();
-      if (!map[key]) map[key] = [];
-      map[key].push(person);
+      map[person.slotted_position.toLowerCase()] = person;
     });
 
     return map;
@@ -102,14 +138,12 @@ export default function GrandOrbat() {
   const filteredTree = useMemo(() => {
     if (!search.trim()) return orgTree;
 
-    const filter = (nodes: any[]): any[] =>
+    const filter = (nodes: OrgNode[]): OrgNode[] =>
       nodes
         .map((node) => {
           const children = node.children ? filter(node.children) : [];
 
-          const matches = node.name
-            .toLowerCase()
-            .includes(search.toLowerCase());
+          const matches = node.name.toLowerCase().includes(search.toLowerCase());
 
           if (matches || children.length > 0) {
             return { ...node, children };
@@ -117,7 +151,7 @@ export default function GrandOrbat() {
 
           return null;
         })
-        .filter(Boolean);
+        .filter(Boolean) as OrgNode[];
 
     return filter(orgTree);
   }, [search, orgTree]);
@@ -126,9 +160,9 @@ export default function GrandOrbat() {
   /* TREE NODE */
   /* ===================================================== */
 
-  const TreeNode = memo(({ node }: any) => {
+  const TreeNode = memo(({ node }: { node: OrgNode }) => {
     const isTreeOpen = !!openNodes[node.id];
-    const hasChildren = node.children?.length > 0;
+    const hasChildren = (node.children?.length || 0) > 0;
 
     const [showSlots, setShowSlots] = useState(true);
     const [lineStyle, setLineStyle] = useState<any>({});
@@ -139,8 +173,28 @@ export default function GrandOrbat() {
       setShowSlots((prev) => !prev);
     };
 
+    const groupedRoles = useMemo<RoleGroup[]>(() => {
+      const roles = node.roles || [];
+      const groups = new Map<string, OrgRole[]>();
+
+      for (const role of roles) {
+        const key = role.role || "Unknown";
+
+        if (!groups.has(key)) {
+          groups.set(key, []);
+        }
+
+        groups.get(key)!.push(role);
+      }
+
+      return Array.from(groups.entries()).map(([role, slots]) => ({
+        role,
+        slots,
+      }));
+    }, [node.roles]);
+
     useEffect(() => {
-      if (!isTreeOpen || !hasChildren || node.children.length < 2) return;
+      if (!isTreeOpen || !hasChildren || (node.children?.length || 0) < 2) return;
 
       const container = childrenRef.current;
       if (!container) return;
@@ -162,12 +216,10 @@ export default function GrandOrbat() {
         left: `${left}px`,
         width: `${right - left}px`,
       });
-    }, [isTreeOpen, node]);
+    }, [isTreeOpen, hasChildren, node.children]);
 
     return (
       <div className="flex flex-col items-center">
-
-        {/* NODE */}
         <div
           onClick={handleClick}
           className="
@@ -185,30 +237,41 @@ export default function GrandOrbat() {
           {node.name}
         </div>
 
-        {/* SLOT PANEL */}
         <div
           className={`mt-4 flex flex-col items-center transition-all duration-300 ease-in-out overflow-hidden ${
-            showSlots ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+            showSlots ? "max-h-[4000px] opacity-100" : "max-h-0 opacity-0"
           }`}
         >
-          {node.roles?.map((role: any, roleIndex: number) => {
-            const assigned = slotMap[role.slotId?.toLowerCase()] || [];
-            const visible = assigned.slice(0, role.count);
+          {groupedRoles.map((group, groupIndex) => {
+            const assignedPeople = group.slots
+              .map((slot) => {
+                const slotId = slot.slotId?.toLowerCase();
+                if (!slotId) return null;
+                return slotMap[slotId] || null;
+              })
+              .filter(Boolean) as Personnel[];
+
+            const emptyCount = group.slots.filter((slot) => {
+              const slotId = slot.slotId?.toLowerCase();
+              if (!slotId) return true;
+              return !slotMap[slotId];
+            }).length;
 
             return (
-              <div key={roleIndex} className="mt-3 flex flex-col items-center">
+              <div
+                key={`${group.role}-${groupIndex}`}
+                className="mt-3 flex flex-col items-center"
+              >
                 <div className="text-[#00ff66] font-semibold mb-2">
-                  {role.role}
-                  {role.count > 1 && (
-                    <span className="text-gray-400 ml-2">
-                      ×{role.count}
-                    </span>
+                  {group.role}
+                  {group.slots.length > 1 && (
+                    <span className="text-gray-400 ml-2">×{group.slots.length}</span>
                   )}
                 </div>
 
-                {visible.map((person: any, i: number) => (
+                {assignedPeople.map((person, i) => (
                   <div
-                    key={i}
+                    key={`${person.id}-${i}`}
                     className="
                       w-[220px]
                       px-4 py-2 mb-2 rounded-xl text-center
@@ -217,19 +280,15 @@ export default function GrandOrbat() {
                     "
                   >
                     <span className="text-[#00ff66] font-bold">
-                      {person.ranks?.name}
+                      {person.ranks?.name || "Unranked"}
                     </span>{" "}
-                    <span className="text-white">
-                      {person.name}
-                    </span>
+                    <span className="text-white">{person.name}</span>
                   </div>
                 ))}
 
-                {Array.from({
-                  length: role.count - visible.length,
-                }).map((_, i) => (
+                {Array.from({ length: emptyCount }).map((_, i) => (
                   <div
-                    key={`empty-${i}`}
+                    key={`empty-${group.role}-${i}`}
                     className="
                       w-[220px]
                       px-4 py-2 mb-2 rounded-xl text-center
@@ -237,9 +296,7 @@ export default function GrandOrbat() {
                       border border-[#00ff66]/10
                     "
                   >
-                    <span className="text-gray-500">
-                      Empty Slot
-                    </span>
+                    <span className="text-gray-500">Empty Slot</span>
                   </div>
                 ))}
               </div>
@@ -247,7 +304,6 @@ export default function GrandOrbat() {
           })}
         </div>
 
-        {/* CHILDREN */}
         {isTreeOpen && hasChildren && (
           <>
             <div className="w-[2px] h-6 bg-[#00ff66]" />
@@ -256,14 +312,14 @@ export default function GrandOrbat() {
               ref={childrenRef}
               className="relative flex items-start justify-center"
             >
-              {node.children.length > 1 && (
+              {(node.children?.length || 0) > 1 && (
                 <div
                   className="absolute top-0 h-[2px] bg-[#00ff66]"
                   style={lineStyle}
                 />
               )}
 
-              {node.children.map((child: any) => (
+              {node.children?.map((child) => (
                 <div
                   key={child.id}
                   className="child-node flex flex-col items-center px-8"
@@ -279,6 +335,8 @@ export default function GrandOrbat() {
     );
   });
 
+  TreeNode.displayName = "TreeNode";
+
   /* ===================================================== */
   /* PAGE */
   /* ===================================================== */
@@ -290,7 +348,7 @@ export default function GrandOrbat() {
         bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)]
       "
     >
-            <button
+      <button
         onClick={() => router.push("/pcs")}
         className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
       >

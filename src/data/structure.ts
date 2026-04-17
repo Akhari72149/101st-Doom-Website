@@ -79,7 +79,8 @@ export const structure = [
         title: "1-1B",
         roles: [
           { role: "Team Lead", count: 1, slotId: "tomahawk1-1-1b-teamlead", discordRoleIds: ["757766977350664232", "840037756642263081", "757765856494223451"] },
-          { role: "Trooper", count: 2, slotId: "tomahawk1-1-1b-trooper", discordRoleIds: ["757766977350664232", "840037756642263081"] },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-1b-trooper", discordRoleIds: ["757766977350664232", "840037756642263081"] },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-1b-trooper__2", discordRoleIds: ["757766977350664232", "840037756642263081"] },
           { role: "Medic", count: 1, slotId: "tomahawk1-1-1b-medic", discordRoleIds: ["757766977350664232", "840037756642263081"] },
         ],
       },
@@ -101,11 +102,13 @@ export const structure = [
         title: "1-2B",
         roles: [
           { role: "Team Lead", count: 1, slotId: "tomahawk1-1-2b-teamlead", discordRoleIds: ["757767541807644712", "840037756642263081", "757765856494223451"] },
-          { role: "Trooper", count: 2, slotId: "tomahawk1-1-2b-trooper", discordRoleIds: ["757767541807644712", "840037756642263081"] },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-2b-trooper", discordRoleIds: ["757767541807644712", "840037756642263081"] },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-2b-trooper__2", discordRoleIds: ["757767541807644712", "840037756642263081"] },
           { role: "Medic", count: 1, slotId: "tomahawk1-1-2b-medic", discordRoleIds: ["757767541807644712", "840037756642263081"] },
         ],
       },
-	{
+
+      {
         type: "sub-header",
         title: "1-3A",
         roles: [
@@ -122,11 +125,11 @@ export const structure = [
         title: "1-3B",
         roles: [
           { role: "Team Lead", count: 1, slotId: "tomahawk1-1-3b-teamlead", discordRoleIds: ["757767664474259606", "840037756642263081", "757765856494223451"] },
-          { role: "Trooper", count: 2, slotId: "tomahawk1-1-3b-trooper", discordRoleIds: ["757767664474259606", "840037756642263081"] },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-3b-trooper", discordRoleIds: ["757767664474259606", "840037756642263081"] },
+          { role: "Trooper", count: 1, slotId: "tomahawk1-1-3b-trooper__2", discordRoleIds: ["757767664474259606", "840037756642263081"] },
           { role: "Medic", count: 1, slotId: "tomahawk1-1-3b-medic", discordRoleIds: ["757767664474259606", "840037756642263081"] },
         ],
       },
-	  
 
       {
         type: "sub-header",
@@ -137,12 +140,13 @@ export const structure = [
           { role: "Trooper", count: 1, slotId: "tomahawk1-scimitar-medic", discordRoleIds: ["1259512490300276756", "840037756642263081"] },
         ],
       },
-	  
-	  {
+
+      {
         type: "sub-header",
         title: "Logistics",
         roles: [
-          { role: "Trooper", count: 2, slotId: "logi1-1-1trooper", discordRoleIds: ["840037756642263081", "1259512490300276756"] },
+          { role: "Trooper", count: 1, slotId: "logi1-1-1trooper", discordRoleIds: ["840037756642263081", "1259512490300276756"] },
+          { role: "Trooper", count: 1, slotId: "logi1-1-1trooper__2", discordRoleIds: ["840037756642263081", "1259512490300276756"] },
         ],
       },
 
@@ -151,7 +155,8 @@ export const structure = [
         title: "Scimitar 1-1",
         roles: [
           { role: "Team Lead", count: 1, slotId: "scimitar1-1-1-teamlead", discordRoleIds: ["1259512490300276756", "840037756642263081","757766977350664232"] },
-          { role: "Trooper", count: 2, slotId: "scimitar1-1-1-trooper", discordRoleIds: ["1259512490300276756", "840037756642263081","757766977350664232"] },
+          { role: "Trooper", count: 1, slotId: "scimitar1-1-1-trooper", discordRoleIds: ["1259512490300276756", "840037756642263081","757766977350664232"] },
+          { role: "Trooper", count: 1, slotId: "scimitar1-1-1-trooper__2", discordRoleIds: ["1259512490300276756", "840037756642263081","757766977350664232"] },
         ],
       },
 
@@ -160,7 +165,8 @@ export const structure = [
         title: "Scimitar 1-2",
         roles: [
           { role: "Team Lead", count: 1, slotId: "scimitar1-1-2-teamlead", discordRoleIds: ["1259512490300276756", "840037756642263081","757767541807644712"] },
-          { role: "Trooper", count: 2, slotId: "scimitar1-1-2-trooper", discordRoleIds: ["1259512490300276756", "840037756642263081","757767541807644712"] },
+          { role: "Trooper", count: 1, slotId: "scimitar1-1-2-trooper", discordRoleIds: ["1259512490300276756", "840037756642263081","757767541807644712"] },
+          { role: "Trooper", count: 1, slotId: "scimitar1-1-2-trooper__2", discordRoleIds: ["1259512490300276756", "840037756642263081","757767541807644712"] },
         ],
       },
 
@@ -169,7 +175,8 @@ export const structure = [
         title: "Scimitar 1-3",
         roles: [
           { role: "Team Lead", count: 1, slotId: "scimitar1-3-teamlead", discordRoleIds: ["1259512490300276756", "840037756642263081","757767664474259606"] },
-          { role: "Trooper", count: 2, slotId: "scimitar1-3-trooper", discordRoleIds: ["1259512490300276756", "840037756642263081","757767664474259606"] },
+          { role: "Trooper", count: 1, slotId: "scimitar1-3-trooper", discordRoleIds: ["1259512490300276756", "840037756642263081","757767664474259606"] },
+          { role: "Trooper", count: 1, slotId: "scimitar1-3-trooper__2", discordRoleIds: ["1259512490300276756", "840037756642263081","757767664474259606"] },
         ],
       },
 
@@ -208,8 +215,11 @@ export const structure = [
         title: "2-1A",
         roles: [
           { role: "Team Lead", count: 1, slotId: "Claymore2-1-1a-teamlead", discordRoleIds: ["803683902597758992", "840037530518945823", "803683130643972177"] },
-          { role: "Trooper", count: 3, slotId: "Claymore2-1-1a-trooper", discordRoleIds: ["803683902597758992", "840037530518945823"] },
-          { role: "Medic", count: 2, slotId: "Claymore2-1-1a-medic", discordRoleIds: ["803683902597758992", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-1-1a-trooper", discordRoleIds: ["803683902597758992", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-1-1a-trooper__2", discordRoleIds: ["803683902597758992", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-1-1a-trooper__3", discordRoleIds: ["803683902597758992", "840037530518945823"] },
+          { role: "Medic", count: 1, slotId: "Claymore2-1-1a-medic", discordRoleIds: ["803683902597758992", "840037530518945823"] },
+          { role: "Medic", count: 1, slotId: "Claymore2-1-1a-medic__2", discordRoleIds: ["803683902597758992", "840037530518945823"] },
         ],
       },
 
@@ -218,7 +228,9 @@ export const structure = [
         title: "2-1B",
         roles: [
           { role: "Team Lead", count: 1, slotId: "Claymore2-1-1b-squadlead", discordRoleIds: ["803683902597758992", "840037530518945823", "803683130643972177"] },
-          { role: "Trooper", count: 3, slotId: "Claymore2-1-1b-teamlead", discordRoleIds: ["803683902597758992", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-1-1b-teamlead", discordRoleIds: ["803683902597758992", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-1-1b-teamlead__2", discordRoleIds: ["803683902597758992", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-1-1b-teamlead__3", discordRoleIds: ["803683902597758992", "840037530518945823"] },
           { role: "Medic", count: 1, slotId: "Claymore2-1-1b-rto", discordRoleIds: ["803683902597758992", "840037530518945823"] },
         ],
       },
@@ -237,8 +249,11 @@ export const structure = [
         title: "2-2A",
         roles: [
           { role: "Team Lead", count: 1, slotId: "Claymore2-2-1a-teamlead", discordRoleIds: ["803684088757747823", "840037530518945823", "803683130643972177"] },
-          { role: "Trooper", count: 3, slotId: "Claymore2-2-1a-trooper", discordRoleIds: ["803684088757747823", "840037530518945823"] },
-          { role: "Medic", count: 2, slotId: "Claymore2-2-1a-medic", discordRoleIds: ["803684088757747823", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-2-1a-trooper", discordRoleIds: ["803684088757747823", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-2-1a-trooper__2", discordRoleIds: ["803684088757747823", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-2-1a-trooper__3", discordRoleIds: ["803684088757747823", "840037530518945823"] },
+          { role: "Medic", count: 1, slotId: "Claymore2-2-1a-medic", discordRoleIds: ["803684088757747823", "840037530518945823"] },
+          { role: "Medic", count: 1, slotId: "Claymore2-2-1a-medic__2", discordRoleIds: ["803684088757747823", "840037530518945823"] },
         ],
       },
 
@@ -247,7 +262,9 @@ export const structure = [
         title: "2-2B",
         roles: [
           { role: "Team Lead", count: 1, slotId: "Claymore2-2-1b-squadlead", discordRoleIds: ["803684088757747823", "840037530518945823", "803683130643972177"] },
-          { role: "Trooper", count: 3, slotId: "Claymore2-2-1b-teamlead", discordRoleIds: ["803684088757747823", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-2-1b-teamlead", discordRoleIds: ["803684088757747823", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-2-1b-teamlead__2", discordRoleIds: ["803684088757747823", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-2-1b-teamlead__3", discordRoleIds: ["803684088757747823", "840037530518945823"] },
           { role: "Medic", count: 1, slotId: "Claymore2-2-1b-rto", discordRoleIds: ["803684088757747823", "840037530518945823"] },
         ],
       },
@@ -266,8 +283,11 @@ export const structure = [
         title: "2-3A",
         roles: [
           { role: "Team Lead", count: 1, slotId: "Claymore2-3-1a-teamlead", discordRoleIds: ["803683976971681872", "840037530518945823", "803683130643972177"] },
-          { role: "Trooper", count: 3, slotId: "Claymore2-3-1a-trooper", discordRoleIds: ["803683976971681872", "840037530518945823"] },
-          { role: "Medic", count: 2, slotId: "Claymore2-3-1a-medic", discordRoleIds: ["803683976971681872", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-3-1a-trooper", discordRoleIds: ["803683976971681872", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-3-1a-trooper__2", discordRoleIds: ["803683976971681872", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-3-1a-trooper__3", discordRoleIds: ["803683976971681872", "840037530518945823"] },
+          { role: "Medic", count: 1, slotId: "Claymore2-3-1a-medic", discordRoleIds: ["803683976971681872", "840037530518945823"] },
+          { role: "Medic", count: 1, slotId: "Claymore2-3-1a-medic__2", discordRoleIds: ["803683976971681872", "840037530518945823"] },
         ],
       },
 
@@ -276,7 +296,9 @@ export const structure = [
         title: "2-3B",
         roles: [
           { role: "Team Lead", count: 1, slotId: "Claymore2-3-1b-squadlead", discordRoleIds: ["803683976971681872", "840037530518945823", "803683130643972177"] },
-          { role: "Trooper", count: 3, slotId: "Claymore2-3-1b-teamlead", discordRoleIds: ["803683976971681872", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-3-1b-teamlead", discordRoleIds: ["803683976971681872", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-3-1b-teamlead__2", discordRoleIds: ["803683976971681872", "840037530518945823"] },
+          { role: "Trooper", count: 1, slotId: "Claymore2-3-1b-teamlead__3", discordRoleIds: ["803683976971681872", "840037530518945823"] },
           { role: "Medic", count: 1, slotId: "Claymore2-3-1b-rto", discordRoleIds: ["803683976971681872", "840037530518945823"] },
         ],
       },
@@ -309,8 +331,13 @@ export const structure = [
           { role: "Squad Lead", count: 1, slotId: "Broadsword3-1-1a-squadlead", discordRoleIds: ["692226734283685928", "848977413009834034", "692226671989751841"] },
           { role: "ASL", count: 1, slotId: "Broadsword3-1-1a-ASL", discordRoleIds: ["692226734283685928", "848977413009834034", "692226671989751841"] },
           { role: "RTO", count: 1, slotId: "Broadsword3-1-1a-RTO", discordRoleIds: ["692226734283685928", "848977413009834034"] },
-          { role: "Trooper", count: 5, slotId: "Broadsword3-1-1a-Trooper", discordRoleIds: ["692226734283685928", "848977413009834034"] },
-          { role: "Medic", count: 2, slotId: "Broadsword3-1-1a-Medic", discordRoleIds: ["692226734283685928", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-1-1a-Trooper", discordRoleIds: ["692226734283685928", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-1-1a-Trooper__2", discordRoleIds: ["692226734283685928", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-1-1a-Trooper__3", discordRoleIds: ["692226734283685928", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-1-1a-Trooper__4", discordRoleIds: ["692226734283685928", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-1-1a-Trooper__5", discordRoleIds: ["692226734283685928", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Broadsword3-1-1a-Medic", discordRoleIds: ["692226734283685928", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Broadsword3-1-1a-Medic__2", discordRoleIds: ["692226734283685928", "848977413009834034"] },
         ],
       },
 
@@ -321,8 +348,13 @@ export const structure = [
           { role: "Squad Lead", count: 1, slotId: "Broadsword3-2-1a-squadlead", discordRoleIds: ["692226750419173397", "848977413009834034", "692226671989751841"] },
           { role: "ASL", count: 1, slotId: "Broadsword3-2-1a-ASL", discordRoleIds: ["692226750419173397", "848977413009834034", "692226671989751841"] },
           { role: "RTO", count: 1, slotId: "Broadsword3-2-1a-RTO", discordRoleIds: ["692226750419173397", "848977413009834034"] },
-          { role: "Trooper", count: 5, slotId: "Broadsword3-2-1a-Trooper", discordRoleIds: ["692226750419173397", "848977413009834034"] },
-          { role: "Medic", count: 2, slotId: "Broadsword3-2-1a-Medic", discordRoleIds: ["692226750419173397", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-2-1a-Trooper", discordRoleIds: ["692226750419173397", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-2-1a-Trooper__2", discordRoleIds: ["692226750419173397", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-2-1a-Trooper__3", discordRoleIds: ["692226750419173397", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-2-1a-Trooper__4", discordRoleIds: ["692226750419173397", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-2-1a-Trooper__5", discordRoleIds: ["692226750419173397", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Broadsword3-2-1a-Medic", discordRoleIds: ["692226750419173397", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Broadsword3-2-1a-Medic__2", discordRoleIds: ["692226750419173397", "848977413009834034"] },
         ],
       },
 
@@ -333,8 +365,13 @@ export const structure = [
           { role: "Squad Lead", count: 1, slotId: "Broadsword3-3-1a-squadlead", discordRoleIds: ["692226922838622298", "848977413009834034", "692226671989751841"] },
           { role: "ASL", count: 1, slotId: "Broadsword3-3-1a-ASL", discordRoleIds: ["692226922838622298", "848977413009834034", "692226671989751841"] },
           { role: "RTO", count: 1, slotId: "Broadsword3-3-1a-RTO", discordRoleIds: ["692226922838622298", "848977413009834034"] },
-          { role: "Trooper", count: 5, slotId: "Broadsword3-3-1a-Trooper", discordRoleIds: ["692226922838622298", "848977413009834034"] },
-          { role: "Medic", count: 2, slotId: "Broadsword3-3-1a-Medic", discordRoleIds: ["692226922838622298", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-3-1a-Trooper", discordRoleIds: ["692226922838622298", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-3-1a-Trooper__2", discordRoleIds: ["692226922838622298", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-3-1a-Trooper__3", discordRoleIds: ["692226922838622298", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-3-1a-Trooper__4", discordRoleIds: ["692226922838622298", "848977413009834034"] },
+          { role: "Trooper", count: 1, slotId: "Broadsword3-3-1a-Trooper__5", discordRoleIds: ["692226922838622298", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Broadsword3-3-1a-Medic", discordRoleIds: ["692226922838622298", "848977413009834034"] },
+          { role: "Medic", count: 1, slotId: "Broadsword3-3-1a-Medic__2", discordRoleIds: ["692226922838622298", "848977413009834034"] },
         ],
       },
 
@@ -375,7 +412,6 @@ export const structure = [
         ],
       },
 
-
     ],
   },
 
@@ -405,8 +441,11 @@ export const structure = [
           { role: "Squad Lead", count: 1, slotId: "Dagger1-1-1a-squadlead", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },
           { role: "ASL", count: 1, slotId: "Dagger1-1-1a-ASL", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },
           { role: "RTO", count: 1, slotId: "Dagger1-1-1a-RTO", discordRoleIds: ["512875704950587402", "747540448989544528"] },
-          { role: "Trooper", count: 3, slotId: "Dagger1-1-1a-Trooper", discordRoleIds: ["512875704950587402", "747540448989544528"] },
-          { role: "Medic", count: 2, slotId: "Dagger1-1-1a-Medic", discordRoleIds: ["512875704950587402", "747540448989544528"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-1-1a-Trooper", discordRoleIds: ["512875704950587402", "747540448989544528"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-1-1a-Trooper__2", discordRoleIds: ["512875704950587402", "747540448989544528"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-1-1a-Trooper__3", discordRoleIds: ["512875704950587402", "747540448989544528"] },
+          { role: "Medic", count: 1, slotId: "Dagger1-1-1a-Medic", discordRoleIds: ["512875704950587402", "747540448989544528"] },
+          { role: "Medic", count: 1, slotId: "Dagger1-1-1a-Medic__2", discordRoleIds: ["512875704950587402", "747540448989544528"] },
         ],
       },
 
@@ -417,8 +456,11 @@ export const structure = [
           { role: "Squad Lead", count: 1, slotId: "Dagger1-2-1a-squadlead", discordRoleIds: ["512875704950587402", "747540204776063006" ,"796660956604268554"] },
           { role: "ASL", count: 1, slotId: "Dagger1-2-1a-ASL", discordRoleIds: ["512875704950587402", "747540204776063006" ,"796660956604268554"] },
           { role: "RTO", count: 1, slotId: "Dagger1-2-1a-RTO", discordRoleIds: ["512875704950587402", "747540204776063006"] },
-          { role: "Trooper", count: 3, slotId: "Dagger1-2-1a-Trooper", discordRoleIds: ["512875704950587402", "747540204776063006"] },
-          { role: "Medic", count: 2, slotId: "Dagger1-2-1a-Medic", discordRoleIds: ["512875704950587402", "747540204776063006"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-2-1a-Trooper", discordRoleIds: ["512875704950587402", "747540204776063006"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-2-1a-Trooper__2", discordRoleIds: ["512875704950587402", "747540204776063006"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-2-1a-Trooper__3", discordRoleIds: ["512875704950587402", "747540204776063006"] },
+          { role: "Medic", count: 1, slotId: "Dagger1-2-1a-Medic", discordRoleIds: ["512875704950587402", "747540204776063006"] },
+          { role: "Medic", count: 1, slotId: "Dagger1-2-1a-Medic__2", discordRoleIds: ["512875704950587402", "747540204776063006"] },
         ],
       },
 
@@ -429,8 +471,11 @@ export const structure = [
           { role: "Squad Lead", count: 1, slotId: "Dagger1-3-1a-squadlead", discordRoleIds: ["512875704950587402", "823737294191067147" ,"796660956604268554"] },
           { role: "ASL", count: 1, slotId: "Dagger1-3-1a-ASL", discordRoleIds: ["512875704950587402", "823737294191067147" ,"796660956604268554"] },
           { role: "RTO", count: 1, slotId: "Dagger1-3-1a-RTO", discordRoleIds: ["512875704950587402", "823737294191067147"] },
-          { role: "Trooper", count: 3, slotId: "Dagger1-3-1a-Trooper", discordRoleIds: ["512875704950587402", "823737294191067147"] },
-          { role: "Medic", count: 2, slotId: "Dagger1-3-1a-Medic", discordRoleIds: ["512875704950587402", "823737294191067147"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-3-1a-Trooper", discordRoleIds: ["512875704950587402", "823737294191067147"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-3-1a-Trooper__2", discordRoleIds: ["512875704950587402", "823737294191067147"] },
+          { role: "Trooper", count: 1, slotId: "Dagger1-3-1a-Trooper__3", discordRoleIds: ["512875704950587402", "823737294191067147"] },
+          { role: "Medic", count: 1, slotId: "Dagger1-3-1a-Medic", discordRoleIds: ["512875704950587402", "823737294191067147"] },
+          { role: "Medic", count: 1, slotId: "Dagger1-3-1a-Medic__2", discordRoleIds: ["512875704950587402", "823737294191067147"] },
         ],
       },
 

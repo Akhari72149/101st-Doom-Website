@@ -22,22 +22,38 @@ type Rank = {
 type StructureRole = {
   role: string;
   slotId: string;
+  discordRoleIds?: string[];
 };
 
 type StructureChild = {
+  type?: string;
   title: string;
   roles?: StructureRole[];
 };
 
 type StructureSection = {
+  type?: string;
   title: string;
   children?: StructureChild[];
+};
+
+type SlotOccupant = {
+  id: string;
+  name: string;
+  rank_id: string | null;
+};
+
+type ResolvedSlotPath = {
+  header: string;
+  subHeader: string;
+  roleLabel: string;
 };
 
 export default function PositionEditor() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
   const [processing, setProcessing] = useState(false);
 
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
@@ -52,7 +68,8 @@ export default function PositionEditor() {
   const [personSearch, setPersonSearch] = useState("");
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
 
-  /* ================= AUTH ================= */
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -89,9 +106,9 @@ export default function PositionEditor() {
     checkAccess();
   }, [router]);
 
-  /* ================= DATA ================= */
-
   const fetchData = async () => {
+    setLoadingData(true);
+
     const { data: personnelData, error: personnelError } = await supabase
       .from("personnel")
       .select("id, name, rank_id, slotted_position, status")
@@ -103,6 +120,8 @@ export default function PositionEditor() {
       .order("rank_level", { ascending: true });
 
     if (personnelError || rankError) {
+      setErrorMessage("Failed to load personnel or ranks.");
+      setLoadingData(false);
       return;
     }
 
@@ -113,11 +132,18 @@ export default function PositionEditor() {
 
     setPersonnel((activePersonnel as Personnel[]) || []);
     setRanks((rankData as Rank[]) || []);
+    setLoadingData(false);
   };
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => setSuccessMessage(""), 3000);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
 
   useEffect(() => {
     if (!selectedPerson) return;
@@ -129,42 +155,55 @@ export default function PositionEditor() {
     setSelectedRankId(updated.rank_id || "");
   }, [personnel, selectedPerson]);
 
-  /* ================= STRUCTURE ================= */
+  const typedStructure = structure as StructureSection[];
 
   const headers = useMemo(
-    () => (structure as StructureSection[]).map((section) => section.title),
-    []
+    () => typedStructure.map((section) => section.title),
+    [typedStructure]
   );
 
   const subHeaders = useMemo(() => {
-    const section = (structure as StructureSection[]).find(
-      (s) => s.title === selectedHeader
-    );
+    const section = typedStructure.find((s) => s.title === selectedHeader);
     return section?.children?.map((child) => child.title) || [];
-  }, [selectedHeader]);
+  }, [typedStructure, selectedHeader]);
 
   const roles = useMemo(() => {
-    const section = (structure as StructureSection[]).find(
-      (s) => s.title === selectedHeader
-    );
-
-    const sub = section?.children?.find(
-      (c) => c.title === selectedSubHeader
-    );
-
+    const section = typedStructure.find((s) => s.title === selectedHeader);
+    const sub = section?.children?.find((c) => c.title === selectedSubHeader);
     return sub?.roles || [];
-  }, [selectedHeader, selectedSubHeader]);
+  }, [typedStructure, selectedHeader, selectedSubHeader]);
 
-  /* ================= HELPERS ================= */
+  const getRankName = (rankId: string | null) => {
+    const rank = ranks.find((r) => r.id === rankId);
+    return rank ? rank.name : "Unranked";
+  };
+
+  const getRoleDisplayLabel = (targetRole: StructureRole, roleList: StructureRole[]) => {
+    const sameRoleEntries = roleList.filter((r) => r.role === targetRole.role);
+
+    if (sameRoleEntries.length <= 1) {
+      return targetRole.role;
+    }
+
+    const index = sameRoleEntries.findIndex((r) => r.slotId === targetRole.slotId);
+
+    if (index === -1) {
+      return targetRole.role;
+    }
+
+    return `${targetRole.role} ${index + 1}`;
+  };
 
   const formatSlotToBillet = (slotId: string | null) => {
     if (!slotId) return "Unassigned";
 
-    for (const section of structure as StructureSection[]) {
+    for (const section of typedStructure) {
       for (const sub of section.children || []) {
-        for (const role of sub.roles || []) {
+        const subRoles = sub.roles || [];
+
+        for (const role of subRoles) {
           if (role.slotId === slotId) {
-            return `${section.title} — ${sub.title} — ${role.role}`;
+            return `${section.title} — ${sub.title} — ${getRoleDisplayLabel(role, subRoles)}`;
           }
         }
       }
@@ -173,17 +212,65 @@ export default function PositionEditor() {
     return slotId;
   };
 
-  const getRankName = (rankId: string | null) => {
-    const rank = ranks.find((r) => r.id === rankId);
-    return rank ? rank.name : "Unranked";
+  const resolveSlotPath = (slotId: string | null): ResolvedSlotPath | null => {
+    if (!slotId) return null;
+
+    for (const section of typedStructure) {
+      for (const sub of section.children || []) {
+        const subRoles = sub.roles || [];
+
+        for (const role of subRoles) {
+          if (role.slotId === slotId) {
+            return {
+              header: section.title,
+              subHeader: sub.title,
+              roleLabel: getRoleDisplayLabel(role, subRoles),
+            };
+          }
+        }
+      }
+    }
+
+    return null;
   };
+
+  const selectedSlotPath = useMemo(() => {
+    return resolveSlotPath(selectedSlotId || null);
+  }, [selectedSlotId]);
+
+  const currentSlotPath = useMemo(() => {
+    return resolveSlotPath(selectedPerson?.slotted_position || null);
+  }, [selectedPerson]);
+
+  const slotOccupants = useMemo(() => {
+    const map = new Map<string, SlotOccupant>();
+
+    for (const person of personnel) {
+      if (!person.slotted_position) continue;
+
+      map.set(person.slotted_position, {
+        id: person.id,
+        name: person.name,
+        rank_id: person.rank_id,
+      });
+    }
+
+    return map;
+  }, [personnel]);
+
+  const selectedSlotOccupant = useMemo(() => {
+    if (!selectedSlotId) return null;
+    return slotOccupants.get(selectedSlotId) || null;
+  }, [slotOccupants, selectedSlotId]);
 
   const filteredPersonnel = useMemo(() => {
     const search = personSearch.trim().toLowerCase();
 
-    return personnel.filter((p) =>
-      `${getRankName(p.rank_id)} ${p.name}`.toLowerCase().includes(search)
-    );
+    return personnel.filter((p) => {
+      const label = `${getRankName(p.rank_id)} ${p.name}`.toLowerCase();
+      const billet = formatSlotToBillet(p.slotted_position).toLowerCase();
+      return label.includes(search) || billet.includes(search);
+    });
   }, [personnel, personSearch, ranks]);
 
   const hasPositionChange =
@@ -192,17 +279,61 @@ export default function PositionEditor() {
   const hasRankChange =
     !!selectedPerson && selectedRankId !== (selectedPerson.rank_id || "");
 
-  /* ================= ACTIONS ================= */
+  const hasAnyChanges = hasPositionChange || hasRankChange;
+
+  const isReplacingAnotherPerson =
+    !!selectedPerson &&
+    !!selectedSlotOccupant &&
+    selectedSlotOccupant.id !== selectedPerson.id;
+
+  const selectPerson = (person: Personnel) => {
+    const currentPath = resolveSlotPath(person.slotted_position);
+
+    setSelectedPerson(person);
+    setSelectedRankId(person.rank_id || "");
+    setSelectedSlotId(person.slotted_position || "");
+    setSelectedHeader(currentPath?.header || "");
+    setSelectedSubHeader(currentPath?.subHeader || "");
+    setPersonSearch(`${getRankName(person.rank_id)} ${person.name}`);
+    setShowPersonDropdown(false);
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
 
   const updatePosition = async () => {
     if (!selectedPerson || !selectedSlotId) {
-      alert("Select a position first.");
+      setErrorMessage("Select a position first.");
       return;
     }
 
     setProcessing(true);
+    setErrorMessage("");
+    setSuccessMessage("");
 
     const oldSlot = selectedPerson.slotted_position;
+    const currentOccupant = slotOccupants.get(selectedSlotId);
+
+    if (currentOccupant && currentOccupant.id !== selectedPerson.id) {
+      const { error: clearOccupantError } = await supabase
+        .from("personnel")
+        .update({ slotted_position: null })
+        .eq("id", currentOccupant.id);
+
+      if (clearOccupantError) {
+        setProcessing(false);
+        setErrorMessage("Failed to clear existing occupant: " + clearOccupantError.message);
+        return;
+      }
+
+      await supabase.functions.invoke("sync-slot-roles", {
+        body: {
+          personnelId: currentOccupant.id,
+          slotId: null,
+          oldSlotId: selectedSlotId,
+          forceDefaultRole: true,
+        },
+      });
+    }
 
     const { error } = await supabase
       .from("personnel")
@@ -213,7 +344,7 @@ export default function PositionEditor() {
 
     if (error) {
       setProcessing(false);
-      alert("Update failed: " + error.message);
+      setErrorMessage("Update failed: " + error.message);
       return;
     }
 
@@ -228,16 +359,22 @@ export default function PositionEditor() {
 
     await fetchData();
     setProcessing(false);
-    alert("✅ Position Updated + Logged");
+    setSuccessMessage(
+      currentOccupant && currentOccupant.id !== selectedPerson.id
+        ? "Position updated successfully. Previous occupant was removed from the slot."
+        : "Position updated successfully."
+    );
   };
 
   const updateRank = async () => {
     if (!selectedPerson) {
-      alert("Select a person first.");
+      setErrorMessage("Select a person first.");
       return;
     }
 
     setProcessing(true);
+    setErrorMessage("");
+    setSuccessMessage("");
 
     const oldRank = selectedPerson.rank_id;
 
@@ -250,7 +387,7 @@ export default function PositionEditor() {
 
     if (error) {
       setProcessing(false);
-      alert("Rank update failed: " + error.message);
+      setErrorMessage("Rank update failed: " + error.message);
       return;
     }
 
@@ -264,13 +401,15 @@ export default function PositionEditor() {
 
     await fetchData();
     setProcessing(false);
-    alert("✅ Rank Updated + Discord Synced");
+    setSuccessMessage("Rank updated successfully.");
   };
 
   const unassignPosition = async () => {
     if (!selectedPerson) return;
 
     setProcessing(true);
+    setErrorMessage("");
+    setSuccessMessage("");
 
     const oldSlot = selectedPerson.slotted_position;
 
@@ -281,7 +420,7 @@ export default function PositionEditor() {
 
     if (error) {
       setProcessing(false);
-      alert("Unassign failed: " + error.message);
+      setErrorMessage("Unassign failed: " + error.message);
       return;
     }
 
@@ -299,10 +438,8 @@ export default function PositionEditor() {
     setSelectedHeader("");
     setSelectedSubHeader("");
     setProcessing(false);
-    alert("✅ Unassigned + Logged");
+    setSuccessMessage("Position removed successfully.");
   };
-
-  /* ================= LOADING ================= */
 
   if (loadingAuth) {
     return (
@@ -312,199 +449,606 @@ export default function PositionEditor() {
     );
   }
 
-  /* ================= UI ================= */
-
   return (
-    <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
-      <button
-        onClick={() => router.push("/pcs")}
-        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
-      >
-        ← Return to Dashboard
-      </button>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
+      <div className="border-b border-[#00ff66]/15 bg-black/30 backdrop-blur-md">
+        <div className="px-6 md:px-10 py-6 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+          <div>
+            <button
+              onClick={() => router.push("/pcs")}
+              className="mb-4 px-4 py-2 rounded-lg border border-[#00ff66]/40 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 transition"
+            >
+              ← Return to Dashboard
+            </button>
 
-      <h1 className="text-4xl font-bold text-[#00ff66] mb-10">
-        Slotting Management
-      </h1>
-
-      <div className="mb-8 relative">
-        <label className="block mb-2 text-[#00ff66]">Select Person</label>
-
-        <input
-          type="text"
-          placeholder="Search person..."
-          className="w-full px-4 py-3 rounded-2xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66] outline-none"
-          value={personSearch}
-          onFocus={() => setShowPersonDropdown(true)}
-          onChange={(e) => {
-            setPersonSearch(e.target.value);
-            setShowPersonDropdown(true);
-          }}
-        />
-
-        {showPersonDropdown && (
-          <div className="absolute w-full mt-2 bg-black/80 border border-[#00ff66]/40 rounded-2xl max-h-60 overflow-y-auto z-50">
-            {filteredPersonnel.length === 0 ? (
-              <div className="px-4 py-3 text-gray-400">No matches found.</div>
-            ) : (
-              filteredPersonnel.map((p) => (
-                <div
-                  key={p.id}
-                  className="px-4 py-3 hover:bg-[#00ff66]/20 cursor-pointer"
-                  onClick={() => {
-                    setSelectedPerson(p);
-                    setSelectedSlotId(p.slotted_position || "");
-                    setSelectedRankId(p.rank_id || "");
-                    setPersonSearch(`${getRankName(p.rank_id)} ${p.name}`);
-                    setSelectedHeader("");
-                    setSelectedSubHeader("");
-                    setShowPersonDropdown(false);
-                  }}
-                >
-                  {getRankName(p.rank_id)} {p.name}
-                </div>
-              ))
-            )}
+            <h1 className="text-4xl font-bold text-[#00ff66]">
+              Slotting Management
+            </h1>
+            <p className="text-sm text-gray-400 mt-2">
+              Assign ranks and billets through a visual command layout.
+            </p>
           </div>
-        )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-[280px]">
+            <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-4 py-3">
+              <div className="text-xs text-gray-400 uppercase tracking-[0.2em]">
+                Active Personnel
+              </div>
+              <div className="text-2xl font-bold text-[#00ff66] mt-1">
+                {personnel.length}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-4 py-3">
+              <div className="text-xs text-gray-400 uppercase tracking-[0.2em]">
+                Changes
+              </div>
+              <div
+                className={`text-2xl font-bold mt-1 ${
+                  hasAnyChanges ? "text-cyan-400" : "text-gray-500"
+                }`}
+              >
+                {hasAnyChanges ? "Pending" : "None"}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-4 py-3">
+              <div className="text-xs text-gray-400 uppercase tracking-[0.2em]">
+                System State
+              </div>
+              <div
+                className={`text-2xl font-bold mt-1 ${
+                  processing
+                    ? "text-yellow-400"
+                    : loadingData
+                    ? "text-cyan-400"
+                    : "text-[#00ff66]"
+                }`}
+              >
+                {processing ? "Working" : loadingData ? "Loading" : "Ready"}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {selectedPerson && (
-        <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="p-6 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-md">
-            <p className="text-xs text-gray-400 mb-2">SELECTED PERSON</p>
-            <p className="text-xl text-[#00ff66] font-semibold">
-              {getRankName(selectedPerson.rank_id)} {selectedPerson.name}
-            </p>
-          </div>
+      {(errorMessage || successMessage) && (
+        <div className="px-6 md:px-10 pt-6">
+          {errorMessage && (
+            <div className="mb-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-red-300">
+              {errorMessage}
+            </div>
+          )}
 
-          <div className="p-6 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-md">
-            <p className="text-xs text-gray-400 mb-2">CURRENT POSITION</p>
-            <p className="text-xl text-[#00ff66]">
-              {formatSlotToBillet(selectedPerson.slotted_position)}
-            </p>
-          </div>
+          {successMessage && (
+            <div className="rounded-2xl border border-[#00ff66]/40 bg-[#00ff66]/10 px-5 py-4 text-[#7dffae]">
+              {successMessage}
+            </div>
+          )}
         </div>
       )}
 
-      {selectedPerson && (
-        <div className="mb-10 p-8 rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg">
-          <h2 className="text-2xl text-[#00ff66] mb-6">Rank Management</h2>
+      <div className="px-6 md:px-10 py-8 grid grid-cols-1 2xl:grid-cols-[360px_minmax(0,1fr)_360px] gap-6">
+        <div className="rounded-3xl border border-[#00ff66]/20 bg-black/40 backdrop-blur-md p-6 space-y-5 h-fit">
+          <div>
+            <div className="text-xs uppercase tracking-[0.25em] text-gray-400 mb-2">
+              Personnel Lookup
+            </div>
+            <h2 className="text-2xl font-semibold text-[#00ff66]">
+              Select Person
+            </h2>
+          </div>
 
-          <select
-            className="w-full p-3 mb-5 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
-            value={selectedRankId}
-            onChange={(e) => setSelectedRankId(e.target.value)}
-          >
-            <option value="">-- Select Rank --</option>
-            {ranks.map((rank) => (
-              <option key={rank.id} value={rank.id}>
-                {rank.name}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={updateRank}
-            disabled={!hasRankChange || processing}
-            className={`px-6 py-2 rounded-xl font-semibold transition ${
-              !hasRankChange || processing
-                ? "border border-[#00ff66]/20 text-gray-500 cursor-not-allowed"
-                : "bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black hover:scale-105"
-            }`}
-          >
-            {processing ? "Saving..." : "Save Rank"}
-          </button>
-        </div>
-      )}
-
-      {selectedPerson && (
-        <div className="space-y-6">
-          <select
-            className="w-full p-3 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
-            value={selectedHeader}
-            onChange={(e) => {
-              setSelectedHeader(e.target.value);
-              setSelectedSubHeader("");
-              setSelectedSlotId("");
-            }}
-          >
-            <option value="">-- Select Header --</option>
-            {headers.map((h) => (
-              <option key={h} value={h}>
-                {h}
-              </option>
-            ))}
-          </select>
-
-          {selectedHeader && (
-            <select
-              className="w-full p-3 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
-              value={selectedSubHeader}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search by name, rank, or billet..."
+              className="w-full px-4 py-3 rounded-2xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66] outline-none focus:border-[#00ff66]"
+              value={personSearch}
+              onFocus={() => setShowPersonDropdown(true)}
               onChange={(e) => {
-                setSelectedSubHeader(e.target.value);
-                setSelectedSlotId("");
+                setPersonSearch(e.target.value);
+                setShowPersonDropdown(true);
               }}
-            >
-              <option value="">-- Select Sub Header --</option>
-              {subHeaders.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          )}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setShowPersonDropdown(false);
+                }
 
-          {selectedSubHeader && (
-            <select
-              className="w-full p-3 rounded-xl bg-black/50 border border-[#00ff66]/40 text-[#00ff66]"
-              value={selectedSlotId}
-              onChange={(e) => setSelectedSlotId(e.target.value)}
-            >
-              <option value="">-- Select Role --</option>
-              {roles.map((r) => (
-                <option key={r.slotId} value={r.slotId}>
-                  {r.role}
-                </option>
-              ))}
-            </select>
-          )}
+                if (
+                  e.key === "Enter" &&
+                  filteredPersonnel.length > 0 &&
+                  showPersonDropdown
+                ) {
+                  selectPerson(filteredPersonnel[0]);
+                }
+              }}
+            />
 
-          <div className="flex gap-4 flex-wrap">
-            {selectedSlotId && (
-              <button
-                onClick={updatePosition}
-                disabled={!hasPositionChange || processing}
-                className={`px-6 py-2 rounded-xl font-semibold transition ${
-                  !hasPositionChange || processing
-                    ? "border border-[#00ff66]/20 text-gray-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black hover:scale-105"
-                }`}
-              >
-                {processing
-                  ? "Saving..."
-                  : selectedPerson.slotted_position
-                  ? "Update Position"
-                  : "Save Position"}
-              </button>
+            {showPersonDropdown && (
+              <div className="absolute w-full mt-2 bg-black/90 border border-[#00ff66]/30 rounded-2xl max-h-96 overflow-y-auto z-50 shadow-[0_0_30px_rgba(0,255,102,0.08)]">
+                {filteredPersonnel.length === 0 ? (
+                  <div className="px-4 py-4 text-gray-400">No matches found.</div>
+                ) : (
+                  filteredPersonnel.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`w-full text-left px-4 py-4 border-b border-[#00ff66]/10 last:border-b-0 hover:bg-[#00ff66]/10 transition ${
+                        selectedPerson?.id === p.id ? "bg-[#00ff66]/10" : ""
+                      }`}
+                      onClick={() => selectPerson(p)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-[#00ff66]">
+                            {getRankName(p.rank_id)} {p.name}
+                          </div>
+                          <div className="text-sm text-gray-400 mt-1">
+                            {formatSlotToBillet(p.slotted_position)}
+                          </div>
+                        </div>
+
+                        {p.slotted_position ? (
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-300 border border-cyan-400/30 rounded-full px-2 py-1">
+                            Slotted
+                          </div>
+                        ) : (
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-gray-500 border border-gray-600 rounded-full px-2 py-1">
+                            Unassigned
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
             )}
+          </div>
 
-            {selectedPerson.slotted_position && (
-              <button
-                onClick={unassignPosition}
-                disabled={processing}
-                className={`px-6 py-2 rounded-xl border transition ${
-                  processing
-                    ? "border-red-500/30 text-red-400/50 cursor-not-allowed"
-                    : "border-red-500 text-red-400 hover:bg-red-500/20"
-                }`}
-              >
-                {processing ? "Working..." : "Unassign"}
-              </button>
+          <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-4">
+            <div className="text-xs uppercase tracking-[0.22em] text-gray-400 mb-3">
+              Selected Personnel
+            </div>
+
+            {selectedPerson ? (
+              <div className="space-y-3">
+                <div>
+                  <div className="text-xl font-semibold text-[#00ff66]">
+                    {getRankName(selectedPerson.rank_id)} {selectedPerson.name}
+                  </div>
+                  <div className="text-sm text-gray-400 mt-1">
+                    {selectedPerson.status || "Active"}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[#00ff66]/10 bg-black/30 p-3">
+                  <div className="text-xs text-gray-400 uppercase tracking-[0.18em]">
+                    Current Billet
+                  </div>
+                  <div className="mt-2 text-sm text-white">
+                    {formatSlotToBillet(selectedPerson.slotted_position)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[#00ff66]/10 bg-black/30 p-3">
+                  <div className="text-xs text-gray-400 uppercase tracking-[0.18em]">
+                    Current Rank
+                  </div>
+                  <div className="mt-2 text-sm text-white">
+                    {getRankName(selectedPerson.rank_id)}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-gray-400 text-sm">
+                Choose a person to begin editing.
+              </div>
             )}
           </div>
         </div>
-      )}
+
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-[#00ff66]/20 bg-black/40 backdrop-blur-md p-6">
+            <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-6">
+              <div>
+                <div className="text-xs uppercase tracking-[0.25em] text-gray-400 mb-2">
+                  Command Actions
+                </div>
+                <h2 className="text-2xl font-semibold text-[#00ff66]">
+                  Rank & Position Console
+                </h2>
+              </div>
+
+              {hasAnyChanges && (
+                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-300">
+                  <span className="h-2 w-2 rounded-full bg-cyan-400" />
+                  Unsaved Changes
+                </div>
+              )}
+            </div>
+
+            {!selectedPerson ? (
+              <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-8 text-gray-400">
+                Select a person from the left panel to open the editing console.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-5">
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.22em] text-gray-400 mb-1">
+                        Rank Assignment
+                      </div>
+                      <div className="text-lg text-[#00ff66] font-semibold">
+                        {getRankName(selectedPerson.rank_id)} →{" "}
+                        {selectedRankId ? getRankName(selectedRankId) : "Unranked"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col xl:flex-row gap-4">
+                    <select
+                      className="flex-1 p-3 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66] outline-none focus:border-[#00ff66]"
+                      value={selectedRankId}
+                      onChange={(e) => setSelectedRankId(e.target.value)}
+                    >
+                      <option value="">-- Select Rank --</option>
+                      {ranks.map((rank) => (
+                        <option key={rank.id} value={rank.id}>
+                          {rank.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={updateRank}
+                      disabled={!hasRankChange || processing}
+                      className={`px-6 py-3 rounded-xl font-semibold transition ${
+                        !hasRankChange || processing
+                          ? "border border-[#00ff66]/15 text-gray-500 cursor-not-allowed"
+                          : "bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black hover:scale-[1.02]"
+                      }`}
+                    >
+                      {processing ? "Saving..." : "Commit Rank Change"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-5 space-y-4">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.22em] text-gray-400 mb-1">
+                      Position Routing
+                    </div>
+                    <div className="text-lg text-[#00ff66] font-semibold">
+                      Select Command Path
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <select
+                      className="w-full p-3 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66] outline-none focus:border-[#00ff66]"
+                      value={selectedHeader}
+                      onChange={(e) => {
+                        setSelectedHeader(e.target.value);
+                        setSelectedSubHeader("");
+                        setSelectedSlotId("");
+                      }}
+                    >
+                      <option value="">-- Select Header --</option>
+                      {headers.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      className="w-full p-3 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66] outline-none focus:border-[#00ff66]"
+                      value={selectedSubHeader}
+                      onChange={(e) => {
+                        setSelectedSubHeader(e.target.value);
+                        setSelectedSlotId("");
+                      }}
+                      disabled={!selectedHeader}
+                    >
+                      <option value="">-- Select Sub Header --</option>
+                      {subHeaders.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedHeader && selectedSubHeader && (
+                    <div className="space-y-3 pt-2">
+                      <div className="text-sm text-gray-400">
+                        Available roles for{" "}
+                        <span className="text-cyan-300">
+                          {selectedHeader} — {selectedSubHeader}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                        {roles.map((role) => {
+                          const occupant = slotOccupants.get(role.slotId);
+                          const isSelected = selectedSlotId === role.slotId;
+                          const occupiedByAnother =
+                            occupant && occupant.id !== selectedPerson.id;
+                          const displayRole = getRoleDisplayLabel(role, roles);
+
+                          return (
+                            <button
+                              key={role.slotId}
+                              type="button"
+                              onClick={() => setSelectedSlotId(role.slotId)}
+                              className={`text-left rounded-2xl border p-4 transition ${
+                                isSelected
+                                  ? occupiedByAnother
+                                    ? "border-red-500 bg-red-500/10"
+                                    : "border-cyan-400 bg-cyan-400/10"
+                                  : occupiedByAnother
+                                  ? "border-red-500/30 bg-black/30 hover:border-red-400/60"
+                                  : occupant?.id === selectedPerson.id
+                                  ? "border-[#00ff66] bg-[#00ff66]/10 hover:border-[#00ff66]"
+                                  : "border-[#00ff66]/20 bg-black/30 hover:border-[#00ff66]/50"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="font-semibold text-white">
+                                  {displayRole}
+                                </div>
+
+                                {occupant ? (
+                                  <div
+                                    className={`text-[10px] uppercase tracking-[0.18em] rounded-full px-2 py-1 border ${
+                                      occupant.id === selectedPerson.id
+                                        ? "text-[#00ff66] border-[#00ff66]/40"
+                                        : "text-red-300 border-red-400/40"
+                                    }`}
+                                  >
+                                    {occupant.id === selectedPerson.id
+                                      ? "Current"
+                                      : "Occupied"}
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] uppercase tracking-[0.18em] rounded-full px-2 py-1 border text-cyan-300 border-cyan-400/30">
+                                    Open
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-3 text-sm text-gray-400">
+                                {selectedHeader} — {selectedSubHeader}
+                              </div>
+
+                              <div className="mt-3 text-sm">
+                                {occupant ? (
+                                  <span
+                                    className={
+                                      occupant.id === selectedPerson.id
+                                        ? "text-[#7dffae]"
+                                        : "text-red-300"
+                                    }
+                                  >
+                                    {getRankName(occupant.rank_id)} {occupant.name}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-500">No current occupant</span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-5">
+                  <div className="text-xs uppercase tracking-[0.22em] text-gray-400 mb-1">
+                    Position Actions
+                  </div>
+                  <div className="text-lg text-[#00ff66] font-semibold mb-4">
+                    {selectedPerson.slotted_position ? "Reassignment" : "Assignment"}
+                  </div>
+
+                  <div className="flex flex-wrap gap-4">
+                    <button
+                      onClick={updatePosition}
+                      disabled={!selectedSlotId || !hasPositionChange || processing}
+                      className={`px-6 py-3 rounded-xl font-semibold transition ${
+                        !selectedSlotId || !hasPositionChange || processing
+                          ? "border border-[#00ff66]/15 text-gray-500 cursor-not-allowed"
+                          : isReplacingAnotherPerson
+                          ? "border border-red-500 text-red-300 hover:bg-red-500/10"
+                          : "bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black hover:scale-[1.02]"
+                      }`}
+                    >
+                      {processing
+                        ? "Saving..."
+                        : selectedPerson.slotted_position
+                        ? "Reassign Position"
+                        : "Assign Position"}
+                    </button>
+
+                    {selectedPerson.slotted_position && (
+                      <button
+                        onClick={unassignPosition}
+                        disabled={processing}
+                        className={`px-6 py-3 rounded-xl border transition ${
+                          processing
+                            ? "border-red-500/20 text-red-400/40 cursor-not-allowed"
+                            : "border-red-500 text-red-400 hover:bg-red-500/10"
+                        }`}
+                      >
+                        {processing ? "Working..." : "Remove From Slot"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-[#00ff66]/20 bg-black/40 backdrop-blur-md p-6 space-y-5 h-fit">
+          <div>
+            <div className="text-xs uppercase tracking-[0.25em] text-gray-400 mb-2">
+              Live Preview
+            </div>
+            <h2 className="text-2xl font-semibold text-[#00ff66]">
+              Assignment Summary
+            </h2>
+          </div>
+
+          {!selectedPerson ? (
+            <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-6 text-gray-400">
+              Preview data will appear here once a person is selected.
+            </div>
+          ) : (
+            <>
+              <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-4 space-y-4">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 mb-1">
+                    Name
+                  </div>
+                  <div className="text-white font-semibold">
+                    {getRankName(selectedPerson.rank_id)} {selectedPerson.name}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 mb-1">
+                    Rank Change
+                  </div>
+                  <div className={hasRankChange ? "text-cyan-300" : "text-gray-400"}>
+                    {getRankName(selectedPerson.rank_id)} →{" "}
+                    {selectedRankId ? getRankName(selectedRankId) : "Unranked"}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 mb-1">
+                    Position Change
+                  </div>
+                  <div className={hasPositionChange ? "text-cyan-300" : "text-gray-400"}>
+                    {formatSlotToBillet(selectedPerson.slotted_position)} →{" "}
+                    {selectedSlotId ? formatSlotToBillet(selectedSlotId) : "Unassigned"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-4 space-y-3">
+                <div className="text-xs uppercase tracking-[0.18em] text-gray-400">
+                  New Slot Breakdown
+                </div>
+
+                {selectedSlotPath ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">Header</span>
+                      <span className="text-white">{selectedSlotPath.header}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">Sub Header</span>
+                      <span className="text-white">{selectedSlotPath.subHeader}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">Role</span>
+                      <span className="text-white">{selectedSlotPath.roleLabel}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500 text-sm">No target slot selected.</div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-4 space-y-3">
+                <div className="text-xs uppercase tracking-[0.18em] text-gray-400">
+                  Slot Status
+                </div>
+
+                {!selectedSlotId ? (
+                  <div className="text-gray-500 text-sm">No slot selected.</div>
+                ) : selectedSlotOccupant ? (
+                  <div className="space-y-2">
+                    <div
+                      className={`font-semibold ${
+                        selectedSlotOccupant.id === selectedPerson.id
+                          ? "text-[#7dffae]"
+                          : "text-red-300"
+                      }`}
+                    >
+                      {selectedSlotOccupant.id === selectedPerson.id
+                        ? "Currently occupied by selected person"
+                        : "Currently occupied by another person"}
+                    </div>
+                    <div className="text-sm text-white">
+                      {getRankName(selectedSlotOccupant.rank_id)}{" "}
+                      {selectedSlotOccupant.name}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-cyan-300 text-sm">Slot is open and available.</div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-4 space-y-3">
+                <div className="text-xs uppercase tracking-[0.18em] text-gray-400">
+                  Action Outcome
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className={hasRankChange ? "text-cyan-300" : "text-gray-500"}>
+                    {hasRankChange ? "✔ Rank change pending" : "— No rank change"}
+                  </div>
+
+                  <div className={hasPositionChange ? "text-cyan-300" : "text-gray-500"}>
+                    {hasPositionChange
+                      ? "✔ Position change pending"
+                      : "— No position change"}
+                  </div>
+
+                  <div className="text-gray-400">
+                    {hasPositionChange ? "Discord role sync will run" : "No slot sync needed"}
+                  </div>
+
+                  {isReplacingAnotherPerson && (
+                    <div className="text-red-300">
+                      Warning: this slot is currently occupied by another person.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {currentSlotPath && (
+                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/30 p-4 space-y-3">
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400">
+                    Current Slot Path
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">Header</span>
+                      <span className="text-white">{currentSlotPath.header}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">Sub Header</span>
+                      <span className="text-white">{currentSlotPath.subHeader}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-400">Role</span>
+                      <span className="text-white">{currentSlotPath.roleLabel}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

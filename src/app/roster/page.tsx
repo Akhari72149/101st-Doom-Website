@@ -12,11 +12,18 @@ type Personnel = {
   name: string;
   slotted_position: string;
   mos?: string | null;
+  created_at?: string | null;
 };
 
 type Rank = {
   id: string;
   name: string;
+};
+
+type RankHistoryRow = {
+  personnel_id: string;
+  new_rank_id: string | null;
+  changed_at: string | null;
 };
 
 type DisplayMode = "all" | "filled" | "empty";
@@ -48,6 +55,7 @@ export default function Roster() {
 
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
+  const [rankHistory, setRankHistory] = useState<RankHistoryRow[]>([]);
 
   const [openSection, setOpenSection] = useState<number | null>(0);
   const [openSubSections, setOpenSubSections] = useState<string[]>([]);
@@ -57,15 +65,19 @@ export default function Roster() {
 
   useEffect(() => {
     async function fetchData() {
-      const { data: rankData } = await supabase.from("ranks").select("*");
+      const [{ data: rankData }, { data: personnelData }, { data: historyData }] =
+        await Promise.all([
+          supabase.from("ranks").select("*"),
+          supabase.from("personnel").select("*").order("rank_id", { ascending: true }),
+          supabase
+            .from("rank_history")
+            .select("personnel_id, new_rank_id, changed_at")
+            .order("changed_at", { ascending: false }),
+        ]);
+
       setRanks((rankData as Rank[]) || []);
-
-      const { data } = await supabase
-        .from("personnel")
-        .select("*")
-        .order("rank_id", { ascending: true });
-
-      setPersonnel((data as Personnel[]) || []);
+      setPersonnel((personnelData as Personnel[]) || []);
+      setRankHistory((historyData as RankHistoryRow[]) || []);
     }
 
     fetchData();
@@ -94,6 +106,45 @@ export default function Roster() {
 
     return map;
   }, [personnel]);
+
+  const rankHistoryByPersonnel = useMemo(() => {
+    const map = new Map<string, RankHistoryRow[]>();
+
+    rankHistory.forEach((entry) => {
+      if (!map.has(entry.personnel_id)) {
+        map.set(entry.personnel_id, []);
+      }
+      map.get(entry.personnel_id)!.push(entry);
+    });
+
+    return map;
+  }, [rankHistory]);
+
+  const calculateTimeInGradeDays = (person: Personnel | null | undefined) => {
+    if (!person?.rank_id) return 0;
+
+    const history = rankHistoryByPersonnel.get(person.id) || [];
+
+    const latestPromotion = [...history]
+      .filter((h) => h.new_rank_id === person.rank_id && h.changed_at)
+      .sort(
+        (a, b) =>
+          new Date(b.changed_at as string).getTime() -
+          new Date(a.changed_at as string).getTime()
+      )[0];
+
+    const startDate = latestPromotion?.changed_at || person.created_at || null;
+    if (!startDate) return 0;
+
+    const then = new Date(startDate);
+    if (Number.isNaN(then.getTime())) return 0;
+
+    const now = new Date();
+    return Math.max(
+      0,
+      Math.floor((now.getTime() - then.getTime()) / (1000 * 60 * 60 * 24))
+    );
+  };
 
   const groupRoles = (roles: StructureRole[] = []): GroupedRole[] => {
     const map = new Map<string, StructureRole[]>();
@@ -344,6 +395,9 @@ export default function Roster() {
                       </div>
                       <div className="mt-1 text-xs tracking-wide text-[#8ea595]">
                         {slot.slotId}
+                      </div>
+                      <div className="mt-2 text-[11px] uppercase tracking-[0.2em] text-[#7fa08e]">
+                        TIG: {calculateTimeInGradeDays(person)} Days
                       </div>
                     </>
                   ) : (

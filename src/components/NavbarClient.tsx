@@ -113,16 +113,6 @@ export default function NavbarClient() {
           allowedRoles: ["Akhari", "logistics"],
         },
         {
-          href: "/admin/attendance",
-          label: "Attendance Roster",
-          allowedRoles: ["admin", "nco"],
-        },
-        {
-          href: "/attendance-dashboard",
-          label: "Attendance Roster Viewer",
-          allowedRoles: ["admin", "nco"],
-        },
-        {
           href: "/audit",
           label: "Audit Log",
           allowedRoles: ["admin", "nco", "trainer", "di"],

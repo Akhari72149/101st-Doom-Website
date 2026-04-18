@@ -11,6 +11,7 @@ type Personnel = {
   birth_number: string;
   name: string;
   slotted_position: string;
+  mos?: string | null;
 };
 
 type Rank = {
@@ -75,6 +76,12 @@ export default function Roster() {
     return rank ? rank.name : "Unranked";
   };
 
+  const getDisplayedRank = (person: Personnel | null | undefined) => {
+    if (!person) return "Unranked";
+    const mos = (person.mos || "").trim();
+    return mos || getRankName(person.rank_id);
+  };
+
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const personBySlotId = useMemo(() => {
@@ -115,6 +122,8 @@ export default function Roster() {
       const fields = [
         person?.name || "",
         person ? getRankName(person.rank_id) : "",
+        person ? getDisplayedRank(person) : "",
+        person?.mos || "",
         person?.slotted_position || "",
         group.role || "",
         slot.slotId || "",
@@ -328,7 +337,7 @@ export default function Roster() {
                   {person ? (
                     <>
                       <div className="text-sm font-bold tracking-wide text-[#00ff66]">
-                        {getRankName(person.rank_id)}
+                        {getDisplayedRank(person)}
                       </div>
                       <div className="truncate text-[15px] font-medium text-[#f2fff7]">
                         {person.name}

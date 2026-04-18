@@ -19,6 +19,7 @@ type Person = {
   created_at: string | null;
   ts_id?: string | null;
   status?: string | null;
+  mos?: string | null;
 };
 
 type CertificationRow = {
@@ -125,6 +126,13 @@ export default function PersonnelProfile() {
     if (!rankId) return "Unranked";
     const rank = ranks.find((r) => r.id === rankId);
     return rank?.name || "Unranked";
+  };
+
+  const getDisplayedRank = (person: Person | null) => {
+    if (!person) return "Unranked";
+    const mos = (person.mos || "").trim();
+    if (mos) return mos;
+    return getRankName(person.rank_id);
   };
 
   const getRankLevel = (rankId: string | null) => {
@@ -255,6 +263,7 @@ export default function PersonnelProfile() {
     return personnel.filter((p) => {
       const text = [
         getRankName(p.rank_id),
+        p.mos || "",
         p.name,
         p.status || "",
         p.slotted_position || "",
@@ -407,7 +416,7 @@ export default function PersonnelProfile() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className={`text-xs uppercase tracking-[0.18em] ${isPersonInactive ? "text-red-300" : theme.primaryText}`}>
-                              {getRankName(p.rank_id)}
+                              {getDisplayedRank(p)}
                             </p>
                             <p className="mt-1 truncate text-sm font-semibold text-white">
                               {p.name}
@@ -513,7 +522,7 @@ export default function PersonnelProfile() {
                   <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs uppercase tracking-[0.35em] text-gray-400">
-                        {getRankName(selectedPerson.rank_id)}
+                        {getDisplayedRank(selectedPerson)}
                       </p>
 
                       <div className="mt-4 flex gap-2">
@@ -607,6 +616,9 @@ export default function PersonnelProfile() {
                   <div className={`my-8 border-t ${theme.divider}`} />
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                    {renderStatCard("Displayed Rank", getDisplayedRank(selectedPerson), true)}
+                    {renderStatCard("Base Rank", getRankName(selectedPerson.rank_id))}
+                    {renderStatCard("MOS", selectedPerson.mos?.trim() || "None", true)}
                     {renderStatCard("Join Date", formatDate(selectedPerson.created_at))}
                     {renderStatCard(
                       "Time in Grade",

@@ -47,6 +47,15 @@ type AuditHighlight = {
   } | { name: string }[] | null;
 };
 
+type SiteVersionData = {
+  version: string;
+  commitMessage: string;
+  shortSha: string;
+  committedAt: string | null;
+  author: string;
+  commitUrl?: string;
+};
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -63,6 +72,10 @@ export default function HomePage() {
   const [loadingHighlights, setLoadingHighlights] = useState(true);
   const [highlightsOpen, setHighlightsOpen] = useState(false);
 
+  const [siteVersion, setSiteVersion] = useState<SiteVersionData | null>(null);
+  const [loadingSiteVersion, setLoadingSiteVersion] = useState(true);
+  const [siteVersionOpen, setSiteVersionOpen] = useState(false);
+
   const [currentSlide, setCurrentSlide] = useState(0);
   const [time, setTime] = useState(new Date());
   const [weeklyOpen, setWeeklyOpen] = useState(false);
@@ -74,12 +87,6 @@ export default function HomePage() {
     today.setHours(0, 0, 0, 0);
     return today;
   });
-
-  const newsItems = [
-    "Week 5 Unit Stats - 112 clone casualties last week, 638 lost during Yoabos GC",
-    "Week 5 Kill Stats - 6000+ clankers taken out, 18200+ destroyed during GC",
-    "Latest numbers, CWO Sicko purged more Troopers from the unit, than the droids did last weekend, FKIN CWOS, they are the true threat",
-  ];
 
   const slides = [
     "/slideshow/farewell.jpg",
@@ -145,6 +152,7 @@ export default function HomePage() {
   useEffect(() => {
     fetchServers();
     fetchDailyHighlights();
+    fetchSiteVersion();
 
     const serverInterval = setInterval(fetchServers, 10000);
     const highlightInterval = setInterval(fetchDailyHighlights, 60000);
@@ -244,15 +252,15 @@ export default function HomePage() {
     return "unknown";
   };
 
-const isPromotionOrCertLog = (row: AuditHighlight) => {
-  const action = (row.action ?? "").toLowerCase();
+  const isPromotionOrCertLog = (row: AuditHighlight) => {
+    const action = (row.action ?? "").toLowerCase();
 
-  if (action === "certification_revoked") {
-    return false;
-  }
+    if (action === "certification_revoked") {
+      return false;
+    }
 
-  return detectHighlightType(row) !== "unknown";
-};
+    return detectHighlightType(row) !== "unknown";
+  };
 
   const formatHighlightTitle = (row: AuditHighlight) => {
     const type = detectHighlightType(row);
@@ -262,78 +270,89 @@ const isPromotionOrCertLog = (row: AuditHighlight) => {
     return "Unit Achievement";
   };
 
-const formatHighlightText = (row: AuditHighlight) => {
-  const name = unwrapRelationName(row.targetPersonnel);
-  const certName = unwrapRelationName(row.targetCertification);
-  const rankName = unwrapRelationName(row.targetRank);
-  const type = detectHighlightType(row);
+  const formatHighlightText = (row: AuditHighlight) => {
+    const name = unwrapRelationName(row.targetPersonnel);
+    const certName = unwrapRelationName(row.targetCertification);
+    const rankName = unwrapRelationName(row.targetRank);
+    const type = detectHighlightType(row);
 
-  const highlightClass = "text-[#00ff66] font-semibold";
+    const highlightClass = "text-[#00ff66] font-semibold";
 
-  if (type === "promotion") {
-    if (name && rankName) {
-      return (
-        <>
-          Congratulations to <span className={highlightClass}>{name}</span> on
-          your promotion to <span className={highlightClass}>{rankName}</span>
-        </>
-      );
+    if (type === "promotion") {
+      if (name && rankName) {
+        return (
+          <>
+            Congratulations to <span className={highlightClass}>{name}</span> on
+            your promotion to <span className={highlightClass}>{rankName}</span>
+          </>
+        );
+      }
+
+      if (name) {
+        return (
+          <>
+            Congratulations to <span className={highlightClass}>{name}</span> on
+            your promotion
+          </>
+        );
+      }
+
+      if (rankName) {
+        return (
+          <>
+            Congratulations on the promotion to{" "}
+            <span className={highlightClass}>{rankName}</span>
+          </>
+        );
+      }
+
+      return "Congratulations on your promotion";
     }
 
-    if (name) {
-      return (
-        <>
-          Congratulations to <span className={highlightClass}>{name}</span> on
-          your promotion
-        </>
-      );
+    if (type === "certification") {
+      if (name && certName) {
+        return (
+          <>
+            Congratulations <span className={highlightClass}>{name}</span>,{" "}
+            <span className={highlightClass}>{certName}</span> assigned
+          </>
+        );
+      }
+
+      if (name) {
+        return (
+          <>
+            Congratulations <span className={highlightClass}>{name}</span> on your
+            certification
+          </>
+        );
+      }
+
+      if (certName) {
+        return (
+          <>
+            Congratulations, <span className={highlightClass}>{certName}</span>{" "}
+            assigned
+          </>
+        );
+      }
+
+      return "Congratulations on your certification";
     }
 
-    if (rankName) {
-      return (
-        <>
-          Congratulations on the promotion to{" "}
-          <span className={highlightClass}>{rankName}</span>
-        </>
-      );
-    }
+    return "Congratulations on today’s achievement";
+  };
 
-    return "Congratulations on your promotion";
-  }
-
-  if (type === "certification") {
-    if (name && certName) {
-      return (
-        <>
-          Congratulations <span className={highlightClass}>{name}</span>,{" "}
-          <span className={highlightClass}>{certName}</span> assigned
-        </>
-      );
-    }
-
-    if (name) {
-      return (
-        <>
-          Congratulations <span className={highlightClass}>{name}</span> on your
-          certification
-        </>
-      );
-    }
-
-    if (certName) {
-      return (
-        <>
-          Congratulations, <span className={highlightClass}>{certName}</span>{" "}
-          assigned
-        </>
-      );
-    }
-
-    return "Congratulations on your certification";
-  }
-
-  return "Congratulations on today’s achievement";
-};
+  const formatSiteVersionDate = (value: string | null) => {
+    if (!value) return "Unknown";
+    return new Date(value).toLocaleString([], {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
 
   const fetchEvents = async (date: Date) => {
     const start = new Date(date);
@@ -454,6 +473,26 @@ const formatHighlightText = (row: AuditHighlight) => {
     }
   };
 
+  const fetchSiteVersion = async () => {
+    try {
+      setLoadingSiteVersion(true);
+      const res = await fetch("/api/site-version");
+
+      if (!res.ok) {
+        setSiteVersion(null);
+        return;
+      }
+
+      const data = await res.json();
+      setSiteVersion(data);
+    } catch (err) {
+      console.error("Failed to fetch site version", err);
+      setSiteVersion(null);
+    } finally {
+      setLoadingSiteVersion(false);
+    }
+  };
+
   const changeEventDate = (days: number) => {
     setSelectedEventDate((prev) => {
       const next = new Date(prev);
@@ -551,6 +590,7 @@ const formatHighlightText = (row: AuditHighlight) => {
             <div className="text-sm mb-2">
               📅 Upcoming Events: {events.length}
             </div>
+            <div className="text-sm mb-2">👥 Players Online: {totalPlayers}</div>
             <div className="mt-2 text-[#00ff66] text-sm">
               {time.toLocaleTimeString()}
             </div>
@@ -700,16 +740,79 @@ const formatHighlightText = (row: AuditHighlight) => {
             </div>
 
             <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
+              <button
+                onClick={() => setHighlightsOpen((prev) => !prev)}
+                className="w-full flex items-center justify-between px-4 py-4 hover:bg-black/40 transition-all"
+              >
+                <span className="text-base text-[#00ff66] tracking-[0.2em] uppercase">
+                  Today&apos;s Commendations
+                </span>
+                <span
+                  className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
+                    highlightsOpen ? "rotate-180" : "rotate-0"
+                  }`}
+                >
+                  ▼
+                </span>
+              </button>
+
+              <div
+                className={`overflow-hidden transition-all duration-500 ${
+                  highlightsOpen
+                    ? "max-h-[420px] opacity-100"
+                    : "max-h-0 opacity-0"
+                }`}
+              >
+                <div className="px-4 pb-4 max-h-[360px] overflow-y-auto pr-2">
+                  {loadingHighlights ? (
+                    <div className="text-center text-gray-400 py-6 animate-pulse">
+                      Loading today&apos;s commendations...
+                    </div>
+                  ) : dailyHighlights.length === 0 ? (
+                    <div className="text-sm text-gray-400 py-4">
+                      No promotions or certifications logged today yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {dailyHighlights.map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-xl border border-[#00ff66]/20 bg-black/55 p-4"
+                        >
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
+                            {formatHighlightTitle(item)}
+                          </div>
+
+                          <div className="mt-2 text-sm text-white leading-relaxed">
+                            {formatHighlightText(item)}
+                          </div>
+
+                          <div className="mt-3 text-[11px] text-gray-500">
+                            {new Date(item.created_at).toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-cyan-400/30 bg-black/50 overflow-hidden">
   <button
-    onClick={() => setHighlightsOpen((prev) => !prev)}
+    onClick={() => setSiteVersionOpen((prev) => !prev)}
     className="w-full flex items-center justify-between px-4 py-4 hover:bg-black/40 transition-all"
   >
-    <span className="text-base text-[#00ff66] tracking-[0.2em] uppercase">
-      Today&apos;s Commendations
+    <span className="text-base text-cyan-300 tracking-[0.2em] uppercase">
+      Website Build
     </span>
+
     <span
-      className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
-        highlightsOpen ? "rotate-180" : "rotate-0"
+      className={`text-cyan-300 text-2xl transition-transform duration-300 ${
+        siteVersionOpen ? "rotate-180" : "rotate-0"
       }`}
     >
       ▼
@@ -718,43 +821,77 @@ const formatHighlightText = (row: AuditHighlight) => {
 
   <div
     className={`overflow-hidden transition-all duration-500 ${
-      highlightsOpen
-        ? "max-h-[420px] opacity-100"
-        : "max-h-0 opacity-0"
+      siteVersionOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0"
     }`}
   >
-    <div className="px-4 pb-4 max-h-[360px] overflow-y-auto pr-2">
-      {loadingHighlights ? (
-        <div className="text-center text-gray-400 py-6 animate-pulse">
-          Loading today&apos;s commendations...
+    <div className="px-4 pb-4">
+      {loadingSiteVersion ? (
+        <div className="text-center text-gray-400 py-4 animate-pulse">
+          Loading website version...
         </div>
-      ) : dailyHighlights.length === 0 ? (
-        <div className="text-sm text-gray-400 py-4">
-          No promotions or certifications logged today yet.
+      ) : !siteVersion ? (
+        <div className="rounded-xl border border-red-400/20 bg-red-500/5 p-4 text-sm text-red-300">
+          Unable to load website version data.
         </div>
       ) : (
         <div className="space-y-3">
-          {dailyHighlights.map((item) => (
-            <div
-              key={item.id}
-              className="rounded-xl border border-[#00ff66]/20 bg-black/55 p-4"
-            >
-              <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
-                {formatHighlightTitle(item)}
-              </div>
+          <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
+              Version
+            </div>
+            <div className="mt-2 text-2xl font-bold text-cyan-300">
+              {siteVersion.version}
+            </div>
+          </div>
 
-              <div className="mt-2 text-sm text-white leading-relaxed">
-                {formatHighlightText(item)}
-              </div>
+          <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
+              Latest Commit
+            </div>
+            <div className="mt-2 text-sm text-white leading-relaxed break-words">
+              {siteVersion.commitMessage}
+            </div>
+          </div>
 
-              <div className="mt-3 text-[11px] text-gray-500">
-                {new Date(item.created_at).toLocaleTimeString([], {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
+                Commit
+              </div>
+              {siteVersion.commitUrl ? (
+                <a
+                  href={siteVersion.commitUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-block text-sm font-semibold text-cyan-300 hover:underline"
+                >
+                  {siteVersion.shortSha}
+                </a>
+              ) : (
+                <div className="mt-2 text-sm font-semibold text-cyan-300">
+                  {siteVersion.shortSha}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
+                Author
+              </div>
+              <div className="mt-2 text-sm text-white">
+                {siteVersion.author}
               </div>
             </div>
-          ))}
+          </div>
+
+          <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
+              Updated
+            </div>
+            <div className="mt-2 text-sm text-white">
+              {formatSiteVersionDate(siteVersion.committedAt)}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1117,6 +1254,7 @@ const formatHighlightText = (row: AuditHighlight) => {
                 key={item.label}
                 href={item.href}
                 target="_blank"
+                rel="noreferrer"
                 className="block mb-4 px-4 py-3 text-center rounded-xl border border-[#00ff66]/30 hover:bg-[#00ff66]/10 hover:scale-105 transition-all"
               >
                 {item.label}
@@ -1124,31 +1262,6 @@ const formatHighlightText = (row: AuditHighlight) => {
             ))}
           </div>
         </div>
-      </div>
-
-      <div className="fixed bottom-15 left-0 w-full bg-black/70 backdrop-blur-xl border-t border-[#00ff66]/30 overflow-hidden z-50">
-        <div className="flex w-max animate-ticker gap-16 px-8 py-3 text-[#00ff66] whitespace-nowrap">
-          {[...newsItems, ...newsItems].map((item, index) => (
-            <span key={index} className="mr-16">
-              {item}
-            </span>
-          ))}
-        </div>
-
-        <style jsx global>{`
-          @keyframes ticker {
-            0% {
-              transform: translateX(0);
-            }
-            100% {
-              transform: translateX(-50%);
-            }
-          }
-
-          .animate-ticker {
-            animation: ticker 30s linear infinite;
-          }
-        `}</style>
       </div>
     </div>
   );

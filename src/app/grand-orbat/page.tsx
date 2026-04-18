@@ -20,6 +20,7 @@ type Personnel = {
   id: string;
   name: string;
   slotted_position: string | null;
+  mos?: string | null;
   ranks?: Rank | null;
 };
 
@@ -83,13 +84,14 @@ export default function GrandOrbat() {
 
       const { data: personnelData } = await supabase
         .from("personnel")
-        .select("id, name, slotted_position, ranks(*)");
+        .select("id, name, slotted_position, mos, ranks(*)");
 
       const normalizedPersonnel: Personnel[] = (personnelData || []).map(
         (person: any) => ({
           id: person.id,
           name: person.name,
           slotted_position: person.slotted_position,
+          mos: person.mos || null,
           ranks: Array.isArray(person.ranks)
             ? person.ranks[0] || null
             : person.ranks || null,
@@ -117,6 +119,16 @@ export default function GrandOrbat() {
   }, [orgTree]);
 
   /* ===================================================== */
+  /* HELPERS */
+  /* ===================================================== */
+
+  const getDisplayedRank = (person: Personnel | null | undefined) => {
+    if (!person) return "Unranked";
+    const mos = (person.mos || "").trim();
+    return mos || person.ranks?.name || "Unranked";
+  };
+
+  /* ===================================================== */
   /* SLOT MAP */
   /* ===================================================== */
 
@@ -138,12 +150,46 @@ export default function GrandOrbat() {
   const filteredTree = useMemo(() => {
     if (!search.trim()) return orgTree;
 
+    const searchTerm = search.toLowerCase();
+
+    const nodeMatchesSearch = (node: OrgNode) => {
+      if (node.name.toLowerCase().includes(searchTerm)) return true;
+
+      const groupedRoles = node.roles || [];
+
+      for (const role of groupedRoles) {
+        const roleName = role.role?.toLowerCase() || "";
+        const slotId = role.slotId?.toLowerCase() || "";
+        const person = role.slotId
+          ? slotMap[role.slotId.toLowerCase()]
+          : null;
+
+        const displayedRank = getDisplayedRank(person).toLowerCase();
+        const baseRank = person?.ranks?.name?.toLowerCase() || "";
+        const mos = (person?.mos || "").toLowerCase();
+        const name = person?.name?.toLowerCase() || "";
+
+        const searchable = [
+          node.name.toLowerCase(),
+          roleName,
+          slotId,
+          name,
+          displayedRank,
+          baseRank,
+          mos,
+        ].join(" ");
+
+        if (searchable.includes(searchTerm)) return true;
+      }
+
+      return false;
+    };
+
     const filter = (nodes: OrgNode[]): OrgNode[] =>
       nodes
         .map((node) => {
           const children = node.children ? filter(node.children) : [];
-
-          const matches = node.name.toLowerCase().includes(search.toLowerCase());
+          const matches = nodeMatchesSearch(node);
 
           if (matches || children.length > 0) {
             return { ...node, children };
@@ -154,7 +200,7 @@ export default function GrandOrbat() {
         .filter(Boolean) as OrgNode[];
 
     return filter(orgTree);
-  }, [search, orgTree]);
+  }, [search, orgTree, slotMap]);
 
   /* ===================================================== */
   /* TREE NODE */
@@ -280,7 +326,7 @@ export default function GrandOrbat() {
                     "
                   >
                     <span className="text-[#00ff66] font-bold">
-                      {person.ranks?.name || "Unranked"}
+                      {getDisplayedRank(person)}
                     </span>{" "}
                     <span className="text-white">{person.name}</span>
                   </div>

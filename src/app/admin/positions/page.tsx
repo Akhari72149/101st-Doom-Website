@@ -11,6 +11,7 @@ type Personnel = {
   rank_id: string | null;
   slotted_position: string | null;
   status: string | null;
+  mos: string | null;
 };
 
 type Rank = {
@@ -49,6 +50,28 @@ type ResolvedSlotPath = {
   roleLabel: string;
 };
 
+type MosType = "medic" | "rto" | null;
+
+const MEDIC_MOS_RANKS = [
+  "CM-C",
+  "CM",
+  "CM-V",
+  "CM-T",
+  "CM-P",
+  "CM-S",
+  "CM-SM",
+];
+
+const RTO_MOS_RANKS = [
+  "CI-C",
+  "CI",
+  "CI-V",
+  "CI-T",
+  "CI-P",
+  "CI-S",
+  "CI-SM",
+];
+
 export default function PositionEditor() {
   const router = useRouter();
 
@@ -64,6 +87,9 @@ export default function PositionEditor() {
   const [selectedSubHeader, setSelectedSubHeader] = useState("");
   const [selectedSlotId, setSelectedSlotId] = useState("");
   const [selectedRankId, setSelectedRankId] = useState("");
+
+  const [selectedMosType, setSelectedMosType] = useState<MosType>(null);
+  const [selectedMosValue, setSelectedMosValue] = useState("");
 
   const [personSearch, setPersonSearch] = useState("");
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
@@ -111,7 +137,7 @@ export default function PositionEditor() {
 
     const { data: personnelData, error: personnelError } = await supabase
       .from("personnel")
-      .select("id, name, rank_id, slotted_position, status")
+      .select("id, name, rank_id, slotted_position, status, mos")
       .order("name", { ascending: true });
 
     const { data: rankData, error: rankError } = await supabase
@@ -153,6 +179,19 @@ export default function PositionEditor() {
 
     setSelectedPerson(updated);
     setSelectedRankId(updated.rank_id || "");
+
+    const currentMos = updated.mos || "";
+
+    if (MEDIC_MOS_RANKS.includes(currentMos)) {
+      setSelectedMosType("medic");
+      setSelectedMosValue(currentMos);
+    } else if (RTO_MOS_RANKS.includes(currentMos)) {
+      setSelectedMosType("rto");
+      setSelectedMosValue(currentMos);
+    } else {
+      setSelectedMosType(null);
+      setSelectedMosValue(currentMos);
+    }
   }, [personnel, selectedPerson]);
 
   const typedStructure = structure as StructureSection[];
@@ -269,7 +308,12 @@ export default function PositionEditor() {
     return personnel.filter((p) => {
       const label = `${getRankName(p.rank_id)} ${p.name}`.toLowerCase();
       const billet = formatSlotToBillet(p.slotted_position).toLowerCase();
-      return label.includes(search) || billet.includes(search);
+      const mos = (p.mos || "").toLowerCase();
+      return (
+        label.includes(search) ||
+        billet.includes(search) ||
+        mos.includes(search)
+      );
     });
   }, [personnel, personSearch, ranks]);
 
@@ -279,12 +323,22 @@ export default function PositionEditor() {
   const hasRankChange =
     !!selectedPerson && selectedRankId !== (selectedPerson.rank_id || "");
 
-  const hasAnyChanges = hasPositionChange || hasRankChange;
+  const hasMosChange =
+    !!selectedPerson && selectedMosValue !== (selectedPerson.mos || "");
+
+  const hasAnyChanges = hasPositionChange || hasRankChange || hasMosChange;
 
   const isReplacingAnotherPerson =
     !!selectedPerson &&
     !!selectedSlotOccupant &&
     selectedSlotOccupant.id !== selectedPerson.id;
+
+  const currentMosOptions =
+    selectedMosType === "medic"
+      ? MEDIC_MOS_RANKS
+      : selectedMosType === "rto"
+      ? RTO_MOS_RANKS
+      : [];
 
   const selectPerson = (person: Personnel) => {
     const currentPath = resolveSlotPath(person.slotted_position);
@@ -298,6 +352,19 @@ export default function PositionEditor() {
     setShowPersonDropdown(false);
     setErrorMessage("");
     setSuccessMessage("");
+
+    const currentMos = person.mos || "";
+
+    if (MEDIC_MOS_RANKS.includes(currentMos)) {
+      setSelectedMosType("medic");
+      setSelectedMosValue(currentMos);
+    } else if (RTO_MOS_RANKS.includes(currentMos)) {
+      setSelectedMosType("rto");
+      setSelectedMosValue(currentMos);
+    } else {
+      setSelectedMosType(null);
+      setSelectedMosValue(currentMos);
+    }
   };
 
   const updatePosition = async () => {
@@ -404,6 +471,48 @@ export default function PositionEditor() {
     setSuccessMessage("Rank updated successfully.");
   };
 
+  const updateMos = async () => {
+    if (!selectedPerson) {
+      setErrorMessage("Select a person first.");
+      return;
+    }
+
+    if (selectedMosType && !selectedMosValue) {
+      setErrorMessage("Select an MOS rank before saving.");
+      return;
+    }
+
+    setProcessing(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const { error } = await supabase
+      .from("personnel")
+      .update({
+        mos: selectedMosValue || null,
+      })
+      .eq("id", selectedPerson.id);
+
+    if (error) {
+      setProcessing(false);
+      setErrorMessage("MOS update failed: " + error.message);
+      return;
+    }
+
+    await fetchData();
+    setProcessing(false);
+    setSuccessMessage(
+      selectedMosValue
+        ? "MOS updated successfully."
+        : "MOS cleared successfully."
+    );
+  };
+
+  const clearMosSelection = () => {
+    setSelectedMosType(null);
+    setSelectedMosValue("");
+  };
+
   const unassignPosition = async () => {
     if (!selectedPerson) return;
 
@@ -465,7 +574,7 @@ export default function PositionEditor() {
               Slotting Management
             </h1>
             <p className="text-sm text-gray-400 mt-2">
-              Assign ranks and billets through a visual command layout.
+              Assign ranks, MOS titles and billets through a visual command layout.
             </p>
           </div>
 
@@ -542,7 +651,7 @@ export default function PositionEditor() {
           <div className="relative">
             <input
               type="text"
-              placeholder="Search by name, rank, or billet..."
+              placeholder="Search by name, rank, billet, or MOS..."
               className="w-full px-4 py-3 rounded-2xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66] outline-none focus:border-[#00ff66]"
               value={personSearch}
               onFocus={() => setShowPersonDropdown(true)}
@@ -587,6 +696,11 @@ export default function PositionEditor() {
                           <div className="text-sm text-gray-400 mt-1">
                             {formatSlotToBillet(p.slotted_position)}
                           </div>
+                          {p.mos && (
+                            <div className="text-xs text-cyan-300 mt-2">
+                              MOS: {p.mos}
+                            </div>
+                          )}
                         </div>
 
                         {p.slotted_position ? (
@@ -639,6 +753,15 @@ export default function PositionEditor() {
                     {getRankName(selectedPerson.rank_id)}
                   </div>
                 </div>
+
+                <div className="rounded-xl border border-[#00ff66]/10 bg-black/30 p-3">
+                  <div className="text-xs text-gray-400 uppercase tracking-[0.18em]">
+                    Current MOS
+                  </div>
+                  <div className="mt-2 text-sm text-white">
+                    {selectedPerson.mos || "None"}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="text-gray-400 text-sm">
@@ -656,7 +779,7 @@ export default function PositionEditor() {
                   Command Actions
                 </div>
                 <h2 className="text-2xl font-semibold text-[#00ff66]">
-                  Rank & Position Console
+                  Rank, MOS & Position Console
                 </h2>
               </div>
 
@@ -712,6 +835,114 @@ export default function PositionEditor() {
                     >
                       {processing ? "Saving..." : "Commit Rank Change"}
                     </button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-cyan-400/20 bg-black/30 p-5 space-y-4">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.22em] text-gray-400 mb-1">
+                      MOS Assignment
+                    </div>
+                    <div className="text-lg text-cyan-300 font-semibold">
+                      {(selectedPerson.mos || "None")} → {selectedMosValue || "None"}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMosType((prev) => (prev === "medic" ? null : "medic"));
+                        setSelectedMosValue("");
+                      }}
+                      className={`px-4 py-2 rounded-xl border transition ${
+                        selectedMosType === "medic"
+                          ? "border-cyan-400 bg-cyan-400/10 text-cyan-300"
+                          : "border-[#00ff66]/20 bg-black/30 text-gray-300 hover:border-cyan-400/40"
+                      }`}
+                    >
+                      Medic
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMosType((prev) => (prev === "rto" ? null : "rto"));
+                        setSelectedMosValue("");
+                      }}
+                      className={`px-4 py-2 rounded-xl border transition ${
+                        selectedMosType === "rto"
+                          ? "border-cyan-400 bg-cyan-400/10 text-cyan-300"
+                          : "border-[#00ff66]/20 bg-black/30 text-gray-300 hover:border-cyan-400/40"
+                      }`}
+                    >
+                      RTO
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={clearMosSelection}
+                      className="px-4 py-2 rounded-xl border border-red-500/40 text-red-300 hover:bg-red-500/10 transition"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_auto_auto] gap-4">
+                    <select
+                      className="w-full p-3 rounded-xl bg-black/60 border border-cyan-400/30 text-cyan-300 outline-none focus:border-cyan-400 disabled:text-gray-500 disabled:border-gray-700"
+                      value={selectedMosValue}
+                      onChange={(e) => setSelectedMosValue(e.target.value)}
+                      disabled={!selectedMosType}
+                    >
+                      <option value="">
+                        {selectedMosType
+                          ? `-- Select ${selectedMosType.toUpperCase()} MOS Rank --`
+                          : "-- Select Medic or RTO First --"}
+                      </option>
+                      {currentMosOptions.map((mosRank) => (
+                        <option key={mosRank} value={mosRank}>
+                          {mosRank}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={updateMos}
+                      disabled={processing || !hasMosChange || (!!selectedMosType && !selectedMosValue)}
+                      className={`px-6 py-3 rounded-xl font-semibold transition ${
+                        processing || !hasMosChange || (!!selectedMosType && !selectedMosValue)
+                          ? "border border-cyan-400/15 text-gray-500 cursor-not-allowed"
+                          : "bg-gradient-to-r from-cyan-400 to-cyan-500 text-black hover:scale-[1.02]"
+                      }`}
+                    >
+                      {processing ? "Saving..." : "Save MOS"}
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        setSelectedMosType(null);
+                        setSelectedMosValue("");
+                        if ((selectedPerson.mos || "") !== "") {
+                          setTimeout(() => {
+                            updateMos();
+                          }, 0);
+                        }
+                      }}
+                      disabled={processing || !selectedPerson.mos}
+                      className={`px-6 py-3 rounded-xl border transition ${
+                        processing || !selectedPerson.mos
+                          ? "border-red-500/20 text-red-400/40 cursor-not-allowed"
+                          : "border-red-500 text-red-300 hover:bg-red-500/10"
+                      }`}
+                    >
+                      Clear MOS
+                    </button>
+                  </div>
+
+                  <div className="rounded-xl border border-cyan-400/10 bg-black/30 p-3 text-sm text-gray-400">
+                    Selecting Medic or RTO only changes the available MOS rank list.
+                    Saving writes the selected MOS rank into the personnel MOS column.
                   </div>
                 </div>
 
@@ -931,6 +1162,15 @@ export default function PositionEditor() {
 
                 <div>
                   <div className="text-xs uppercase tracking-[0.18em] text-gray-400 mb-1">
+                    MOS Change
+                  </div>
+                  <div className={hasMosChange ? "text-cyan-300" : "text-gray-400"}>
+                    {selectedPerson.mos || "None"} → {selectedMosValue || "None"}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 mb-1">
                     Position Change
                   </div>
                   <div className={hasPositionChange ? "text-cyan-300" : "text-gray-400"}>
@@ -1003,6 +1243,10 @@ export default function PositionEditor() {
                 <div className="space-y-2 text-sm">
                   <div className={hasRankChange ? "text-cyan-300" : "text-gray-500"}>
                     {hasRankChange ? "✔ Rank change pending" : "— No rank change"}
+                  </div>
+
+                  <div className={hasMosChange ? "text-cyan-300" : "text-gray-500"}>
+                    {hasMosChange ? "✔ MOS change pending" : "— No MOS change"}
                   </div>
 
                   <div className={hasPositionChange ? "text-cyan-300" : "text-gray-500"}>

@@ -13,6 +13,9 @@ import {
   XCircle,
   ShieldCheck,
   PlaneTakeoff,
+  BarChart3,
+  CalendarRange,
+  UserSearch,
 } from "lucide-react";
 
 type ViewerMember = {
@@ -23,6 +26,20 @@ type ViewerMember = {
   slot: string;
   status: string;
   type: string;
+};
+
+type IndividualAttendanceMember = {
+  id: string;
+  name: string;
+  rank: string;
+  slot: string;
+  total: number;
+  yes: number;
+  no: number;
+  excused: number;
+  loa: number;
+  attendancePct: number;
+  nonAttendancePct: number;
 };
 
 const months = [
@@ -223,6 +240,75 @@ function matchesPlatoon(slotValue: string | null | undefined, activeTab: string 
   return slotPlatoon === normaliseValue(activeTab);
 }
 
+function getMonthIndex(month: string) {
+  return months.findIndex((m) => m === month);
+}
+
+function getPeriodValue(month: string, week: number) {
+  const monthIndex = getMonthIndex(month);
+  if (monthIndex < 0) return -1;
+  return monthIndex * 10 + week;
+}
+
+function getOrderedPeriodBounds(
+  startMonth: string,
+  startWeek: number,
+  endMonth: string,
+  endWeek: number
+) {
+  const startValue = getPeriodValue(startMonth, startWeek);
+  const endValue = getPeriodValue(endMonth, endWeek);
+
+  if (startValue <= endValue) {
+    return {
+      start: startValue,
+      end: endValue,
+    };
+  }
+
+  return {
+    start: endValue,
+    end: startValue,
+  };
+}
+
+function getMonthsInRange(
+  startMonth: string,
+  startWeek: number,
+  endMonth: string,
+  endWeek: number
+) {
+  const bounds = getOrderedPeriodBounds(startMonth, startWeek, endMonth, endWeek);
+
+  return months.filter((month) => {
+    const monthIndex = getMonthIndex(month);
+    const monthStart = monthIndex * 10 + 1;
+    const monthEnd = monthIndex * 10 + 5;
+    return monthEnd >= bounds.start && monthStart <= bounds.end;
+  });
+}
+
+function isPeriodInRange(
+  month: string | null | undefined,
+  week: number | null | undefined,
+  startMonth: string,
+  startWeek: number,
+  endMonth: string,
+  endWeek: number
+) {
+  if (!month || !week) return false;
+
+  const value = getPeriodValue(month, week);
+  const bounds = getOrderedPeriodBounds(startMonth, startWeek, endMonth, endWeek);
+
+  return value >= bounds.start && value <= bounds.end;
+}
+
+function formatPercentage(value: number) {
+  if (!Number.isFinite(value)) return "0%";
+  return `${value.toFixed(1)}%`;
+}
+
 export default function AttendanceDashboardViewer() {
   const defaultPeriod = getDefaultAttendancePeriod();
 
@@ -238,7 +324,14 @@ export default function AttendanceDashboardViewer() {
   const [selectedType, setSelectedType] = useState("Training");
   const [search, setSearch] = useState("");
 
-  
+  const [individualSearch, setIndividualSearch] = useState("");
+  const [individualType, setIndividualType] = useState<"All" | "Training" | "MainOp">("All");
+  const [rangeStartMonth, setRangeStartMonth] = useState(defaultPeriod.month);
+  const [rangeStartWeek, setRangeStartWeek] = useState(defaultPeriod.week);
+  const [rangeEndMonth, setRangeEndMonth] = useState(defaultPeriod.month);
+  const [rangeEndWeek, setRangeEndWeek] = useState(defaultPeriod.week);
+  const [individualLoading, setIndividualLoading] = useState(false);
+  const [individualResults, setIndividualResults] = useState<IndividualAttendanceMember[]>([]);
 
   const tabs = [
     "Company Command",
@@ -313,19 +406,19 @@ export default function AttendanceDashboardViewer() {
           };
         })
         .filter((member) => member.id && member.recordId)
-.sort((a, b) => {
-  const aKey = normaliseValue(a.slot);
-  const bKey = normaliseValue(b.slot);
+        .sort((a, b) => {
+          const aKey = normaliseValue(a.slot);
+          const bKey = normaliseValue(b.slot);
 
-  const aOrder = structureSlotOrder[aKey] ?? 999999;
-  const bOrder = structureSlotOrder[bKey] ?? 999999;
+          const aOrder = structureSlotOrder[aKey] ?? 999999;
+          const bOrder = structureSlotOrder[bKey] ?? 999999;
 
-  if (aOrder !== bOrder) {
-    return aOrder - bOrder;
-  }
+          if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+          }
 
-  return a.name.localeCompare(b.name);
-});
+          return a.name.localeCompare(b.name);
+        });
 
       setRecords(formatted);
     } catch (err) {
@@ -334,17 +427,158 @@ export default function AttendanceDashboardViewer() {
     } finally {
       setLoading(false);
     }
+  }, [activeTab, activeSquad, selectedMonth, selectedWeek, selectedType]);
+
+  const fetchIndividualAttendance = useCallback(async () => {
+    const term = individualSearch.trim().toLowerCase();
+
+    if (!term) {
+      setIndividualResults([]);
+      return;
+    }
+
+    try {
+      setIndividualLoading(true);
+
+      const monthsToQuery = getMonthsInRange(
+        rangeStartMonth,
+        rangeStartWeek,
+        rangeEndMonth,
+        rangeEndWeek
+      );
+
+      let query = supabase
+        .from("attendance_records")
+        .select(`
+          id,
+          type,
+          status,
+          attendance_month,
+          week_number,
+          personnel (
+            id,
+            name,
+            slotted_position,
+            ranks ( name )
+          )
+        `)
+        .in("attendance_month", monthsToQuery);
+
+      if (individualType !== "All") {
+        query = query.eq("type", individualType);
+      }
+
+      const { data, error } = await query;
+
+      if (error || !data) {
+        console.error(error);
+        setIndividualResults([]);
+        return;
+      }
+
+      const filteredRows = data.filter((row: any) => {
+        const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
+        const rankRow = Array.isArray(person?.ranks) ? person?.ranks[0] : person?.ranks;
+
+        const name = normaliseValue(person?.name);
+        const rank = normaliseValue(rankRow?.name);
+        const slot = normaliseValue(person?.slotted_position);
+
+        const matchesSearch =
+          name.includes(term) ||
+          rank.includes(term) ||
+          slot.includes(term);
+
+        if (!matchesSearch) return false;
+
+        return isPeriodInRange(
+          row.attendance_month,
+          row.week_number,
+          rangeStartMonth,
+          rangeStartWeek,
+          rangeEndMonth,
+          rangeEndWeek
+        );
+      });
+
+      const grouped = new Map<string, IndividualAttendanceMember>();
+
+      for (const row of filteredRows) {
+        const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
+        const rankRow = Array.isArray(person?.ranks) ? person?.ranks[0] : person?.ranks;
+
+        if (!person?.id) continue;
+
+        const existing = grouped.get(person.id) || {
+          id: person.id,
+          name: person?.name ?? "Unknown",
+          rank: rankRow?.name ?? "Unknown",
+          slot: person?.slotted_position ?? "Unassigned",
+          total: 0,
+          yes: 0,
+          no: 0,
+          excused: 0,
+          loa: 0,
+          attendancePct: 0,
+          nonAttendancePct: 0,
+        };
+
+        existing.total += 1;
+
+        if (row.status === "Y") existing.yes += 1;
+        else if (row.status === "N") existing.no += 1;
+        else if (row.status === "Excused") existing.excused += 1;
+        else if (row.status === "LOA") existing.loa += 1;
+
+        grouped.set(person.id, existing);
+      }
+
+      const result = Array.from(grouped.values())
+        .map((person) => {
+          const total = person.total || 1;
+
+          return {
+            ...person,
+            attendancePct: (person.yes / total) * 100,
+            nonAttendancePct: (person.no / total) * 100,
+          };
+        })
+        .sort((a, b) => {
+          const aExact = normaliseValue(a.name) === term ? 1 : 0;
+          const bExact = normaliseValue(b.name) === term ? 1 : 0;
+
+          if (aExact !== bExact) return bExact - aExact;
+
+          if (b.attendancePct !== a.attendancePct) {
+            return b.attendancePct - a.attendancePct;
+          }
+
+          return a.name.localeCompare(b.name);
+        });
+
+      setIndividualResults(result);
+    } catch (err) {
+      console.error(err);
+      setIndividualResults([]);
+    } finally {
+      setIndividualLoading(false);
+    }
   }, [
-    activeTab,
-    activeSquad,
-    selectedMonth,
-    selectedWeek,
-    selectedType,
+    individualSearch,
+    individualType,
+    rangeStartMonth,
+    rangeStartWeek,
+    rangeEndMonth,
+    rangeEndWeek,
   ]);
 
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
+
+  useEffect(() => {
+    fetchIndividualAttendance();
+  }, [fetchIndividualAttendance]);
 
   const filteredRoster = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -363,12 +597,21 @@ export default function AttendanceDashboardViewer() {
   }, [records, search]);
 
   const stats = useMemo(() => {
+    const total = records.length;
+    const yes = records.filter((m) => m.status === "Y").length;
+    const no = records.filter((m) => m.status === "N").length;
+    const excused = records.filter((m) => m.status === "Excused").length;
+    const loa = records.filter((m) => m.status === "LOA").length;
+
     return {
-      total: records.length,
-      yes: records.filter((m) => m.status === "Y").length,
-      no: records.filter((m) => m.status === "N").length,
-      excused: records.filter((m) => m.status === "Excused").length,
-      loa: records.filter((m) => m.status === "LOA").length,
+      total,
+      yes,
+      no,
+      excused,
+      loa,
+      yesPct: total > 0 ? (yes / total) * 100 : 0,
+      noPct: total > 0 ? (no / total) * 100 : 0,
+      excusedLoaPct: total > 0 ? ((excused + loa) / total) * 100 : 0,
     };
   }, [records]);
 
@@ -395,7 +638,8 @@ export default function AttendanceDashboardViewer() {
               </h1>
               <p className="mt-3 text-sm md:text-base text-[#b9d8c4]">
                 Review platoon and squad attendance for Training and MainOp periods.
-                Select a formation, review the roster, and inspect attendance status.
+                Select a formation, review the roster, inspect attendance status, and
+                search historical attendance percentages for individual personnel.
               </p>
             </div>
 
@@ -477,7 +721,12 @@ export default function AttendanceDashboardViewer() {
                 <CheckCircle2 className="h-4 w-4" />
                 Y
               </div>
-              <div className="mt-3 text-white font-semibold">{stats.yes}</div>
+              <div className="mt-3 text-white font-semibold">
+                {stats.yes}
+                <span className="ml-2 text-sm text-emerald-300/80">
+                  {formatPercentage(stats.yesPct)}
+                </span>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
@@ -485,7 +734,12 @@ export default function AttendanceDashboardViewer() {
                 <XCircle className="h-4 w-4" />
                 N
               </div>
-              <div className="mt-3 text-white font-semibold">{stats.no}</div>
+              <div className="mt-3 text-white font-semibold">
+                {stats.no}
+                <span className="ml-2 text-sm text-red-300/80">
+                  {formatPercentage(stats.noPct)}
+                </span>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
@@ -495,9 +749,277 @@ export default function AttendanceDashboardViewer() {
               </div>
               <div className="mt-3 text-white font-semibold">
                 {stats.excused + stats.loa}
+                <span className="ml-2 text-sm text-amber-300/80">
+                  {formatPercentage(stats.excusedLoaPct)}
+                </span>
               </div>
             </div>
           </div>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-500/20 bg-[#08110c]/80 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-300/70">
+                    Attending Percentage
+                  </p>
+                  <p className="mt-2 text-2xl font-bold text-white">
+                    {formatPercentage(stats.yesPct)}
+                  </p>
+                </div>
+                <BarChart3 className="h-5 w-5 text-emerald-300/70" />
+              </div>
+              <div className="mt-4 h-2 rounded-full bg-black/50 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-400 transition-all"
+                  style={{ width: `${Math.min(stats.yesPct, 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-red-500/20 bg-[#08110c]/80 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-red-300/70">
+                    Non-Attending Percentage
+                  </p>
+                  <p className="mt-2 text-2xl font-bold text-white">
+                    {formatPercentage(stats.noPct)}
+                  </p>
+                </div>
+                <BarChart3 className="h-5 w-5 text-red-300/70" />
+              </div>
+              <div className="mt-4 h-2 rounded-full bg-black/50 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-red-400 transition-all"
+                  style={{ width: `${Math.min(stats.noPct, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-5 md:p-6 shadow-[0_0_30px_rgba(0,255,102,0.05)] mb-8">
+          <div className="mb-6">
+            <div className="flex items-center gap-3">
+              <UserSearch className="h-5 w-5 text-[#00ff66]/70" />
+              <h2 className="text-xl font-bold text-white">
+                Individual Attendance Review
+              </h2>
+            </div>
+            <p className="text-sm text-[#9bc4a8] mt-2">
+              Search a person over a selected period and view their attendance percentage.
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+            <div className="relative xl:col-span-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#00ff66]/50" />
+              <input
+                value={individualSearch}
+                onChange={(e) => setIndividualSearch(e.target.value)}
+                placeholder="Search person, rank, or slot..."
+                className="w-full bg-[#06100a] border border-[#00ff66]/30 text-white px-10 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+              />
+            </div>
+
+            <select
+              value={individualType}
+              onChange={(e) =>
+                setIndividualType(e.target.value as "All" | "Training" | "MainOp")
+              }
+              className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+            >
+              <option value="All">All Types</option>
+              <option value="Training">Training</option>
+              <option value="MainOp">MainOp</option>
+            </select>
+
+            <select
+              value={rangeStartMonth}
+              onChange={(e) => setRangeStartMonth(e.target.value)}
+              className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+            >
+              {months.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+
+            <select
+              value={rangeStartWeek}
+              onChange={(e) => setRangeStartWeek(Number(e.target.value))}
+              className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+            >
+              {[1, 2, 3, 4, 5].map((w) => (
+                <option key={w} value={w}>
+                  From Week {w}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={rangeEndMonth}
+              onChange={(e) => setRangeEndMonth(e.target.value)}
+              className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+            >
+              {months.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+
+            <select
+              value={rangeEndWeek}
+              onChange={(e) => setRangeEndWeek(Number(e.target.value))}
+              className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+            >
+              {[1, 2, 3, 4, 5].map((w) => (
+                <option key={w} value={w}>
+                  To Week {w}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-[#00ff66]/10 bg-[#08110c]/70 p-4 flex items-center gap-3 text-sm text-[#a9efbc]">
+            <CalendarRange className="h-4 w-4 text-[#00ff66]/70" />
+            Reviewing period from {rangeStartMonth} Week {rangeStartWeek} to {rangeEndMonth} Week {rangeEndWeek}
+          </div>
+
+          {individualLoading ? (
+            <p className="text-center text-gray-400 py-12">
+              Loading individual attendance data...
+            </p>
+          ) : !individualSearch.trim() ? (
+            <div className="rounded-2xl border border-[#00ff66]/10 bg-[#08110c]/70 px-6 py-12 text-center mt-6">
+              <p className="text-lg text-white">Search for a person to begin.</p>
+              <p className="text-sm text-[#88b596] mt-2">
+                Enter a name, rank, or slot to review attendance history over your selected period.
+              </p>
+            </div>
+          ) : individualResults.length === 0 ? (
+            <div className="rounded-2xl border border-[#00ff66]/10 bg-[#08110c]/70 px-6 py-12 text-center mt-6">
+              <p className="text-lg text-white">No matching attendance history found.</p>
+              <p className="text-sm text-[#88b596] mt-2">
+                Try a wider date range or a different search term.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-4">
+              {individualResults.map((person) => (
+                <div
+                  key={person.id}
+                  className="rounded-2xl border border-[#00ff66]/15 bg-[#07100b]/80 p-5"
+                >
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div>
+                      <h3 className="text-lg text-[#dfffea] font-semibold">
+                        {person.name}
+                      </h3>
+                      <p className="text-[#9fc6ac] text-sm mt-1">
+                        {person.rank} • {person.slot}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 min-w-0 xl:min-w-[420px]">
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                        <p className="text-xs uppercase tracking-[0.16em] text-emerald-300/70">
+                          Attendance %
+                        </p>
+                        <p className="mt-2 text-xl font-bold text-white">
+                          {formatPercentage(person.attendancePct)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3">
+                        <p className="text-xs uppercase tracking-[0.16em] text-red-300/70">
+                          Non-Attendance %
+                        </p>
+                        <p className="mt-2 text-xl font-bold text-white">
+                          {formatPercentage(person.nonAttendancePct)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-[#00ff66]/15 bg-[#08110c]/80 p-3">
+                        <p className="text-xs uppercase tracking-[0.16em] text-[#00ff66]/60">
+                          Total Records
+                        </p>
+                        <p className="mt-2 text-xl font-bold text-white">
+                          {person.total}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                    <div className="rounded-xl border border-[#00ff66]/15 bg-[#08110c]/80 p-3">
+                      <p className="text-xs uppercase tracking-[0.16em] text-[#00ff66]/60">
+                        Total
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">{person.total}</p>
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                      <p className="text-xs uppercase tracking-[0.16em] text-emerald-300/70">
+                        Y
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">{person.yes}</p>
+                    </div>
+
+                    <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3">
+                      <p className="text-xs uppercase tracking-[0.16em] text-red-300/70">
+                        N
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">{person.no}</p>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+                      <p className="text-xs uppercase tracking-[0.16em] text-amber-300/70">
+                        Excused
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {person.excused}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 p-3">
+                      <p className="text-xs uppercase tracking-[0.16em] text-sky-300/70">
+                        LOA
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">{person.loa}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-emerald-300/70 mb-2">
+                        <span>Attending</span>
+                        <span>{formatPercentage(person.attendancePct)}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-black/50 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-emerald-400"
+                          style={{ width: `${Math.min(person.attendancePct, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-red-300/70 mb-2">
+                        <span>Non-Attending</span>
+                        <span>{formatPercentage(person.nonAttendancePct)}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-black/50 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-red-400"
+                          style={{ width: `${Math.min(person.nonAttendancePct, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">

@@ -246,6 +246,12 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "recruiter"],
         },
         {
+          href: "/admin/discord-announcemets",
+          label: "Discord announcemets Control Page",
+          description: "Manage & create pings for the bot to send out.",
+          allowedRoles: ["admin", "Akhari"],
+        },
+        {
           href: "/admin/positions",
           label: "Promotions & Slotting",
           description: "Manage rank progressions and assignments",

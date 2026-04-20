@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
+import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
@@ -41,6 +42,41 @@ const months = [
   "December",
 ];
 
+type StructureRole = {
+  role: string;
+  slotId: string;
+};
+
+type StructureChild = {
+  type: "sub-header";
+  title: string;
+  roles?: StructureRole[];
+};
+
+type StructureSection = {
+  type: "header";
+  title: string;
+  children?: StructureChild[];
+};
+
+function buildStructureSlotOrder() {
+  const order: Record<string, number> = {};
+  let index = 0;
+
+  for (const section of structure as StructureSection[]) {
+    for (const child of section.children || []) {
+      for (const role of child.roles || []) {
+        index += 1;
+        order[normaliseValue(role.slotId)] = index;
+      }
+    }
+  }
+
+  return order;
+}
+
+const structureSlotOrder = buildStructureSlotOrder();
+
 function getDefaultAttendancePeriod() {
   const today = new Date();
   const currentDay = today.getDay();
@@ -57,19 +93,19 @@ function getDefaultAttendancePeriod() {
 
 function getStatusStyles(status: string) {
   if (status === "Y") {
-    return "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
+    return "border-emerald-500/40 bg-[#0b1a12] text-emerald-300";
   }
 
   if (status === "N") {
-    return "border-red-500/40 bg-red-500/15 text-red-300";
+    return "border-red-500/40 bg-[#1a0b0b] text-red-300";
   }
 
   if (status === "Excused") {
-    return "border-amber-500/40 bg-amber-500/15 text-amber-300";
+    return "border-amber-500/40 bg-[#1a140b] text-amber-300";
   }
 
   if (status === "LOA") {
-    return "border-sky-500/40 bg-sky-500/15 text-sky-300";
+    return "border-sky-500/40 bg-[#0b141a] text-sky-300";
   }
 
   return "border-[#00ff66]/20 bg-[#08110c] text-[#b7f5cb]";
@@ -128,6 +164,7 @@ function extractSquadKeyFromSlot(slotValue: string | null | undefined) {
   if (slot.includes("halberd")) return "halberd";
   if (slot.includes("tomahawk1-scimitar")) return "scimitar hq";
   if (slot.includes("scimitar1")) return "scimitar";
+  if (slot.includes("logi1")) return "anvil";
 
   const tomahawkMatch = slot.match(/^tomahawk\d+-(\d)-(\d)[ab]?/i);
   if (tomahawkMatch) {
@@ -167,6 +204,7 @@ function extractPlatoonKeyFromSlot(slotValue: string | null | undefined) {
 
   if (slot.startsWith("tomahawk1")) return "tomahawk 1";
   if (slot.startsWith("scimitar1")) return "tomahawk 1";
+  if (slot.startsWith("logi1")) return "tomahawk 1";
   if (slot.startsWith("claymore2")) return "claymore 2";
   if (slot.startsWith("broadsword3")) return "broadsword 3";
   if (slot.startsWith("halberd")) return "broadsword 3";
@@ -236,7 +274,7 @@ export default function AttendancePage() {
 
   const platoons: Record<string, string[]> = {
     "Company Command": ["Company"],
-    "Tomahawk 1": ["Tomahawk Platoon", "1-1", "1-2", "1-3", "Scimitar HQ", "Scimitar", "Hammer 1"],
+    "Tomahawk 1": ["Tomahawk Platoon", "1-1", "1-2", "1-3", "Scimitar HQ", "Scimitar", "Anvil", "Hammer 1"],
     "Claymore 2": ["Claymore Platoon", "2-1", "2-2", "2-3", "Hammer 2"],
     "Broadsword 3": ["Broadsword Platoon", "3-1", "3-2", "3-3", "Halberd", "Hammer 3"],
     Dagger: ["Dagger Platoon", "1-1", "1-2", "1-3", "Hammer 4"],
@@ -327,7 +365,19 @@ export default function AttendancePage() {
           };
         })
         .filter((member) => member.id && member.recordId)
-        .sort((a, b) => a.name.localeCompare(b.name));
+.sort((a, b) => {
+  const aKey = normaliseValue(a.slot);
+  const bKey = normaliseValue(b.slot);
+
+  const aOrder = structureSlotOrder[aKey] ?? 999999;
+  const bOrder = structureSlotOrder[bKey] ?? 999999;
+
+  if (aOrder !== bOrder) {
+    return aOrder - bOrder;
+  }
+
+  return a.name.localeCompare(b.name);
+});
 
       setRoster(formatted);
     } catch (err) {

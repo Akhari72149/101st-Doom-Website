@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { structure } from "@/data/structure";
 import {
   ChevronDown,
   ChevronRight,
@@ -39,6 +39,41 @@ const months = [
   "November",
   "December",
 ];
+
+type StructureRole = {
+  role: string;
+  slotId: string;
+};
+
+type StructureChild = {
+  type: "sub-header";
+  title: string;
+  roles?: StructureRole[];
+};
+
+type StructureSection = {
+  type: "header";
+  title: string;
+  children?: StructureChild[];
+};
+
+function buildStructureSlotOrder() {
+  const order: Record<string, number> = {};
+  let index = 0;
+
+  for (const section of structure as StructureSection[]) {
+    for (const child of section.children || []) {
+      for (const role of child.roles || []) {
+        index += 1;
+        order[normaliseValue(role.slotId)] = index;
+      }
+    }
+  }
+
+  return order;
+}
+
+const structureSlotOrder = buildStructureSlotOrder();
 
 function getDefaultAttendancePeriod() {
   const today = new Date();
@@ -107,6 +142,7 @@ function extractSquadKeyFromSlot(slotValue: string | null | undefined) {
   if (slot.includes("halberd")) return "halberd";
   if (slot.includes("tomahawk1-scimitar")) return "scimitar hq";
   if (slot.includes("scimitar1")) return "scimitar";
+  if (slot.includes("logi1")) return "anvil";
 
   const tomahawkMatch = slot.match(/^tomahawk\d+-(\d)-(\d)[ab]?/i);
   if (tomahawkMatch) {
@@ -146,6 +182,7 @@ function extractPlatoonKeyFromSlot(slotValue: string | null | undefined) {
 
   if (slot.startsWith("tomahawk1")) return "tomahawk 1";
   if (slot.startsWith("scimitar1")) return "tomahawk 1";
+  if (slot.startsWith("logi1")) return "tomahawk 1";
   if (slot.startsWith("claymore2")) return "claymore 2";
   if (slot.startsWith("broadsword3")) return "broadsword 3";
   if (slot.startsWith("halberd")) return "broadsword 3";
@@ -187,10 +224,8 @@ function matchesPlatoon(slotValue: string | null | undefined, activeTab: string 
 }
 
 export default function AttendanceDashboardViewer() {
-  const router = useRouter();
   const defaultPeriod = getDefaultAttendancePeriod();
 
-  const [loadingAuth, setLoadingAuth] = useState(true);
   const [records, setRecords] = useState<ViewerMember[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -203,6 +238,8 @@ export default function AttendanceDashboardViewer() {
   const [selectedType, setSelectedType] = useState("Training");
   const [search, setSearch] = useState("");
 
+  
+
   const tabs = [
     "Company Command",
     "Tomahawk 1",
@@ -213,44 +250,14 @@ export default function AttendanceDashboardViewer() {
 
   const platoons: Record<string, string[]> = {
     "Company Command": ["Company"],
-    "Tomahawk 1": ["Tomahawk Platoon", "1-1", "1-2", "1-3", "Scimitar HQ", "Scimitar", "Hammer 1"],
+    "Tomahawk 1": ["Tomahawk Platoon", "1-1", "1-2", "1-3", "Scimitar HQ", "Scimitar", "Anvil", "Hammer 1"],
     "Claymore 2": ["Claymore Platoon", "2-1", "2-2", "2-3", "Hammer 2"],
     "Broadsword 3": ["Broadsword Platoon", "3-1", "3-2", "3-3", "Halberd", "Hammer 3"],
     Dagger: ["Dagger Platoon", "1-1", "1-2", "1-3", "Hammer 4"],
   };
 
-  useEffect(() => {
-    const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = roles?.map((r: any) => r.role) || [];
-      const allowedRoles = ["admin", "nco"];
-
-      if (!roleList.some((role) => allowedRoles.includes(role))) {
-        router.replace("/");
-        return;
-      }
-
-      setLoadingAuth(false);
-    };
-
-    checkAccess();
-  }, [router]);
-
   const fetchRecords = useCallback(async () => {
-    if (!activeTab || loadingAuth) return;
+    if (!activeTab) return;
 
     try {
       setLoading(true);
@@ -306,7 +313,19 @@ export default function AttendanceDashboardViewer() {
           };
         })
         .filter((member) => member.id && member.recordId)
-        .sort((a, b) => a.name.localeCompare(b.name));
+.sort((a, b) => {
+  const aKey = normaliseValue(a.slot);
+  const bKey = normaliseValue(b.slot);
+
+  const aOrder = structureSlotOrder[aKey] ?? 999999;
+  const bOrder = structureSlotOrder[bKey] ?? 999999;
+
+  if (aOrder !== bOrder) {
+    return aOrder - bOrder;
+  }
+
+  return a.name.localeCompare(b.name);
+});
 
       setRecords(formatted);
     } catch (err) {
@@ -321,14 +340,11 @@ export default function AttendanceDashboardViewer() {
     selectedMonth,
     selectedWeek,
     selectedType,
-    loadingAuth,
   ]);
 
   useEffect(() => {
-    if (!loadingAuth) {
-      fetchRecords();
-    }
-  }, [fetchRecords, loadingAuth]);
+    fetchRecords();
+  }, [fetchRecords]);
 
   const filteredRoster = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -358,14 +374,6 @@ export default function AttendanceDashboardViewer() {
 
   const currentSquads = activeTab ? platoons[activeTab] || [] : [];
 
-  if (loadingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-green-400 bg-black">
-        Authorising attendance dashboard...
-      </div>
-    );
-  }
-
   return (
     <motion.div className="relative min-h-screen text-white font-orbitron overflow-hidden">
       <div
@@ -376,13 +384,6 @@ export default function AttendanceDashboardViewer() {
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,102,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none" />
 
       <div className="relative z-10 mx-auto max-w-7xl p-6 md:p-10 xl:p-12">
-        <button
-          onClick={() => router.push("/pcs")}
-          className="mb-6 px-4 py-2 rounded-xl border border-[#00ff66]/40 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-[1.02] transition"
-        >
-          ← Return to Dashboard
-        </button>
-
         <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-6 md:p-8 shadow-[0_0_40px_rgba(0,255,102,0.08)] mb-8">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-2xl">

@@ -157,6 +157,11 @@ export default function NavbarClient() {
           label: "Tag Lookup",
           description: "Search personnel by role or status tags",
         },
+        {
+          href: "/audit",
+          label: "Audit Log",
+          description: "Review logged system and personnel actions",
+        },        
       ],
     },
     {
@@ -262,12 +267,6 @@ export default function NavbarClient() {
           label: "Certification Management",
           description: "Award and manage certifications",
           allowedRoles: ["admin", "nco", "trainer"],
-        },
-        {
-          href: "/audit",
-          label: "Audit Log",
-          description: "Review logged system and personnel actions",
-          allowedRoles: ["admin", "nco", "trainer", "di"],
         },
         {
           href: "/admin/removal",

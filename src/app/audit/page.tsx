@@ -64,35 +64,13 @@ export default function AuditLogsPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = roles?.map((r) => r.role?.toLowerCase()) || [];
-      const allowedRoles = ["nco", "admin", "trainer", "di"];
-
-      if (!roleList.some((role) => allowedRoles.includes(role))) {
-        router.replace("/");
-        return;
-      }
-
+    const init = async () => {
       await fetchFilterOptions();
       setLoadingAuth(false);
     };
 
-    checkAccess();
-  }, [router]);
+    init();
+  }, []);
 
   const renderName = (name: string) => {
     if (!name) return <span className="text-gray-500">Unknown</span>;

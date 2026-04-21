@@ -2,6 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  ChevronDown,
+  Dice5,
+  Lock,
+  Save,
+  Search,
+  Settings2,
+  Shield,
+  Trash2,
+  Users,
+  UserPlus,
+  Wand2,
+} from "lucide-react";
 
 type Signup = {
   id: string;
@@ -29,16 +42,18 @@ export default function SideOperationPage() {
   const [processing, setProcessing] = useState(false);
   const [name, setName] = useState("");
   const [showNameDropdown, setShowNameDropdown] = useState(false);
+  const [signupSearch, setSignupSearch] = useState("");
+  const [signupError, setSignupError] = useState("");
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editSlotCount, setEditSlotCount] = useState("1");
   const [savingOperation, setSavingOperation] = useState(false);
+  const [togglingSignups, setTogglingSignups] = useState(false);
 
   const nameDropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const isPrivileged =
-    roles.includes("admin") || roles.includes("logistics");
+  const isPrivileged = roles.includes("admin") || roles.includes("logistics");
 
   useEffect(() => {
     const loadUser = async () => {
@@ -199,6 +214,37 @@ export default function SideOperationPage() {
       .slice(0, 12);
   }, [knownPeople, name]);
 
+  const filteredSignups = useMemo(() => {
+    const term = normaliseName(signupSearch);
+
+    const sorted = [...signups].sort((a, b) => {
+      if (a.selected !== b.selected) return a.selected ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    if (!term) return sorted;
+
+    return sorted.filter((signup) =>
+      normaliseName(signup.name).includes(term)
+    );
+  }, [signups, signupSearch]);
+
+  const selected = useMemo(
+    () => signups.filter((s) => s.selected),
+    [signups]
+  );
+
+  const availableCount = Math.max((operation?.slot_count ?? 0) - selected.length, 0);
+
+  const stats = useMemo(() => {
+    return {
+      totalSignups: signups.length,
+      selectedCount: selected.length,
+      slotCount: operation?.slot_count ?? 0,
+      status: signupsOpen ? "Open" : "Closed",
+    };
+  }, [signups.length, selected.length, operation?.slot_count, signupsOpen]);
+
   const handleSignup = async () => {
     if (!name.trim() || !operation || !signupsOpen) return;
 
@@ -210,9 +256,11 @@ export default function SideOperationPage() {
     );
 
     if (alreadySignedUp) {
-      alert("You are already signed up.");
+      setSignupError("That person is already signed up.");
       return;
     }
+
+    setSignupError("");
 
     const { error } = await supabase.from("side_operation_signups").insert({
       operation_id: operation.id,
@@ -222,6 +270,7 @@ export default function SideOperationPage() {
 
     if (error) {
       console.error("SIGNUP INSERT ERROR:", error);
+      setSignupError("Failed to add signup.");
       return;
     }
 
@@ -232,6 +281,7 @@ export default function SideOperationPage() {
 
   const handleRemove = async (id: string) => {
     if (!isPrivileged) return;
+    if (!confirm("Remove this signup?")) return;
 
     const { error } = await supabase
       .from("side_operation_signups")
@@ -412,7 +462,7 @@ export default function SideOperationPage() {
 
       const chosen = pickMultipleWeighted(weightedPool, operation.slot_count);
 
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1200));
 
       for (const person of chosen) {
         const { error } = await supabase
@@ -437,7 +487,6 @@ export default function SideOperationPage() {
       }
 
       await incrementLevelsForChosen(chosen);
-
       fetchData();
     } catch (error) {
       console.error("RANDOMISE ERROR:", error);
@@ -448,6 +497,7 @@ export default function SideOperationPage() {
 
   const handleReset = async () => {
     if (!isPrivileged || !operation) return;
+    if (!confirm("Reset the current randomiser results?")) return;
 
     const { error: resetSignupError } = await supabase
       .from("side_operation_signups")
@@ -484,287 +534,575 @@ export default function SideOperationPage() {
     fetchData();
   };
 
+  const handleToggleSignups = async () => {
+    if (!operation) return;
+    const nextState = !signupsOpen;
+    const confirmed = nextState
+      ? confirm("Open signups for this operation?")
+      : confirm("Close signups for this operation?");
+
+    if (!confirmed) return;
+
+    setTogglingSignups(true);
+
+    const { error } = await supabase
+      .from("side_operations")
+      .update({ open: nextState })
+      .eq("id", operation.id);
+
+    if (error) {
+      console.error("TOGGLE SIGNUPS ERROR:", error);
+      setTogglingSignups(false);
+      return;
+    }
+
+    setSignupsOpen(nextState);
+    setOperation((prev: any) => ({
+      ...prev,
+      open: nextState,
+    }));
+    setTogglingSignups(false);
+  };
+
   if (loading || !operation) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-400">
+      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#00ff66]">
         Loading operation...
       </div>
     );
   }
 
-  const selected = signups.filter((s) => s.selected);
-
   return (
-    <div className="relative min-h-screen text-white font-orbitron p-10">
+    <div className="relative min-h-screen text-white font-orbitron overflow-hidden">
       <div className="fixed inset-0 -z-10">
         <div
           className="absolute inset-0 bg-center bg-cover opacity-15"
           style={{ backgroundImage: "url('/background/bg.jpg')" }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/95 via-black/85 to-black/95" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,100,0.08)_0%,transparent_70%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(0,255,100,0.1)_0%,transparent_60%)]" />
+        <div className="absolute inset-0 opacity-[0.05] bg-[linear-gradient(rgba(0,255,102,0.25)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.25)_1px,transparent_1px)] bg-[size:42px_42px]" />
       </div>
 
-      <div className="max-w-4xl mx-auto mb-10 p-6 rounded-2xl border border-[#00ff66]/40 bg-black/60 backdrop-blur-xl">
-        <h1 className="text-3xl text-[#00ff66] tracking-widest">
-          {operation.title}
-        </h1>
+      <div className="relative z-10 p-4 sm:p-6 lg:p-10">
+        <div className="max-w-7xl mx-auto">
+          <div className="rounded-3xl border border-[#00ff66]/25 bg-black/55 backdrop-blur-xl shadow-[0_0_60px_rgba(0,255,100,0.1)] overflow-hidden mb-8">
+            <div className="p-6 sm:p-8 border-b border-[#00ff66]/10">
+              <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6">
+                <div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-12 w-12 rounded-2xl border border-[#00ff66]/25 bg-[#00ff66]/10 flex items-center justify-center">
+                      <Dice5 className="h-6 w-6 text-[#00ff66]" />
+                    </div>
+                    <div>
+                      <h1 className="text-3xl sm:text-4xl text-[#00ff66] tracking-[0.18em]">
+                        {operation.title}
+                      </h1>
+                      <p className="mt-2 text-sm sm:text-base text-gray-300 max-w-3xl font-sans">
+                        {operation.description}
+                      </p>
+                    </div>
+                  </div>
 
-        <p className="mt-4 text-gray-300">{operation.description}</p>
-
-        {!signupsOpen && (
-          <div className="mt-3 text-red-400 text-sm font-semibold">
-            🚫 Signups are currently closed.
-          </div>
-        )}
-      </div>
-
-      <div className="relative z-20 max-w-4xl mx-auto p-6 rounded-2xl border border-[#00ff66]/30 bg-black/50 backdrop-blur-md">
-        <div className="flex gap-4 mb-6 items-start">
-          <div className="relative flex-1" ref={nameDropdownRef}>
-            <input
-              disabled={!signupsOpen}
-              type="text"
-              placeholder="Enter or select a name..."
-              value={name}
-              onFocus={() => setShowNameDropdown(true)}
-              onChange={(e) => {
-                setName(e.target.value);
-                setShowNameDropdown(true);
-              }}
-              className={`w-full px-4 py-2 rounded-lg bg-black/70 border border-[#00ff66]/40 text-[#00ff66] placeholder:text-[#00ff66]/45 focus:outline-none focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66]/40
-                ${!signupsOpen ? "opacity-50 cursor-not-allowed" : ""}`}
-            />
-
-            {signupsOpen && showNameDropdown && (
-              <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-[#00ff66]/30 bg-black/95 shadow-[0_0_25px_rgba(0,255,102,0.12)] backdrop-blur-xl">
-                <div className="border-b border-[#00ff66]/15 px-3 py-2 text-xs uppercase tracking-[0.2em] text-[#00ff66]/70">
-                  Personnel Registry
-                </div>
-
-                <div className="max-h-64 overflow-y-auto">
-                  {filteredKnownPeople.length > 0 ? (
-                    filteredKnownPeople.map((person) => (
-                      <button
-                        key={person.id}
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setName(person.name);
-                          setShowNameDropdown(false);
-                        }}
-                        className="flex w-full items-center justify-between border-b border-[#00ff66]/10 px-4 py-3 text-left transition-all hover:bg-[#00ff66]/10"
-                      >
-                        <span className="text-sm text-white">
-                          {person.name}
-                        </span>
-                        <span className="rounded-full border border-[#00ff66]/30 bg-[#00ff66]/10 px-2 py-1 text-[11px] text-[#00ff66]">
-                          Level {person.level}
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-4 py-4 text-sm text-gray-400">
-                      No matching known personnel. Type a new name to add one.
+                  {!signupsOpen && (
+                    <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm text-red-300 font-sans">
+                      <Lock className="h-4 w-4" />
+                      Signups are currently closed
                     </div>
                   )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 min-w-full xl:min-w-[420px]">
+                  <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-2">
+                      Signups
+                    </div>
+                    <div className="text-2xl font-bold text-white">
+                      {stats.totalSignups}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-2">
+                      Slots
+                    </div>
+                    <div className="text-2xl font-bold text-white">
+                      {stats.slotCount}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-2">
+                      Selected
+                    </div>
+                    <div className="text-2xl font-bold text-white">
+                      {stats.selectedCount}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-500 mb-2">
+                      Status
+                    </div>
+                    <div
+                      className={`text-lg font-bold ${
+                        signupsOpen ? "text-[#00ff66]" : "text-red-300"
+                      }`}
+                    >
+                      {stats.status}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {isPrivileged && (
+              <div className="px-6 sm:px-8 py-4 bg-black/30 border-t border-[#00ff66]/5">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 font-sans">
+                  {[
+                    { label: "Level 1", value: "100% weight" },
+                    { label: "Level 2", value: "75% weight" },
+                    { label: "Level 3", value: "50% weight" },
+                    { label: "Level 4", value: "25% weight" },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-2xl border border-[#00ff66]/10 bg-black/30 px-4 py-3"
+                    >
+                      <div className="text-xs uppercase tracking-[0.16em] text-gray-500">
+                        {item.label}
+                      </div>
+                      <div className="text-sm text-[#00ff66] mt-1">
+                        {item.value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
           </div>
 
-          <button
-            onClick={handleSignup}
-            className="px-6 py-2 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all"
-          >
-            Sign Up
-          </button>
-        </div>
+          <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-8">
+            <div className="space-y-8">
+              <div className="rounded-3xl border border-[#00ff66]/20 bg-black/50 backdrop-blur-xl p-6 sm:p-8">
+                <div className="flex items-start gap-3 mb-6">
+                  <div className="h-11 w-11 rounded-2xl border border-[#00ff66]/20 bg-[#00ff66]/10 flex items-center justify-center">
+                    <UserPlus className="h-5 w-5 text-[#00ff66]" />
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.24em] text-[#00ff66]/70">
+                      Personnel Entry
+                    </div>
+                    <h2 className="text-xl text-[#00ff66] mt-1">
+                      Add Operator to Selection Pool
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-400 font-sans">
+                      Enter a new name or pick from known personnel already tracked in the level system.
+                    </p>
+                  </div>
+                </div>
 
-        <h2 className="text-[#00ff66] mb-4 tracking-wider">
-          Current Sign-Up Count ({signups.length})
-        </h2>
+                <div className="flex flex-col lg:flex-row gap-4 items-start">
+                  <div className="relative flex-1 w-full" ref={nameDropdownRef}>
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#00ff66]/70" />
+                      <input
+                        disabled={!signupsOpen}
+                        type="text"
+                        placeholder="Enter or select a name..."
+                        value={name}
+                        onFocus={() => setShowNameDropdown(true)}
+                        onChange={(e) => {
+                          setName(e.target.value);
+                          setSignupError("");
+                          setShowNameDropdown(true);
+                        }}
+                        className={`w-full pl-11 pr-10 py-3 rounded-2xl bg-black/70 border text-white placeholder:text-[#00ff66]/40 focus:outline-none focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66]/40 font-sans ${
+                          signupError
+                            ? "border-red-500/50"
+                            : "border-[#00ff66]/30"
+                        } ${!signupsOpen ? "opacity-50 cursor-not-allowed" : ""}`}
+                      />
+                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#00ff66]/70" />
+                    </div>
 
-        <div className="space-y-3 max-h-80 overflow-y-auto">
-          {signups.map((s) => (
-            <div
-              key={s.id}
-              className="flex justify-between items-center p-3 rounded-xl bg-black/60 border border-[#00ff66]/20"
-            >
-              <div className="flex items-center gap-3">
-                <span className={s.selected ? "text-[#00ff66] font-semibold" : ""}>
-                  {s.name}
-                </span>
+                    {signupError && (
+                      <div className="mt-2 text-sm text-red-300 font-sans">
+                        {signupError}
+                      </div>
+                    )}
 
-                {isPrivileged && (
-                  <span className="text-xs px-2 py-1 rounded-full border border-[#00ff66]/30 text-gray-300">
-                    Level {s.level ?? 1}
-                  </span>
+                    {signupsOpen && showNameDropdown && (
+                      <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-[#00ff66]/20 bg-black/95 shadow-[0_0_25px_rgba(0,255,102,0.12)] backdrop-blur-xl">
+                        <div className="border-b border-[#00ff66]/10 px-4 py-3 text-xs uppercase tracking-[0.22em] text-[#00ff66]/70">
+                          Known Personnel
+                        </div>
+
+                        <div className="max-h-72 overflow-y-auto">
+                          {filteredKnownPeople.length > 0 ? (
+                            filteredKnownPeople.map((person) => {
+                              const alreadySignedUp = signups.some(
+                                (s) =>
+                                  normaliseName(s.name) ===
+                                  normaliseName(person.name)
+                              );
+
+                              return (
+                                <button
+                                  key={person.id}
+                                  type="button"
+                                  disabled={alreadySignedUp}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    if (alreadySignedUp) return;
+                                    setName(person.name);
+                                    setSignupError("");
+                                    setShowNameDropdown(false);
+                                  }}
+                                  className={`flex w-full items-center justify-between border-b border-[#00ff66]/10 px-4 py-3 text-left transition-all ${
+                                    alreadySignedUp
+                                      ? "opacity-40 cursor-not-allowed"
+                                      : "hover:bg-[#00ff66]/10"
+                                  }`}
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="text-sm text-white font-sans">
+                                      {person.name}
+                                    </span>
+                                    {alreadySignedUp && (
+                                      <span className="text-xs text-gray-500 font-sans mt-1">
+                                        Already signed up
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <span className="rounded-full border border-[#00ff66]/25 bg-[#00ff66]/10 px-2 py-1 text-[11px] text-[#00ff66] font-sans">
+                                      Level {person.level}
+                                    </span>
+                                    {isPrivileged && (
+                                      <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[11px] text-cyan-300 font-sans">
+                                        {getWeightFromLevel(person.level)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="px-4 py-4 text-sm text-gray-400 font-sans">
+                              No matching known personnel. Type a new name to add one.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleSignup}
+                    disabled={!signupsOpen}
+                    className="w-full lg:w-auto min-w-[170px] px-6 py-3 rounded-2xl border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-[#00ff66]/20 bg-black/50 backdrop-blur-xl p-6 sm:p-8">
+                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.24em] text-[#00ff66]/70">
+                      Selection Pool
+                    </div>
+                    <h2 className="text-xl text-[#00ff66] mt-1">
+                      Current Signups
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-400 font-sans">
+                      {signups.length} total signups • {availableCount} remaining available for draw
+                    </p>
+                  </div>
+
+                  <div className="relative w-full lg:w-[320px]">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#00ff66]/60" />
+                    <input
+                      type="text"
+                      value={signupSearch}
+                      onChange={(e) => setSignupSearch(e.target.value)}
+                      placeholder="Search signed-up personnel..."
+                      className="w-full pl-11 pr-4 py-3 rounded-2xl bg-black/70 border border-[#00ff66]/20 text-white placeholder:text-[#00ff66]/35 focus:outline-none focus:border-[#00ff66]/50 font-sans"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                  {filteredSignups.length === 0 ? (
+                    <div className="rounded-2xl border border-[#00ff66]/10 bg-black/30 p-8 text-center">
+                      <Users className="h-8 w-8 text-[#00ff66]/50 mx-auto mb-3" />
+                      <div className="text-white">No signups found</div>
+                      <div className="text-sm text-gray-500 mt-1 font-sans">
+                        Add a signup or adjust the search above.
+                      </div>
+                    </div>
+                  ) : (
+                    filteredSignups.map((s) => (
+                      <div
+                        key={s.id}
+                        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                          s.selected
+                            ? "border-[#00ff66]/45 bg-[#00ff66]/10 shadow-[0_0_20px_rgba(0,255,102,0.08)]"
+                            : "border-[#00ff66]/15 bg-black/45 hover:border-[#00ff66]/25"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`h-3 w-3 rounded-full ${
+                              s.selected ? "bg-[#00ff66]" : "bg-gray-600"
+                            }`}
+                          />
+                          <div>
+                            <div
+                              className={`text-base ${
+                                s.selected ? "text-[#00ff66] font-semibold" : "text-white"
+                              }`}
+                            >
+                              {s.name}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-2 font-sans">
+                              <span className="text-xs px-2 py-1 rounded-full border border-[#00ff66]/20 text-gray-300">
+                                Level {s.level ?? 1}
+                              </span>
+                              {isPrivileged && (
+                                <span className="text-xs px-2 py-1 rounded-full border border-cyan-400/20 text-cyan-300">
+                                  Weight {s.weight ?? 100}%
+                                </span>
+                              )}
+                              {s.selected && (
+                                <span className="text-xs px-2 py-1 rounded-full border border-[#00ff66]/25 text-[#00ff66]">
+                                  Selected
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isPrivileged && (
+                          <button
+                            onClick={() => handleRemove(s.id)}
+                            className="inline-flex items-center gap-2 text-red-300 hover:text-red-200 text-sm font-sans"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-8">
+              <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-6 sm:p-8">
+                <div className="flex items-start gap-3 mb-6">
+                  <div className="h-11 w-11 rounded-2xl border border-[#00ff66]/20 bg-[#00ff66]/10 flex items-center justify-center">
+                    <Wand2 className="h-5 w-5 text-[#00ff66]" />
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.24em] text-[#00ff66]/70">
+                      Results
+                    </div>
+                    <h2 className="text-xl text-[#00ff66] mt-1">
+                      Selected Operators
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-400 font-sans">
+                      {selected.length} of {operation.slot_count} chosen for the current side operation.
+                    </p>
+                  </div>
+                </div>
+
+                {processing ? (
+                  <div className="rounded-2xl border border-[#00ff66]/20 bg-[#00ff66]/5 py-14 text-center">
+                    <div className="text-[#00ff66] animate-pulse text-lg">
+                      Randomising weighted selection...
+                    </div>
+                    <div className="mt-2 text-sm text-gray-400 font-sans">
+                      Calculating draw based on current level weighting
+                    </div>
+                  </div>
+                ) : selected.length === 0 ? (
+                  <div className="rounded-2xl border border-[#00ff66]/10 bg-black/30 p-8 text-center">
+                    <Dice5 className="h-8 w-8 text-[#00ff66]/50 mx-auto mb-3" />
+                    <div className="text-white">No operators selected yet</div>
+                    <div className="text-sm text-gray-500 mt-1 font-sans">
+                      Awaiting selection from the omnissiah...
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {selected.map((s, index) => (
+                      <div
+                        key={s.id}
+                        className="relative overflow-hidden p-5 rounded-2xl border border-[#00ff66]/35 bg-[linear-gradient(135deg,rgba(0,255,102,0.12),rgba(0,0,0,0.45))] shadow-[0_0_30px_rgba(0,255,102,0.08)]"
+                      >
+                        <div className="absolute -top-3 -left-3 bg-[#00ff66] text-black text-xs px-3 py-1 rounded-full font-bold">
+                          #{index + 1}
+                        </div>
+
+                        <div className="text-lg text-[#00ff66] font-semibold">
+                          ★ {s.name}
+                        </div>
+
+                        {isPrivileged && (
+                          <div className="mt-3 flex flex-wrap gap-2 font-sans">
+                            <span className="text-xs px-2 py-1 rounded-full border border-[#00ff66]/20 text-gray-200">
+                              Previous Level: {s.level ?? 1}
+                            </span>
+                            <span className="text-xs px-2 py-1 rounded-full border border-cyan-400/20 text-cyan-300">
+                              Previous Weight: {s.weight ?? 100}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
               {isPrivileged && (
-                <button
-                  onClick={() => handleRemove(s.id)}
-                  className="text-red-400 hover:text-red-500 text-xs"
-                >
-                  Remove
-                </button>
+                <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-6 sm:p-8 space-y-8">
+                  <div>
+                    <div className="flex items-start gap-3 mb-6">
+                      <div className="h-11 w-11 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 flex items-center justify-center">
+                        <Settings2 className="h-5 w-5 text-cyan-300" />
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.24em] text-cyan-300/70">
+                          Logistics
+                        </div>
+                        <h3 className="text-xl text-cyan-300 mt-1">
+                          Operation Settings
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-400 font-sans">
+                          Update the operation details and selection target.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4">
+                      <div>
+                        <label className="block text-sm text-cyan-300 mb-2 font-sans">
+                          Operation Title
+                        </label>
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="w-full px-4 py-3 rounded-2xl bg-black/70 border border-cyan-400/20 text-white focus:outline-none focus:border-cyan-300 font-sans"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-cyan-300 mb-2 font-sans">
+                          Operation Description
+                        </label>
+                        <textarea
+                          value={editDescription}
+                          onChange={(e) => setEditDescription(e.target.value)}
+                          rows={4}
+                          className="w-full px-4 py-3 rounded-2xl bg-black/70 border border-cyan-400/20 text-white focus:outline-none focus:border-cyan-300 resize-none font-sans"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-cyan-300 mb-2 font-sans">
+                          Number of People to Select
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={editSlotCount}
+                          onChange={(e) => setEditSlotCount(e.target.value)}
+                          className="w-full px-4 py-3 rounded-2xl bg-black/70 border border-cyan-400/20 text-white focus:outline-none focus:border-cyan-300 font-sans"
+                        />
+                      </div>
+
+                      <button
+                        onClick={handleSaveOperationDetails}
+                        disabled={savingOperation}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-3 border border-cyan-400 rounded-2xl text-cyan-300 hover:bg-cyan-400 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Save className="h-4 w-4" />
+                        {savingOperation ? "Saving..." : "Save Operation Details"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#00ff66]/10 pt-8">
+                    <div className="flex items-start gap-3 mb-6">
+                      <div className="h-11 w-11 rounded-2xl border border-[#00ff66]/20 bg-[#00ff66]/10 flex items-center justify-center">
+                        <Shield className="h-5 w-5 text-[#00ff66]" />
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.24em] text-[#00ff66]/70">
+                          Operation State
+                        </div>
+                        <h3 className="text-xl text-[#00ff66] mt-1">
+                          Signups and Randomiser
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-400 font-sans">
+                          Control whether signups are open and manage the current draw.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <button
+                        onClick={handleToggleSignups}
+                        disabled={togglingSignups}
+                        className={`px-4 py-3 rounded-2xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                          signupsOpen
+                            ? "border-red-500 text-red-300 hover:bg-red-500 hover:text-black"
+                            : "border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black"
+                        }`}
+                      >
+                        {togglingSignups
+                          ? "Updating..."
+                          : signupsOpen
+                          ? "Close Signups"
+                          : "Open Signups"}
+                      </button>
+
+                      {!operation.randomised ? (
+                        <button
+                          onClick={handleRandomise}
+                          disabled={processing}
+                          className="px-4 py-3 border border-[#00ff66] rounded-2xl text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {processing ? "Randomising..." : "Randomise"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleReset}
+                          className="px-4 py-3 border border-red-500 rounded-2xl text-red-300 hover:bg-red-500 hover:text-black transition-all"
+                        >
+                          Reset Randomiser
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div className="relative z-0 max-w-4xl mx-auto mt-8 p-6 rounded-2xl border border-[#00ff66]/40 bg-black/60 backdrop-blur-xl">
-        <h2 className="text-[#00ff66] mb-6 tracking-widest text-xl flex justify-between items-center">
-          <span>Selected Operators</span>
-
-          <span className="text-xs text-gray-400">
-            {selected.length} / {operation.slot_count}
-          </span>
-        </h2>
-
-        <div className="space-y-4">
-          {processing ? (
-            <div className="text-center text-[#00ff66] animate-pulse py-10 text-lg">
-              🔄 Randomising Selection...
+          {!user && (
+            <div className="max-w-3xl mx-auto mt-8 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200 font-sans">
+              You are viewing the page without an authenticated session. Privileged controls may not appear.
             </div>
-          ) : selected.length === 0 ? (
-            <div className="text-gray-500 text-sm">
-              Awaiting selection from the omnissiah...
-            </div>
-          ) : (
-            selected.map((s, index) => (
-              <div
-                key={s.id}
-                className="relative p-4 rounded-xl border border-[#00ff66] bg-[#00ff66]/10"
-              >
-                <div className="absolute -top-3 -left-3 bg-[#00ff66] text-black text-xs px-3 py-1 rounded-full font-bold">
-                  #{index + 1}
-                </div>
-
-                <div className="text-lg text-[#00ff66] font-semibold">
-                  ★ {s.name}
-                </div>
-
-                {isPrivileged && (
-                  <div className="mt-2 text-xs text-gray-300">
-                    Previous Level: {s.level ?? 1}
-                  </div>
-                )}
-              </div>
-            ))
           )}
         </div>
       </div>
-
-      {isPrivileged && (
-        <div className="max-w-4xl mx-auto mt-10 p-6 rounded-2xl border border-[#00ff66]/40 bg-black/60 backdrop-blur-xl space-y-6">
-          <h3 className="text-[#00ff66] tracking-wider">
-            Logistics Control Panel
-          </h3>
-
-          <div className="grid gap-4">
-            <div>
-              <label className="block text-sm text-[#00ff66] mb-2">
-                Operation Title
-              </label>
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg bg-black/70 border border-[#00ff66]/40 text-white placeholder:text-[#00ff66]/45 focus:outline-none focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66]/40"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#00ff66] mb-2">
-                Operation Description
-              </label>
-              <textarea
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                rows={4}
-                className="w-full px-4 py-3 rounded-lg bg-black/70 border border-[#00ff66]/40 text-white placeholder:text-[#00ff66]/45 focus:outline-none focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66]/40 resize-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#00ff66] mb-2">
-                Number of People to Select
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={editSlotCount}
-                onChange={(e) => setEditSlotCount(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg bg-black/70 border border-[#00ff66]/40 text-white placeholder:text-[#00ff66]/45 focus:outline-none focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66]/40"
-              />
-            </div>
-
-            <button
-              onClick={handleSaveOperationDetails}
-              disabled={savingOperation}
-              className="px-4 py-2 border border-cyan-400 rounded-lg text-cyan-300 hover:bg-cyan-400 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {savingOperation ? "Saving..." : "Save Operation Details"}
-            </button>
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              onClick={async () => {
-                if (!operation) return;
-
-                const newState = !signupsOpen;
-
-                const { error } = await supabase
-                  .from("side_operations")
-                  .update({ open: newState })
-                  .eq("id", operation.id);
-
-                if (error) {
-                  console.error("TOGGLE SIGNUPS ERROR:", error);
-                  return;
-                }
-
-                setSignupsOpen(newState);
-                setOperation((prev: any) => ({
-                  ...prev,
-                  open: newState,
-                }));
-              }}
-              className={`flex-1 px-4 py-2 rounded-lg border transition-all
-                ${
-                  signupsOpen
-                    ? "border-red-500 text-red-400 hover:bg-red-500 hover:text-black"
-                    : "border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black"
-                }`}
-            >
-              {signupsOpen ? "Close Signups" : "Open Signups"}
-            </button>
-
-            {!operation.randomised && (
-              <button
-                onClick={handleRandomise}
-                className="flex-1 px-4 py-2 border border-[#00ff66] rounded-lg text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all"
-              >
-                Randomise
-              </button>
-            )}
-
-            {operation.randomised && (
-              <button
-                onClick={handleReset}
-                className="flex-1 px-4 py-2 border border-red-500 rounded-lg text-red-400 hover:bg-red-500 hover:text-black transition-all"
-              >
-                Reset Randomiser
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

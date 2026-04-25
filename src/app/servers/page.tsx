@@ -728,7 +728,7 @@ export default function ServersPage() {
             </div>
           </section>
 
-          <aside className="min-w-0 2xl:sticky 2xl:top-4 2xl:self-start">
+          <aside className="min-w-0 2xl:sticky 2xl:top-[360px] 2xl:self-start">
             <div className="rounded-3xl border border-[#00ff66]/25 bg-black/55 p-6 backdrop-blur-xl shadow-[0_0_35px_rgba(0,255,100,0.08)]">
               <div className="mb-5">
                 <div className="text-xs uppercase tracking-[0.25em] text-[#7f9f8f]">

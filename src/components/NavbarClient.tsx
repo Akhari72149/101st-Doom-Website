@@ -11,7 +11,6 @@ import {
   ClipboardList,
   Cog,
   FileText,
-  FolderKanban,
   Hammer,
   Home,
   Newspaper,
@@ -55,6 +54,7 @@ export default function NavbarClient() {
   const [user, setUser] = useState<any>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
 
   /* ================= AUTH ================= */
 
@@ -161,7 +161,7 @@ export default function NavbarClient() {
           href: "/audit",
           label: "Audit Log",
           description: "Review logged system and personnel actions",
-        },        
+        },
       ],
     },
     {
@@ -252,8 +252,8 @@ export default function NavbarClient() {
         },
         {
           href: "/admin/discord-announcemets",
-          label: "Discord announcemets Control Page",
-          description: "Manage & create pings for the bot to send out.",
+          label: "Discord Announcements Control Page",
+          description: "Manage and create pings for the bot to send out",
           allowedRoles: ["admin", "Akhari"],
         },
         {
@@ -328,17 +328,28 @@ export default function NavbarClient() {
       .filter((group) => group.items.length > 0);
   }, [roles]);
 
+  const getItemIcon = (groupLabel: string) => {
+    if (groupLabel === "Public") return <FileText size={14} />;
+    if (groupLabel === "Personnel") return <User size={14} />;
+    if (groupLabel === "Operations") return <ClipboardList size={14} />;
+    if (groupLabel === "Campaign") return <Newspaper size={14} />;
+    if (groupLabel === "Tools") return <Hammer size={14} />;
+    if (groupLabel === "Admin") return <Cog size={14} />;
+    return <FileText size={14} />;
+  };
+
   return (
-    <nav className="relative z-50 w-full border-b border-[#00ff66]/15 bg-black/70 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,255,102,0.06)]">
-      <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-6 px-6 py-4">
+    <nav className="relative z-50 w-full border-b border-[#00ff66]/15 bg-black/70 shadow-[0_10px_40px_rgba(0,255,102,0.06)] backdrop-blur-xl">
+      <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-3 px-4 py-4 sm:px-6 xl:gap-6">
         {/* ================= LEFT ================= */}
         <div className="flex items-center gap-3">
           <Link
             href="/"
+            onClick={() => setOpenMobileGroup(null)}
             className="flex items-center gap-2 rounded-xl border border-[#00ff66]/20 bg-[#00ff66]/5 px-4 py-2 text-[#00ff66] transition hover:border-[#00ff66]/40 hover:bg-[#00ff66]/10"
           >
             <Home size={16} />
-            <span className="text-sm font-medium tracking-[0.18em] uppercase">
+            <span className="text-sm font-medium uppercase tracking-[0.18em]">
               Home
             </span>
           </Link>
@@ -367,7 +378,7 @@ export default function NavbarClient() {
                   className="flex items-center gap-2 rounded-xl border border-transparent px-4 py-2 text-[#00ff66] transition hover:border-[#00ff66]/20 hover:bg-[#00ff66]/8"
                 >
                   <Icon size={16} />
-                  <span className="text-sm font-medium tracking-[0.12em] uppercase">
+                  <span className="text-sm font-medium uppercase tracking-[0.12em]">
                     {group.label}
                   </span>
                   <ChevronDown
@@ -387,15 +398,13 @@ export default function NavbarClient() {
                 >
                   <div
                     className={`rounded-2xl border border-[#00ff66]/20 bg-black/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl ${
-                      group.columns === 2
-                        ? "w-[700px]"
-                        : "w-[360px]"
+                      group.columns === 2 ? "w-[700px]" : "w-[360px]"
                     }`}
                   >
                     <div className="mb-4 border-b border-[#00ff66]/10 pb-3">
                       <div className="flex items-center gap-2 text-[#00ff66]">
                         <Icon size={16} />
-                        <span className="text-sm font-semibold tracking-[0.16em] uppercase">
+                        <span className="text-sm font-semibold uppercase tracking-[0.16em]">
                           {group.label}
                         </span>
                       </div>
@@ -413,20 +422,12 @@ export default function NavbarClient() {
                         <Link
                           key={item.href}
                           href={item.href}
+                          onClick={() => setOpenDropdown(null)}
                           className="group/item rounded-xl border border-transparent bg-white/[0.015] p-3 transition hover:border-[#00ff66]/15 hover:bg-[#00ff66]/8"
                         >
                           <div className="flex items-start gap-3">
                             <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/8 p-2 text-[#00ff66]">
-                              {group.label === "Public" && <FileText size={14} />}
-                              {group.label === "Personnel" && <User size={14} />}
-                              {group.label === "Operations" && (
-                                <ClipboardList size={14} />
-                              )}
-                              {group.label === "Campaign" && (
-                                <Newspaper size={14} />
-                              )}
-                              {group.label === "Tools" && <Hammer size={14} />}
-                              {group.label === "Admin" && <Cog size={14} />}
+                              {getItemIcon(group.label)}
                             </div>
 
                             <div className="min-w-0">
@@ -451,7 +452,7 @@ export default function NavbarClient() {
         </div>
 
         {/* ================= RIGHT ================= */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           {user ? (
             <>
               <div className="hidden text-right md:block">
@@ -473,7 +474,7 @@ export default function NavbarClient() {
 
               <button
                 onClick={handleLogout}
-                className="rounded-xl border border-red-500/60 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/10"
+                className="rounded-xl border border-red-500/60 px-3 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/10 sm:px-4"
               >
                 Logout
               </button>
@@ -481,6 +482,7 @@ export default function NavbarClient() {
           ) : (
             <Link
               href="/login"
+              onClick={() => setOpenMobileGroup(null)}
               className="rounded-xl border border-[#00ff66]/40 bg-[#00ff66]/5 px-4 py-2 text-sm font-medium text-[#00ff66] transition hover:bg-[#00ff66]/10"
             >
               Login
@@ -489,24 +491,92 @@ export default function NavbarClient() {
         </div>
       </div>
 
-      {/* ================= SIMPLE FALLBACK FOR SMALLER SCREENS ================= */}
+      {/* ================= MOBILE NAV ================= */}
       <div className="border-t border-[#00ff66]/10 px-4 py-3 xl:hidden">
-        <div className="flex flex-wrap gap-2">
-          {filteredGroups.map((group) => (
-            <Link
-              key={group.label}
-              href={group.items[0]?.href || "#"}
-              className="rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/10"
-            >
-              {group.label}
-            </Link>
-          ))}
-          <Link
-            href="/faq"
-            className="rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/10"
-          >
-            FAQ
-          </Link>
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+            Navigation
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.16em] text-[#00ff66]/70">
+            {filteredGroups.length} Sections
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {filteredGroups.map((group) => {
+            const Icon = group.icon;
+            const isOpen = openMobileGroup === group.label;
+
+            return (
+              <div
+                key={group.label}
+                className="overflow-hidden rounded-xl border border-[#00ff66]/15 bg-black/60"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenMobileGroup((prev) =>
+                      prev === group.label ? null : group.label
+                    )
+                  }
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[#00ff66] transition hover:bg-[#00ff66]/5"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/8 p-2">
+                      <Icon size={16} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em]">
+                        {group.label}
+                      </div>
+                      <div className="mt-1 line-clamp-1 text-[11px] normal-case tracking-normal text-gray-400">
+                        {group.description}
+                      </div>
+                    </div>
+                  </div>
+
+                  <ChevronDown
+                    size={16}
+                    className={`shrink-0 transition-transform duration-200 ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {isOpen && (
+                  <div className="space-y-2 border-t border-[#00ff66]/10 p-3">
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpenMobileGroup(null)}
+                        className="group/mobile block rounded-lg border border-[#00ff66]/10 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/25 hover:bg-[#00ff66]/10"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-black/40 p-2 text-[#00ff66]">
+                            {getItemIcon(group.label)}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-white transition group-hover/mobile:text-[#00ff66]">
+                              {item.label}
+                            </div>
+
+                            {item.description && (
+                              <div className="mt-1 text-xs leading-5 text-gray-400 sm:block">
+                                {item.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </nav>

@@ -63,6 +63,13 @@ export default function AuditLogsPage() {
   const [selectedPersonnel, setSelectedPersonnel] = useState<string>("all");
   const [search, setSearch] = useState("");
 
+  const hasManualFilter =
+    selectedUser !== "all" ||
+    selectedAction !== "all" ||
+    selectedDate !== "all" ||
+    selectedPersonnel !== "all" ||
+    search.trim() !== "";
+
   useEffect(() => {
     const init = async () => {
       await fetchFilterOptions();
@@ -114,6 +121,7 @@ export default function AuditLogsPage() {
             .filter((value): value is string => Boolean(value))
         )
       ).sort();
+
       setActions(uniqueActions);
     }
 
@@ -125,12 +133,6 @@ export default function AuditLogsPage() {
       );
     }
   };
-
-  const hasManualFilter =
-    selectedUser !== "all" ||
-    selectedAction !== "all" ||
-    selectedDate !== "all" ||
-    selectedPersonnel !== "all";
 
   const fetchLogs = async (isManualRefresh = false) => {
     if (isManualRefresh) {
@@ -174,7 +176,7 @@ export default function AuditLogsPage() {
       query = query
         .gte("created_at", start.toISOString())
         .lte("created_at", end.toISOString());
-    } else {
+    } else if (!hasManualFilter) {
       const recentStart = new Date();
       recentStart.setDate(recentStart.getDate() - DEFAULT_RECENT_DAYS);
       recentStart.setHours(0, 0, 0, 0);
@@ -234,7 +236,14 @@ export default function AuditLogsPage() {
     if (!loadingAuth) {
       fetchLogs();
     }
-  }, [loadingAuth, selectedUser, selectedAction, selectedDate, selectedPersonnel]);
+  }, [
+    loadingAuth,
+    selectedUser,
+    selectedAction,
+    selectedDate,
+    selectedPersonnel,
+    search,
+  ]);
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleString();
@@ -253,6 +262,7 @@ export default function AuditLogsPage() {
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
+
     return new Date(date).toLocaleDateString();
   };
 
@@ -261,7 +271,9 @@ export default function AuditLogsPage() {
       log.action === "CERTIFICATION_ASSIGNED" ||
       log.action === "CERTIFICATION_REVOKED"
     ) {
-      return `Certification → ${log.certifications?.name || "Unknown Certification"}`;
+      return `Certification → ${
+        log.certifications?.name || "Unknown Certification"
+      }`;
     }
 
     if (log.action === "RANK_CHANGED") {
@@ -352,7 +364,9 @@ export default function AuditLogsPage() {
     recentCutoff.setDate(recentCutoff.getDate() - DEFAULT_RECENT_DAYS);
     recentCutoff.setHours(0, 0, 0, 0);
 
-    const recent = logs.filter((log) => new Date(log.created_at) >= recentCutoff).length;
+    const recent = logs.filter(
+      (log) => new Date(log.created_at) >= recentCutoff
+    ).length;
 
     const activeFiltersCount = [
       selectedUser !== "all",
@@ -429,7 +443,8 @@ export default function AuditLogsPage() {
                         Audit Logs
                       </h1>
                       <p className="text-sm sm:text-base text-gray-400 mt-1">
-                        Monitor personnel, certifications, ranks, and slotting activity across the system
+                        Monitor personnel, certifications, ranks, and slotting
+                        activity across the system
                       </p>
                     </div>
                   </div>
@@ -453,21 +468,27 @@ export default function AuditLogsPage() {
                   <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">
                     Visible Logs
                   </div>
-                  <div className="text-3xl font-bold text-white">{stats.total}</div>
+                  <div className="text-3xl font-bold text-white">
+                    {stats.total}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
                   <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">
                     Today
                   </div>
-                  <div className="text-3xl font-bold text-white">{stats.today}</div>
+                  <div className="text-3xl font-bold text-white">
+                    {stats.today}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
                   <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">
                     Last {DEFAULT_RECENT_DAYS} Days
                   </div>
-                  <div className="text-3xl font-bold text-white">{stats.recent}</div>
+                  <div className="text-3xl font-bold text-white">
+                    {stats.recent}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
@@ -560,9 +581,11 @@ export default function AuditLogsPage() {
 
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mt-5 text-sm">
                 <div className="text-gray-400">
-                  {selectedDate === "all"
-                    ? `Showing recent changes from the last ${DEFAULT_RECENT_DAYS} days`
-                    : `Showing changes for ${selectedDate}`}
+                  {selectedDate !== "all"
+                    ? `Showing changes for ${selectedDate}`
+                    : hasManualFilter
+                    ? "Showing all matching logs"
+                    : `Showing recent changes from the last ${DEFAULT_RECENT_DAYS} days`}
                   {" • "}
                   <span className="text-white font-semibold">
                     {filteredLogs.length}
@@ -576,7 +599,7 @@ export default function AuditLogsPage() {
                 </div>
               </div>
 
-              {(hasManualFilter || search.trim()) && (
+              {hasManualFilter && (
                 <div className="flex flex-wrap gap-2 mt-4">
                   {activeFilterChips.map((chip) => (
                     <span
@@ -648,7 +671,8 @@ export default function AuditLogsPage() {
                   ) : (
                     filteredLogs.map((log) => {
                       const userName = getUserName(log);
-                      const personnelName = log.personnel?.name || "Mommy Doombot";
+                      const personnelName =
+                        log.personnel?.name || "Mommy Doombot";
                       const targetText = formatTarget(log);
 
                       return (
@@ -657,11 +681,15 @@ export default function AuditLogsPage() {
                           className="border-b border-[#00ff66]/10 odd:bg-black/35 even:bg-black/55 hover:bg-[#00ff66]/8 transition"
                         >
                           <td className="p-4 align-top">
-                            <div className="font-medium">{renderName(userName)}</div>
+                            <div className="font-medium">
+                              {renderName(userName)}
+                            </div>
                           </td>
 
                           <td className="p-4 align-top">
-                            <div className="font-medium">{renderName(personnelName)}</div>
+                            <div className="font-medium">
+                              {renderName(personnelName)}
+                            </div>
                           </td>
 
                           <td className="p-4 align-top">
@@ -708,8 +736,9 @@ export default function AuditLogsPage() {
               </div>
 
               <div>
-                Showing up to <span className="text-white font-medium">200</span> most
-                recent matching entries
+                Showing up to{" "}
+                <span className="text-white font-medium">200</span> most recent
+                matching entries
               </div>
             </div>
           </div>

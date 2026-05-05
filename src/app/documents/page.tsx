@@ -106,6 +106,7 @@ export default function DocumentsPage() {
   } else {
     currentDocuments = documents[activeTab];
   }
+  
 
   return (
     <div className="relative min-h-screen text-white font-orbitron flex justify-center">

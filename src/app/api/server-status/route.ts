@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import dgram from "dgram";
 
 const SERVERS = [
-  { id: 1, host: "199.33.118.13", basePort: 2000 },
-  { id: 2, host: "199.33.118.13", basePort: 2100 },
-  { id: 3, host: "199.33.118.13", basePort: 2200 },
-  { id: 4, host: "199.33.118.13", basePort: 2300 },
-  { id: 5, host: "199.33.118.13", basePort: 2400 },
-  { id: 6, host: "199.33.118.13", basePort: 2500 },
+  { id: 1, host: "157.90.221.162", basePort: 2000 },
+  { id: 2, host: "157.90.221.162", basePort: 2100 },
+  { id: 3, host: "157.90.221.162", basePort: 2200 },
+  { id: 4, host: "157.90.221.162", basePort: 2300 },
+  { id: 5, host: "157.90.221.162", basePort: 2400 },
+  { id: 6, host: "157.90.221.162", basePort: 2500 },
 ];
 
 /* ===================================================== */

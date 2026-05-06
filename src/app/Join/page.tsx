@@ -238,7 +238,7 @@ export default function HowToJoinPage() {
     },
     {
       label: "Connect to TeamSpeak",
-      href: "ts3server://199.33.118.13",
+      href: "ts3server://157.90.221.162",
     },
   ];
 

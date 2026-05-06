@@ -1252,7 +1252,7 @@ export default function HomePage() {
               },
               {
                 label: "🎧 Join TeamSpeak Server",
-                href: "ts3server://199.33.118.13",
+                href: "ts3server://157.90.221.162",
               },
             ].map((item) => (
               <a

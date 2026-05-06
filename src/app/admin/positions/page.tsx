@@ -52,25 +52,10 @@ type ResolvedSlotPath = {
 
 type MosType = "medic" | "rto" | null;
 
-const MEDIC_MOS_RANKS = [
-  "CM-C",
-  "CM",
-  "CM-V",
-  "CM-T",
-  "CM-P",
-  "CM-S",
-  "CM-SM",
-];
+const MEDIC_MOS_RANKS = ["CM-C", "CM", "CM-V", "CM-T", "CM-P", "CM-S", "CM-SM"];
+const RTO_MOS_RANKS = ["CI-C", "CI", "CI-V", "CI-T", "CI-P", "CI-S", "CI-SM"];
 
-const RTO_MOS_RANKS = [
-  "CI-C",
-  "CI",
-  "CI-V",
-  "CI-T",
-  "CI-P",
-  "CI-S",
-  "CI-SM",
-];
+const todayDateInput = () => new Date().toISOString().split("T")[0];
 
 export default function PositionEditor() {
   const router = useRouter();
@@ -87,6 +72,7 @@ export default function PositionEditor() {
   const [selectedSubHeader, setSelectedSubHeader] = useState("");
   const [selectedSlotId, setSelectedSlotId] = useState("");
   const [selectedRankId, setSelectedRankId] = useState("");
+  const [rankChangedAt, setRankChangedAt] = useState(todayDateInput());
 
   const [selectedMosType, setSelectedMosType] = useState<MosType>(null);
   const [selectedMosValue, setSelectedMosValue] = useState("");
@@ -94,8 +80,26 @@ export default function PositionEditor() {
   const [personSearch, setPersonSearch] = useState("");
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
 
+  const [processedByName, setProcessedByName] = useState("Unknown");
+
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const typedStructure = structure as StructureSection[];
+
+  const broadcastWebsiteAction = async (payload: any) => {
+    try {
+      await fetch("/api/website-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      console.error("Failed to broadcast website action:", error);
+    }
+  };
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -126,6 +130,13 @@ export default function PositionEditor() {
         return;
       }
 
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      setProcessedByName(profile?.display_name || user.email || "Unknown");
       setLoadingAuth(false);
     };
 
@@ -192,9 +203,7 @@ export default function PositionEditor() {
       setSelectedMosType(null);
       setSelectedMosValue(currentMos);
     }
-  }, [personnel, selectedPerson]);
-
-  const typedStructure = structure as StructureSection[];
+  }, [personnel, selectedPerson?.id]);
 
   const headers = useMemo(
     () => typedStructure.map((section) => section.title),
@@ -217,18 +226,19 @@ export default function PositionEditor() {
     return rank ? rank.name : "Unranked";
   };
 
-  const getRoleDisplayLabel = (targetRole: StructureRole, roleList: StructureRole[]) => {
+  const getRoleDisplayLabel = (
+    targetRole: StructureRole,
+    roleList: StructureRole[]
+  ) => {
     const sameRoleEntries = roleList.filter((r) => r.role === targetRole.role);
 
-    if (sameRoleEntries.length <= 1) {
-      return targetRole.role;
-    }
+    if (sameRoleEntries.length <= 1) return targetRole.role;
 
-    const index = sameRoleEntries.findIndex((r) => r.slotId === targetRole.slotId);
+    const index = sameRoleEntries.findIndex(
+      (r) => r.slotId === targetRole.slotId
+    );
 
-    if (index === -1) {
-      return targetRole.role;
-    }
+    if (index === -1) return targetRole.role;
 
     return `${targetRole.role} ${index + 1}`;
   };
@@ -242,7 +252,10 @@ export default function PositionEditor() {
 
         for (const role of subRoles) {
           if (role.slotId === slotId) {
-            return `${section.title} — ${sub.title} — ${getRoleDisplayLabel(role, subRoles)}`;
+            return `${section.title} — ${sub.title} — ${getRoleDisplayLabel(
+              role,
+              subRoles
+            )}`;
           }
         }
       }
@@ -273,13 +286,15 @@ export default function PositionEditor() {
     return null;
   };
 
-  const selectedSlotPath = useMemo(() => {
-    return resolveSlotPath(selectedSlotId || null);
-  }, [selectedSlotId]);
+  const selectedSlotPath = useMemo(
+    () => resolveSlotPath(selectedSlotId || null),
+    [selectedSlotId]
+  );
 
-  const currentSlotPath = useMemo(() => {
-    return resolveSlotPath(selectedPerson?.slotted_position || null);
-  }, [selectedPerson]);
+  const currentSlotPath = useMemo(
+    () => resolveSlotPath(selectedPerson?.slotted_position || null),
+    [selectedPerson]
+  );
 
   const slotOccupants = useMemo(() => {
     const map = new Map<string, SlotOccupant>();
@@ -309,11 +324,8 @@ export default function PositionEditor() {
       const label = `${getRankName(p.rank_id)} ${p.name}`.toLowerCase();
       const billet = formatSlotToBillet(p.slotted_position).toLowerCase();
       const mos = (p.mos || "").toLowerCase();
-      return (
-        label.includes(search) ||
-        billet.includes(search) ||
-        mos.includes(search)
-      );
+
+      return label.includes(search) || billet.includes(search) || mos.includes(search);
     });
   }, [personnel, personSearch, ranks]);
 
@@ -350,6 +362,7 @@ export default function PositionEditor() {
     setSelectedSubHeader(currentPath?.subHeader || "");
     setPersonSearch(`${getRankName(person.rank_id)} ${person.name}`);
     setShowPersonDropdown(false);
+    setRankChangedAt(todayDateInput());
     setErrorMessage("");
     setSuccessMessage("");
 
@@ -367,6 +380,66 @@ export default function PositionEditor() {
     }
   };
 
+const syncRankHistoryDate = async (
+  personnelId: string,
+  oldRankId: string | null,
+  newRankId: string | null,
+  changedAtDate: string
+) => {
+  if (!newRankId || !changedAtDate) return;
+
+  const changedAt = `${changedAtDate}T12:00:00+00:00`;
+
+  const { data: personRow, error: personError } = await supabase
+    .from("personnel")
+    .select("discord_id")
+    .eq("id", personnelId)
+    .maybeSingle();
+
+  if (personError || !personRow?.discord_id) {
+    setErrorMessage(
+      `Rank updated, but failed to get Discord ID for rank history.`
+    );
+    return;
+  }
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from("rank_history")
+    .update({
+      changed_at: changedAt,
+    })
+    .eq("personnel_id", personnelId)
+    .eq("old_rank_id", oldRankId)
+    .eq("new_rank_id", newRankId)
+    .is("changed_at", null)
+    .select("id, changed_at");
+
+  if (updateError) {
+    setErrorMessage(
+      `Rank updated, but failed to update rank history date: ${updateError.message}`
+    );
+    return;
+  }
+
+  if (updatedRows && updatedRows.length > 0) {
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("rank_history").insert({
+    personnel_id: personnelId,
+    discord_id: personRow.discord_id,
+    old_rank_id: oldRankId,
+    new_rank_id: newRankId,
+    changed_at: changedAt,
+  });
+
+  if (insertError) {
+    setErrorMessage(
+      `Rank updated, but failed to insert rank history date: ${insertError.message}`
+    );
+  }
+};
+
   const updatePosition = async () => {
     if (!selectedPerson || !selectedSlotId) {
       setErrorMessage("Select a position first.");
@@ -379,6 +452,7 @@ export default function PositionEditor() {
 
     const oldSlot = selectedPerson.slotted_position;
     const currentOccupant = slotOccupants.get(selectedSlotId);
+    const newSlotLabel = formatSlotToBillet(selectedSlotId);
 
     if (currentOccupant && currentOccupant.id !== selectedPerson.id) {
       const { error: clearOccupantError } = await supabase
@@ -388,7 +462,9 @@ export default function PositionEditor() {
 
       if (clearOccupantError) {
         setProcessing(false);
-        setErrorMessage("Failed to clear existing occupant: " + clearOccupantError.message);
+        setErrorMessage(
+          "Failed to clear existing occupant: " + clearOccupantError.message
+        );
         return;
       }
 
@@ -399,6 +475,14 @@ export default function PositionEditor() {
           oldSlotId: selectedSlotId,
           forceDefaultRole: true,
         },
+      });
+
+      await broadcastWebsiteAction({
+        action: "POSITION_UNASSIGNED",
+        target_personnel_id: currentOccupant.id,
+        processedBy: processedByName,
+        slotLabel: newSlotLabel,
+        slotSection: selectedSlotPath?.subHeader || selectedSlotPath?.header || "N/A",
       });
     }
 
@@ -424,6 +508,14 @@ export default function PositionEditor() {
       },
     });
 
+    await broadcastWebsiteAction({
+      action: "POSITION_ASSIGNED",
+      target_personnel_id: selectedPerson.id,
+      processedBy: processedByName,
+      slotLabel: newSlotLabel,
+      slotSection: selectedSlotPath?.subHeader || selectedSlotPath?.header || "N/A",
+    });
+
     await fetchData();
     setProcessing(false);
     setSuccessMessage(
@@ -439,11 +531,18 @@ export default function PositionEditor() {
       return;
     }
 
+    if (!rankChangedAt) {
+      setErrorMessage("Select the date the rank change occurred.");
+      return;
+    }
+
     setProcessing(true);
     setErrorMessage("");
     setSuccessMessage("");
 
-    const oldRank = selectedPerson.rank_id;
+    const oldRankId = selectedPerson.rank_id;
+    const oldRankName = getRankName(oldRankId);
+    const newRankName = selectedRankId ? getRankName(selectedRankId) : "Unranked";
 
     const { error } = await supabase
       .from("personnel")
@@ -458,12 +557,27 @@ export default function PositionEditor() {
       return;
     }
 
+await syncRankHistoryDate(
+  selectedPerson.id,
+  oldRankId,
+  selectedRankId || null,
+  rankChangedAt
+);
+
     await supabase.functions.invoke("discord-rank-sync", {
       body: {
         personnelId: selectedPerson.id,
-        oldRankId: oldRank,
+        oldRankId,
         newRankId: selectedRankId || null,
       },
+    });
+
+    await broadcastWebsiteAction({
+      action: "RANK_CHANGED",
+      target_personnel_id: selectedPerson.id,
+      processedBy: processedByName,
+      oldRankName,
+      rankName: newRankName,
     });
 
     await fetchData();
@@ -502,9 +616,7 @@ export default function PositionEditor() {
     await fetchData();
     setProcessing(false);
     setSuccessMessage(
-      selectedMosValue
-        ? "MOS updated successfully."
-        : "MOS cleared successfully."
+      selectedMosValue ? "MOS updated successfully." : "MOS cleared successfully."
     );
   };
 
@@ -521,6 +633,8 @@ export default function PositionEditor() {
     setSuccessMessage("");
 
     const oldSlot = selectedPerson.slotted_position;
+    const oldSlotPath = resolveSlotPath(oldSlot);
+    const oldSlotLabel = formatSlotToBillet(oldSlot);
 
     const { error } = await supabase
       .from("personnel")
@@ -540,6 +654,14 @@ export default function PositionEditor() {
         oldSlotId: oldSlot,
         forceDefaultRole: true,
       },
+    });
+
+    await broadcastWebsiteAction({
+      action: "POSITION_UNASSIGNED",
+      target_personnel_id: selectedPerson.id,
+      processedBy: processedByName,
+      slotLabel: oldSlotLabel,
+      slotSection: oldSlotPath?.subHeader || oldSlotPath?.header || "N/A",
     });
 
     await fetchData();
@@ -660,9 +782,7 @@ export default function PositionEditor() {
                 setShowPersonDropdown(true);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setShowPersonDropdown(false);
-                }
+                if (e.key === "Escape") setShowPersonDropdown(false);
 
                 if (
                   e.key === "Enter" &&
@@ -810,9 +930,9 @@ export default function PositionEditor() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col xl:flex-row gap-4">
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_220px_auto] gap-4">
                     <select
-                      className="flex-1 p-3 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66] outline-none focus:border-[#00ff66]"
+                      className="p-3 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66] outline-none focus:border-[#00ff66]"
                       value={selectedRankId}
                       onChange={(e) => setSelectedRankId(e.target.value)}
                     >
@@ -823,6 +943,13 @@ export default function PositionEditor() {
                         </option>
                       ))}
                     </select>
+
+                    <input
+                      type="date"
+                      value={rankChangedAt}
+                      onChange={(e) => setRankChangedAt(e.target.value)}
+                      className="p-3 rounded-xl bg-black/60 border border-[#00ff66]/30 text-[#00ff66] outline-none focus:border-[#00ff66]"
+                    />
 
                     <button
                       onClick={updateRank}
@@ -836,6 +963,11 @@ export default function PositionEditor() {
                       {processing ? "Saving..." : "Commit Rank Change"}
                     </button>
                   </div>
+
+                  <p className="mt-3 text-xs text-gray-400">
+                    The selected date is written into{" "}
+                    <span className="text-cyan-300">rank_history.changed_at</span>.
+                  </p>
                 </div>
 
                 <div className="rounded-2xl border border-cyan-400/20 bg-black/30 p-5 space-y-4">
@@ -844,7 +976,7 @@ export default function PositionEditor() {
                       MOS Assignment
                     </div>
                     <div className="text-lg text-cyan-300 font-semibold">
-                      {(selectedPerson.mos || "None")} → {selectedMosValue || "None"}
+                      {selectedPerson.mos || "None"} → {selectedMosValue || "None"}
                     </div>
                   </div>
 
@@ -852,7 +984,9 @@ export default function PositionEditor() {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedMosType((prev) => (prev === "medic" ? null : "medic"));
+                        setSelectedMosType((prev) =>
+                          prev === "medic" ? null : "medic"
+                        );
                         setSelectedMosValue("");
                       }}
                       className={`px-4 py-2 rounded-xl border transition ${
@@ -867,7 +1001,9 @@ export default function PositionEditor() {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedMosType((prev) => (prev === "rto" ? null : "rto"));
+                        setSelectedMosType((prev) =>
+                          prev === "rto" ? null : "rto"
+                        );
                         setSelectedMosValue("");
                       }}
                       className={`px-4 py-2 rounded-xl border transition ${
@@ -909,9 +1045,15 @@ export default function PositionEditor() {
 
                     <button
                       onClick={updateMos}
-                      disabled={processing || !hasMosChange || (!!selectedMosType && !selectedMosValue)}
+                      disabled={
+                        processing ||
+                        !hasMosChange ||
+                        (!!selectedMosType && !selectedMosValue)
+                      }
                       className={`px-6 py-3 rounded-xl font-semibold transition ${
-                        processing || !hasMosChange || (!!selectedMosType && !selectedMosValue)
+                        processing ||
+                        !hasMosChange ||
+                        (!!selectedMosType && !selectedMosValue)
                           ? "border border-cyan-400/15 text-gray-500 cursor-not-allowed"
                           : "bg-gradient-to-r from-cyan-400 to-cyan-500 text-black hover:scale-[1.02]"
                       }`}
@@ -924,9 +1066,7 @@ export default function PositionEditor() {
                         setSelectedMosType(null);
                         setSelectedMosValue("");
                         if ((selectedPerson.mos || "") !== "") {
-                          setTimeout(() => {
-                            updateMos();
-                          }, 0);
+                          setTimeout(() => updateMos(), 0);
                         }
                       }}
                       disabled={processing || !selectedPerson.mos}
@@ -1066,7 +1206,9 @@ export default function PositionEditor() {
                                     {getRankName(occupant.rank_id)} {occupant.name}
                                   </span>
                                 ) : (
-                                  <span className="text-gray-500">No current occupant</span>
+                                  <span className="text-gray-500">
+                                    No current occupant
+                                  </span>
                                 )}
                               </div>
                             </button>
@@ -1158,6 +1300,11 @@ export default function PositionEditor() {
                     {getRankName(selectedPerson.rank_id)} →{" "}
                     {selectedRankId ? getRankName(selectedRankId) : "Unranked"}
                   </div>
+                  {hasRankChange && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Effective date: {rankChangedAt || "Not selected"}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1173,9 +1320,13 @@ export default function PositionEditor() {
                   <div className="text-xs uppercase tracking-[0.18em] text-gray-400 mb-1">
                     Position Change
                   </div>
-                  <div className={hasPositionChange ? "text-cyan-300" : "text-gray-400"}>
+                  <div
+                    className={hasPositionChange ? "text-cyan-300" : "text-gray-400"}
+                  >
                     {formatSlotToBillet(selectedPerson.slotted_position)} →{" "}
-                    {selectedSlotId ? formatSlotToBillet(selectedSlotId) : "Unassigned"}
+                    {selectedSlotId
+                      ? formatSlotToBillet(selectedSlotId)
+                      : "Unassigned"}
                   </div>
                 </div>
               </div>
@@ -1193,7 +1344,9 @@ export default function PositionEditor() {
                     </div>
                     <div className="flex justify-between gap-4">
                       <span className="text-gray-400">Sub Header</span>
-                      <span className="text-white">{selectedSlotPath.subHeader}</span>
+                      <span className="text-white">
+                        {selectedSlotPath.subHeader}
+                      </span>
                     </div>
                     <div className="flex justify-between gap-4">
                       <span className="text-gray-400">Role</span>
@@ -1201,7 +1354,9 @@ export default function PositionEditor() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-gray-500 text-sm">No target slot selected.</div>
+                  <div className="text-gray-500 text-sm">
+                    No target slot selected.
+                  </div>
                 )}
               </div>
 
@@ -1231,7 +1386,9 @@ export default function PositionEditor() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-cyan-300 text-sm">Slot is open and available.</div>
+                  <div className="text-cyan-300 text-sm">
+                    Slot is open and available.
+                  </div>
                 )}
               </div>
 
@@ -1249,14 +1406,18 @@ export default function PositionEditor() {
                     {hasMosChange ? "✔ MOS change pending" : "— No MOS change"}
                   </div>
 
-                  <div className={hasPositionChange ? "text-cyan-300" : "text-gray-500"}>
+                  <div
+                    className={hasPositionChange ? "text-cyan-300" : "text-gray-500"}
+                  >
                     {hasPositionChange
                       ? "✔ Position change pending"
                       : "— No position change"}
                   </div>
 
                   <div className="text-gray-400">
-                    {hasPositionChange ? "Discord role sync will run" : "No slot sync needed"}
+                    {hasPositionChange
+                      ? "Discord role sync will run"
+                      : "No slot sync needed"}
                   </div>
 
                   {isReplacingAnotherPerson && (
@@ -1280,7 +1441,9 @@ export default function PositionEditor() {
                     </div>
                     <div className="flex justify-between gap-4">
                       <span className="text-gray-400">Sub Header</span>
-                      <span className="text-white">{currentSlotPath.subHeader}</span>
+                      <span className="text-white">
+                        {currentSlotPath.subHeader}
+                      </span>
                     </div>
                     <div className="flex justify-between gap-4">
                       <span className="text-gray-400">Role</span>

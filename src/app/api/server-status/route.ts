@@ -146,14 +146,11 @@ function queryServer(host: string, port: number): Promise<any> {
 /* ===================================================== */
 
 export async function GET() {
-
   const results = await Promise.all(
     SERVERS.map(async (server) => {
       const ports = [server.basePort, server.basePort + 1];
 
       for (const port of ports) {
-        console.log(`Querying server ${server.id} on port ${port}`);
-
         const data = await queryServer(server.host, port);
 
         if (data) {
@@ -165,6 +162,10 @@ export async function GET() {
           };
         }
       }
+
+      console.error(
+        `[SERVER OFFLINE] Failed to query ${server.id} (${server.host}) on ports ${ports.join(", ")}`
+      );
 
       return {
         id: server.id,

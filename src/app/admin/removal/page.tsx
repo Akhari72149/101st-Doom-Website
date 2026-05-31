@@ -19,6 +19,8 @@ type ProcessorRow = {
   status: string | null;
 };
 
+type StatusAction = "Retired" | "Removed" | "Transferred";
+
 type ActionMeta = {
   title: string;
   subtitle: string;
@@ -26,6 +28,14 @@ type ActionMeta = {
   badgeClass: string;
   buttonClass: string;
 };
+
+const TRANSFER_UNITS = [
+  "212th Attack Battalion",
+  "501st Legion",
+  "91st Recon Company",
+  "327th Star Corps",
+  "38th Assault Corps",
+];
 
 export default function RemovePersonnelPage() {
   const router = useRouter();
@@ -40,7 +50,8 @@ export default function RemovePersonnelPage() {
   const [search, setSearch] = useState("");
   const [selectedPersonnelId, setSelectedPersonnelId] = useState("");
   const [selectedProcessor, setSelectedProcessor] = useState("");
-  const [statusAction, setStatusAction] = useState<"Retired" | "Removed">("Removed");
+  const [statusAction, setStatusAction] = useState<StatusAction>("Removed");
+  const [transferUnit, setTransferUnit] = useState("");
   const [reason, setReason] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -113,7 +124,7 @@ export default function RemovePersonnelPage() {
 
       const filteredProcessors = (personnelData || []).filter((person) => {
         const status = (person.status || "").trim().toLowerCase();
-        return status !== "removed" && status !== "retired";
+        return status !== "removed" && status !== "retired" && status !== "transferred";
       });
 
       setProcessors(filteredProcessors);
@@ -140,7 +151,7 @@ export default function RemovePersonnelPage() {
 
       const activePersonnel = (data || []).filter((person) => {
         const status = (person.status || "").trim().toLowerCase();
-        return status !== "removed" && status !== "retired";
+        return status !== "removed" && status !== "retired" && status !== "transferred";
       });
 
       setPersonnel(activePersonnel);
@@ -197,6 +208,17 @@ export default function RemovePersonnelPage() {
       };
     }
 
+    if (statusAction === "Transferred") {
+      return {
+        title: "Transfer Personnel",
+        subtitle: "Personnel will be marked as transferred and the destination unit will be logged.",
+        panelClass: "border-cyan-500/35 bg-cyan-500/10",
+        badgeClass: "border-cyan-400/30 bg-cyan-400/10 text-cyan-200",
+        buttonClass:
+          "bg-cyan-500/10 border border-cyan-400 text-cyan-200 hover:bg-cyan-400 hover:text-black hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]",
+      };
+    }
+
     return {
       title: "Remove Personnel",
       subtitle: "All Discord roles will be cleared, then the no roles tag will be applied.",
@@ -232,9 +254,19 @@ export default function RemovePersonnelPage() {
       return;
     }
 
-    const confirmText = `Are you sure you want to mark ${
-      selectedPersonnel?.name || "this person"
-    } as ${statusAction}?`;
+    if (statusAction === "Transferred" && !transferUnit) {
+      alert("Please select the unit they are transferring to.");
+      return;
+    }
+
+    const confirmText =
+      statusAction === "Transferred"
+        ? `Are you sure you want to mark ${
+            selectedPersonnel?.name || "this person"
+          } as Transferred to ${transferUnit}?`
+        : `Are you sure you want to mark ${
+            selectedPersonnel?.name || "this person"
+          } as ${statusAction}?`;
 
     if (!window.confirm(confirmText)) {
       return;
@@ -279,12 +311,19 @@ export default function RemovePersonnelPage() {
     }
 
     const auditAction =
-      statusAction === "Retired" ? "PERSONNEL_RETIRED" : "PERSONNEL_REMOVED";
+      statusAction === "Retired"
+        ? "PERSONNEL_RETIRED"
+        : statusAction === "Transferred"
+          ? "PERSONNEL_TRANSFERRED"
+          : "PERSONNEL_REMOVED";
+
+    const transferDetails =
+      statusAction === "Transferred" ? ` Transfer unit: ${transferUnit}.` : "";
 
     const auditDetails =
       reason.trim().length > 0
-        ? `${statusAction} from active personnel. Reason: ${reason.trim()}`
-        : `${statusAction} from active personnel.`;
+        ? `${statusAction} from active personnel.${transferDetails} Reason: ${reason.trim()}`
+        : `${statusAction} from active personnel.${transferDetails}`;
 
     const { error: auditError } = await supabase.from("audit_logs").insert([
       {
@@ -303,15 +342,26 @@ export default function RemovePersonnelPage() {
       return;
     }
 
-    alert(`✅ Personnel marked as ${statusAction}`);
+    alert(
+      statusAction === "Transferred"
+        ? `✅ Personnel marked as Transferred to ${transferUnit}`
+        : `✅ Personnel marked as ${statusAction}`
+    );
 
     setPersonnel((prev) => prev.filter((p) => p.id !== selectedPersonnelId));
     setSelectedPersonnelId("");
     setSearch("");
     setReason("");
     setSelectedProcessor("");
+    setTransferUnit("");
     setSubmitting(false);
   };
+
+  const submitDisabled =
+    !selectedPersonnelId ||
+    !selectedProcessor ||
+    submitting ||
+    (statusAction === "Transferred" && !transferUnit);
 
   if (loadingAuth) {
     return (
@@ -337,12 +387,12 @@ export default function RemovePersonnelPage() {
           </div>
 
           <h1 className="mt-3 bg-gradient-to-r from-[#00ff66] to-[#00ffaa] bg-clip-text text-4xl font-extrabold tracking-[0.22em] text-transparent drop-shadow-[0_0_10px_rgba(0,255,100,0.6)]">
-            REMOVE / RETIRE PERSONNEL
+            REMOVE / RETIRE / TRANSFER PERSONNEL
           </h1>
 
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#8eaa9b]">
             Select an active personnel record, choose the status action, and process the
-            Discord role change alongside the audit entry.
+            status update alongside the audit entry.
           </p>
         </div>
 
@@ -370,7 +420,7 @@ export default function RemovePersonnelPage() {
                 </div>
               </div>
 
-              <div className="relative mb-4">
+              <div ref={searchRef} className="relative mb-4">
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#00ff66]/50" />
                 <input
                   type="text"
@@ -409,9 +459,7 @@ export default function RemovePersonnelPage() {
                       <button
                         key={person.id}
                         type="button"
-                        onClick={() => {
-                          handleSelectPersonnel(person);
-                        }}
+                        onClick={() => handleSelectPersonnel(person)}
                         className={`w-full border-b px-4 py-4 text-left transition-all duration-200 last:border-b-0 ${
                           isSelected
                             ? "border-[#00ff66]/30 bg-[#00ff66]/12"
@@ -457,7 +505,6 @@ export default function RemovePersonnelPage() {
                   </h2>
                   <p className="mt-4 max-w-2xl text-sm leading-7 text-[#8eaa9b]">
                     Choose the target, enter the reason, and process the status update.
-                    Discord roles will be updated automatically after this record is saved.
                   </p>
 
                   <div className={`mt-6 rounded-2xl border p-4 ${actionMeta.panelClass}`}>
@@ -535,13 +582,23 @@ export default function RemovePersonnelPage() {
                         <div className={`rounded-2xl border p-4 ${actionMeta.panelClass}`}>
                           <div className="flex items-center gap-2 text-sm font-semibold">
                             <ShieldCheck className="h-4 w-4" />
-                            Discord Outcome
+                            Outcome
                           </div>
                           <p className="mt-2 text-sm leading-6 text-[#d7e6dc]">
                             {statusAction === "Removed"
-                              ? "All roles will be removed, then the no roles tag will be assigned."
-                              : "All roles will be removed, then the retired tag will be assigned."}
+                              ? "Personnel will be marked as removed."
+                              : statusAction === "Retired"
+                                ? "Personnel will be marked as retired."
+                                : "Personnel will be marked as transferred and the selected unit will be logged."}
                           </p>
+
+                          {statusAction === "Transferred" && transferUnit && (
+                            <div className="mt-3 rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-xs text-cyan-100">
+                              Transfer Unit:{" "}
+                              <span className="font-bold">{transferUnit}</span>
+                            </div>
+                          )}
+
                           <div className="mt-3">
                             <span
                               className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${actionMeta.badgeClass}`}
@@ -570,14 +627,24 @@ export default function RemovePersonnelPage() {
 
               <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm text-gray-300">Update Status To</label>
+                  <label className="mb-2 block text-sm text-gray-300">
+                    Update Status To
+                  </label>
                   <select
                     value={statusAction}
-                    onChange={(e) => setStatusAction(e.target.value as "Retired" | "Removed")}
+                    onChange={(e) => {
+                      const nextAction = e.target.value as StatusAction;
+                      setStatusAction(nextAction);
+
+                      if (nextAction !== "Transferred") {
+                        setTransferUnit("");
+                      }
+                    }}
                     className="w-full rounded-xl border border-[#00ff66]/30 bg-black/60 p-4 text-[#00ff66] outline-none transition focus:border-[#00ff66] focus:shadow-[0_0_12px_rgba(0,255,102,0.35)]"
                   >
                     <option value="Removed">Removed</option>
                     <option value="Retired">Retired</option>
+                    <option value="Transferred">Transferred</option>
                   </select>
                 </div>
 
@@ -585,7 +652,9 @@ export default function RemovePersonnelPage() {
                   <label className="mb-2 block text-sm text-gray-300">
                     Who Processed This Action?
                   </label>
-                  <p className="mb-2 text-xs text-[#00ff66]/60">Required for audit tracking</p>
+                  <p className="mb-2 text-xs text-[#00ff66]/60">
+                    Required for audit tracking
+                  </p>
                   <select
                     value={selectedProcessor}
                     onChange={(e) => setSelectedProcessor(e.target.value)}
@@ -600,6 +669,26 @@ export default function RemovePersonnelPage() {
                   </select>
                 </div>
               </div>
+
+              {statusAction === "Transferred" && (
+                <div className="mt-6">
+                  <label className="mb-2 block text-sm text-gray-300">
+                    Transfer To Unit
+                  </label>
+                  <select
+                    value={transferUnit}
+                    onChange={(e) => setTransferUnit(e.target.value)}
+                    className="w-full rounded-xl border border-cyan-400/30 bg-black/60 p-4 text-cyan-200 outline-none transition focus:border-cyan-300 focus:shadow-[0_0_12px_rgba(34,211,238,0.35)]"
+                  >
+                    <option value="">-- Select Unit --</option>
+                    {TRANSFER_UNITS.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {unit}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="mt-6">
                 <label className="mb-2 block text-sm text-gray-300">
@@ -617,14 +706,18 @@ export default function RemovePersonnelPage() {
               <div className="mt-8">
                 <button
                   onClick={handleStatusUpdate}
-                  disabled={!selectedPersonnelId || !selectedProcessor || submitting}
+                  disabled={submitDisabled}
                   className={`w-full rounded-xl py-4 font-bold transition-all duration-200 ${
-                    !selectedPersonnelId || !selectedProcessor || submitting
+                    submitDisabled
                       ? "cursor-not-allowed border border-gray-600 bg-gray-700 text-gray-400"
                       : actionMeta.buttonClass
                   }`}
                 >
-                  {submitting ? "Processing..." : `Mark as ${statusAction}`}
+                  {submitting
+                    ? "Processing..."
+                    : statusAction === "Transferred"
+                      ? "Mark as Transferred"
+                      : `Mark as ${statusAction}`}
                 </button>
               </div>
             </div>

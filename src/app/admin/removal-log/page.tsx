@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Search, ShieldAlert, Trash2, CalendarDays } from "lucide-react";
+import {
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Trash2,
+  CalendarDays,
+} from "lucide-react";
 
 type JoinedDisplayName =
   | { display_name: string | null }
@@ -52,7 +58,7 @@ type RemovalLogRow = {
 type TimeFilter = "all" | "today" | "7d" | "30d";
 
 function normaliseDisplayNameRelation(
-  value: JoinedDisplayName
+  value: JoinedDisplayName,
 ): { display_name: string | null } | null {
   if (!value) return null;
   if (Array.isArray(value)) return value[0] ?? null;
@@ -60,7 +66,7 @@ function normaliseDisplayNameRelation(
 }
 
 function normaliseNameRelation(
-  value: JoinedName
+  value: JoinedName,
 ): { name: string | null } | null {
   if (!value) return null;
   if (Array.isArray(value)) return value[0] ?? null;
@@ -77,6 +83,62 @@ export default function RemovalLogsPage() {
   const [search, setSearch] = useState("");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
 
+  const fetchLogs = async (isManualRefresh = true) => {
+    if (isManualRefresh) setRefreshing(true);
+    else setLoadingLogs(true);
+
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select(
+        `
+    id,
+    action,
+    details,
+    created_at,
+    user_id,
+    processed_by,
+    target_personnel_id,
+    profiles:user_id ( display_name ),
+    processor:processed_by ( name ),
+    personnel:target_personnel_id ( name )
+  `,
+      )
+      .in("action", [
+        "PERSONNEL_REMOVED",
+        "PERSONNEL_RETIRED",
+        "PERSONNEL_TRANSFERRED",
+      ])
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (error) {
+      alert(error.message);
+      setLogs([]);
+      setLoadingLogs(false);
+      setRefreshing(false);
+      return;
+    }
+
+    const cleanedLogs: RemovalLogRow[] = (
+      (data || []) as RemovalLogRowRaw[]
+    ).map((log) => ({
+      id: log.id,
+      action: log.action,
+      details: log.details,
+      created_at: log.created_at,
+      user_id: log.user_id,
+      processed_by: log.processed_by,
+      target_personnel_id: log.target_personnel_id,
+      profiles: normaliseDisplayNameRelation(log.profiles),
+      processor: normaliseNameRelation(log.processor),
+      personnel: normaliseNameRelation(log.personnel),
+    }));
+
+    setLogs(cleanedLogs);
+    setLoadingLogs(false);
+    setRefreshing(false);
+  };
+
   useEffect(() => {
     const checkAccessAndLoad = async () => {
       const {
@@ -90,6 +152,7 @@ export default function RemovalLogsPage() {
 
       const [{ data: roles }, { data: profile }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", user.id),
+
         supabase
           .from("profiles")
           .select("display_name")
@@ -101,7 +164,9 @@ export default function RemovalLogsPage() {
       const displayName = profile?.display_name?.trim().toLowerCase() || "";
 
       const allowedRoles = ["recruiter", "nco", "admin", "akhari"];
-      const hasAllowedRole = roleList.some((role) => allowedRoles.includes(role));
+      const hasAllowedRole = roleList.some((role) =>
+        allowedRoles.includes(role),
+      );
       const isAkhariByName = displayName === "akhari";
 
       if (!hasAllowedRole && !isAkhariByName) {
@@ -110,61 +175,17 @@ export default function RemovalLogsPage() {
       }
 
       setLoadingAuth(false);
-      await fetchLogs(false);
+
+      try {
+        await fetchLogs(false);
+      } catch (err) {
+        console.error("Failed to load logs:", err);
+        setLoadingLogs(false);
+      }
     };
 
     checkAccessAndLoad();
   }, [router]);
-
-  const fetchLogs = async (isManualRefresh = true) => {
-    if (isManualRefresh) setRefreshing(true);
-    else setLoadingLogs(true);
-
-    const { data, error } = await supabase
-      .from("audit_logs")
-      .select(`
-        id,
-        action,
-        details,
-        created_at,
-        user_id,
-        processed_by,
-        target_personnel_id,
-        profiles:user_id ( display_name ),
-        processor:processed_by ( name ),
-        personnel:target_personnel_id ( name )
-      `)
-      .eq("action", "PERSONNEL_REMOVED")
-      .order("created_at", { ascending: false })
-      .limit(200);
-
-    if (error) {
-      alert(error.message);
-      setLogs([]);
-      setLoadingLogs(false);
-      setRefreshing(false);
-      return;
-    }
-
-    const cleanedLogs: RemovalLogRow[] = ((data || []) as RemovalLogRowRaw[]).map(
-      (log) => ({
-        id: log.id,
-        action: log.action,
-        details: log.details,
-        created_at: log.created_at,
-        user_id: log.user_id,
-        processed_by: log.processed_by,
-        target_personnel_id: log.target_personnel_id,
-        profiles: normaliseDisplayNameRelation(log.profiles),
-        processor: normaliseNameRelation(log.processor),
-        personnel: normaliseNameRelation(log.personnel),
-      })
-    );
-
-    setLogs(cleanedLogs);
-    setLoadingLogs(false);
-    setRefreshing(false);
-  };
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleString();
@@ -234,9 +255,7 @@ export default function RemovalLogsPage() {
 
     return logs.filter((log) => {
       const userName =
-        log.processor?.name ||
-        log.profiles?.display_name ||
-        "Mommy Doombot";
+        log.processor?.name || log.profiles?.display_name || "Mommy Doombot";
 
       const personnelName = log.personnel?.name || "Unknown";
       const detailsText = log.details || "";
@@ -283,6 +302,29 @@ export default function RemovalLogsPage() {
     );
   }
 
+  const getActionPill = (action: string) => {
+    switch (action) {
+      case "PERSONNEL_RETIRED":
+        return {
+          label: "Retired",
+          className:
+            "text-slate-300 bg-slate-500/10 border border-slate-400/25",
+        };
+
+      case "PERSONNEL_TRANSFERRED":
+        return {
+          label: "Transferred",
+          className: "text-cyan-300 bg-cyan-500/10 border border-cyan-400/25",
+        };
+
+      default:
+        return {
+          label: "Removed",
+          className: "text-red-300 bg-red-500/10 border border-red-500/25",
+        };
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#001f11_0%,#000000_55%,#000000_100%)] text-white relative overflow-hidden">
       <div className="absolute inset-0 pointer-events-none opacity-[0.06] bg-[linear-gradient(rgba(0,255,102,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.2)_1px,transparent_1px)] bg-[size:42px_42px]" />
@@ -309,7 +351,8 @@ export default function RemovalLogsPage() {
                         Personnel Removal Log
                       </h1>
                       <p className="text-sm sm:text-base text-gray-400 mt-1">
-                        Track personnel removals, responsible users, and recorded audit details
+                        Track personnel removals, responsible users, and
+                        recorded audit details
                       </p>
                     </div>
                   </div>
@@ -333,21 +376,27 @@ export default function RemovalLogsPage() {
                   <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">
                     Total Removals
                   </div>
-                  <div className="text-3xl font-bold text-white">{stats.total}</div>
+                  <div className="text-3xl font-bold text-white">
+                    {stats.total}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
                   <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">
                     Today
                   </div>
-                  <div className="text-3xl font-bold text-white">{stats.today}</div>
+                  <div className="text-3xl font-bold text-white">
+                    {stats.today}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
                   <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">
                     Last 7 Days
                   </div>
-                  <div className="text-3xl font-bold text-white">{stats.last7Days}</div>
+                  <div className="text-3xl font-bold text-white">
+                    {stats.last7Days}
+                  </div>
                 </div>
               </div>
             </div>
@@ -489,9 +538,17 @@ export default function RemovalLogsPage() {
                           </td>
 
                           <td className="p-4 align-top">
-                            <div className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold text-red-300 bg-red-500/10 border border-red-500/25">
-                              Removed
-                            </div>
+                            {(() => {
+                              const pill = getActionPill(log.action);
+
+                              return (
+                                <div
+                                  className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${pill.className}`}
+                                >
+                                  {pill.label}
+                                </div>
+                              );
+                            })()}
                             <div className="text-[11px] text-gray-500 mt-2 tracking-wide">
                               {log.action}
                             </div>

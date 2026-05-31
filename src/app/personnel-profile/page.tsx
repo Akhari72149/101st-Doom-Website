@@ -90,27 +90,35 @@ export default function PersonnelProfile() {
 
         supabase
           .from("rank_history")
-          .select(`
+          .select(
+            `
             id,
             old_rank_id,
             new_rank_id,
             changed_at,
             old_rank:ranks!rank_history_old_rank_id_fkey(name),
             new_rank:ranks!rank_history_new_rank_id_fkey(name)
-          `)
+          `,
+          )
           .eq("personnel_id", person.id)
           .order("changed_at", { ascending: false }),
 
         supabase
           .from("audit_logs")
-          .select(`
+          .select(
+            `
             id,
             action,
             created_at,
             processor:processed_by ( name )
-          `)
+          `,
+          )
           .eq("target_personnel_id", person.id)
-          .in("action", ["PERSONNEL_REMOVED", "PERSONNEL_RETIRED"])
+          .in("action", [
+            "PERSONNEL_REMOVED",
+            "PERSONNEL_RETIRED",
+            "PERSONNEL_TRANSFERRED",
+          ])
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
@@ -193,7 +201,7 @@ export default function PersonnelProfile() {
     if (!selectedPerson || rankHistory.length === 0) return 0;
 
     const latestPromotion = rankHistory.find(
-      (h) => h.new_rank_id === selectedPerson.rank_id
+      (h) => h.new_rank_id === selectedPerson.rank_id,
     );
 
     if (!latestPromotion?.changed_at) return 0;
@@ -206,7 +214,10 @@ export default function PersonnelProfile() {
   };
 
   const statusValue = (selectedPerson?.status || "").trim().toLowerCase();
-  const isInactive = statusValue === "retired" || statusValue === "removed";
+  const isInactive =
+    statusValue === "retired" ||
+    statusValue === "removed" ||
+    statusValue === "transferred";
 
   const theme = {
     pageBg: isInactive
@@ -243,17 +254,17 @@ export default function PersonnelProfile() {
   const trainerCerts = useMemo(
     () =>
       certifications.filter((c) =>
-        c.certification?.name?.toLowerCase().includes("trainer")
+        c.certification?.name?.toLowerCase().includes("trainer"),
       ),
-    [certifications]
+    [certifications],
   );
 
   const normalCerts = useMemo(
     () =>
       certifications.filter(
-        (c) => !c.certification?.name?.toLowerCase().includes("trainer")
+        (c) => !c.certification?.name?.toLowerCase().includes("trainer"),
       ),
-    [certifications]
+    [certifications],
   );
 
   const filteredPersonnel = useMemo(() => {
@@ -281,9 +292,13 @@ export default function PersonnelProfile() {
     () =>
       personnel.filter((p) => {
         const status = (p.status || "").trim().toLowerCase();
-        return status !== "retired" && status !== "removed";
+        return (
+          status !== "retired" &&
+          status !== "removed" &&
+          status !== "transferred"
+        );
       }).length,
-    [personnel]
+    [personnel],
   );
 
   const inactivePersonnel = personnel.length - activePersonnel;
@@ -311,14 +326,18 @@ export default function PersonnelProfile() {
       <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
         {label}
       </p>
-      <p className={`mt-2 text-sm sm:text-base ${accent ? theme.accentText : "text-[#eafff2]"}`}>
+      <p
+        className={`mt-2 text-sm sm:text-base ${accent ? theme.accentText : "text-[#eafff2]"}`}
+      >
         {value}
       </p>
     </div>
   );
 
   return (
-    <div className={`min-h-screen ${theme.pageBg} px-4 py-8 text-[#eafff2] sm:px-6 lg:px-10`}>
+    <div
+      className={`min-h-screen ${theme.pageBg} px-4 py-8 text-[#eafff2] sm:px-6 lg:px-10`}
+    >
       <div className="mx-auto max-w-[1800px]">
         <button
           onClick={() => router.push("/pcs")}
@@ -331,18 +350,23 @@ export default function PersonnelProfile() {
           <div className="text-xs uppercase tracking-[0.4em] text-gray-400">
             Personnel Command System
           </div>
-          <h1 className={`mt-3 text-4xl font-bold tracking-[0.18em] ${theme.primaryText}`}>
+          <h1
+            className={`mt-3 text-4xl font-bold tracking-[0.18em] ${theme.primaryText}`}
+          >
             PERSONNEL PROFILE
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-400">
             Search the directory and open an individual service dossier with
-            qualifications, trainer records, rank progression, and status history.
+            qualifications, trainer records, rank progression, and status
+            history.
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
           <aside className="xl:sticky xl:top-6 xl:self-start">
-            <div className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-5 backdrop-blur-xl`}>
+            <div
+              className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-5 backdrop-blur-xl`}
+            >
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.25em] text-gray-400">
@@ -357,12 +381,16 @@ export default function PersonnelProfile() {
                   <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">
                     Total
                   </p>
-                  <p className="text-sm font-semibold text-white">{personnel.length}</p>
+                  <p className="text-sm font-semibold text-white">
+                    {personnel.length}
+                  </p>
                 </div>
               </div>
 
               <div className="mb-4 grid grid-cols-2 gap-3">
-                <div className={`rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-3`}>
+                <div
+                  className={`rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-3`}
+                >
                   <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">
                     Active
                   </p>
@@ -389,7 +417,9 @@ export default function PersonnelProfile() {
                 className={`mb-4 w-full rounded-2xl border bg-black/40 p-4 outline-none transition ${theme.searchBorder} ${theme.searchText} ${theme.searchPlaceholder}`}
               />
 
-              <div className={`max-h-[65vh] overflow-y-auto rounded-2xl border ${theme.secondaryBorder} bg-black/30`}>
+              <div
+                className={`max-h-[65vh] overflow-y-auto rounded-2xl border ${theme.secondaryBorder} bg-black/30`}
+              >
                 {filteredPersonnel.length === 0 ? (
                   <div className="p-5 text-sm text-gray-400">
                     No personnel matched your search.
@@ -398,7 +428,9 @@ export default function PersonnelProfile() {
                   filteredPersonnel.map((p) => {
                     const personStatus = (p.status || "").trim().toLowerCase();
                     const isPersonInactive =
-                      personStatus === "retired" || personStatus === "removed";
+                      personStatus === "retired" ||
+                      personStatus === "removed" ||
+                      personStatus === "transferred";
                     const isSelected = selectedPerson?.id === p.id;
 
                     return (
@@ -415,7 +447,9 @@ export default function PersonnelProfile() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className={`text-xs uppercase tracking-[0.18em] ${isPersonInactive ? "text-red-300" : theme.primaryText}`}>
+                            <p
+                              className={`text-xs uppercase tracking-[0.18em] ${isPersonInactive ? "text-red-300" : theme.primaryText}`}
+                            >
                               {getDisplayedRank(p)}
                             </p>
                             <p className="mt-1 truncate text-sm font-semibold text-white">
@@ -429,7 +463,11 @@ export default function PersonnelProfile() {
                           <div className="shrink-0">
                             {isPersonInactive ? (
                               <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-red-300">
-                                {personStatus === "removed" ? "Removed" : "Retired"}
+                                {personStatus === "removed"
+                                  ? "Removed"
+                                  : personStatus === "transferred"
+                                    ? "Transferred"
+                                    : "Retired"}
                               </span>
                             ) : (
                               <span className="rounded-full border border-[#00ff66]/30 bg-[#00ff66]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#00ff66]">
@@ -448,13 +486,17 @@ export default function PersonnelProfile() {
 
           <section className="min-w-0">
             {!selectedPerson ? (
-              <div className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-8`}>
+              <div
+                className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-8`}
+              >
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.25fr_0.75fr]">
                   <div>
                     <p className="text-xs uppercase tracking-[0.35em] text-gray-500">
                       Dossier Viewer
                     </p>
-                    <h2 className={`mt-3 text-3xl font-bold ${theme.primaryText}`}>
+                    <h2
+                      className={`mt-3 text-3xl font-bold ${theme.primaryText}`}
+                    >
                       Select a personnel record
                     </h2>
                     <p className="mt-4 max-w-2xl text-sm leading-7 text-gray-400">
@@ -465,11 +507,15 @@ export default function PersonnelProfile() {
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className={`rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-5`}>
+                    <div
+                      className={`rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-5`}
+                    >
                       <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">
                         Personnel Loaded
                       </p>
-                      <p className={`mt-2 text-3xl font-bold ${theme.primaryText}`}>
+                      <p
+                        className={`mt-2 text-3xl font-bold ${theme.primaryText}`}
+                      >
                         {personnel.length}
                       </p>
                     </div>
@@ -504,7 +550,9 @@ export default function PersonnelProfile() {
                 </div>
               </div>
             ) : loadingProfile ? (
-              <div className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-8`}>
+              <div
+                className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-8`}
+              >
                 <div className="animate-pulse space-y-6">
                   <div className="h-4 w-36 rounded bg-white/10" />
                   <div className="h-12 w-72 rounded bg-white/10" />
@@ -518,7 +566,9 @@ export default function PersonnelProfile() {
               </div>
             ) : (
               <div className="space-y-8">
-                <div className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-8 sm:p-10`}>
+                <div
+                  className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-8 sm:p-10`}
+                >
                   <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs uppercase tracking-[0.35em] text-gray-400">
@@ -526,24 +576,32 @@ export default function PersonnelProfile() {
                       </p>
 
                       <div className="mt-4 flex gap-2">
-                        {Array.from({ length: getRankBars(selectedPerson.rank_id) }).map(
-                          (_, i) => (
-                            <div
-                              key={i}
-                              className={`h-1.5 w-10 rounded-full ${theme.rankBar}`}
-                            />
-                          )
-                        )}
+                        {Array.from({
+                          length: getRankBars(selectedPerson.rank_id),
+                        }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`h-1.5 w-10 rounded-full ${theme.rankBar}`}
+                          />
+                        ))}
                       </div>
 
                       <div className="mt-5 flex flex-wrap items-center gap-3">
-                        <h2 className={`text-4xl font-bold sm:text-5xl ${theme.primaryText}`}>
+                        <h2
+                          className={`text-4xl font-bold sm:text-5xl ${theme.primaryText}`}
+                        >
                           {selectedPerson.name}
                         </h2>
 
                         {isInactive ? (
-                          <span className={`rounded-full px-3 py-1 text-sm font-semibold ${theme.badgeBg}`}>
-                            {statusValue === "removed" ? "Removed" : "Retired"}
+                          <span
+                            className={`rounded-full px-3 py-1 text-sm font-semibold ${theme.badgeBg}`}
+                          >
+                            {statusValue === "removed"
+                              ? "Removed"
+                              : statusValue === "transferred"
+                                ? "Transferred"
+                                : "Retired"}
                           </span>
                         ) : (
                           <span className="rounded-full border border-[#00ff66]/30 bg-[#00ff66]/10 px-3 py-1 text-sm font-semibold text-[#00ff66]">
@@ -595,7 +653,9 @@ export default function PersonnelProfile() {
                     <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
                         <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
-                          {statusValue === "removed" ? "Removed On" : "Retired On"}
+                          {statusValue === "removed"
+                            ? "Removed On"
+                            : "Retired On"}
                         </p>
                         <p className="mt-2 text-base text-red-300">
                           {formatDate(statusAudit.created_at)}
@@ -616,38 +676,54 @@ export default function PersonnelProfile() {
                   <div className={`my-8 border-t ${theme.divider}`} />
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                    {renderStatCard("Displayed Rank", getDisplayedRank(selectedPerson), true)}
-                    {renderStatCard("Base Rank", getRankName(selectedPerson.rank_id))}
-                    {renderStatCard("MOS", selectedPerson.mos?.trim() || "None", true)}
-                    {renderStatCard("Join Date", formatDate(selectedPerson.created_at))}
+                    {renderStatCard(
+                      "Displayed Rank",
+                      getDisplayedRank(selectedPerson),
+                      true,
+                    )}
+                    {renderStatCard(
+                      "Base Rank",
+                      getRankName(selectedPerson.rank_id),
+                    )}
+                    {renderStatCard(
+                      "MOS",
+                      selectedPerson.mos?.trim() || "None",
+                      true,
+                    )}
+                    {renderStatCard(
+                      "Join Date",
+                      formatDate(selectedPerson.created_at),
+                    )}
                     {renderStatCard(
                       "Time in Grade",
                       `${calculateTimeInGrade()} Days`,
-                      true
+                      true,
                     )}
                     {renderStatCard(
                       "Current Billet",
                       getBilletFromSlot(selectedPerson.slotted_position),
-                      true
+                      true,
                     )}
                     {renderStatCard(
                       "Slot ID",
-                      selectedPerson.slotted_position || "Unassigned"
+                      selectedPerson.slotted_position || "Unassigned",
                     )}
                     {renderStatCard(
                       "TeamSpeak ID",
                       selectedPerson.ts_id || "Not Set",
-                      true
+                      true,
                     )}
 
-                    <div className={`rounded-2xl border ${theme.secondaryBorder} ${theme.cardBg} p-4`}>
+                    <div
+                      className={`rounded-2xl border ${theme.secondaryBorder} ${theme.cardBg} p-4`}
+                    >
                       <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
                         Service Duration
                       </p>
 
                       {(() => {
                         const { years, months } = calculateServiceDuration(
-                          selectedPerson.created_at
+                          selectedPerson.created_at,
                         );
                         const totalMonths = years * 12 + months;
                         const barColor = isInactive
@@ -670,8 +746,12 @@ export default function PersonnelProfile() {
                               />
                             </div>
 
-                            <p className="mt-3 text-sm" style={{ color: barColor }}>
-                              {years} Year{years !== 1 ? "s" : ""} {months} Month
+                            <p
+                              className="mt-3 text-sm"
+                              style={{ color: barColor }}
+                            >
+                              {years} Year{years !== 1 ? "s" : ""} {months}{" "}
+                              Month
                               {months !== 1 ? "s" : ""}
                             </p>
                           </>
@@ -681,12 +761,18 @@ export default function PersonnelProfile() {
                   </div>
                 </div>
 
-                <div className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-6 sm:p-8`}>
-                  <div className={`mb-6 flex flex-wrap gap-3 border-b ${theme.divider} pb-4`}>
+                <div
+                  className={`rounded-3xl border ${theme.primaryBorder} ${theme.cardBg} p-6 sm:p-8`}
+                >
+                  <div
+                    className={`mb-6 flex flex-wrap gap-3 border-b ${theme.divider} pb-4`}
+                  >
                     <button
                       onClick={() => setActiveTab("qual")}
                       className={`rounded-xl border px-4 py-2 text-sm font-semibold tracking-[0.15em] transition ${
-                        activeTab === "qual" ? theme.tabActive : theme.tabInactive
+                        activeTab === "qual"
+                          ? theme.tabActive
+                          : theme.tabInactive
                       }`}
                     >
                       QUALIFICATIONS ({normalCerts.length})
@@ -695,7 +781,9 @@ export default function PersonnelProfile() {
                     <button
                       onClick={() => setActiveTab("trainer")}
                       className={`rounded-xl border px-4 py-2 text-sm font-semibold tracking-[0.15em] transition ${
-                        activeTab === "trainer" ? theme.tabActive : theme.tabInactive
+                        activeTab === "trainer"
+                          ? theme.tabActive
+                          : theme.tabInactive
                       }`}
                     >
                       TRAINER ({trainerCerts.length})
@@ -704,7 +792,9 @@ export default function PersonnelProfile() {
                     <button
                       onClick={() => setActiveTab("rank")}
                       className={`rounded-xl border px-4 py-2 text-sm font-semibold tracking-[0.15em] transition ${
-                        activeTab === "rank" ? theme.tabActive : theme.tabInactive
+                        activeTab === "rank"
+                          ? theme.tabActive
+                          : theme.tabInactive
                       }`}
                     >
                       RANK HISTORY ({rankHistory.length})
@@ -714,7 +804,9 @@ export default function PersonnelProfile() {
                   <div className="max-h-[440px] overflow-y-auto pr-1">
                     {activeTab === "qual" ? (
                       normalCerts.length === 0 ? (
-                        <p className="text-gray-400">No certifications recorded.</p>
+                        <p className="text-gray-400">
+                          No certifications recorded.
+                        </p>
                       ) : (
                         <div className="space-y-3">
                           {normalCerts.map((c, i) => (
@@ -755,13 +847,19 @@ export default function PersonnelProfile() {
                         {rankHistory.map((h, index) => (
                           <div key={h.id} className="flex gap-4">
                             <div className="flex flex-col items-center">
-                              <div className={`mt-1 h-3.5 w-3.5 rounded-full ${theme.rankBar}`} />
+                              <div
+                                className={`mt-1 h-3.5 w-3.5 rounded-full ${theme.rankBar}`}
+                              />
                               {index !== rankHistory.length - 1 && (
-                                <div className={`mt-2 h-full min-h-[42px] w-px ${isInactive ? "bg-red-500/30" : "bg-[#00ff66]/20"}`} />
+                                <div
+                                  className={`mt-2 h-full min-h-[42px] w-px ${isInactive ? "bg-red-500/30" : "bg-[#00ff66]/20"}`}
+                                />
                               )}
                             </div>
 
-                            <div className={`mb-2 flex-1 rounded-2xl border ${theme.softDivider} bg-black/30 px-4 py-4`}>
+                            <div
+                              className={`mb-2 flex-1 rounded-2xl border ${theme.softDivider} bg-black/30 px-4 py-4`}
+                            >
                               <p className="text-sm text-white">
                                 {getRankName(h.old_rank_id)}{" "}
                                 <span className={theme.accentText}>→</span>{" "}

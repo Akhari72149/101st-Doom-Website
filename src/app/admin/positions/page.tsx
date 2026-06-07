@@ -380,7 +380,7 @@ export default function PositionEditor() {
     }
   };
 
-const syncRankHistoryDate = async (
+const insertRankHistory = async (
   personnelId: string,
   oldRankId: string | null,
   newRankId: string | null,
@@ -396,38 +396,16 @@ const syncRankHistoryDate = async (
     .eq("id", personnelId)
     .maybeSingle();
 
-  if (personError || !personRow?.discord_id) {
+  if (personError) {
     setErrorMessage(
-      `Rank updated, but failed to get Discord ID for rank history.`
+      `Rank updated, but failed to get Discord ID for rank history: ${personError.message}`
     );
-    return;
-  }
-
-  const { data: updatedRows, error: updateError } = await supabase
-    .from("rank_history")
-    .update({
-      changed_at: changedAt,
-    })
-    .eq("personnel_id", personnelId)
-    .eq("old_rank_id", oldRankId)
-    .eq("new_rank_id", newRankId)
-    .is("changed_at", null)
-    .select("id, changed_at");
-
-  if (updateError) {
-    setErrorMessage(
-      `Rank updated, but failed to update rank history date: ${updateError.message}`
-    );
-    return;
-  }
-
-  if (updatedRows && updatedRows.length > 0) {
     return;
   }
 
   const { error: insertError } = await supabase.from("rank_history").insert({
     personnel_id: personnelId,
-    discord_id: personRow.discord_id,
+    discord_id: personRow?.discord_id || null,
     old_rank_id: oldRankId,
     new_rank_id: newRankId,
     changed_at: changedAt,
@@ -435,7 +413,7 @@ const syncRankHistoryDate = async (
 
   if (insertError) {
     setErrorMessage(
-      `Rank updated, but failed to insert rank history date: ${insertError.message}`
+      `Rank updated, but failed to insert rank history: ${insertError.message}`
     );
   }
 };
@@ -557,7 +535,7 @@ const syncRankHistoryDate = async (
       return;
     }
 
-await syncRankHistoryDate(
+await insertRankHistory(
   selectedPerson.id,
   oldRankId,
   selectedRankId || null,

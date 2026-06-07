@@ -19,6 +19,7 @@ type ProcessorRow = {
   status: string | null;
 };
 
+
 type StatusAction = "Retired" | "Removed" | "Transferred";
 
 type ActionMeta = {

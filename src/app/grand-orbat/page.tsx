@@ -37,9 +37,17 @@ type OrgNode = {
   children?: OrgNode[];
 };
 
-type RoleGroup = {
-  role: string;
-  slots: OrgRole[];
+type OrgNodeRow = {
+  id: string;
+  name: string;
+  parent_id?: string | null;
+  order_index?: number | null;
+  roles?: OrgRole[] | null;
+};
+
+type LineStyle = {
+  left?: string;
+  width?: string;
 };
 
 /* ===================================================== */
@@ -67,7 +75,7 @@ export default function GrandOrbat() {
         .select("*")
         .order("order_index", { ascending: true });
 
-      const tree = buildTree((data || []) as any[]) as OrgNode[];
+      const tree = buildTree((data || []) as OrgNodeRow[]) as OrgNode[];
       setOrgTree(tree);
 
       const map: Record<string, boolean> = {};
@@ -86,17 +94,25 @@ export default function GrandOrbat() {
         .from("personnel")
         .select("id, name, slotted_position, mos, ranks(*)");
 
-      const normalizedPersonnel: Personnel[] = (personnelData || []).map(
-        (person: any) => ({
-          id: person.id,
-          name: person.name,
-          slotted_position: person.slotted_position,
-          mos: person.mos || null,
-          ranks: Array.isArray(person.ranks)
-            ? person.ranks[0] || null
-            : person.ranks || null,
-        })
-      );
+      type PersonnelRow = {
+        id: string;
+        name: string;
+        slotted_position: string | null;
+        mos?: string | null;
+        ranks?: Rank | Rank[] | null;
+      };
+
+      const normalizedPersonnel: Personnel[] = (
+        (personnelData || []) as PersonnelRow[]
+      ).map((person) => ({
+        id: person.id,
+        name: person.name,
+        slotted_position: person.slotted_position,
+        mos: person.mos || null,
+        ranks: Array.isArray(person.ranks)
+          ? person.ranks[0] || null
+          : person.ranks || null,
+      }));
 
       setPersonnel(normalizedPersonnel);
     }
@@ -160,9 +176,7 @@ export default function GrandOrbat() {
       for (const role of groupedRoles) {
         const roleName = role.role?.toLowerCase() || "";
         const slotId = role.slotId?.toLowerCase() || "";
-        const person = role.slotId
-          ? slotMap[role.slotId.toLowerCase()]
-          : null;
+        const person = role.slotId ? slotMap[role.slotId.toLowerCase()] : null;
 
         const displayedRank = getDisplayedRank(person).toLowerCase();
         const baseRank = person?.ranks?.name?.toLowerCase() || "";
@@ -211,7 +225,7 @@ export default function GrandOrbat() {
     const hasChildren = (node.children?.length || 0) > 0;
 
     const [showSlots, setShowSlots] = useState(true);
-    const [lineStyle, setLineStyle] = useState<any>({});
+    const [lineStyle, setLineStyle] = useState<LineStyle>({});
     const childrenRef = useRef<HTMLDivElement>(null);
 
     const handleClick = (e: React.MouseEvent) => {
@@ -219,34 +233,15 @@ export default function GrandOrbat() {
       setShowSlots((prev) => !prev);
     };
 
-    const groupedRoles = useMemo<RoleGroup[]>(() => {
-      const roles = node.roles || [];
-      const groups = new Map<string, OrgRole[]>();
-
-      for (const role of roles) {
-        const key = role.role || "Unknown";
-
-        if (!groups.has(key)) {
-          groups.set(key, []);
-        }
-
-        groups.get(key)!.push(role);
-      }
-
-      return Array.from(groups.entries()).map(([role, slots]) => ({
-        role,
-        slots,
-      }));
-    }, [node.roles]);
-
     useEffect(() => {
-      if (!isTreeOpen || !hasChildren || (node.children?.length || 0) < 2) return;
+      if (!isTreeOpen || !hasChildren || (node.children?.length || 0) < 2)
+        return;
 
       const container = childrenRef.current;
       if (!container) return;
 
       const children = Array.from(
-        container.querySelectorAll(":scope > .child-node")
+        container.querySelectorAll(":scope > .child-node"),
       ) as HTMLElement[];
 
       if (children.length < 2) return;
@@ -288,63 +283,45 @@ export default function GrandOrbat() {
             showSlots ? "max-h-[4000px] opacity-100" : "max-h-0 opacity-0"
           }`}
         >
-          {groupedRoles.map((group, groupIndex) => {
-            const assignedPeople = group.slots
-              .map((slot) => {
-                const slotId = slot.slotId?.toLowerCase();
-                if (!slotId) return null;
-                return slotMap[slotId] || null;
-              })
-              .filter(Boolean) as Personnel[];
-
-            const emptyCount = group.slots.filter((slot) => {
-              const slotId = slot.slotId?.toLowerCase();
-              if (!slotId) return true;
-              return !slotMap[slotId];
-            }).length;
+          {(node.roles || []).map((slot, slotIndex) => {
+            const slotId = slot.slotId?.toLowerCase();
+            const person = slotId ? slotMap[slotId] || null : null;
 
             return (
               <div
-                key={`${group.role}-${groupIndex}`}
+                key={slot.slotId || `${slot.role}-${slotIndex}`}
                 className="mt-3 flex flex-col items-center"
               >
                 <div className="text-[#00ff66] font-semibold mb-2">
-                  {group.role}
-                  {group.slots.length > 1 && (
-                    <span className="text-gray-400 ml-2">×{group.slots.length}</span>
-                  )}
+                  {slot.role}
                 </div>
 
-                {assignedPeople.map((person, i) => (
+                {person ? (
                   <div
-                    key={`${person.id}-${i}`}
                     className="
-                      w-[220px]
-                      px-4 py-2 mb-2 rounded-xl text-center
-                      bg-[#000f08]/80
-                      border border-[#00ff66]/20
-                    "
+            w-[220px]
+            px-4 py-2 mb-2 rounded-xl text-center
+            bg-[#000f08]/80
+            border border-[#00ff66]/20
+          "
                   >
                     <span className="text-[#00ff66] font-bold">
                       {getDisplayedRank(person)}
                     </span>{" "}
                     <span className="text-white">{person.name}</span>
                   </div>
-                ))}
-
-                {Array.from({ length: emptyCount }).map((_, i) => (
+                ) : (
                   <div
-                    key={`empty-${group.role}-${i}`}
                     className="
-                      w-[220px]
-                      px-4 py-2 mb-2 rounded-xl text-center
-                      bg-[#000a00]
-                      border border-[#00ff66]/10
-                    "
+            w-[220px]
+            px-4 py-2 mb-2 rounded-xl text-center
+            bg-[#000a00]
+            border border-[#00ff66]/10
+          "
                   >
                     <span className="text-gray-500">Empty Slot</span>
                   </div>
-                ))}
+                )}
               </div>
             );
           })}
@@ -401,9 +378,7 @@ export default function GrandOrbat() {
         ← Return to Dashboard
       </button>
 
-      <h1 className="text-4xl font-bold text-[#00ff66] mb-8">
-        Grand ORBAT
-      </h1>
+      <h1 className="text-4xl font-bold text-[#00ff66] mb-8">Grand ORBAT</h1>
 
       <div className="mb-6">
         <input

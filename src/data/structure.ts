@@ -441,6 +441,7 @@ export const structure = [
         roles: [
           { role: "Squad Lead", count: 1, slotId: "Dagger1-1-1a-squadlead", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },
           { role: "RTO", count: 1, slotId: "Dagger1-1-1a-RTO", discordRoleIds: ["512875704950587402", "747540448989544528"] },
+          { role: "Team Lead", count: 1, slotId: "Dagger1-1-1a-tl", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },                   
           { role: "Team Lead", count: 1, slotId: "Dagger1-1-1b-tl", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },          
           { role: "Trooper", count: 1, slotId: "Dagger1-1-1a-Trooper", discordRoleIds: ["512875704950587402", "747540448989544528"] },
           { role: "Trooper", count: 1, slotId: "Dagger1-1-1a-Trooper__2", discordRoleIds: ["512875704950587402", "747540448989544528"] },
@@ -459,6 +460,7 @@ export const structure = [
         roles: [
           { role: "Squad Lead", count: 1, slotId: "Dagger1-1-2a-squadlead", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },
           { role: "RTO", count: 1, slotId: "Dagger1-1-2a-RTO", discordRoleIds: ["512875704950587402", "747540448989544528"] },
+          { role: "Team Lead", count: 1, slotId: "Dagger1-1-2a-tl", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },                    
           { role: "Team Lead", count: 1, slotId: "Dagger1-1-2b-tl", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },          
           { role: "Trooper", count: 1, slotId: "Dagger1-1-2a-Trooper", discordRoleIds: ["512875704950587402", "747540448989544528"] },
           { role: "Trooper", count: 1, slotId: "Dagger1-1-2a-Trooper__2", discordRoleIds: ["512875704950587402", "747540448989544528"] },
@@ -477,6 +479,7 @@ export const structure = [
         roles: [
           { role: "Squad Lead", count: 1, slotId: "Dagger1-1-3a-squadlead", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },
           { role: "RTO", count: 1, slotId: "Dagger1-1-3a-RTO", discordRoleIds: ["512875704950587402", "747540448989544528"] },
+          { role: "Team Lead", count: 1, slotId: "Dagger1-1-3a-tl", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },                    
           { role: "Team Lead", count: 1, slotId: "Dagger1-1-3b-tl", discordRoleIds: ["512875704950587402", "747540448989544528" ,"796660956604268554"] },          
           { role: "Trooper", count: 1, slotId: "Dagger1-1-3a-Trooper", discordRoleIds: ["512875704950587402", "747540448989544528"] },
           { role: "Trooper", count: 1, slotId: "Dagger1-1-3a-Trooper__2", discordRoleIds: ["512875704950587402", "747540448989544528"] },

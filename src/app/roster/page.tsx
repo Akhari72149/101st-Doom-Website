@@ -257,6 +257,7 @@ export default function Roster() {
     return { total, filled, empty };
   };
 
+  
   const visibleSections = useMemo(() => {
     return (structure as StructureSection[]).filter((section) => {
       if (section.type !== "header") return false;

@@ -127,7 +127,7 @@ export default function TaskboardPage() {
         .eq("user_id", user.id);
 
       const roleList = (roleData as RoleRow[] | null)?.map((r) => r.role) || [];
-      const allowedRoles = ["Akhari"];
+      const allowedRoles = ["Akhari", "admin"];
 
       if (!roleList.some((role) => allowedRoles.includes(role))) {
         router.replace("/");

@@ -413,14 +413,13 @@ export default function HowToJoinPage() {
                         modlists before attending operations.
                       </p>
                       <p>
-                        Server 4 runs the Main Operation Modlist and is keyed. If you have
+                        Server 1 runs the Main Operation Modlist and is keyed. If you have
                         mods outside the modlist or unit whitelist, you will not be able to
                         connect.
                       </p>
-                      <p>Server 1 runs the Fun Operation Modlist.</p>
-                      <p>Server 2, 3, and 5 run the Training Server Modlist.</p>
+                      <p>Server 2 runs the Fun Operation Modlist.</p>
                       <p>
-                        Server 6 runs the FOTM modlist, which changes every two months.
+                        Server 3 runs on a different modlist dependant on what it is being used for.
                       </p>
 
                       <div className="space-y-3">

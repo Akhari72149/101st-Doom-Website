@@ -74,7 +74,7 @@ export default function HomePage() {
   const [time, setTime] = useState(new Date());
   const [weeklyOpen, setWeeklyOpen] = useState(false);
   const [previousStatus, setPreviousStatus] = useState<Record<number, boolean>>(
-    {}
+    {},
   );
 
   const [selectedEventDate, setSelectedEventDate] = useState(() => {
@@ -211,7 +211,7 @@ export default function HomePage() {
   };
 
   const unwrapRelationName = (
-    value: { name: string } | { name: string }[] | null | undefined
+    value: { name: string } | { name: string }[] | null | undefined,
   ) => {
     if (!value) return null;
     if (Array.isArray(value)) return value[0]?.name ?? null;
@@ -355,7 +355,7 @@ export default function HomePage() {
         title,
         start_time,
         personnel:booked_for ( name )
-      `
+      `,
       )
       .gte("start_time", start.toISOString())
       .lt("start_time", end.toISOString())
@@ -371,10 +371,10 @@ export default function HomePage() {
 
     if (selectedIsToday) {
       const upcoming = safeEvents.filter(
-        (event) => new Date(event.start_time).getTime() >= now.getTime()
+        (event) => new Date(event.start_time).getTime() >= now.getTime(),
       );
       const earlier = safeEvents.filter(
-        (event) => new Date(event.start_time).getTime() < now.getTime()
+        (event) => new Date(event.start_time).getTime() < now.getTime(),
       );
 
       setEvents(upcoming);
@@ -436,7 +436,7 @@ export default function HomePage() {
           targetPersonnel:target_personnel_id ( name ),
           targetCertification:target_certification_id ( name ),
           targetRank:target_rank_id ( name )
-        `
+        `,
         )
         .in("action", ["CERTIFICATION_ASSIGNED", "RANK_CHANGED"])
         .gte("created_at", start.toISOString())
@@ -507,7 +507,7 @@ export default function HomePage() {
 
   const totalPlayers = servers.reduce(
     (sum, server) => sum + (server.players || 0),
-    0
+    0,
   );
 
   const justCameOnline = (server: Server) =>
@@ -548,7 +548,7 @@ export default function HomePage() {
 
     return [...events].sort(
       (a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
     )[0];
   }, [events]);
 
@@ -569,21 +569,19 @@ export default function HomePage() {
 
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] z-0" />
 
-<img
-  src="/background/bg.jpg"
-  alt=""
-  aria-hidden="true"
-  className="fixed left-1/2 top-1/2 z-[1] w-[700px] sm:w-[950px] xl:w-[1200px] -translate-x-1/2 -translate-y-1/2 opacity-[0.2] blur-sm saturate-150 pointer-events-none"
-/>
+      <img
+        src="/background/bg.jpg"
+        alt=""
+        aria-hidden="true"
+        className="fixed left-1/2 top-1/2 z-[1] w-[700px] sm:w-[950px] xl:w-[1200px] -translate-x-1/2 -translate-y-1/2 opacity-[0.2] blur-sm saturate-150 pointer-events-none"
+      />
 
       <div className="relative z-10 flex w-full flex-col xl:flex-row">
         <div className="order-2 xl:order-1 w-full xl:w-[320px] xl:min-h-screen border-t xl:border-t-0 xl:border-r border-[#00ff66]/30 p-4 sm:p-6 bg-black/30 backdrop-blur-2xl">
           <div className="mb-5 grid grid-cols-2 gap-3 rounded-2xl border border-[#00ff66]/30 bg-black/50 p-4 xl:block xl:space-y-2">
             <div className="text-xs sm:text-sm">🟢 Online: {onlineCount}</div>
             <div className="text-xs sm:text-sm">🔴 Offline: {offlineCount}</div>
-            <div className="text-xs sm:text-sm">
-              📅 Events: {events.length}
-            </div>
+            <div className="text-xs sm:text-sm">📅 Events: {events.length}</div>
             <div className="text-xs sm:text-sm">👥 Players: {totalPlayers}</div>
             <div className="col-span-2 mt-1 text-[#00ff66] text-xs sm:text-sm xl:mt-2">
               {time.toLocaleTimeString()}
@@ -721,8 +719,8 @@ export default function HomePage() {
                                       {server.players === 0
                                         ? "Server is empty"
                                         : server.players === server.maxPlayers
-                                        ? "Server is full"
-                                        : "Server is active"}
+                                          ? "Server is full"
+                                          : "Server is active"}
                                     </div>
                                   </div>
                                 </div>
@@ -951,7 +949,7 @@ export default function HomePage() {
             <button
               onClick={() =>
                 setCurrentSlide((prev) =>
-                  prev === 0 ? slides.length - 1 : prev - 1
+                  prev === 0 ? slides.length - 1 : prev - 1,
                 )
               }
               className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 bg-black/60 text-[#00ff66] p-2 sm:p-3 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/80 z-20"
@@ -963,7 +961,7 @@ export default function HomePage() {
             <button
               onClick={() =>
                 setCurrentSlide((prev) =>
-                  prev === slides.length - 1 ? 0 : prev + 1
+                  prev === slides.length - 1 ? 0 : prev + 1,
                 )
               }
               className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 bg-black/60 text-[#00ff66] p-2 sm:p-3 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/80 z-20"
@@ -1192,7 +1190,7 @@ export default function HomePage() {
                     const nextOccurrence = getNextOccurrence(
                       event.day,
                       event.hour,
-                      event.minute
+                      event.minute,
                     );
 
                     return (
@@ -1252,7 +1250,7 @@ export default function HomePage() {
               },
               {
                 label: "🎧 Join TeamSpeak Server",
-                href: "ts3server://157.90.221.162",
+                href: "ts3server://ts.101stdoombattalion.com",
               },
             ].map((item) => (
               <a

@@ -180,6 +180,11 @@ export default function NavbarClient() {
           label: "Art of War",
           description: "Operational archive and doctrine reference",
         },
+        {
+          href: "/weekly-attendance",
+          label: "Weekly Attendance",
+          description: "Weekly Mainop Attendance Tracking",
+        },
       ],
     },
     {
@@ -267,6 +272,12 @@ export default function NavbarClient() {
           label: "Certification Management",
           description: "Award and manage certifications",
           allowedRoles: ["admin", "nco", "trainer"],
+        },
+        {
+          href: "/admin/weekly-attendance",
+          label: "Attendance Management",
+          description: "Award and manage certifications",
+          allowedRoles: ["admin", "nco"],
         },
         {
           href: "/admin/removal",

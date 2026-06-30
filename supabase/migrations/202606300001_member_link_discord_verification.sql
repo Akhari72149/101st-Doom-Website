@@ -159,15 +159,15 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
-as $$
+set search_path to public
+as $function$
 declare
   session_row public.steam_link_sessions%rowtype;
   challenge_row public.personnel_discord_verification_challenges%rowtype;
   new_link_id uuid;
 begin
   select *
-    into session_row
+  into session_row
   from public.steam_link_sessions
   where id = p_steam_link_session_id
   for update;
@@ -185,7 +185,7 @@ begin
   end if;
 
   select *
-    into challenge_row
+  into challenge_row
   from public.personnel_discord_verification_challenges
   where id = p_discord_challenge_id
   for update;
@@ -241,8 +241,9 @@ begin
   returning id into new_link_id;
 
   update public.personnel_discord_verification_challenges
-  set status = 'VERIFIED',
-      verified_at = now()
+  set
+    status = 'VERIFIED',
+    verified_at = now()
   where id = challenge_row.id;
 
   update public.steam_link_sessions
@@ -262,7 +263,7 @@ begin
     session_row.selected_personnel_id,
     session_row.steam_id,
     new_link_id,
-    'website',
+    'STEAM_MEMBER',
     jsonb_build_object(
       'method', 'DISCORD_CODE',
       'challenge_id', challenge_row.id,
@@ -272,9 +273,10 @@ begin
 
   link_id := new_link_id;
   personnel_id := session_row.selected_personnel_id;
+
   return next;
 end;
-$$;
+$function$;
 
 revoke all on function public.finalize_steam_link_from_discord(uuid, uuid) from public;
 revoke all on function public.finalize_steam_link_from_discord(uuid, uuid) from anon;

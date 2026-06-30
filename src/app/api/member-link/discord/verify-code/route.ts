@@ -32,6 +32,26 @@ type PersonnelRow = {
   name: string | null;
 };
 
+function getFinalizeErrorResponse(errorMessage: string) {
+  if (
+    errorMessage.includes("STEAM_ALREADY_LINKED") ||
+    errorMessage.includes("PERSONNEL_ALREADY_LINKED") ||
+    errorMessage.includes("duplicate key")
+  ) {
+    return { error: "ALREADY_LINKED", status: 409 };
+  }
+
+  if (errorMessage.includes("INVALID_SESSION")) {
+    return { error: "SESSION_EXPIRED", status: 409 };
+  }
+
+  if (errorMessage.includes("INVALID_CHALLENGE")) {
+    return { error: "CODE_EXPIRED", status: 409 };
+  }
+
+  return { error: "LINK_FINALIZE_FAILED", status: 500 };
+}
+
 export async function POST(request: Request) {
   const { session, reason } = await getVerifiedSteamSession();
 
@@ -153,9 +173,16 @@ export async function POST(request: Request) {
   );
 
   if (finalizeError) {
+    const safeError = getFinalizeErrorResponse(finalizeError.message || "");
+
+    console.error("[member-link] Steam link finalization failed:", {
+      code: finalizeError.code,
+      safeError: safeError.error,
+    });
+
     return NextResponse.json(
-      { error: "ALREADY_LINKED" },
-      { status: 409, headers: noStoreHeaders },
+      { error: safeError.error },
+      { status: safeError.status, headers: noStoreHeaders },
     );
   }
 

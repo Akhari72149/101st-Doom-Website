@@ -58,6 +58,8 @@ const safeErrors: Record<string, string> = {
   CODE_INCORRECT: "That verification code was incorrect.",
   TOO_MANY_ATTEMPTS: "Too many incorrect attempts. Send a new code to continue.",
   RESEND_COOLDOWN: "Please wait before sending another verification code.",
+  LINK_FINALIZE_FAILED:
+    "The code was accepted, but the final link could not be completed. Staff may need to apply the latest database migration.",
 };
 
 const statusMessages: Record<string, string> = {

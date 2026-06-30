@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
@@ -44,6 +44,14 @@ type StatusAuditRow = {
   } | null;
 };
 
+type SteamLinkRow = {
+  steamId: string;
+  displayName: string | null;
+  profileUrl: string | null;
+  avatarUrl: string | null;
+  linkedAt: string | null;
+};
+
 type ActiveTab = "qual" | "trainer" | "rank";
 
 export default function PersonnelProfile() {
@@ -56,32 +64,35 @@ export default function PersonnelProfile() {
   const [certifications, setCertifications] = useState<CertificationRow[]>([]);
   const [rankHistory, setRankHistory] = useState<RankHistoryRow[]>([]);
   const [statusAudit, setStatusAudit] = useState<StatusAuditRow | null>(null);
+  const [steamLink, setSteamLink] = useState<SteamLinkRow | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("qual");
   const [loadingProfile, setLoadingProfile] = useState(false);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    let active = true;
 
-  const fetchData = async () => {
-    setStatusAudit(null);
-
-    const [{ data: rankData }, { data: personnelData }] = await Promise.all([
+    Promise.all([
       supabase.from("ranks").select("*"),
       supabase.from("personnel").select("*").order("name"),
-    ]);
+    ]).then(([{ data: rankData }, { data: personnelData }]) => {
+      if (!active) return;
+      setRanks((rankData as Rank[]) || []);
+      setPersonnel((personnelData as Person[]) || []);
+    });
 
-    setRanks((rankData as Rank[]) || []);
-    setPersonnel((personnelData as Person[]) || []);
-  };
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadProfile = async (person: Person) => {
     setSelectedPerson(person);
     setStatusAudit(null);
+    setSteamLink(null);
     setLoadingProfile(true);
     setActiveTab("qual");
 
-    const [{ data: certs }, { data: history }, { data: auditData }] =
+    const [certResult, historyResult, auditResult, steamResponse] =
       await Promise.all([
         supabase
           .from("personnel_certifications")
@@ -122,19 +133,24 @@ export default function PersonnelProfile() {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
+
+        fetch(`/api/personnel/steam-link?personnelId=${encodeURIComponent(person.id)}`, {
+          cache: "no-store",
+        }).then((response) => response.json() as Promise<{ steamLink: SteamLinkRow | null }>),
       ]);
 
-    setCertifications((certs as CertificationRow[]) || []);
-    setRankHistory((history as RankHistoryRow[]) || []);
-    setStatusAudit((auditData as StatusAuditRow) || null);
+    setCertifications((certResult.data as CertificationRow[]) || []);
+    setRankHistory((historyResult.data as RankHistoryRow[]) || []);
+    setStatusAudit((auditResult.data as StatusAuditRow) || null);
+    setSteamLink(steamResponse.steamLink || null);
     setLoadingProfile(false);
   };
 
-  const getRankName = (rankId: string | null) => {
+  const getRankName = useCallback((rankId: string | null) => {
     if (!rankId) return "Unranked";
     const rank = ranks.find((r) => r.id === rankId);
     return rank?.name || "Unranked";
-  };
+  }, [ranks]);
 
   const getDisplayedRank = (person: Person | null) => {
     if (!person) return "Unranked";
@@ -286,7 +302,7 @@ export default function PersonnelProfile() {
 
       return text.includes(term);
     });
-  }, [personnel, search, ranks]);
+  }, [personnel, search, getRankName]);
 
   const activePersonnel = useMemo(
     () =>
@@ -641,6 +657,7 @@ export default function PersonnelProfile() {
                           setCertifications([]);
                           setRankHistory([]);
                           setStatusAudit(null);
+                          setSteamLink(null);
                         }}
                         className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
                       >
@@ -669,6 +686,64 @@ export default function PersonnelProfile() {
                         <p className="mt-2 text-base text-red-300">
                           {statusAudit.processor?.name || "Unknown"}
                         </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {steamLink && (
+                    <div
+                      className={`mt-8 rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-5`}
+                    >
+                      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-4">
+                          <div
+                            className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border ${theme.secondaryBorder} bg-black/60 bg-cover bg-center text-2xl font-bold ${theme.primaryText}`}
+                            style={
+                              steamLink.avatarUrl
+                                ? {
+                                    backgroundImage: `url("${steamLink.avatarUrl}")`,
+                                  }
+                                : undefined
+                            }
+                            aria-label="Steam profile avatar"
+                          >
+                            {!steamLink.avatarUrl && "S"}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-gray-400">
+                              Linked Steam Profile
+                            </p>
+                            <p className={`mt-2 truncate text-xl font-bold ${theme.primaryText}`}>
+                              {steamLink.displayName || "Steam User"}
+                            </p>
+                            <p className="mt-1 break-all font-mono text-xs text-gray-400">
+                              {steamLink.steamId}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                              Linked
+                            </p>
+                            <p className="mt-1 text-sm text-gray-200">
+                              {formatDate(steamLink.linkedAt)}
+                            </p>
+                          </div>
+
+                          {steamLink.profileUrl && (
+                            <a
+                              href={steamLink.profileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`rounded-xl border px-4 py-2 text-sm font-semibold uppercase tracking-[0.14em] transition ${theme.buttonBorder} ${theme.buttonText} ${theme.buttonHover}`}
+                            >
+                              Open Steam
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

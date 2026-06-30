@@ -231,7 +231,7 @@ export async function addSteamLinkAudit(
       personnel_id: values.personnelId ?? null,
       steam_id: values.steamId ?? null,
       link_id: values.linkId ?? null,
-      actor_type: "website",
+      actor_type: "STEAM_MEMBER",
       details: values.details ?? {},
     });
   } catch {

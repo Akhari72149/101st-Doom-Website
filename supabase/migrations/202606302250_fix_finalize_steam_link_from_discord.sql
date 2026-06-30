@@ -143,7 +143,7 @@ begin
     finalized_personnel_id,
     session_row.steam_id,
     new_link_id,
-    'website',
+    'STEAM_MEMBER',
     jsonb_build_object(
       'method', 'DISCORD_CODE',
       'challenge_id', challenge_row.id,

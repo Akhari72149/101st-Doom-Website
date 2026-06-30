@@ -177,6 +177,7 @@ export async function POST(request: Request) {
 
     console.error("[member-link] Steam link finalization failed:", {
       code: finalizeError.code,
+      message: finalizeError.message,
       safeError: safeError.error,
     });
 

@@ -1,3 +1,33 @@
+alter table public.personnel_steam_links
+  add column if not exists steam_display_name text,
+  add column if not exists steam_profile_url text,
+  add column if not exists steam_avatar_url text;
+
+do $$
+declare
+  constraint_name text;
+begin
+  for constraint_name in
+    select c.conname
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public'
+      and t.relname = 'personnel_steam_links'
+      and c.contype = 'c'
+      and pg_get_constraintdef(c.oid) ilike '%linked_method%'
+  loop
+    execute format(
+      'alter table public.personnel_steam_links drop constraint if exists %I',
+      constraint_name
+    );
+  end loop;
+end $$;
+
+alter table public.personnel_steam_links
+  add constraint personnel_steam_links_linked_method_check
+  check (linked_method in ('CLAIM_CODE', 'STAFF_APPROVAL', 'DISCORD_CODE'));
+
 create or replace function public.finalize_steam_link_from_discord(
   p_steam_link_session_id uuid,
   p_discord_challenge_id uuid

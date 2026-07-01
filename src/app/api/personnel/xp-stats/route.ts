@@ -1,0 +1,220 @@
+import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store, max-age=0",
+};
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+type XpProfileRow = {
+  total_xp: number;
+  current_level: number;
+  lifetime_kill_count: number;
+  lifetime_death_count: number;
+  lifetime_teamkill_count: number;
+  last_event_at: string | null;
+};
+
+type WeeklyRow = {
+  week_start_date: string;
+  week_end_at: string;
+  week_xp: number;
+  week_positive_xp: number;
+  week_negative_xp: number;
+  week_kill_count: number;
+  week_death_count: number;
+  week_teamkill_count: number;
+  infantry_kill_count: number;
+  specialist_kill_count: number;
+  static_weapon_kill_count: number;
+  light_vehicle_kill_count: number;
+  vehicle_kill_count: number;
+  apc_ifv_kill_count: number;
+  tank_kill_count: number;
+  aircraft_kill_count: number;
+  unknown_kill_count: number;
+  last_event_at: string | null;
+};
+
+type WeeklyTargetRow = {
+  target_category: string;
+  target_class: string;
+  target_display_name: string;
+  kill_count: number;
+  xp_total: number;
+  last_killed_at: string | null;
+};
+
+function emptyProfile() {
+  return {
+    totalXp: 0,
+    currentLevel: 1,
+    lifetimeKills: 0,
+    lifetimeDeaths: 0,
+    lifetimeTeamkills: 0,
+    lastEventAt: null,
+  };
+}
+
+function emptyWeekly() {
+  return {
+    weekStartDate: null,
+    weekEndAt: null,
+    xp: 0,
+    positiveXp: 0,
+    negativeXp: 0,
+    kills: 0,
+    deaths: 0,
+    teamkills: 0,
+    categories: {
+      infantry: 0,
+      specialist: 0,
+      staticWeapon: 0,
+      lightVehicle: 0,
+      vehicle: 0,
+      apcIfv: 0,
+      tank: 0,
+      aircraft: 0,
+      unknown: 0,
+    },
+    lastEventAt: null,
+    targets: [] as Array<{
+      category: string;
+      className: string;
+      displayName: string;
+      kills: number;
+      xp: number;
+      lastKilledAt: string | null;
+    }>,
+  };
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const personnelId = url.searchParams.get("personnelId") || "";
+
+  if (!isUuid(personnelId)) {
+    return NextResponse.json(
+      { xpStats: null },
+      { status: 400, headers: noStoreHeaders },
+    );
+  }
+
+  const [{ data: profile }, { data: weekly }, { data: targets }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("personnel_xp_profiles")
+        .select(
+          "total_xp,current_level,lifetime_kill_count,lifetime_death_count,lifetime_teamkill_count,last_event_at",
+        )
+        .eq("personnel_id", personnelId)
+        .maybeSingle<XpProfileRow>(),
+
+      supabaseAdmin
+        .from("personnel_xp_weekly_stats")
+        .select(
+          [
+            "week_start_date",
+            "week_end_at",
+            "week_xp",
+            "week_positive_xp",
+            "week_negative_xp",
+            "week_kill_count",
+            "week_death_count",
+            "week_teamkill_count",
+            "infantry_kill_count",
+            "specialist_kill_count",
+            "static_weapon_kill_count",
+            "light_vehicle_kill_count",
+            "vehicle_kill_count",
+            "apc_ifv_kill_count",
+            "tank_kill_count",
+            "aircraft_kill_count",
+            "unknown_kill_count",
+            "last_event_at",
+          ].join(","),
+        )
+        .eq("personnel_id", personnelId)
+        .maybeSingle<WeeklyRow>(),
+
+      supabaseAdmin
+        .from("personnel_xp_weekly_target_stats")
+        .select(
+          "target_category,target_class,target_display_name,kill_count,xp_total,last_killed_at",
+        )
+        .eq("personnel_id", personnelId)
+        .order("kill_count", { ascending: false })
+        .limit(12)
+        .returns<WeeklyTargetRow[]>(),
+    ]);
+
+  const profileStats = profile
+    ? {
+        totalXp: profile.total_xp,
+        currentLevel: profile.current_level,
+        lifetimeKills: profile.lifetime_kill_count,
+        lifetimeDeaths: profile.lifetime_death_count,
+        lifetimeTeamkills: profile.lifetime_teamkill_count,
+        lastEventAt: profile.last_event_at,
+      }
+    : emptyProfile();
+
+  const now = Date.now();
+  const weeklyIsCurrent =
+    weekly?.week_end_at && new Date(weekly.week_end_at).getTime() > now;
+
+  const weeklyStats =
+    weekly && weeklyIsCurrent
+      ? {
+          weekStartDate: weekly.week_start_date,
+          weekEndAt: weekly.week_end_at,
+          xp: weekly.week_xp,
+          positiveXp: weekly.week_positive_xp,
+          negativeXp: weekly.week_negative_xp,
+          kills: weekly.week_kill_count,
+          deaths: weekly.week_death_count,
+          teamkills: weekly.week_teamkill_count,
+          categories: {
+            infantry: weekly.infantry_kill_count,
+            specialist: weekly.specialist_kill_count,
+            staticWeapon: weekly.static_weapon_kill_count,
+            lightVehicle: weekly.light_vehicle_kill_count,
+            vehicle: weekly.vehicle_kill_count,
+            apcIfv: weekly.apc_ifv_kill_count,
+            tank: weekly.tank_kill_count,
+            aircraft: weekly.aircraft_kill_count,
+            unknown: weekly.unknown_kill_count,
+          },
+          lastEventAt: weekly.last_event_at,
+          targets: ((targets || []) as WeeklyTargetRow[])
+            .filter((target) => target.kill_count > 0)
+            .map((target) => ({
+              category: target.target_category,
+              className: target.target_class,
+              displayName: target.target_display_name,
+              kills: target.kill_count,
+              xp: target.xp_total,
+              lastKilledAt: target.last_killed_at,
+            })),
+        }
+      : emptyWeekly();
+
+  return NextResponse.json(
+    {
+      xpStats: {
+        profile: profileStats,
+        weekly: weeklyStats,
+      },
+    },
+    { headers: noStoreHeaders },
+  );
+}

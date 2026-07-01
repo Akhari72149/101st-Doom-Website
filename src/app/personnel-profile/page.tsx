@@ -52,6 +52,47 @@ type SteamLinkRow = {
   linkedAt: string | null;
 };
 
+type XpStatsRow = {
+  profile: {
+    totalXp: number;
+    currentLevel: number;
+    lifetimeKills: number;
+    lifetimeDeaths: number;
+    lifetimeTeamkills: number;
+    lastEventAt: string | null;
+  };
+  weekly: {
+    weekStartDate: string | null;
+    weekEndAt: string | null;
+    xp: number;
+    positiveXp: number;
+    negativeXp: number;
+    kills: number;
+    deaths: number;
+    teamkills: number;
+    categories: {
+      infantry: number;
+      specialist: number;
+      staticWeapon: number;
+      lightVehicle: number;
+      vehicle: number;
+      apcIfv: number;
+      tank: number;
+      aircraft: number;
+      unknown: number;
+    };
+    lastEventAt: string | null;
+    targets: Array<{
+      category: string;
+      className: string;
+      displayName: string;
+      kills: number;
+      xp: number;
+      lastKilledAt: string | null;
+    }>;
+  };
+};
+
 type ActiveTab = "qual" | "trainer" | "rank";
 
 export default function PersonnelProfile() {
@@ -65,6 +106,7 @@ export default function PersonnelProfile() {
   const [rankHistory, setRankHistory] = useState<RankHistoryRow[]>([]);
   const [statusAudit, setStatusAudit] = useState<StatusAuditRow | null>(null);
   const [steamLink, setSteamLink] = useState<SteamLinkRow | null>(null);
+  const [xpStats, setXpStats] = useState<XpStatsRow | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("qual");
   const [loadingProfile, setLoadingProfile] = useState(false);
 
@@ -89,10 +131,11 @@ export default function PersonnelProfile() {
     setSelectedPerson(person);
     setStatusAudit(null);
     setSteamLink(null);
+    setXpStats(null);
     setLoadingProfile(true);
     setActiveTab("qual");
 
-    const [certResult, historyResult, auditResult, steamResponse] =
+    const [certResult, historyResult, auditResult, steamResponse, xpResponse] =
       await Promise.all([
         supabase
           .from("personnel_certifications")
@@ -137,12 +180,17 @@ export default function PersonnelProfile() {
         fetch(`/api/personnel/steam-link?personnelId=${encodeURIComponent(person.id)}`, {
           cache: "no-store",
         }).then((response) => response.json() as Promise<{ steamLink: SteamLinkRow | null }>),
+
+        fetch(`/api/personnel/xp-stats?personnelId=${encodeURIComponent(person.id)}`, {
+          cache: "no-store",
+        }).then((response) => response.json() as Promise<{ xpStats: XpStatsRow | null }>),
       ]);
 
     setCertifications((certResult.data as CertificationRow[]) || []);
     setRankHistory((historyResult.data as RankHistoryRow[]) || []);
     setStatusAudit((auditResult.data as StatusAuditRow) || null);
     setSteamLink(steamResponse.steamLink || null);
+    setXpStats(xpResponse.xpStats || null);
     setLoadingProfile(false);
   };
 
@@ -169,6 +217,17 @@ export default function PersonnelProfile() {
 
   const formatDate = (date: string | null) =>
     date ? new Date(date).toLocaleDateString() : "N/A";
+
+  const formatNumber = (value: number | null | undefined) =>
+    new Intl.NumberFormat().format(value || 0);
+
+  const formatShortDate = (date: string | null) =>
+    date
+      ? new Date(date).toLocaleDateString(undefined, {
+          day: "2-digit",
+          month: "short",
+        })
+      : "N/A";
 
   const calculateServiceDuration = (date: string | null) => {
     if (!date) return { years: 0, months: 0 };
@@ -658,6 +717,7 @@ export default function PersonnelProfile() {
                           setRankHistory([]);
                           setStatusAudit(null);
                           setSteamLink(null);
+                          setXpStats(null);
                         }}
                         className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
                       >
@@ -742,6 +802,195 @@ export default function PersonnelProfile() {
                             >
                               Open Steam
                             </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {xpStats && (
+                    <div
+                      className={`mt-8 rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-5`}
+                    >
+                      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-gray-400">
+                            Arma XP Profile
+                          </p>
+                          <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2">
+                            <div>
+                              <p className={`text-4xl font-bold ${theme.primaryText}`}>
+                                Level {xpStats.profile.currentLevel}
+                              </p>
+                              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-gray-500">
+                                XP Rank
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-2xl font-bold text-white">
+                                {formatNumber(xpStats.profile.totalXp)}
+                              </p>
+                              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-gray-500">
+                                Total XP
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 sm:min-w-[360px]">
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                              Kills
+                            </p>
+                            <p className={`mt-1 text-lg font-bold ${theme.primaryText}`}>
+                              {formatNumber(xpStats.profile.lifetimeKills)}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                              Deaths
+                            </p>
+                            <p className="mt-1 text-lg font-bold text-white">
+                              {formatNumber(xpStats.profile.lifetimeDeaths)}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                              Teamkills
+                            </p>
+                            <p className="mt-1 text-lg font-bold text-red-300">
+                              {formatNumber(xpStats.profile.lifetimeTeamkills)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className={`my-5 border-t ${theme.softDivider}`} />
+
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.75fr_1.25fr]">
+                        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
+                                Weekly Combat
+                              </p>
+                              <p className="mt-2 text-sm text-gray-400">
+                                {xpStats.weekly.weekStartDate
+                                  ? `${formatShortDate(xpStats.weekly.weekStartDate)} - ${formatShortDate(xpStats.weekly.weekEndAt)}`
+                                  : "No weekly activity"}
+                              </p>
+                            </div>
+
+                            <div className="text-right">
+                              <p className={`text-2xl font-bold ${theme.primaryText}`}>
+                                {formatNumber(xpStats.weekly.xp)}
+                              </p>
+                              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                                Week XP
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-3 gap-3">
+                            <div>
+                              <p className={`text-xl font-bold ${theme.primaryText}`}>
+                                {formatNumber(xpStats.weekly.kills)}
+                              </p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
+                                Kills
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xl font-bold text-white">
+                                {formatNumber(xpStats.weekly.deaths)}
+                              </p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
+                                Deaths
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xl font-bold text-red-300">
+                                {formatNumber(xpStats.weekly.teamkills)}
+                              </p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
+                                Teamkills
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-3">
+                            <div className="rounded-xl border border-[#00ff66]/15 bg-[#00ff66]/5 px-3 py-2">
+                              <p className={`text-sm font-bold ${theme.primaryText}`}>
+                                +{formatNumber(xpStats.weekly.positiveXp)}
+                              </p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
+                                Gained XP
+                              </p>
+                            </div>
+                            <div className="rounded-xl border border-red-500/15 bg-red-500/5 px-3 py-2">
+                              <p className="text-sm font-bold text-red-300">
+                                {formatNumber(xpStats.weekly.negativeXp)}
+                              </p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
+                                Lost XP
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
+                            <span>Infantry: {formatNumber(xpStats.weekly.categories.infantry)}</span>
+                            <span>Specialist: {formatNumber(xpStats.weekly.categories.specialist)}</span>
+                            <span>Vehicles: {formatNumber(xpStats.weekly.categories.vehicle + xpStats.weekly.categories.lightVehicle)}</span>
+                            <span>APC/IFV: {formatNumber(xpStats.weekly.categories.apcIfv)}</span>
+                            <span>Tanks: {formatNumber(xpStats.weekly.categories.tank)}</span>
+                            <span>Aircraft: {formatNumber(xpStats.weekly.categories.aircraft)}</span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
+                              Weekly Targets
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {xpStats.weekly.targets.length} tracked
+                            </p>
+                          </div>
+
+                          {xpStats.weekly.targets.length === 0 ? (
+                            <p className="text-sm text-gray-400">
+                              No target kills recorded this week.
+                            </p>
+                          ) : (
+                            <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                              {xpStats.weekly.targets.map((target) => (
+                                <div
+                                  key={`${target.className}-${target.displayName}`}
+                                  className={`grid grid-cols-[minmax(0,1fr)_auto] gap-4 rounded-xl border ${theme.softDivider} bg-black/30 px-3 py-2`}
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-white">
+                                      {target.displayName || target.className}
+                                    </p>
+                                    <p className="mt-1 truncate font-mono text-[11px] text-gray-500">
+                                      {target.className}
+                                    </p>
+                                  </div>
+
+                                  <div className="text-right">
+                                    <p className={`text-sm font-bold ${theme.primaryText}`}>
+                                      {formatNumber(target.kills)} K
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-gray-400">
+                                      {formatNumber(target.xp)} XP
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>

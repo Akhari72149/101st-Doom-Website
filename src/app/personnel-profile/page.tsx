@@ -194,6 +194,30 @@ export default function PersonnelProfile() {
     setLoadingProfile(false);
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined" || personnel.length === 0) {
+      return;
+    }
+
+    const requestedId = new URLSearchParams(window.location.search).get("id");
+
+    if (!requestedId || selectedPerson?.id === requestedId) {
+      return;
+    }
+
+    const requestedPerson = personnel.find((person) => person.id === requestedId);
+
+    if (!requestedPerson) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      loadProfile(requestedPerson);
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [personnel, selectedPerson?.id]);
+
   const getRankName = useCallback((rankId: string | null) => {
     if (!rankId) return "Unranked";
     const rank = ranks.find((r) => r.id === rankId);

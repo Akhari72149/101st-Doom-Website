@@ -15,6 +15,10 @@ type Event = {
   } | null;
 };
 
+type ServerBookingRow = Omit<Event, "personnel"> & {
+  personnel?: Event["personnel"] | Array<{ name: string }>;
+};
+
 type Server = {
   id: number;
   online: boolean;
@@ -50,6 +54,19 @@ type SiteVersionData = {
   commitUrl?: string;
 };
 
+type XpLeaderboardEntry = {
+  position: number;
+  personnelId: string;
+  name: string;
+  displayedRank: string;
+  totalXp: number;
+  currentLevel: number;
+  kills: number;
+  deaths: number;
+  teamkills: number;
+  lastEventAt: string | null;
+};
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -69,6 +86,9 @@ export default function HomePage() {
   const [siteVersion, setSiteVersion] = useState<SiteVersionData | null>(null);
   const [loadingSiteVersion, setLoadingSiteVersion] = useState(true);
   const [siteVersionOpen, setSiteVersionOpen] = useState(false);
+  const [xpLeaderboard, setXpLeaderboard] = useState<XpLeaderboardEntry[]>([]);
+  const [loadingXpLeaderboard, setLoadingXpLeaderboard] = useState(true);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [time, setTime] = useState(new Date());
@@ -148,13 +168,16 @@ export default function HomePage() {
     fetchServers();
     fetchDailyHighlights();
     fetchSiteVersion();
+    fetchXpLeaderboard();
 
     const serverInterval = setInterval(fetchServers, 10000);
     const highlightInterval = setInterval(fetchDailyHighlights, 60000);
+    const leaderboardInterval = setInterval(fetchXpLeaderboard, 60000);
 
     return () => {
       clearInterval(serverInterval);
       clearInterval(highlightInterval);
+      clearInterval(leaderboardInterval);
     };
   }, []);
 
@@ -361,10 +384,16 @@ export default function HomePage() {
       .lt("start_time", end.toISOString())
       .order("start_time", { ascending: true });
 
-    const safeEvents: Event[] = (bookings || []).map((b: any) => ({
-      ...b,
-      personnel: b.personnel ?? null,
-    }));
+    const safeEvents: Event[] = ((bookings as unknown as ServerBookingRow[]) || []).map((b) => {
+      const relation = Array.isArray(b.personnel)
+        ? b.personnel[0] ?? null
+        : b.personnel ?? null;
+
+      return {
+        ...b,
+        personnel: relation,
+      };
+    });
 
     const now = new Date();
     const selectedIsToday = isSameDay(start, now);
@@ -483,6 +512,32 @@ export default function HomePage() {
     }
   };
 
+  const fetchXpLeaderboard = async () => {
+    try {
+      setLoadingXpLeaderboard(true);
+
+      const res = await fetch("/api/arma/xp-leaderboard", {
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        setXpLeaderboard([]);
+        return;
+      }
+
+      const data = (await res.json()) as {
+        leaderboard?: XpLeaderboardEntry[];
+      };
+
+      setXpLeaderboard(data.leaderboard || []);
+    } catch (err) {
+      console.error("Failed to fetch XP leaderboard", err);
+      setXpLeaderboard([]);
+    } finally {
+      setLoadingXpLeaderboard(false);
+    }
+  };
+
   const changeEventDate = (days: number) => {
     setSelectedEventDate((prev) => {
       const next = new Date(prev);
@@ -561,7 +616,7 @@ export default function HomePage() {
     isSameDay(selectedEventDate, new Date()) && pastEvents.length > 0;
 
   return (
-    <div className="boot relative min-h-screen overflow-x-hidden text-white font-orbitron pb-10 sm:pb-20">
+    <div className="boot relative min-h-screen overflow-x-hidden text-white font-orbitron">
       <div
         className="fixed inset-0 bg-center bg-no-repeat bg-cover opacity-20 pointer-events-none z-0"
         style={{ backgroundImage: "url('/background/bg.jpg')" }}
@@ -897,6 +952,121 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+
+            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
+              <button
+                onClick={() => setLeaderboardOpen((prev) => !prev)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-4 hover:bg-black/40 transition-all"
+              >
+                <span className="text-sm sm:text-base text-[#00ff66] tracking-[0.2em] uppercase">
+                  XP Leaderboard
+                </span>
+
+                <span
+                  className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
+                    leaderboardOpen ? "rotate-180" : "rotate-0"
+                  }`}
+                >
+                  ▼
+                </span>
+              </button>
+
+              <div
+                className={`overflow-hidden transition-all duration-500 ${
+                  leaderboardOpen
+                    ? "max-h-[980px] opacity-100"
+                    : "max-h-0 opacity-0"
+                }`}
+              >
+                <div className="space-y-3 px-4 pb-4">
+                  <div className="rounded-xl border border-[#00ff66]/20 bg-black/55 p-3 text-xs leading-5 text-gray-400">
+                    Link your Steam account to your personnel profile to appear
+                    on the board and earn XP from tracked Arma events.
+                    <button
+                      onClick={() => router.push("/member-link")}
+                      className="ml-2 text-[#00ff66] underline decoration-[#00ff66]/40 underline-offset-4 transition hover:text-white"
+                    >
+                      Link Steam
+                    </button>
+                  </div>
+
+                  {loadingXpLeaderboard ? (
+                    <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4 text-center text-sm text-gray-400 animate-pulse">
+                      Loading XP standings...
+                    </div>
+                  ) : xpLeaderboard.length === 0 ? (
+                    <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4 text-sm text-gray-400">
+                      No XP records yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {xpLeaderboard.slice(0, 5).map((entry) => (
+                        <button
+                          key={entry.personnelId}
+                          onClick={() =>
+                            router.push(`/personnel-profile?id=${entry.personnelId}`)
+                          }
+                          className="group w-full rounded-xl border border-[#00ff66]/20 bg-black/55 p-3 text-left transition hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#00ff66]/30 bg-[#00ff66]/10 text-sm font-bold text-[#00ff66]">
+                                {entry.position}
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="truncate text-[10px] uppercase tracking-[0.14em] text-[#00ff66]">
+                                  {entry.displayedRank}
+                                </div>
+                                <div className="mt-1 truncate text-sm font-semibold text-white group-hover:text-[#00ff66]">
+                                  {entry.name}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 text-right">
+                              <div className="text-[10px] uppercase tracking-[0.14em] text-gray-500">
+                                Lvl
+                              </div>
+                              <div className="text-lg font-bold text-white">
+                                {entry.currentLevel}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-4 gap-2 text-[11px]">
+                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
+                              <div className="text-gray-500">XP</div>
+                              <div className="mt-1 font-bold text-[#00ff66]">
+                                {entry.totalXp.toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
+                              <div className="text-gray-500">K</div>
+                              <div className="mt-1 font-bold text-white">
+                                {entry.kills.toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
+                              <div className="text-gray-500">D</div>
+                              <div className="mt-1 font-bold text-white">
+                                {entry.deaths.toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
+                              <div className="text-gray-500">TK</div>
+                              <div className="mt-1 font-bold text-red-300">
+                                {entry.teamkills.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -970,6 +1140,7 @@ export default function HomePage() {
               ▶
             </button>
           </div>
+
         </main>
 
         <aside className="order-3 w-full xl:w-[400px] xl:min-h-screen border-t xl:border-t-0 xl:border-l border-[#00ff66]/30 p-4 sm:p-6 bg-black/35 backdrop-blur-2xl shadow-2xl flex flex-col">

@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!tools/arma-xp-bridge/.env.example
+
+# Arma XP bridge runtime state
+tools/arma-xp-bridge/bridge-state.json
 
 # vercel
 .vercel

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "arma-xp-bridge": "node tools/arma-xp-bridge/bridge.js",
+    "test:arma-xp-bridge": "node tools/arma-xp-bridge/test-parser.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",

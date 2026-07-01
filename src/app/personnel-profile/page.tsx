@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
@@ -93,9 +94,104 @@ type XpStatsRow = {
   };
 };
 
+type MedicalStatsRow = {
+  profile: {
+    bloodLitres: number;
+    plasmaLitres: number;
+    salineLitres: number;
+    bandages: number;
+    stitchedBodyParts: number;
+    surgeries: number;
+    heartRestarts: number;
+    lungTreatments: number;
+    airwayChecks: number;
+    lastEventAt: string | null;
+  };
+  weekly: {
+    weekStartDate: string | null;
+    weekEndAt: string | null;
+    bloodLitres: number;
+    plasmaLitres: number;
+    salineLitres: number;
+    bandages: number;
+    stitchedBodyParts: number;
+    surgeries: number;
+    heartRestarts: number;
+    lungTreatments: number;
+    airwayChecks: number;
+    lastEventAt: string | null;
+  };
+};
+
 type ActiveTab = "qual" | "trainer" | "rank";
 
-async function fetchXpStats(personnelId: string) {
+const plasmaWaveStyles = `
+@keyframes plasmaWaveDrift {
+  0% {
+    transform: translate3d(-42%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0%, 0, 0);
+  }
+}
+
+@keyframes plasmaWaveSway {
+  0%, 100% {
+    transform: translate3d(-12%, 0, 0) scaleY(1);
+  }
+  50% {
+    transform: translate3d(8%, -2px, 0) scaleY(1.08);
+  }
+}
+
+@keyframes plasmaBubbleRise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.6);
+  }
+  18% {
+    opacity: 0.45;
+  }
+  86% {
+    opacity: 0.28;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--bubble-drift, 8px), -72px, 0) scale(1.15);
+  }
+}
+
+@keyframes plasmaPourIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, -120%, 0) scaleY(0.2);
+  }
+  18% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, 55%, 0) scaleY(1);
+  }
+}
+
+@keyframes plasmaDrainSpiral {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) rotate(0deg) scale(0.35);
+  }
+  20% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, 32%, 0) rotate(540deg) scale(0.08);
+  }
+}
+
+`;
+
+async function fetchCombatStats(personnelId: string) {
   const response = await fetch(
     `/api/personnel/xp-stats?personnelId=${encodeURIComponent(personnelId)}`,
     {
@@ -103,9 +199,15 @@ async function fetchXpStats(personnelId: string) {
     },
   );
 
-  const data = (await response.json()) as { xpStats: XpStatsRow | null };
+  const data = (await response.json()) as {
+    xpStats: XpStatsRow | null;
+    medicalStats: MedicalStatsRow | null;
+  };
 
-  return data.xpStats || null;
+  return {
+    xpStats: data.xpStats || null,
+    medicalStats: data.medicalStats || null,
+  };
 }
 
 function AnimatedNumber({
@@ -113,11 +215,13 @@ function AnimatedNumber({
   prefix = "",
   suffix = "",
   className = "",
+  decimals = 0,
 }: {
   value: number;
   prefix?: string;
   suffix?: string;
   className?: string;
+  decimals?: number;
 }) {
   const [displayValue, setDisplayValue] = useState(value);
   const lastValue = useRef(value);
@@ -137,7 +241,8 @@ function AnimatedNumber({
     const tick = (now: number) => {
       const progress = Math.min((now - startedAt) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      const next = Math.round(from + (to - from) * eased);
+      const factor = 10 ** decimals;
+      const next = Math.round((from + (to - from) * eased) * factor) / factor;
 
       setDisplayValue(next);
 
@@ -151,12 +256,15 @@ function AnimatedNumber({
     frame = requestAnimationFrame(tick);
 
     return () => cancelAnimationFrame(frame);
-  }, [value]);
+  }, [decimals, value]);
 
   return (
     <span className={className}>
       {prefix}
-      {new Intl.NumberFormat().format(displayValue)}
+      {new Intl.NumberFormat(undefined, {
+        maximumFractionDigits: decimals,
+        minimumFractionDigits: decimals,
+      }).format(displayValue)}
       {suffix}
     </span>
   );
@@ -174,6 +282,9 @@ export default function PersonnelProfile() {
   const [statusAudit, setStatusAudit] = useState<StatusAuditRow | null>(null);
   const [steamLink, setSteamLink] = useState<SteamLinkRow | null>(null);
   const [xpStats, setXpStats] = useState<XpStatsRow | null>(null);
+  const [medicalStats, setMedicalStats] = useState<MedicalStatsRow | null>(null);
+  const [plasmaDirection, setPlasmaDirection] = useState<"idle" | "up" | "down">("idle");
+  const lastPlasmaLitres = useRef<number | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("qual");
   const [loadingProfile, setLoadingProfile] = useState(false);
   const selectedPersonId = selectedPerson?.id;
@@ -200,6 +311,9 @@ export default function PersonnelProfile() {
     setStatusAudit(null);
     setSteamLink(null);
     setXpStats(null);
+    setMedicalStats(null);
+    setPlasmaDirection("idle");
+    lastPlasmaLitres.current = null;
     setLoadingProfile(true);
     setActiveTab("qual");
 
@@ -249,7 +363,7 @@ export default function PersonnelProfile() {
           cache: "no-store",
         }).then((response) => response.json() as Promise<{ steamLink: SteamLinkRow | null }>),
 
-        fetchXpStats(person.id).then((xpStats) => ({ xpStats })),
+        fetchCombatStats(person.id),
       ]);
 
     setCertifications((certResult.data as CertificationRow[]) || []);
@@ -257,6 +371,7 @@ export default function PersonnelProfile() {
     setStatusAudit((auditResult.data as StatusAuditRow) || null);
     setSteamLink(steamResponse.steamLink || null);
     setXpStats(xpResponse.xpStats || null);
+    setMedicalStats(xpResponse.medicalStats || null);
     setLoadingProfile(false);
   };
 
@@ -269,10 +384,11 @@ export default function PersonnelProfile() {
 
     const interval = window.setInterval(async () => {
       try {
-        const latestXpStats = await fetchXpStats(selectedPersonId);
+        const latestStats = await fetchCombatStats(selectedPersonId);
 
         if (active) {
-          setXpStats(latestXpStats);
+          setXpStats(latestStats.xpStats);
+          setMedicalStats(latestStats.medicalStats);
         }
       } catch (error) {
         console.error("Failed to refresh XP stats", error);
@@ -284,6 +400,34 @@ export default function PersonnelProfile() {
       window.clearInterval(interval);
     };
   }, [selectedPersonId]);
+
+  useEffect(() => {
+    const currentPlasmaLitres = medicalStats?.profile.plasmaLitres;
+
+    if (currentPlasmaLitres === undefined) {
+      return;
+    }
+
+    const previousPlasmaLitres = lastPlasmaLitres.current;
+    lastPlasmaLitres.current = currentPlasmaLitres;
+
+    if (previousPlasmaLitres === null || previousPlasmaLitres === currentPlasmaLitres) {
+      return;
+    }
+
+    const directionTimeout = window.setTimeout(() => {
+      setPlasmaDirection(currentPlasmaLitres > previousPlasmaLitres ? "up" : "down");
+    }, 0);
+
+    const timeout = window.setTimeout(() => {
+      setPlasmaDirection("idle");
+    }, 900);
+
+    return () => {
+      window.clearTimeout(directionTimeout);
+      window.clearTimeout(timeout);
+    };
+  }, [medicalStats?.profile.plasmaLitres]);
 
   useEffect(() => {
     if (typeof window === "undefined" || personnel.length === 0) {
@@ -525,6 +669,7 @@ export default function PersonnelProfile() {
     <div
       className={`min-h-screen ${theme.pageBg} px-4 py-8 text-[#eafff2] sm:px-6 lg:px-10`}
     >
+      <style>{plasmaWaveStyles}</style>
       <div className="mx-auto max-w-[1800px]">
         <button
           onClick={() => router.push("/pcs")}
@@ -1143,6 +1288,218 @@ export default function PersonnelProfile() {
                               ))}
                             </div>
                           )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {medicalStats && (
+                    <div
+                      className={`mt-5 rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-5`}
+                    >
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-gray-400">
+                            Medical Tracking
+                          </p>
+                          <p className="mt-2 text-sm text-gray-400">
+                            {medicalStats.weekly.weekStartDate
+                              ? `${formatShortDate(medicalStats.weekly.weekStartDate)} - ${formatShortDate(medicalStats.weekly.weekEndAt)}`
+                              : "No weekly medical activity"}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 sm:min-w-[420px]">
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                              Bandages
+                            </p>
+                            <AnimatedNumber
+                              value={medicalStats.profile.bandages}
+                              className={`mt-1 block text-lg font-bold ${theme.primaryText}`}
+                            />
+                          </div>
+
+                          <div className="relative overflow-hidden rounded-xl border border-red-500/20 bg-white/[0.03] px-3 py-2">
+                            <div
+                              className="absolute inset-x-0 bottom-0 overflow-hidden bg-gradient-to-t from-red-700/55 via-red-500/35 to-red-300/20 transition-[height] duration-700 ease-out"
+                              style={{
+                                height: `${Math.min(
+                                  100,
+                                  Math.max(0, (medicalStats.profile.plasmaLitres / 200) * 100),
+                                )}%`,
+                              }}
+                            >
+                              <div
+                                className="absolute -top-4 left-0 h-7 w-[180%] opacity-65 blur-[0.2px]"
+                                style={{
+                                  animation: "plasmaWaveDrift 9.5s ease-in-out infinite alternate",
+                                  background:
+                                    "radial-gradient(48px 15px at 24px 54%, rgba(255,215,215,0.36) 0%, rgba(255,215,215,0.2) 45%, transparent 72%) repeat-x",
+                                  backgroundSize: "113px 30px",
+                                }}
+                              />
+                              <div
+                                className="absolute -top-2 left-0 h-5 w-[150%] opacity-40"
+                                style={{
+                                  animation: "plasmaWaveSway 6.8s ease-in-out infinite",
+                                  background:
+                                    "radial-gradient(62px 13px at 31px 50%, rgba(100,0,0,0.32) 0%, rgba(100,0,0,0.18) 45%, transparent 74%) repeat-x",
+                                  backgroundSize: "147px 26px",
+                                }}
+                              />
+                              {[
+                                { left: "18%", size: 4, delay: "0s", duration: "5.8s", drift: "7px" },
+                                { left: "38%", size: 3, delay: "1.4s", duration: "6.6s", drift: "-6px" },
+                                { left: "61%", size: 5, delay: "0.8s", duration: "7.2s", drift: "10px" },
+                                { left: "78%", size: 3, delay: "2.2s", duration: "6.1s", drift: "-8px" },
+                              ].map((bubble) => (
+                                <span
+                                  key={`${bubble.left}-${bubble.delay}`}
+                                  className="absolute bottom-1 rounded-full border border-red-100/25 bg-red-50/25"
+                                  style={{
+                                    left: bubble.left,
+                                    width: bubble.size,
+                                    height: bubble.size,
+                                    animation: `plasmaBubbleRise ${bubble.duration} ease-in infinite`,
+                                    animationDelay: bubble.delay,
+                                    "--bubble-drift": bubble.drift,
+                                  } as CSSProperties}
+                                />
+                              ))}
+                            </div>
+                            {plasmaDirection === "up" && (
+                              <div
+                                className="pointer-events-none absolute left-1/2 top-0 h-[120%] w-4 rounded-full bg-gradient-to-b from-red-100/70 via-red-400/50 to-red-700/0 blur-[1px]"
+                                style={{ animation: "plasmaPourIn 0.9s ease-out both" }}
+                              />
+                            )}
+                            {plasmaDirection === "down" && (
+                              <div
+                                className="pointer-events-none absolute left-1/2 top-1/2 h-14 w-14 rounded-full border-4 border-red-200/50 border-b-transparent border-l-red-800/45 blur-[0.2px]"
+                                style={{ animation: "plasmaDrainSpiral 0.9s ease-in both" }}
+                              />
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 h-px bg-red-200/40" />
+                            <div className="relative">
+                              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                                Plasma
+                              </p>
+                              <AnimatedNumber
+                                value={medicalStats.profile.plasmaLitres}
+                                decimals={2}
+                                suffix=" L"
+                                className="mt-1 block text-lg font-bold text-white"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                              Hearts
+                            </p>
+                            <AnimatedNumber
+                              value={medicalStats.profile.heartRestarts}
+                              className="mt-1 block text-lg font-bold text-red-300"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className={`my-5 border-t ${theme.softDivider}`} />
+
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
+                            Weekly Medical
+                          </p>
+
+                          <div className="mt-4 grid grid-cols-2 gap-3">
+                            <div>
+                              <AnimatedNumber
+                                value={medicalStats.weekly.bandages}
+                                className={`block text-xl font-bold ${theme.primaryText}`}
+                              />
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
+                                Bandages
+                              </p>
+                            </div>
+                            <div>
+                              <AnimatedNumber
+                                value={medicalStats.weekly.plasmaLitres}
+                                decimals={2}
+                                suffix=" L"
+                                className="block text-xl font-bold text-white"
+                              />
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
+                                Plasma
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
+                            <span>
+                              Stitched:{" "}
+                              <AnimatedNumber value={medicalStats.weekly.stitchedBodyParts} />
+                            </span>
+                            <span>
+                              Surgeries:{" "}
+                              <AnimatedNumber value={medicalStats.weekly.surgeries} />
+                            </span>
+                            <span>
+                              Heart restarts:{" "}
+                              <AnimatedNumber value={medicalStats.weekly.heartRestarts} />
+                            </span>
+                            <span>
+                              Lungs treated:{" "}
+                              <AnimatedNumber value={medicalStats.weekly.lungTreatments} />
+                            </span>
+                            <span>
+                              Airways checked:{" "}
+                              <AnimatedNumber value={medicalStats.weekly.airwayChecks} />
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
+                            Lifetime Medical
+                          </p>
+
+                          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
+                            <span>
+                              Plasma pushed:{" "}
+                              <AnimatedNumber
+                                value={medicalStats.profile.plasmaLitres}
+                                decimals={2}
+                                suffix=" L"
+                              />
+                            </span>
+                            <span>
+                              Bandages:{" "}
+                              <AnimatedNumber value={medicalStats.profile.bandages} />
+                            </span>
+                            <span>
+                              Stitched:{" "}
+                              <AnimatedNumber value={medicalStats.profile.stitchedBodyParts} />
+                            </span>
+                            <span>
+                              Surgeries:{" "}
+                              <AnimatedNumber value={medicalStats.profile.surgeries} />
+                            </span>
+                            <span>
+                              Heart restarts:{" "}
+                              <AnimatedNumber value={medicalStats.profile.heartRestarts} />
+                            </span>
+                            <span>
+                              Lungs treated:{" "}
+                              <AnimatedNumber value={medicalStats.profile.lungTreatments} />
+                            </span>
+                            <span>
+                              Airways checked:{" "}
+                              <AnimatedNumber value={medicalStats.profile.airwayChecks} />
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>

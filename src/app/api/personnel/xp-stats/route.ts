@@ -54,6 +54,39 @@ type WeeklyTargetRow = {
   last_killed_at: string | null;
 };
 
+type MedicalProfileRow = {
+  lifetime_blood_litres: number | string;
+  lifetime_plasma_litres: number | string;
+  lifetime_saline_litres: number | string;
+  lifetime_bandage_count: number;
+  lifetime_stitched_body_part_count: number;
+  lifetime_surgery_count: number;
+  lifetime_heart_restart_count: number;
+  lifetime_lung_treatment_count: number;
+  lifetime_airway_check_count: number;
+  last_event_at: string | null;
+};
+
+type MedicalWeeklyRow = {
+  week_start_date: string;
+  week_end_at: string;
+  week_blood_litres: number | string;
+  week_plasma_litres: number | string;
+  week_saline_litres: number | string;
+  week_bandage_count: number;
+  week_stitched_body_part_count: number;
+  week_surgery_count: number;
+  week_heart_restart_count: number;
+  week_lung_treatment_count: number;
+  week_airway_check_count: number;
+  last_event_at: string | null;
+};
+
+function numeric(value: number | string | null | undefined) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function emptyProfile() {
   return {
     totalXp: 0,
@@ -98,6 +131,38 @@ function emptyWeekly() {
   };
 }
 
+function emptyMedicalProfile() {
+  return {
+    bloodLitres: 0,
+    plasmaLitres: 0,
+    salineLitres: 0,
+    bandages: 0,
+    stitchedBodyParts: 0,
+    surgeries: 0,
+    heartRestarts: 0,
+    lungTreatments: 0,
+    airwayChecks: 0,
+    lastEventAt: null,
+  };
+}
+
+function emptyMedicalWeekly() {
+  return {
+    weekStartDate: null,
+    weekEndAt: null,
+    bloodLitres: 0,
+    plasmaLitres: 0,
+    salineLitres: 0,
+    bandages: 0,
+    stitchedBodyParts: 0,
+    surgeries: 0,
+    heartRestarts: 0,
+    lungTreatments: 0,
+    airwayChecks: 0,
+    lastEventAt: null,
+  };
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const personnelId = url.searchParams.get("personnelId") || "";
@@ -109,7 +174,13 @@ export async function GET(request: Request) {
     );
   }
 
-  const [{ data: profile }, { data: weekly }, { data: targets }] =
+  const [
+    { data: profile },
+    { data: weekly },
+    { data: targets },
+    { data: medicalProfile },
+    { data: medicalWeekly },
+  ] =
     await Promise.all([
       supabaseAdmin
         .from("personnel_xp_profiles")
@@ -155,6 +226,46 @@ export async function GET(request: Request) {
         .order("kill_count", { ascending: false })
         .limit(12)
         .returns<WeeklyTargetRow[]>(),
+
+      supabaseAdmin
+        .from("personnel_medical_profiles")
+        .select(
+          [
+            "lifetime_blood_litres",
+            "lifetime_plasma_litres",
+            "lifetime_saline_litres",
+            "lifetime_bandage_count",
+            "lifetime_stitched_body_part_count",
+            "lifetime_surgery_count",
+            "lifetime_heart_restart_count",
+            "lifetime_lung_treatment_count",
+            "lifetime_airway_check_count",
+            "last_event_at",
+          ].join(","),
+        )
+        .eq("personnel_id", personnelId)
+        .maybeSingle<MedicalProfileRow>(),
+
+      supabaseAdmin
+        .from("personnel_medical_weekly_stats")
+        .select(
+          [
+            "week_start_date",
+            "week_end_at",
+            "week_blood_litres",
+            "week_plasma_litres",
+            "week_saline_litres",
+            "week_bandage_count",
+            "week_stitched_body_part_count",
+            "week_surgery_count",
+            "week_heart_restart_count",
+            "week_lung_treatment_count",
+            "week_airway_check_count",
+            "last_event_at",
+          ].join(","),
+        )
+        .eq("personnel_id", personnelId)
+        .maybeSingle<MedicalWeeklyRow>(),
     ]);
 
   const profileStats = profile
@@ -208,11 +319,51 @@ export async function GET(request: Request) {
         }
       : emptyWeekly();
 
+  const medicalProfileStats = medicalProfile
+    ? {
+        bloodLitres: numeric(medicalProfile.lifetime_blood_litres),
+        plasmaLitres: numeric(medicalProfile.lifetime_plasma_litres),
+        salineLitres: numeric(medicalProfile.lifetime_saline_litres),
+        bandages: medicalProfile.lifetime_bandage_count,
+        stitchedBodyParts: medicalProfile.lifetime_stitched_body_part_count,
+        surgeries: medicalProfile.lifetime_surgery_count,
+        heartRestarts: medicalProfile.lifetime_heart_restart_count,
+        lungTreatments: medicalProfile.lifetime_lung_treatment_count,
+        airwayChecks: medicalProfile.lifetime_airway_check_count,
+        lastEventAt: medicalProfile.last_event_at,
+      }
+    : emptyMedicalProfile();
+
+  const medicalWeeklyIsCurrent =
+    medicalWeekly?.week_end_at && new Date(medicalWeekly.week_end_at).getTime() > now;
+
+  const medicalWeeklyStats =
+    medicalWeekly && medicalWeeklyIsCurrent
+      ? {
+          weekStartDate: medicalWeekly.week_start_date,
+          weekEndAt: medicalWeekly.week_end_at,
+          bloodLitres: numeric(medicalWeekly.week_blood_litres),
+          plasmaLitres: numeric(medicalWeekly.week_plasma_litres),
+          salineLitres: numeric(medicalWeekly.week_saline_litres),
+          bandages: medicalWeekly.week_bandage_count,
+          stitchedBodyParts: medicalWeekly.week_stitched_body_part_count,
+          surgeries: medicalWeekly.week_surgery_count,
+          heartRestarts: medicalWeekly.week_heart_restart_count,
+          lungTreatments: medicalWeekly.week_lung_treatment_count,
+          airwayChecks: medicalWeekly.week_airway_check_count,
+          lastEventAt: medicalWeekly.last_event_at,
+        }
+      : emptyMedicalWeekly();
+
   return NextResponse.json(
     {
       xpStats: {
         profile: profileStats,
         weekly: weeklyStats,
+      },
+      medicalStats: {
+        profile: medicalProfileStats,
+        weekly: medicalWeeklyStats,
       },
     },
     { headers: noStoreHeaders },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
@@ -95,6 +95,73 @@ type XpStatsRow = {
 
 type ActiveTab = "qual" | "trainer" | "rank";
 
+async function fetchXpStats(personnelId: string) {
+  const response = await fetch(
+    `/api/personnel/xp-stats?personnelId=${encodeURIComponent(personnelId)}`,
+    {
+      cache: "no-store",
+    },
+  );
+
+  const data = (await response.json()) as { xpStats: XpStatsRow | null };
+
+  return data.xpStats || null;
+}
+
+function AnimatedNumber({
+  value,
+  prefix = "",
+  suffix = "",
+  className = "",
+}: {
+  value: number;
+  prefix?: string;
+  suffix?: string;
+  className?: string;
+}) {
+  const [displayValue, setDisplayValue] = useState(value);
+  const lastValue = useRef(value);
+
+  useEffect(() => {
+    const from = lastValue.current;
+    const to = value;
+
+    if (from === to) {
+      return;
+    }
+
+    const duration = 700;
+    const startedAt = performance.now();
+    let frame = 0;
+
+    const tick = (now: number) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const next = Math.round(from + (to - from) * eased);
+
+      setDisplayValue(next);
+
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+      } else {
+        lastValue.current = to;
+      }
+    };
+
+    frame = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return (
+    <span className={className}>
+      {prefix}
+      {new Intl.NumberFormat().format(displayValue)}
+      {suffix}
+    </span>
+  );
+}
+
 export default function PersonnelProfile() {
   const router = useRouter();
 
@@ -109,6 +176,7 @@ export default function PersonnelProfile() {
   const [xpStats, setXpStats] = useState<XpStatsRow | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("qual");
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const selectedPersonId = selectedPerson?.id;
 
   useEffect(() => {
     let active = true;
@@ -181,9 +249,7 @@ export default function PersonnelProfile() {
           cache: "no-store",
         }).then((response) => response.json() as Promise<{ steamLink: SteamLinkRow | null }>),
 
-        fetch(`/api/personnel/xp-stats?personnelId=${encodeURIComponent(person.id)}`, {
-          cache: "no-store",
-        }).then((response) => response.json() as Promise<{ xpStats: XpStatsRow | null }>),
+        fetchXpStats(person.id).then((xpStats) => ({ xpStats })),
       ]);
 
     setCertifications((certResult.data as CertificationRow[]) || []);
@@ -195,13 +261,38 @@ export default function PersonnelProfile() {
   };
 
   useEffect(() => {
+    if (!selectedPersonId) {
+      return;
+    }
+
+    let active = true;
+
+    const interval = window.setInterval(async () => {
+      try {
+        const latestXpStats = await fetchXpStats(selectedPersonId);
+
+        if (active) {
+          setXpStats(latestXpStats);
+        }
+      } catch (error) {
+        console.error("Failed to refresh XP stats", error);
+      }
+    }, 10000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [selectedPersonId]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || personnel.length === 0) {
       return;
     }
 
     const requestedId = new URLSearchParams(window.location.search).get("id");
 
-    if (!requestedId || selectedPerson?.id === requestedId) {
+    if (!requestedId || selectedPersonId === requestedId) {
       return;
     }
 
@@ -216,7 +307,7 @@ export default function PersonnelProfile() {
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [personnel, selectedPerson?.id]);
+  }, [personnel, selectedPersonId]);
 
   const getRankName = useCallback((rankId: string | null) => {
     if (!rankId) return "Unranked";
@@ -241,9 +332,6 @@ export default function PersonnelProfile() {
 
   const formatDate = (date: string | null) =>
     date ? new Date(date).toLocaleDateString() : "N/A";
-
-  const formatNumber = (value: number | null | undefined) =>
-    new Intl.NumberFormat().format(value || 0);
 
   const formatShortDate = (date: string | null) =>
     date
@@ -844,7 +932,8 @@ export default function PersonnelProfile() {
                           <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2">
                             <div>
                               <p className={`text-4xl font-bold ${theme.primaryText}`}>
-                                Level {xpStats.profile.currentLevel}
+                                Level{" "}
+                                <AnimatedNumber value={xpStats.profile.currentLevel} />
                               </p>
                               <p className="mt-1 text-xs uppercase tracking-[0.18em] text-gray-500">
                                 XP Rank
@@ -852,9 +941,10 @@ export default function PersonnelProfile() {
                             </div>
 
                             <div>
-                              <p className="text-2xl font-bold text-white">
-                                {formatNumber(xpStats.profile.totalXp)}
-                              </p>
+                              <AnimatedNumber
+                                value={xpStats.profile.totalXp}
+                                className="block text-2xl font-bold text-white"
+                              />
                               <p className="mt-1 text-xs uppercase tracking-[0.18em] text-gray-500">
                                 Total XP
                               </p>
@@ -867,27 +957,30 @@ export default function PersonnelProfile() {
                             <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
                               Kills
                             </p>
-                            <p className={`mt-1 text-lg font-bold ${theme.primaryText}`}>
-                              {formatNumber(xpStats.profile.lifetimeKills)}
-                            </p>
+                            <AnimatedNumber
+                              value={xpStats.profile.lifetimeKills}
+                              className={`mt-1 block text-lg font-bold ${theme.primaryText}`}
+                            />
                           </div>
 
                           <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
                             <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
                               Deaths
                             </p>
-                            <p className="mt-1 text-lg font-bold text-white">
-                              {formatNumber(xpStats.profile.lifetimeDeaths)}
-                            </p>
+                            <AnimatedNumber
+                              value={xpStats.profile.lifetimeDeaths}
+                              className="mt-1 block text-lg font-bold text-white"
+                            />
                           </div>
 
                           <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
                             <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
                               Teamkills
                             </p>
-                            <p className="mt-1 text-lg font-bold text-red-300">
-                              {formatNumber(xpStats.profile.lifetimeTeamkills)}
-                            </p>
+                            <AnimatedNumber
+                              value={xpStats.profile.lifetimeTeamkills}
+                              className="mt-1 block text-lg font-bold text-red-300"
+                            />
                           </div>
                         </div>
                       </div>
@@ -909,9 +1002,10 @@ export default function PersonnelProfile() {
                             </div>
 
                             <div className="text-right">
-                              <p className={`text-2xl font-bold ${theme.primaryText}`}>
-                                {formatNumber(xpStats.weekly.xp)}
-                              </p>
+                              <AnimatedNumber
+                                value={xpStats.weekly.xp}
+                                className={`block text-2xl font-bold ${theme.primaryText}`}
+                              />
                               <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
                                 Week XP
                               </p>
@@ -920,25 +1014,28 @@ export default function PersonnelProfile() {
 
                           <div className="mt-4 grid grid-cols-3 gap-3">
                             <div>
-                              <p className={`text-xl font-bold ${theme.primaryText}`}>
-                                {formatNumber(xpStats.weekly.kills)}
-                              </p>
+                              <AnimatedNumber
+                                value={xpStats.weekly.kills}
+                                className={`block text-xl font-bold ${theme.primaryText}`}
+                              />
                               <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
                                 Kills
                               </p>
                             </div>
                             <div>
-                              <p className="text-xl font-bold text-white">
-                                {formatNumber(xpStats.weekly.deaths)}
-                              </p>
+                              <AnimatedNumber
+                                value={xpStats.weekly.deaths}
+                                className="block text-xl font-bold text-white"
+                              />
                               <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
                                 Deaths
                               </p>
                             </div>
                             <div>
-                              <p className="text-xl font-bold text-red-300">
-                                {formatNumber(xpStats.weekly.teamkills)}
-                              </p>
+                              <AnimatedNumber
+                                value={xpStats.weekly.teamkills}
+                                className="block text-xl font-bold text-red-300"
+                              />
                               <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
                                 Teamkills
                               </p>
@@ -947,17 +1044,20 @@ export default function PersonnelProfile() {
 
                           <div className="mt-4 grid grid-cols-2 gap-3">
                             <div className="rounded-xl border border-[#00ff66]/15 bg-[#00ff66]/5 px-3 py-2">
-                              <p className={`text-sm font-bold ${theme.primaryText}`}>
-                                +{formatNumber(xpStats.weekly.positiveXp)}
-                              </p>
+                              <AnimatedNumber
+                                value={xpStats.weekly.positiveXp}
+                                prefix="+"
+                                className={`block text-sm font-bold ${theme.primaryText}`}
+                              />
                               <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
                                 Gained XP
                               </p>
                             </div>
                             <div className="rounded-xl border border-red-500/15 bg-red-500/5 px-3 py-2">
-                              <p className="text-sm font-bold text-red-300">
-                                {formatNumber(xpStats.weekly.negativeXp)}
-                              </p>
+                              <AnimatedNumber
+                                value={xpStats.weekly.negativeXp}
+                                className="block text-sm font-bold text-red-300"
+                              />
                               <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">
                                 Lost XP
                               </p>
@@ -965,12 +1065,35 @@ export default function PersonnelProfile() {
                           </div>
 
                           <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
-                            <span>Infantry: {formatNumber(xpStats.weekly.categories.infantry)}</span>
-                            <span>Specialist: {formatNumber(xpStats.weekly.categories.specialist)}</span>
-                            <span>Vehicles: {formatNumber(xpStats.weekly.categories.vehicle + xpStats.weekly.categories.lightVehicle)}</span>
-                            <span>APC/IFV: {formatNumber(xpStats.weekly.categories.apcIfv)}</span>
-                            <span>Tanks: {formatNumber(xpStats.weekly.categories.tank)}</span>
-                            <span>Aircraft: {formatNumber(xpStats.weekly.categories.aircraft)}</span>
+                            <span>
+                              Infantry:{" "}
+                              <AnimatedNumber value={xpStats.weekly.categories.infantry} />
+                            </span>
+                            <span>
+                              Specialist:{" "}
+                              <AnimatedNumber value={xpStats.weekly.categories.specialist} />
+                            </span>
+                            <span>
+                              Vehicles:{" "}
+                              <AnimatedNumber
+                                value={
+                                  xpStats.weekly.categories.vehicle +
+                                  xpStats.weekly.categories.lightVehicle
+                                }
+                              />
+                            </span>
+                            <span>
+                              APC/IFV:{" "}
+                              <AnimatedNumber value={xpStats.weekly.categories.apcIfv} />
+                            </span>
+                            <span>
+                              Tanks:{" "}
+                              <AnimatedNumber value={xpStats.weekly.categories.tank} />
+                            </span>
+                            <span>
+                              Aircraft:{" "}
+                              <AnimatedNumber value={xpStats.weekly.categories.aircraft} />
+                            </span>
                           </div>
                         </div>
 
@@ -980,7 +1103,7 @@ export default function PersonnelProfile() {
                               Weekly Targets
                             </p>
                             <p className="text-xs text-gray-500">
-                              {xpStats.weekly.targets.length} tracked
+                              <AnimatedNumber value={xpStats.weekly.targets.length} /> tracked
                             </p>
                           </div>
 
@@ -1005,12 +1128,16 @@ export default function PersonnelProfile() {
                                   </div>
 
                                   <div className="text-right">
-                                    <p className={`text-sm font-bold ${theme.primaryText}`}>
-                                      {formatNumber(target.kills)} K
-                                    </p>
-                                    <p className="mt-1 text-[11px] text-gray-400">
-                                      {formatNumber(target.xp)} XP
-                                    </p>
+                                    <AnimatedNumber
+                                      value={target.kills}
+                                      suffix=" K"
+                                      className={`block text-sm font-bold ${theme.primaryText}`}
+                                    />
+                                    <AnimatedNumber
+                                      value={target.xp}
+                                      suffix=" XP"
+                                      className="mt-1 block text-[11px] text-gray-400"
+                                    />
                                   </div>
                                 </div>
                               ))}

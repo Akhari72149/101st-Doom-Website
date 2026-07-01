@@ -14,6 +14,9 @@ const VALID_MEDICAL_METRICS = new Set([
   "HEART_RESTARTED",
   "LUNG_TREATED",
   "AIRWAY_CHECKED",
+  "FRACTURE_CHECKED",
+  "ULTRASOUND_SCAN",
+  "CHEST_SEAL_APPLIED",
 ]);
 
 export type ArmaMedicalPayload = {

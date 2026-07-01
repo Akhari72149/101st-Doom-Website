@@ -105,6 +105,9 @@ type MedicalStatsRow = {
     heartRestarts: number;
     lungTreatments: number;
     airwayChecks: number;
+    fractureChecks: number;
+    ultrasoundScans: number;
+    chestSeals: number;
     lastEventAt: string | null;
   };
   weekly: {
@@ -119,6 +122,9 @@ type MedicalStatsRow = {
     heartRestarts: number;
     lungTreatments: number;
     airwayChecks: number;
+    fractureChecks: number;
+    ultrasoundScans: number;
+    chestSeals: number;
     lastEventAt: string | null;
   };
 };
@@ -1458,6 +1464,18 @@ export default function PersonnelProfile() {
                               Airways checked:{" "}
                               <AnimatedNumber value={medicalStats.weekly.airwayChecks} />
                             </span>
+                            <span>
+                              Fractures checked:{" "}
+                              <AnimatedNumber value={medicalStats.weekly.fractureChecks} />
+                            </span>
+                            <span>
+                              Ultrasound scans:{" "}
+                              <AnimatedNumber value={medicalStats.weekly.ultrasoundScans} />
+                            </span>
+                            <span>
+                              Chest seals:{" "}
+                              <AnimatedNumber value={medicalStats.weekly.chestSeals} />
+                            </span>
                           </div>
                         </div>
 
@@ -1498,6 +1516,18 @@ export default function PersonnelProfile() {
                             <span>
                               Airways checked:{" "}
                               <AnimatedNumber value={medicalStats.profile.airwayChecks} />
+                            </span>
+                            <span>
+                              Fractures checked:{" "}
+                              <AnimatedNumber value={medicalStats.profile.fractureChecks} />
+                            </span>
+                            <span>
+                              Ultrasound scans:{" "}
+                              <AnimatedNumber value={medicalStats.profile.ultrasoundScans} />
+                            </span>
+                            <span>
+                              Chest seals:{" "}
+                              <AnimatedNumber value={medicalStats.profile.chestSeals} />
                             </span>
                           </div>
                         </div>

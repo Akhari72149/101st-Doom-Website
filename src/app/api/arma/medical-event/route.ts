@@ -30,6 +30,9 @@ type RecordArmaMedicalEventResult = {
   lifetime_heart_restart_count: number | null;
   lifetime_lung_treatment_count: number | null;
   lifetime_airway_check_count: number | null;
+  lifetime_fracture_check_count: number | null;
+  lifetime_ultrasound_scan_count: number | null;
+  lifetime_chest_seal_count: number | null;
   week_blood_litres: number | string | null;
   week_plasma_litres: number | string | null;
   week_saline_litres: number | string | null;
@@ -39,6 +42,9 @@ type RecordArmaMedicalEventResult = {
   week_heart_restart_count: number | null;
   week_lung_treatment_count: number | null;
   week_airway_check_count: number | null;
+  week_fracture_check_count: number | null;
+  week_ultrasound_scan_count: number | null;
+  week_chest_seal_count: number | null;
   week_start_date: string | null;
   week_end_at: string | null;
   reason: string;
@@ -169,6 +175,9 @@ export async function POST(request: Request) {
         heartRestarts: data.lifetime_heart_restart_count || 0,
         lungTreatments: data.lifetime_lung_treatment_count || 0,
         airwayChecks: data.lifetime_airway_check_count || 0,
+        fractureChecks: data.lifetime_fracture_check_count || 0,
+        ultrasoundScans: data.lifetime_ultrasound_scan_count || 0,
+        chestSeals: data.lifetime_chest_seal_count || 0,
       },
       weekly: {
         weekStartDate: data.week_start_date,
@@ -183,6 +192,9 @@ export async function POST(request: Request) {
         heartRestarts: data.week_heart_restart_count || 0,
         lungTreatments: data.week_lung_treatment_count || 0,
         airwayChecks: data.week_airway_check_count || 0,
+        fractureChecks: data.week_fracture_check_count || 0,
+        ultrasoundScans: data.week_ultrasound_scan_count || 0,
+        chestSeals: data.week_chest_seal_count || 0,
       },
     },
   });

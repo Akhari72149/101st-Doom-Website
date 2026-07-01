@@ -64,6 +64,9 @@ type MedicalProfileRow = {
   lifetime_heart_restart_count: number;
   lifetime_lung_treatment_count: number;
   lifetime_airway_check_count: number;
+  lifetime_fracture_check_count: number;
+  lifetime_ultrasound_scan_count: number;
+  lifetime_chest_seal_count: number;
   last_event_at: string | null;
 };
 
@@ -79,6 +82,9 @@ type MedicalWeeklyRow = {
   week_heart_restart_count: number;
   week_lung_treatment_count: number;
   week_airway_check_count: number;
+  week_fracture_check_count: number;
+  week_ultrasound_scan_count: number;
+  week_chest_seal_count: number;
   last_event_at: string | null;
 };
 
@@ -142,6 +148,9 @@ function emptyMedicalProfile() {
     heartRestarts: 0,
     lungTreatments: 0,
     airwayChecks: 0,
+    fractureChecks: 0,
+    ultrasoundScans: 0,
+    chestSeals: 0,
     lastEventAt: null,
   };
 }
@@ -159,6 +168,9 @@ function emptyMedicalWeekly() {
     heartRestarts: 0,
     lungTreatments: 0,
     airwayChecks: 0,
+    fractureChecks: 0,
+    ultrasoundScans: 0,
+    chestSeals: 0,
     lastEventAt: null,
   };
 }
@@ -240,6 +252,9 @@ export async function GET(request: Request) {
             "lifetime_heart_restart_count",
             "lifetime_lung_treatment_count",
             "lifetime_airway_check_count",
+            "lifetime_fracture_check_count",
+            "lifetime_ultrasound_scan_count",
+            "lifetime_chest_seal_count",
             "last_event_at",
           ].join(","),
         )
@@ -261,6 +276,9 @@ export async function GET(request: Request) {
             "week_heart_restart_count",
             "week_lung_treatment_count",
             "week_airway_check_count",
+            "week_fracture_check_count",
+            "week_ultrasound_scan_count",
+            "week_chest_seal_count",
             "last_event_at",
           ].join(","),
         )
@@ -330,6 +348,9 @@ export async function GET(request: Request) {
         heartRestarts: medicalProfile.lifetime_heart_restart_count,
         lungTreatments: medicalProfile.lifetime_lung_treatment_count,
         airwayChecks: medicalProfile.lifetime_airway_check_count,
+        fractureChecks: medicalProfile.lifetime_fracture_check_count,
+        ultrasoundScans: medicalProfile.lifetime_ultrasound_scan_count,
+        chestSeals: medicalProfile.lifetime_chest_seal_count,
         lastEventAt: medicalProfile.last_event_at,
       }
     : emptyMedicalProfile();
@@ -351,6 +372,9 @@ export async function GET(request: Request) {
           heartRestarts: medicalWeekly.week_heart_restart_count,
           lungTreatments: medicalWeekly.week_lung_treatment_count,
           airwayChecks: medicalWeekly.week_airway_check_count,
+          fractureChecks: medicalWeekly.week_fracture_check_count,
+          ultrasoundScans: medicalWeekly.week_ultrasound_scan_count,
+          chestSeals: medicalWeekly.week_chest_seal_count,
           lastEventAt: medicalWeekly.last_event_at,
         }
       : emptyMedicalWeekly();

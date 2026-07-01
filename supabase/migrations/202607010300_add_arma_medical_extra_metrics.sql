@@ -1,81 +1,12 @@
-create table if not exists public.personnel_medical_profiles (
-  personnel_id uuid primary key references public.personnel(id) on delete cascade,
-  lifetime_blood_litres numeric(10,2) not null default 0 check (lifetime_blood_litres >= 0),
-  lifetime_plasma_litres numeric(10,2) not null default 0 check (lifetime_plasma_litres >= 0),
-  lifetime_saline_litres numeric(10,2) not null default 0 check (lifetime_saline_litres >= 0),
-  lifetime_bandage_count integer not null default 0 check (lifetime_bandage_count >= 0),
-  lifetime_stitched_body_part_count integer not null default 0 check (lifetime_stitched_body_part_count >= 0),
-  lifetime_surgery_count integer not null default 0 check (lifetime_surgery_count >= 0),
-  lifetime_heart_restart_count integer not null default 0 check (lifetime_heart_restart_count >= 0),
-  lifetime_lung_treatment_count integer not null default 0 check (lifetime_lung_treatment_count >= 0),
-  lifetime_airway_check_count integer not null default 0 check (lifetime_airway_check_count >= 0),
-  lifetime_fracture_check_count integer not null default 0 check (lifetime_fracture_check_count >= 0),
-  lifetime_ultrasound_scan_count integer not null default 0 check (lifetime_ultrasound_scan_count >= 0),
-  lifetime_chest_seal_count integer not null default 0 check (lifetime_chest_seal_count >= 0),
-  last_event_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+alter table public.personnel_medical_profiles
+  add column if not exists lifetime_fracture_check_count integer not null default 0 check (lifetime_fracture_check_count >= 0),
+  add column if not exists lifetime_ultrasound_scan_count integer not null default 0 check (lifetime_ultrasound_scan_count >= 0),
+  add column if not exists lifetime_chest_seal_count integer not null default 0 check (lifetime_chest_seal_count >= 0);
 
-create table if not exists public.personnel_medical_weekly_stats (
-  personnel_id uuid primary key references public.personnel(id) on delete cascade,
-  week_start_date date not null,
-  week_end_at timestamptz not null,
-  week_blood_litres numeric(10,2) not null default 0 check (week_blood_litres >= 0),
-  week_plasma_litres numeric(10,2) not null default 0 check (week_plasma_litres >= 0),
-  week_saline_litres numeric(10,2) not null default 0 check (week_saline_litres >= 0),
-  week_bandage_count integer not null default 0 check (week_bandage_count >= 0),
-  week_stitched_body_part_count integer not null default 0 check (week_stitched_body_part_count >= 0),
-  week_surgery_count integer not null default 0 check (week_surgery_count >= 0),
-  week_heart_restart_count integer not null default 0 check (week_heart_restart_count >= 0),
-  week_lung_treatment_count integer not null default 0 check (week_lung_treatment_count >= 0),
-  week_airway_check_count integer not null default 0 check (week_airway_check_count >= 0),
-  week_fracture_check_count integer not null default 0 check (week_fracture_check_count >= 0),
-  week_ultrasound_scan_count integer not null default 0 check (week_ultrasound_scan_count >= 0),
-  week_chest_seal_count integer not null default 0 check (week_chest_seal_count >= 0),
-  last_event_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.arma_medical_event_receipts (
-  event_uid text primary key,
-  personnel_id uuid not null references public.personnel(id) on delete cascade,
-  steam_id text not null,
-  medical_metric text not null,
-  medical_quantity numeric(10,2) not null default 0,
-  xp_delta integer not null default 0,
-  server_id text not null,
-  mission_id text not null,
-  week_start_date date not null,
-  occurred_at timestamptz not null,
-  created_at timestamptz not null default now()
-);
-
-create index if not exists personnel_medical_profiles_last_event_idx
-  on public.personnel_medical_profiles (last_event_at desc);
-
-create index if not exists personnel_medical_weekly_stats_week_idx
-  on public.personnel_medical_weekly_stats (week_start_date, last_event_at desc);
-
-create index if not exists arma_medical_event_receipts_personnel_week_idx
-  on public.arma_medical_event_receipts (personnel_id, week_start_date);
-
-alter table public.personnel_medical_profiles enable row level security;
-alter table public.personnel_medical_weekly_stats enable row level security;
-alter table public.arma_medical_event_receipts enable row level security;
-
-revoke all on public.personnel_medical_profiles from anon;
-revoke all on public.personnel_medical_profiles from authenticated;
-grant all on public.personnel_medical_profiles to service_role;
-
-revoke all on public.personnel_medical_weekly_stats from anon;
-revoke all on public.personnel_medical_weekly_stats from authenticated;
-grant all on public.personnel_medical_weekly_stats to service_role;
-
-revoke all on public.arma_medical_event_receipts from anon;
-revoke all on public.arma_medical_event_receipts from authenticated;
-grant all on public.arma_medical_event_receipts to service_role;
+alter table public.personnel_medical_weekly_stats
+  add column if not exists week_fracture_check_count integer not null default 0 check (week_fracture_check_count >= 0),
+  add column if not exists week_ultrasound_scan_count integer not null default 0 check (week_ultrasound_scan_count >= 0),
+  add column if not exists week_chest_seal_count integer not null default 0 check (week_chest_seal_count >= 0);
 
 create or replace function public.calculate_arma_medical_xp(
   p_medical_metric text,
@@ -107,6 +38,8 @@ as $function$
     )
   );
 $function$;
+
+drop function if exists public.record_arma_medical_event(text, text, text, numeric, text, text, timestamptz, text, text, text, text, text);
 
 create or replace function public.record_arma_medical_event(
   p_event_uid text,
@@ -567,42 +500,3 @@ revoke all on function public.record_arma_medical_event(text, text, text, numeri
 revoke all on function public.record_arma_medical_event(text, text, text, numeric, text, text, timestamptz, text, text, text, text, text) from anon;
 revoke all on function public.record_arma_medical_event(text, text, text, numeric, text, text, timestamptz, text, text, text, text, text) from authenticated;
 grant execute on function public.record_arma_medical_event(text, text, text, numeric, text, text, timestamptz, text, text, text, text, text) to service_role;
-
-drop function if exists public.reset_arma_xp_weekly_data();
-
-create or replace function public.reset_arma_xp_weekly_data()
-returns table (
-  receipts_deleted integer,
-  weekly_stats_deleted integer,
-  target_stats_deleted integer,
-  medical_receipts_deleted integer,
-  medical_weekly_stats_deleted integer
-)
-language plpgsql
-security definer
-set search_path to public
-as $function$
-begin
-  delete from public.arma_xp_event_receipts;
-  get diagnostics receipts_deleted = row_count;
-
-  delete from public.personnel_xp_weekly_target_stats;
-  get diagnostics target_stats_deleted = row_count;
-
-  delete from public.personnel_xp_weekly_stats;
-  get diagnostics weekly_stats_deleted = row_count;
-
-  delete from public.arma_medical_event_receipts;
-  get diagnostics medical_receipts_deleted = row_count;
-
-  delete from public.personnel_medical_weekly_stats;
-  get diagnostics medical_weekly_stats_deleted = row_count;
-
-  return next;
-end;
-$function$;
-
-revoke all on function public.reset_arma_xp_weekly_data() from public;
-revoke all on function public.reset_arma_xp_weekly_data() from anon;
-revoke all on function public.reset_arma_xp_weekly_data() from authenticated;
-grant execute on function public.reset_arma_xp_weekly_data() to service_role;

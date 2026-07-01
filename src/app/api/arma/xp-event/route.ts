@@ -21,6 +21,8 @@ type RecordArmaXpEventResult = {
   week_kill_count: number | null;
   week_death_count: number | null;
   week_teamkill_count: number | null;
+  target_week_kill_count: number | null;
+  target_week_xp: number | null;
   week_start_date: string | null;
   week_end_at: string | null;
   reason: string;
@@ -76,6 +78,8 @@ export async function POST(request: Request) {
       p_mission_id: event.missionId,
       p_occurred_at: event.occurredAtDate.toISOString(),
       p_target_category: event.targetCategory,
+      p_target_class: event.targetClass || null,
+      p_target_display_name: event.targetDisplayName || null,
     })
     .maybeSingle<RecordArmaXpEventResult>();
 
@@ -131,6 +135,13 @@ export async function POST(request: Request) {
       teamkills: data.week_teamkill_count,
       weekStartDate: data.week_start_date,
       weekEndAt: data.week_end_at,
+      target: {
+        class: event.targetClass || null,
+        displayName: event.targetDisplayName || null,
+        category: event.targetCategory,
+        kills: data.target_week_kill_count,
+        xp: data.target_week_xp,
+      },
     },
   });
 }

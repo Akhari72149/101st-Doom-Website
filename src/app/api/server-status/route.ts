@@ -2,14 +2,11 @@ import { NextResponse } from "next/server";
 import dgram from "dgram";
 
 const SERVERS = [
-  { id: 1, host: "77.68.28.88", basePort: 2000 },
-  { id: 2, host: "77.68.28.88", basePort: 2100 },
-  { id: 3, host: "77.68.28.88", basePort: 2200 },
+  { id: 1, host: "77.68.28.88", basePort: 2100 },
+  { id: 2, host: "77.68.28.88", basePort: 2200 },
+  { id: 3, host: "77.68.28.88", basePort: 2300 },
 ];
 
-/* ===================================================== */
-/* ================= SAFE SOCKET CLOSE ================== */
-/* ===================================================== */
 
 function queryServer(host: string, port: number): Promise<any> {
   return new Promise((resolve) => {
@@ -47,7 +44,6 @@ function queryServer(host: string, port: number): Promise<any> {
 
       const type = msg[4];
 
-      /* ================= CHALLENGE ================= */
       if (type === 0x41) {
         challengeToken = msg.slice(5);
 
@@ -60,7 +56,6 @@ function queryServer(host: string, port: number): Promise<any> {
         return;
       }
 
-      /* ================= SERVER INFO ================= */
       if (type === 0x49) {
         let offset = 5;
         offset += 1;
@@ -138,9 +133,6 @@ function queryServer(host: string, port: number): Promise<any> {
   });
 }
 
-/* ===================================================== */
-/* ===================== API =========================== */
-/* ===================================================== */
 
 export async function GET() {
   const results = await Promise.all(

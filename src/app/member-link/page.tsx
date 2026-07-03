@@ -448,6 +448,23 @@ function SteamAuthStage() {
         Steam confirms ownership of your Steam ID, then this site creates a
         short-lived linking session.
       </p>
+      <div className="mt-6 max-w-3xl rounded-2xl border border-[#00ff66]/25 bg-black/40 p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#00ff66]">
+          How your Steam account is protected
+        </p>
+        <p className="mt-3 text-sm leading-7 text-gray-300">
+          Steam linking is only used to confirm your Steam ID. You sign in on
+          Steam&apos;s official website, not on the 101st website, and we never
+          see or store your Steam password, Steam Guard, wallet, inventory,
+          trades, or private account details.
+        </p>
+        <p className="mt-3 text-sm leading-7 text-gray-400">
+          Steam simply confirms which Steam ID belongs to you, then sends that
+          ID back so it can be linked to your personnel record for Arma XP and
+          stat tracking. It does not give this website control over your Steam
+          account.
+        </p>
+      </div>
       <a
         href="/api/steam/link/start"
         className="mt-8 inline-flex rounded-xl border border-[#00ff66]/50 bg-[#00ff66]/10 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-[#00ff66] transition hover:bg-[#00ff66]/20"

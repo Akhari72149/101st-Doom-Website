@@ -31,6 +31,8 @@ import {
   GiStarsStack,
   GiTank,
   GiTrophy,
+  Gi3dHammer,
+  GiServerRack,
 } from "react-icons/gi";
 import { supabase } from "@/lib/supabase";
 
@@ -97,6 +99,8 @@ function MedalIcon({
   if (iconKey === "plasma") return <GiMedicines className={className} style={style} />;
   if (iconKey === "surgery") return <GiLifeSupport className={className} style={style} />;
   if (iconKey === "lungs") return <GiLungs className={className} style={style} />;
+  if (iconKey === "hammer") return <Gi3dHammer className={className} style={style} />;
+  if (iconKey === "server") return <GiServerRack className={className} style={style} />;
   return <GiMedal className={className} style={style} />;
 }
 

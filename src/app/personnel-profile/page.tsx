@@ -5,6 +5,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
+import {
+  GiArmorVest,
+  GiCheckedShield,
+  GiCrossedSwords,
+  GiCrystalGrowth,
+  GiHeartBeats,
+  GiJetFighter,
+  GiLaurelCrown,
+  GiLifeSupport,
+  GiLungs,
+  GiMedal,
+  GiMedicalPack,
+  GiMedicines,
+  GiRibbonMedal,
+  GiShieldBounces,
+  GiStarfighter,
+  GiStarsStack,
+  GiTank,
+  GiTrophy,
+} from "react-icons/gi";
 
 type Rank = {
   id: string;
@@ -51,6 +71,20 @@ type SteamLinkRow = {
   profileUrl: string | null;
   avatarUrl: string | null;
   linkedAt: string | null;
+};
+
+type AwardRow = {
+  id: string;
+  awarded_at: string | null;
+  notes?: string | null;
+  award?: {
+    id?: string;
+    name?: string | null;
+    description?: string | null;
+    category?: string | null;
+    icon_key?: string | null;
+    ribbon_color?: string | null;
+  } | null;
 };
 
 type XpStatsRow = {
@@ -276,6 +310,35 @@ function AnimatedNumber({
   );
 }
 
+function MedalIcon({
+  iconKey,
+  className = "h-5 w-5",
+  style,
+}: {
+  iconKey?: string | null;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  if (iconKey === "swords") return <GiCrossedSwords className={className} style={style} />;
+  if (iconKey === "medical") return <GiMedicalPack className={className} style={style} />;
+  if (iconKey === "shield") return <GiCheckedShield className={className} style={style} />;
+  if (iconKey === "star") return <GiStarsStack className={className} style={style} />;
+  if (iconKey === "engineering") return <GiCrystalGrowth className={className} style={style} />;
+  if (iconKey === "ribbon") return <GiRibbonMedal className={className} style={style} />;
+  if (iconKey === "laurel") return <GiLaurelCrown className={className} style={style} />;
+  if (iconKey === "trophy") return <GiTrophy className={className} style={style} />;
+  if (iconKey === "armor") return <GiArmorVest className={className} style={style} />;
+  if (iconKey === "shield_burst") return <GiShieldBounces className={className} style={style} />;
+  if (iconKey === "tank") return <GiTank className={className} style={style} />;
+  if (iconKey === "jet") return <GiJetFighter className={className} style={style} />;
+  if (iconKey === "starfighter") return <GiStarfighter className={className} style={style} />;
+  if (iconKey === "heart") return <GiHeartBeats className={className} style={style} />;
+  if (iconKey === "plasma") return <GiMedicines className={className} style={style} />;
+  if (iconKey === "surgery") return <GiLifeSupport className={className} style={style} />;
+  if (iconKey === "lungs") return <GiLungs className={className} style={style} />;
+  return <GiMedal className={className} style={style} />;
+}
+
 export default function PersonnelProfile() {
   const router = useRouter();
 
@@ -287,6 +350,7 @@ export default function PersonnelProfile() {
   const [rankHistory, setRankHistory] = useState<RankHistoryRow[]>([]);
   const [statusAudit, setStatusAudit] = useState<StatusAuditRow | null>(null);
   const [steamLink, setSteamLink] = useState<SteamLinkRow | null>(null);
+  const [awards, setAwards] = useState<AwardRow[]>([]);
   const [xpStats, setXpStats] = useState<XpStatsRow | null>(null);
   const [medicalStats, setMedicalStats] = useState<MedicalStatsRow | null>(null);
   const [plasmaDirection, setPlasmaDirection] = useState<"idle" | "up" | "down">("idle");
@@ -316,6 +380,7 @@ export default function PersonnelProfile() {
     setSelectedPerson(person);
     setStatusAudit(null);
     setSteamLink(null);
+    setAwards([]);
     setXpStats(null);
     setMedicalStats(null);
     setPlasmaDirection("idle");
@@ -323,7 +388,7 @@ export default function PersonnelProfile() {
     setLoadingProfile(true);
     setActiveTab("qual");
 
-    const [certResult, historyResult, auditResult, steamResponse, xpResponse] =
+    const [certResult, historyResult, auditResult, awardResult, steamResponse, xpResponse] =
       await Promise.all([
         supabase
           .from("personnel_certifications")
@@ -365,6 +430,26 @@ export default function PersonnelProfile() {
           .limit(1)
           .maybeSingle(),
 
+        supabase
+          .from("personnel_awards")
+          .select(
+            `
+            id,
+            awarded_at,
+            notes,
+            award:award_id (
+              id,
+              name,
+              description,
+              category,
+              icon_key,
+              ribbon_color
+            )
+          `,
+          )
+          .eq("personnel_id", person.id)
+          .order("awarded_at", { ascending: false }),
+
         fetch(`/api/personnel/steam-link?personnelId=${encodeURIComponent(person.id)}`, {
           cache: "no-store",
         }).then((response) => response.json() as Promise<{ steamLink: SteamLinkRow | null }>),
@@ -375,6 +460,7 @@ export default function PersonnelProfile() {
     setCertifications((certResult.data as CertificationRow[]) || []);
     setRankHistory((historyResult.data as RankHistoryRow[]) || []);
     setStatusAudit((auditResult.data as StatusAuditRow) || null);
+    setAwards((awardResult.data as AwardRow[]) || []);
     setSteamLink(steamResponse.steamLink || null);
     setXpStats(xpResponse.xpStats || null);
     setMedicalStats(xpResponse.medicalStats || null);
@@ -670,6 +756,67 @@ export default function PersonnelProfile() {
       </p>
     </div>
   );
+
+  const renderServiceDetails = () => {
+    if (!selectedPerson) return null;
+
+    return (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+        {renderStatCard("Displayed Rank", getDisplayedRank(selectedPerson), true)}
+        {renderStatCard("Base Rank", getRankName(selectedPerson.rank_id))}
+        {renderStatCard("MOS", selectedPerson.mos?.trim() || "None", true)}
+        {renderStatCard("Join Date", formatDate(selectedPerson.created_at))}
+        {renderStatCard("Time in Grade", `${calculateTimeInGrade()} Days`, true)}
+        {renderStatCard(
+          "Current Billet",
+          getBilletFromSlot(selectedPerson.slotted_position),
+          true,
+        )}
+        {renderStatCard(
+          "Slot ID",
+          selectedPerson.slotted_position || "Unassigned",
+        )}
+        {renderStatCard("TeamSpeak ID", selectedPerson.ts_id || "Not Set", true)}
+
+        <div
+          className={`rounded-2xl border ${theme.secondaryBorder} ${theme.cardBg} p-4`}
+        >
+          <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
+            Service Duration
+          </p>
+
+          {(() => {
+            const { years, months } = calculateServiceDuration(
+              selectedPerson.created_at,
+            );
+            const totalMonths = years * 12 + months;
+            const barColor = isInactive ? "#ef4444" : getServiceColor(totalMonths);
+
+            return (
+              <>
+                <div
+                  className={`mt-3 h-5 w-full overflow-hidden rounded-xl ${
+                    isInactive ? "bg-[#220000]" : "bg-[#001a0a]"
+                  }`}
+                >
+                  <div
+                    className="h-full rounded-xl transition-all duration-700"
+                    style={{
+                      width: `${Math.min((totalMonths / 60) * 100, 100)}%`,
+                      backgroundColor: barColor,
+                    }}
+                  />
+                </div>
+                <p className="mt-3 text-sm text-yellow-400">
+                  {years} Years {months} Months
+                </p>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -1071,6 +1218,85 @@ export default function PersonnelProfile() {
                     </div>
                   )}
 
+                  <div
+                    className={`mt-5 rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-5`}
+                  >
+                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-gray-400">
+                          Decorations
+                        </p>
+                        <h3 className={`mt-2 text-2xl font-bold ${theme.primaryText}`}>
+                          Medals & Awards
+                        </h3>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        {awards.length} assigned
+                      </p>
+                    </div>
+
+                    {awards.length === 0 ? (
+                      <p className="rounded-xl border border-white/10 bg-black/25 px-4 py-4 text-sm text-gray-400">
+                        No medals or awards assigned to this personnel record.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                        {awards.map((entry) => (
+                          <div
+                            key={entry.id}
+                            className={`rounded-2xl border ${theme.softDivider} bg-black/30 p-4`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${theme.secondaryBorder} bg-[#00ff66]/10`}
+                              >
+                                <MedalIcon
+                                  iconKey={entry.award?.icon_key}
+                                  style={{
+                                    color:
+                                      entry.award?.ribbon_color || "#00ff66",
+                                  }}
+                                />
+                              </div>
+                              <div className="min-w-0">
+                                <div
+                                  className="mb-2 h-1.5 w-10 rounded-full"
+                                  style={{
+                                    backgroundColor:
+                                      entry.award?.ribbon_color || "#00ff66",
+                                  }}
+                                />
+                                <p className="truncate text-sm font-semibold text-white">
+                                  {entry.award?.name || "Unknown Award"}
+                                </p>
+                                {entry.award?.category && (
+                                  <p className={`mt-1 text-[11px] uppercase tracking-[0.16em] ${theme.primaryText}`}>
+                                    {entry.award.category}
+                                  </p>
+                                )}
+                                <p className="mt-2 text-xs text-gray-500">
+                                  Awarded {formatDate(entry.awarded_at)}
+                                </p>
+                              </div>
+                            </div>
+
+                            {entry.award?.description && (
+                              <p className="mt-3 text-xs leading-5 text-gray-400">
+                                {entry.award.description}
+                              </p>
+                            )}
+
+                            {entry.notes && (
+                              <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-gray-400">
+                                {entry.notes}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   {xpStats && (
                     <div
                       className={`mt-8 rounded-2xl border ${theme.secondaryBorder} bg-black/40 p-5`}
@@ -1135,6 +1361,10 @@ export default function PersonnelProfile() {
                           </div>
                         </div>
                       </div>
+
+                      <div className={`my-5 border-t ${theme.softDivider}`} />
+
+                      {renderServiceDetails()}
 
                       <div className={`my-5 border-t ${theme.softDivider}`} />
 
@@ -1535,92 +1765,6 @@ export default function PersonnelProfile() {
                     </div>
                   )}
 
-                  <div className={`my-8 border-t ${theme.divider}`} />
-
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                    {renderStatCard(
-                      "Displayed Rank",
-                      getDisplayedRank(selectedPerson),
-                      true,
-                    )}
-                    {renderStatCard(
-                      "Base Rank",
-                      getRankName(selectedPerson.rank_id),
-                    )}
-                    {renderStatCard(
-                      "MOS",
-                      selectedPerson.mos?.trim() || "None",
-                      true,
-                    )}
-                    {renderStatCard(
-                      "Join Date",
-                      formatDate(selectedPerson.created_at),
-                    )}
-                    {renderStatCard(
-                      "Time in Grade",
-                      `${calculateTimeInGrade()} Days`,
-                      true,
-                    )}
-                    {renderStatCard(
-                      "Current Billet",
-                      getBilletFromSlot(selectedPerson.slotted_position),
-                      true,
-                    )}
-                    {renderStatCard(
-                      "Slot ID",
-                      selectedPerson.slotted_position || "Unassigned",
-                    )}
-                    {renderStatCard(
-                      "TeamSpeak ID",
-                      selectedPerson.ts_id || "Not Set",
-                      true,
-                    )}
-
-                    <div
-                      className={`rounded-2xl border ${theme.secondaryBorder} ${theme.cardBg} p-4`}
-                    >
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
-                        Service Duration
-                      </p>
-
-                      {(() => {
-                        const { years, months } = calculateServiceDuration(
-                          selectedPerson.created_at,
-                        );
-                        const totalMonths = years * 12 + months;
-                        const barColor = isInactive
-                          ? "#ef4444"
-                          : getServiceColor(totalMonths);
-
-                        return (
-                          <>
-                            <div
-                              className={`mt-3 h-5 w-full overflow-hidden rounded-xl ${
-                                isInactive ? "bg-[#220000]" : "bg-[#001a0a]"
-                              }`}
-                            >
-                              <div
-                                className="h-full rounded-xl"
-                                style={{
-                                  width: `${Math.min(totalMonths / 1.2, 100)}%`,
-                                  backgroundColor: barColor,
-                                }}
-                              />
-                            </div>
-
-                            <p
-                              className="mt-3 text-sm"
-                              style={{ color: barColor }}
-                            >
-                              {years} Year{years !== 1 ? "s" : ""} {months}{" "}
-                              Month
-                              {months !== 1 ? "s" : ""}
-                            </p>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
                 </div>
 
                 <div

@@ -1,5 +1,6 @@
 "use client";
 
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
@@ -18,6 +19,7 @@ import {
   User,
   Users,
   Wrench,
+  type LucideIcon,
 } from "lucide-react";
 
 /* ================= TYPES ================= */
@@ -37,11 +39,12 @@ type NavItem = {
   label: string;
   description?: string;
   allowedRoles?: Role[];
+  category?: string;
 };
 
 type NavGroup = {
   label: string;
-  icon: any;
+  icon: LucideIcon;
   description: string;
   allowedRoles?: Role[];
   columns?: 1 | 2;
@@ -51,7 +54,7 @@ type NavGroup = {
 export default function NavbarClient() {
   const router = useRouter();
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
@@ -87,7 +90,7 @@ export default function NavbarClient() {
 
   /* ================= NAV GROUPS ================= */
 
-  const navGroups: NavGroup[] = [
+  const navGroups = useMemo<NavGroup[]>(() => [
     {
       label: "Public",
       icon: BookOpen,
@@ -251,73 +254,91 @@ export default function NavbarClient() {
       items: [
         {
           href: "/admin/create",
-          label: "Account Creation",
+          label: "Create Accounts",
           description: "Create new user and personnel accounts",
           allowedRoles: ["admin", "recruiter"],
+          category: "Personnel Admin",
         },
         {
           href: "/admin/discord-announcemets",
-          label: "Discord Announcements Control Page",
-          description: "Manage and create pings for the bot to send out",
+          label: "Discord Pings",
+          description: "Create bot announcements and pings",
           allowedRoles: ["admin", "Akhari"],
+          category: "Systems",
         },
         {
           href: "/admin/positions",
-          label: "Promotions & Slotting",
+          label: "Ranks & Slots",
           description: "Manage rank progressions and assignments",
           allowedRoles: ["admin", "nco", "di"],
+          category: "Personnel Admin",
         },
         {
           href: "/admin/certifications",
-          label: "Certification Management",
+          label: "Certifications",
           description: "Award and manage certifications",
           allowedRoles: ["admin", "nco", "trainer"],
+          category: "Personnel Admin",
         },
         {
           href: "/admin/weekly-attendance",
-          label: "Attendance Management",
-          description: "Award and manage certifications",
+          label: "Attendance",
+          description: "Manage weekly attendance records",
           allowedRoles: ["admin", "nco"],
+          category: "Records",
+        },
+        {
+          href: "/admin/medals",
+          label: "Medals",
+          description: "Award medals shown on personnel profiles",
+          allowedRoles: ["Akhari", "nco", "admin"],
+          category: "Personnel Admin",
         },
         {
           href: "/admin/removal",
-          label: "Account Removal",
+          label: "Remove / Retire",
           description: "Remove or retire personnel records",
           allowedRoles: ["nco", "admin"],
+          category: "Records",
         },
         {
           href: "/admin/removal-log",
           label: "Removal Log",
           description: "Review account and personnel removals",
           allowedRoles: ["recruiter", "nco", "admin"],
+          category: "Records",
         },
         {
           href: "/GC-Asset-Log",
-          label: "Asset Purchase Log",
+          label: "Asset Log",
           description: "Track campaign asset purchases",
           allowedRoles: ["Akhari", "logistics"],
+          category: "Logistics",
         },
         {
           href: "/GC-Logi",
           label: "GC Logistics",
           description: "Campaign logistics and distribution tools",
           allowedRoles: ["Akhari", "logistics", "admin"],
+          category: "Logistics",
         },
         {
           href: "/CIS-Logi",
           label: "CIS Logistics",
           description: "Manage CIS logistics actions and inventory",
           allowedRoles: ["logistics", "Akhari"],
+          category: "Logistics",
         },
         {
           href: "/admin/server-control",
-          label: "Server Control Panel",
+          label: "Server Control",
           description: "Server maintenance and control access",
           allowedRoles: ["ServerMaintenance", "Akhari"],
+          category: "Systems",
         },
       ],
     },
-  ];
+  ], []);
 
   /* ================= ROLE FILTER ================= */
 
@@ -337,7 +358,7 @@ export default function NavbarClient() {
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [roles]);
+  }, [navGroups, roles]);
 
   const getItemIcon = (groupLabel: string) => {
     if (groupLabel === "Public") return <FileText size={14} />;
@@ -348,6 +369,16 @@ export default function NavbarClient() {
     if (groupLabel === "Admin") return <Cog size={14} />;
     return <FileText size={14} />;
   };
+
+  const adminSections = ["Personnel Admin", "Records", "Logistics", "Systems"];
+
+  const getAdminSections = (items: NavItem[]) =>
+    adminSections
+      .map((section) => ({
+        section,
+        items: items.filter((item) => item.category === section),
+      }))
+      .filter((section) => section.items.length > 0);
 
   return (
     <nav className="relative z-50 w-full border-b border-[#00ff66]/15 bg-black/70 shadow-[0_10px_40px_rgba(0,255,102,0.06)] backdrop-blur-xl">
@@ -424,37 +455,76 @@ export default function NavbarClient() {
                       </p>
                     </div>
 
-                    <div
-                      className={`grid gap-2 ${
-                        group.columns === 2 ? "grid-cols-2" : "grid-cols-1"
-                      }`}
-                    >
-                      {group.items.map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setOpenDropdown(null)}
-                          className="group/item rounded-xl border border-transparent bg-white/[0.015] p-3 transition hover:border-[#00ff66]/15 hover:bg-[#00ff66]/8"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/8 p-2 text-[#00ff66]">
-                              {getItemIcon(group.label)}
+                    {group.label === "Admin" ? (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {getAdminSections(group.items).map((section) => (
+                          <div key={section.section}>
+                            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#00ff66]/55">
+                              {section.section}
                             </div>
+                            <div className="space-y-2">
+                              {section.items.map((item) => (
+                                <Link
+                                  key={item.href}
+                                  href={item.href}
+                                  onClick={() => setOpenDropdown(null)}
+                                  className="group/item block rounded-xl border border-transparent bg-white/[0.015] p-3 transition hover:border-[#00ff66]/15 hover:bg-[#00ff66]/8"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/8 p-2 text-[#00ff66]">
+                                      {getItemIcon(group.label)}
+                                    </div>
 
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium text-white transition group-hover/item:text-[#00ff66]">
-                                {item.label}
-                              </div>
-                              {item.description && (
-                                <div className="mt-1 text-xs leading-5 text-gray-400">
-                                  {item.description}
-                                </div>
-                              )}
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium text-white transition group-hover/item:text-[#00ff66]">
+                                        {item.label}
+                                      </div>
+                                      {item.description && (
+                                        <div className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
+                                          {item.description}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </Link>
+                              ))}
                             </div>
                           </div>
-                        </Link>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        className={`grid gap-2 ${
+                          group.columns === 2 ? "grid-cols-2" : "grid-cols-1"
+                        }`}
+                      >
+                        {group.items.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setOpenDropdown(null)}
+                            className="group/item rounded-xl border border-transparent bg-white/[0.015] p-3 transition hover:border-[#00ff66]/15 hover:bg-[#00ff66]/8"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/8 p-2 text-[#00ff66]">
+                                {getItemIcon(group.label)}
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-white transition group-hover/item:text-[#00ff66]">
+                                  {item.label}
+                                </div>
+                                {item.description && (
+                                  <div className="mt-1 text-xs leading-5 text-gray-400">
+                                    {item.description}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -557,32 +627,68 @@ export default function NavbarClient() {
 
                 {isOpen && (
                   <div className="space-y-2 border-t border-[#00ff66]/10 p-3">
-                    {group.items.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setOpenMobileGroup(null)}
-                        className="group/mobile block rounded-lg border border-[#00ff66]/10 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/25 hover:bg-[#00ff66]/10"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-black/40 p-2 text-[#00ff66]">
-                            {getItemIcon(group.label)}
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-white transition group-hover/mobile:text-[#00ff66]">
-                              {item.label}
+                    {group.label === "Admin"
+                      ? getAdminSections(group.items).map((section) => (
+                          <div key={section.section}>
+                            <div className="px-1 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#00ff66]/55">
+                              {section.section}
                             </div>
+                            <div className="space-y-2">
+                              {section.items.map((item) => (
+                                <Link
+                                  key={item.href}
+                                  href={item.href}
+                                  onClick={() => setOpenMobileGroup(null)}
+                                  className="group/mobile block rounded-lg border border-[#00ff66]/10 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/25 hover:bg-[#00ff66]/10"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-black/40 p-2 text-[#00ff66]">
+                                      {getItemIcon(group.label)}
+                                    </div>
 
-                            {item.description && (
-                              <div className="mt-1 text-xs leading-5 text-gray-400 sm:block">
-                                {item.description}
-                              </div>
-                            )}
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium text-white transition group-hover/mobile:text-[#00ff66]">
+                                        {item.label}
+                                      </div>
+
+                                      {item.description && (
+                                        <div className="mt-1 text-xs leading-5 text-gray-400 sm:block">
+                                          {item.description}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </Link>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      </Link>
-                    ))}
+                        ))
+                      : group.items.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setOpenMobileGroup(null)}
+                            className="group/mobile block rounded-lg border border-[#00ff66]/10 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/25 hover:bg-[#00ff66]/10"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-black/40 p-2 text-[#00ff66]">
+                                {getItemIcon(group.label)}
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-white transition group-hover/mobile:text-[#00ff66]">
+                                  {item.label}
+                                </div>
+
+                                {item.description && (
+                                  <div className="mt-1 text-xs leading-5 text-gray-400 sm:block">
+                                    {item.description}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+                        ))}
                   </div>
                 )}
               </div>

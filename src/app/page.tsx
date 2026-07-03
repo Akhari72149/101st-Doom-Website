@@ -1,9 +1,32 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { animate, stagger } from "animejs";
+import {
+  Activity,
+  BookOpen,
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Code2,
+  ExternalLink,
+  Gamepad2,
+  Headphones,
+  Instagram,
+  Medal,
+  MessageCircle,
+  RadioTower,
+  Shield,
+  Trophy,
+  Users,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 
 type Event = {
   id: string;
@@ -162,6 +185,8 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchEvents(selectedEventDate);
+    // Fetches are intentionally scoped to selected date changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventDate]);
 
   useEffect(() => {
@@ -179,6 +204,8 @@ export default function HomePage() {
       clearInterval(highlightInterval);
       clearInterval(leaderboardInterval);
     };
+    // Polling setup is intentionally created once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isSameDay = (a: Date, b: Date) => {
@@ -616,212 +643,503 @@ export default function HomePage() {
     isSameDay(selectedEventDate, new Date()) && pastEvents.length > 0;
 
   return (
-    <div className="boot relative min-h-screen overflow-x-hidden text-white font-orbitron">
+    <div className="boot relative min-h-screen overflow-x-hidden bg-[#020704] text-white font-orbitron">
       <div
-        className="fixed inset-0 bg-center bg-no-repeat bg-cover opacity-20 pointer-events-none z-0"
+        className="fixed inset-0 bg-center bg-no-repeat bg-cover opacity-12 pointer-events-none z-0"
         style={{ backgroundImage: "url('/background/bg.jpg')" }}
       />
+      <div className="fixed inset-0 z-0 bg-[linear-gradient(90deg,rgba(0,255,102,0.045)_1px,transparent_1px),linear-gradient(rgba(0,255,102,0.035)_1px,transparent_1px)] bg-[size:72px_72px]" />
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(circle_at_top,rgba(0,255,102,0.13),transparent_34%),linear-gradient(180deg,rgba(2,7,4,0.66),#020704_82%)]" />
 
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] z-0" />
-
-      <img
-        src="/background/bg.jpg"
-        alt=""
-        aria-hidden="true"
-        className="fixed left-1/2 top-1/2 z-[1] w-[700px] sm:w-[950px] xl:w-[1200px] -translate-x-1/2 -translate-y-1/2 opacity-[0.2] blur-sm saturate-150 pointer-events-none"
-      />
-
-      <div className="relative z-10 flex w-full flex-col xl:flex-row">
-        <div className="order-2 xl:order-1 w-full xl:w-[320px] xl:min-h-screen border-t xl:border-t-0 xl:border-r border-[#00ff66]/30 p-4 sm:p-6 bg-black/30 backdrop-blur-2xl">
-          <div className="mb-5 grid grid-cols-2 gap-3 rounded-2xl border border-[#00ff66]/30 bg-black/50 p-4 xl:block xl:space-y-2">
-            <div className="text-xs sm:text-sm">🟢 Online: {onlineCount}</div>
-            <div className="text-xs sm:text-sm">🔴 Offline: {offlineCount}</div>
-            <div className="text-xs sm:text-sm">📅 Events: {events.length}</div>
-            <div className="text-xs sm:text-sm">👥 Players: {totalPlayers}</div>
-            <div className="col-span-2 mt-1 text-[#00ff66] text-xs sm:text-sm xl:mt-2">
-              {time.toLocaleTimeString()}
-            </div>
+      <div className="relative z-10 mx-auto w-full max-w-[1840px] px-4 py-5 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-4 border-b border-[#00ff66]/15 pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.34em] text-[#00ff66]/60">
+              Operational Command System
+            </p>
+            <h1 className="mt-2 text-4xl font-bold tracking-[0.16em] text-[#00ff66] sm:text-5xl lg:text-6xl">
+              101ST DOOM BATTALION
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-400">
+              Personnel, operations, server activity, and Arma progression from
+              one live command surface.
+            </p>
           </div>
 
-          <div className="space-y-5">
-            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
-              <button
-                onClick={() => setServersOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between px-4 py-4 hover:bg-black/40 transition-all"
-              >
-                <span className="text-lg sm:text-xl text-[#00ff66] tracking-widest">
-                  Servers
-                </span>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:w-[680px]">
+            <div className="border-l border-[#00ff66]/30 bg-black/25 px-4 py-3">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-gray-500">
+                <Wifi className="h-3.5 w-3.5 text-[#00ff66]" />
+                Online
+              </div>
+              <div className="mt-2 text-2xl font-bold text-white">
+                {onlineCount}
+              </div>
+            </div>
+            <div className="border-l border-red-400/30 bg-black/25 px-4 py-3">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-gray-500">
+                <WifiOff className="h-3.5 w-3.5 text-red-300" />
+                Offline
+              </div>
+              <div className="mt-2 text-2xl font-bold text-white">
+                {offlineCount}
+              </div>
+            </div>
+            <div className="border-l border-[#00ff66]/30 bg-black/25 px-4 py-3">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-gray-500">
+                <CalendarDays className="h-3.5 w-3.5 text-[#00ff66]" />
+                Events
+              </div>
+              <div className="mt-2 text-2xl font-bold text-white">
+                {events.length}
+              </div>
+            </div>
+            <div className="border-l border-[#00ff66]/30 bg-black/25 px-4 py-3">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-gray-500">
+                <Users className="h-3.5 w-3.5 text-[#00ff66]" />
+                Players
+              </div>
+              <div className="mt-2 text-2xl font-bold text-white">
+                {totalPlayers}
+              </div>
+            </div>
+          </div>
+        </header>
 
-                <span
-                  className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
-                    serversOpen ? "rotate-180" : "rotate-0"
+        <main className="grid gap-5 py-5 xl:grid-cols-[minmax(0,1fr)_430px]">
+          <section className="min-w-0 space-y-5">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+              <div className="relative min-h-[360px] overflow-hidden border border-[#00ff66]/20 bg-black/35 shadow-[0_0_36px_rgba(0,255,102,0.08)] sm:min-h-[520px]">
+                {slides.map((slide, index) => (
+                  <div
+                    key={slide}
+                    className={`absolute inset-0 transition-all duration-1000 ${
+                      index === currentSlide
+                        ? "opacity-100 scale-105"
+                        : "opacity-0 scale-100"
+                    }`}
+                  >
+                    <Image
+                      src={slide}
+                      alt=""
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 70vw"
+                      priority={index === 0}
+                      aria-hidden={index !== currentSlide}
+                      className="object-cover"
+                    />
+                  </div>
+                ))}
+
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.86),rgba(0,0,0,0.16)_58%,rgba(0,0,0,0.74)),linear-gradient(0deg,rgba(0,0,0,0.78),transparent_50%)]" />
+
+                <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
+                  <div className="max-w-2xl">
+                    <div className="inline-flex items-center gap-2 border border-[#00ff66]/25 bg-black/45 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-[#00ff66]">
+                      <Shield className="h-3.5 w-3.5" />
+                      Live Unit Dashboard
+                    </div>
+                    <h2 className="mt-4 text-3xl font-bold text-white sm:text-5xl">
+                      Command, roster, and operations at a glance.
+                    </h2>
+                    <p className="mt-3 max-w-xl text-sm leading-6 text-gray-300">
+                      Track server state, scheduled operations, commendations,
+                      weekly events, and Arma XP without leaving the home page.
+                    </p>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => router.push("/personnel-profile")}
+                        className="border border-[#00ff66]/45 bg-[#00ff66]/10 px-4 py-2 text-sm font-semibold text-[#00ff66] transition hover:bg-[#00ff66]/18"
+                      >
+                        Personnel Profiles
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/member-link")}
+                        className="border border-white/15 bg-black/40 px-4 py-2 text-sm text-white transition hover:border-[#00ff66]/40 hover:text-[#00ff66]"
+                      >
+                        Link Steam
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute bottom-5 right-5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentSlide((prev) =>
+                        prev === 0 ? slides.length - 1 : prev - 1,
+                      )
+                    }
+                    className="grid h-10 w-10 place-items-center border border-[#00ff66]/25 bg-black/55 text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                    aria-label="Previous slide"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentSlide((prev) =>
+                        prev === slides.length - 1 ? 0 : prev + 1,
+                      )
+                    }
+                    className="grid h-10 w-10 place-items-center border border-[#00ff66]/25 bg-black/55 text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                    aria-label="Next slide"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="absolute left-5 top-5 flex max-w-[70%] flex-wrap gap-2">
+                  {slides.map((_, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setCurrentSlide(index)}
+                      className={`h-1.5 rounded-full transition-all ${
+                        index === currentSlide
+                          ? "w-8 bg-[#00ff66]"
+                          : "w-3 bg-white/35 hover:bg-white/70"
+                      }`}
+                      aria-label={`Go to slide ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div className="border border-[#00ff66]/15 bg-black/35 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.24em] text-[#00ff66]/60">
+                        Current Time
+                      </p>
+                      <p className="mt-2 text-3xl font-bold text-white">
+                        {time.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                    <Clock3 className="h-8 w-8 text-[#00ff66]/70" />
+                  </div>
+                </div>
+
+                <div className="border border-[#00ff66]/15 bg-black/35 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.24em] text-[#00ff66]/60">
+                        Next Operation
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {featuredEvent?.title || "No upcoming event"}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-400">
+                        {featuredEvent
+                          ? getRelativeCountdown(
+                              new Date(featuredEvent.start_time),
+                            )
+                          : selectedEventDateLabel}
+                      </p>
+                    </div>
+                    <CalendarDays className="h-8 w-8 text-[#00ff66]/70" />
+                  </div>
+                </div>
+
+                <div className="border border-[#00ff66]/15 bg-black/35 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.24em] text-[#00ff66]/60">
+                        XP Leader
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {xpLeaderboard[0]?.name || "Awaiting records"}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-400">
+                        {xpLeaderboard[0]
+                          ? `Level ${xpLeaderboard[0].currentLevel} - ${xpLeaderboard[0].totalXp.toLocaleString()} XP`
+                          : "Link Steam to enter the board"}
+                      </p>
+                    </div>
+                    <Trophy className="h-8 w-8 text-[#00ff66]/70" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid items-start gap-5 lg:grid-cols-2">
+              <div className="border border-[#00ff66]/15 bg-black/35">
+                <button
+                  type="button"
+                  onClick={() => setServersOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between gap-3 border-b border-[#00ff66]/15 px-5 py-4 text-left transition hover:bg-white/[0.03]"
+                >
+                  <span className="inline-flex items-center gap-3 text-[#00ff66]">
+                    <RadioTower className="h-5 w-5" />
+                    <span className="text-sm uppercase tracking-[0.22em]">
+                      Servers
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`h-5 w-5 text-[#00ff66] transition ${
+                      serversOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                <div
+                  className={`overflow-hidden transition-all duration-500 ${
+                    serversOpen ? "max-h-[1400px] opacity-100" : "max-h-0 opacity-0"
                   }`}
                 >
-                  ▼
-                </span>
-              </button>
-
-              <div
-                className={`overflow-hidden transition-all duration-500 ${
-                  serversOpen
-                    ? "max-h-[1400px] opacity-100"
-                    : "max-h-0 opacity-0"
-                }`}
-              >
-                <div className="px-4 pb-4">
-                  {initialLoad ? (
-                    <div className="text-center text-gray-400 py-6 animate-pulse">
-                      Checking server status...
-                    </div>
-                  ) : servers.length === 0 ? (
-                    <div className="text-center text-gray-400 py-6">
-                      No servers found.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {servers.map((server) => {
+                  <div className="space-y-3 p-4">
+                    {initialLoad ? (
+                      <div className="py-6 text-center text-sm text-gray-400 animate-pulse">
+                        Checking server status...
+                      </div>
+                    ) : servers.length === 0 ? (
+                      <div className="py-6 text-center text-sm text-gray-400">
+                        No servers found.
+                      </div>
+                    ) : (
+                      servers.map((server) => {
                         const isOpen = expandedServer === server.id;
+                        const population =
+                          server.maxPlayers && server.maxPlayers > 0
+                            ? Math.min(
+                                100,
+                                Math.round(
+                                  (server.players / server.maxPlayers) * 100,
+                                ),
+                              )
+                            : 0;
 
                         return (
-                          <div key={server.id}>
-                            <div
+                          <div
+                            key={server.id}
+                            className={`border bg-black/45 transition ${
+                              server.online
+                                ? "border-[#00ff66]/25"
+                                : "border-red-400/20"
+                            } ${
+                              justCameOnline(server)
+                                ? "animate-[glowBurst_1.2s_ease-out]"
+                                : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
                               onClick={() => toggleServer(server.id)}
-                              className={`cursor-pointer rounded-xl border bg-black/60 overflow-hidden transition-all duration-300 hover:border-[#00ff66] ${
-                                server.online
-                                  ? "border-[#00ff66]/40 shadow-[0_0_20px_rgba(0,255,102,0.08)]"
-                                  : "border-[#00ff66]/20"
-                              } ${
-                                justCameOnline(server)
-                                  ? "animate-[glowBurst_1.2s_ease-out]"
-                                  : ""
-                              }`}
+                              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                             >
-                              <div className="p-4 flex justify-between items-center gap-3">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span
-                                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                                      server.online
-                                        ? "bg-[#00ff66] shadow-[0_0_10px_#00ff66]"
-                                        : "bg-red-500 shadow-[0_0_8px_red]"
-                                    }`}
-                                  />
-
-                                  <span className="truncate">
-                                    Server {server.id}
-                                  </span>
-                                </div>
-
-                                <div
-                                  className={`shrink-0 text-[10px] px-2 py-1 rounded-full ${
+                              <span className="flex min-w-0 items-center gap-3">
+                                <span
+                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
                                     server.online
-                                      ? "bg-green-500/20 text-green-400"
-                                      : "bg-red-500/20 text-red-400"
+                                      ? "bg-[#00ff66] shadow-[0_0_10px_#00ff66]"
+                                      : "bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.7)]"
                                   }`}
-                                >
-                                  {server.online ? "ONLINE" : "OFFLINE"}
-                                </div>
-                              </div>
-
-                              <div
-                                className={`grid transition-all duration-300 ${
-                                  isOpen && server.online
-                                    ? "grid-rows-[1fr] opacity-100"
-                                    : "grid-rows-[0fr] opacity-0"
+                                />
+                                <span className="truncate text-sm font-semibold text-white">
+                                  Server {server.id}
+                                </span>
+                              </span>
+                              <span
+                                className={`shrink-0 border px-2 py-1 text-[10px] uppercase tracking-[0.14em] ${
+                                  server.online
+                                    ? "border-[#00ff66]/25 text-[#00ff66]"
+                                    : "border-red-400/25 text-red-300"
                                 }`}
                               >
-                                <div className="overflow-hidden">
-                                  <div className="border-t border-[#00ff66]/20 p-4 sm:p-5 text-sm text-gray-300">
-                                    <div className="text-[#00ff66] mb-3 tracking-wide">
-                                      Server Population
-                                    </div>
+                                {server.online ? "Online" : "Offline"}
+                              </span>
+                            </button>
 
-                                    {server.missionFile && (
-                                      <div className="text-xs text-gray-400 mt-2 break-words">
-                                        Map: {server.missionFile}
-                                      </div>
-                                    )}
-
-                                    <div className="flex items-center justify-between text-white text-lg font-semibold gap-3">
-                                      <span>
-                                        {server.players ?? 0} /{" "}
-                                        {server.maxPlayers || "?"}
-                                      </span>
-
-                                      <span className="text-xs text-gray-400 text-right">
-                                        Players Online
-                                      </span>
-                                    </div>
-
-                                    <div className="mt-3 w-full h-3 bg-black/70 rounded-full overflow-hidden border border-[#00ff66]/30">
-                                      <div
-                                        className="h-full bg-[#00ff66] transition-all duration-500"
-                                        style={{
-                                          width:
-                                            server.maxPlayers &&
-                                            server.maxPlayers > 0
-                                              ? `${
-                                                  (server.players /
-                                                    server.maxPlayers) *
-                                                  100
-                                                }%`
-                                              : "0%",
-                                        }}
-                                      />
-                                    </div>
-
-                                    <div className="mt-2 text-xs text-gray-400">
-                                      {server.players === 0
-                                        ? "Server is empty"
-                                        : server.players === server.maxPlayers
-                                          ? "Server is full"
-                                          : "Server is active"}
-                                    </div>
+                            <div
+                              className={`grid transition-all duration-300 ${
+                                isOpen && server.online
+                                  ? "grid-rows-[1fr] opacity-100"
+                                  : "grid-rows-[0fr] opacity-0"
+                              }`}
+                            >
+                              <div className="overflow-hidden">
+                                <div className="border-t border-[#00ff66]/10 px-4 py-4">
+                                  {server.missionFile && (
+                                    <p className="mb-3 break-words text-xs text-gray-400">
+                                      {server.missionFile}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-500">
+                                      Population
+                                    </span>
+                                    <span className="font-semibold text-white">
+                                      {server.players ?? 0} /{" "}
+                                      {server.maxPlayers || "?"}
+                                    </span>
+                                  </div>
+                                  <div className="mt-3 h-2 overflow-hidden bg-white/10">
+                                    <div
+                                      className="h-full bg-[#00ff66] transition-all duration-500"
+                                      style={{ width: `${population}%` }}
+                                    />
                                   </div>
                                 </div>
                               </div>
                             </div>
                           </div>
                         );
-                      })}
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-[#00ff66]/15 bg-black/35">
+                <button
+                  type="button"
+                  onClick={() => setLeaderboardOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between gap-3 border-b border-[#00ff66]/15 px-5 py-4 text-left transition hover:bg-white/[0.03]"
+                >
+                  <span className="inline-flex items-center gap-3 text-[#00ff66]">
+                    <Trophy className="h-5 w-5" />
+                    <span className="text-sm uppercase tracking-[0.22em]">
+                      XP Leaderboard
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`h-5 w-5 text-[#00ff66] transition ${
+                      leaderboardOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                <div
+                  className={`overflow-hidden transition-all duration-500 ${
+                    leaderboardOpen
+                      ? "max-h-[980px] opacity-100"
+                      : "max-h-0 opacity-0"
+                  }`}
+                >
+                  <div className="space-y-3 p-4">
+                    <div className="border border-[#00ff66]/15 bg-black/45 p-3 text-xs leading-5 text-gray-400">
+                      Link your Steam account to your personnel profile to appear
+                      on the board and earn XP from tracked Arma events.
+                      <button
+                        type="button"
+                        onClick={() => router.push("/member-link")}
+                        className="ml-2 text-[#00ff66] underline decoration-[#00ff66]/40 underline-offset-4 transition hover:text-white"
+                      >
+                        Link Steam
+                      </button>
                     </div>
-                  )}
+
+                    {loadingXpLeaderboard ? (
+                      <div className="border border-[#00ff66]/15 bg-black/40 p-4 text-center text-sm text-gray-400 animate-pulse">
+                        Loading XP standings...
+                      </div>
+                    ) : xpLeaderboard.length === 0 ? (
+                      <div className="border border-[#00ff66]/15 bg-black/40 p-4 text-sm text-gray-400">
+                        No XP records yet.
+                      </div>
+                    ) : (
+                      xpLeaderboard.slice(0, 5).map((entry) => (
+                        <button
+                          key={entry.personnelId}
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              `/personnel-profile?id=${entry.personnelId}`,
+                            )
+                          }
+                          className="group w-full border border-[#00ff66]/15 bg-black/45 p-3 text-left transition hover:border-[#00ff66]/55 hover:bg-[#00ff66]/10"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="grid h-8 w-8 shrink-0 place-items-center border border-[#00ff66]/30 bg-[#00ff66]/10 text-sm font-bold text-[#00ff66]">
+                                {entry.position}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-[10px] uppercase tracking-[0.14em] text-[#00ff66]">
+                                  {entry.displayedRank}
+                                </div>
+                                <div className="mt-1 truncate text-sm font-semibold text-white group-hover:text-[#00ff66]">
+                                  {entry.name}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-[10px] uppercase tracking-[0.14em] text-gray-500">
+                                Level
+                              </div>
+                              <div className="text-lg font-bold text-white">
+                                {entry.currentLevel}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-3 grid grid-cols-4 gap-2 text-[11px]">
+                            {[
+                              ["XP", entry.totalXp, "text-[#00ff66]"],
+                              ["K", entry.kills, "text-white"],
+                              ["D", entry.deaths, "text-white"],
+                              ["TK", entry.teamkills, "text-red-300"],
+                            ].map(([label, value, className]) => (
+                              <div
+                                key={label}
+                                className="border border-white/10 bg-white/[0.03] px-2 py-2"
+                              >
+                                <div className="text-gray-500">{label}</div>
+                                <div className={`mt-1 font-bold ${className}`}>
+                                  {Number(value).toLocaleString()}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
+            <div className="grid items-start gap-5 lg:grid-cols-2">
+              <div className="border border-[#00ff66]/15 bg-black/35">
               <button
+                type="button"
                 onClick={() => setHighlightsOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-4 hover:bg-black/40 transition-all"
+                className="flex w-full items-center justify-between gap-3 border-b border-[#00ff66]/15 px-5 py-4 text-left transition hover:bg-white/[0.03]"
               >
-                <span className="text-sm sm:text-base text-[#00ff66] tracking-[0.16em] sm:tracking-[0.2em] uppercase text-left">
-                  Today&apos;s Commendations
+                <span className="inline-flex items-center gap-3 text-[#00ff66]">
+                  <Medal className="h-5 w-5" />
+                  <span className="text-sm uppercase tracking-[0.22em]">
+                    Commendations
+                  </span>
                 </span>
-
-                <span
-                  className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
-                    highlightsOpen ? "rotate-180" : "rotate-0"
+                <ChevronDown
+                  className={`h-5 w-5 text-[#00ff66] transition ${
+                    highlightsOpen ? "rotate-180" : ""
                   }`}
-                >
-                  ▼
-                </span>
+                />
               </button>
 
               <div
                 className={`overflow-hidden transition-all duration-500 ${
                   highlightsOpen
-                    ? "max-h-[420px] opacity-100"
+                    ? "max-h-[520px] opacity-100"
                     : "max-h-0 opacity-0"
                 }`}
               >
-                <div className="px-4 pb-4 max-h-[360px] overflow-y-auto pr-2">
+                <div className="max-h-[460px] overflow-y-auto p-4">
                   {loadingHighlights ? (
-                    <div className="text-center text-gray-400 py-6 animate-pulse">
+                    <div className="py-6 text-center text-sm text-gray-400 animate-pulse">
                       Loading today&apos;s commendations...
                     </div>
                   ) : dailyHighlights.length === 0 ? (
-                    <div className="text-sm text-gray-400 py-4">
+                    <div className="py-4 text-sm text-gray-400">
                       No promotions or certifications logged today yet.
                     </div>
                   ) : (
@@ -829,7 +1147,7 @@ export default function HomePage() {
                       {dailyHighlights.map((item) => (
                         <div
                           key={item.id}
-                          className="rounded-xl border border-[#00ff66]/20 bg-black/55 p-4"
+                          className="border border-[#00ff66]/15 bg-black/45 p-4"
                         >
                           <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
                             {formatHighlightTitle(item)}
@@ -853,22 +1171,23 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-cyan-400/30 bg-black/50 overflow-hidden">
+              <div className="border border-cyan-300/15 bg-black/35">
               <button
+                type="button"
                 onClick={() => setSiteVersionOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between px-4 py-4 hover:bg-black/40 transition-all"
+                className="flex w-full items-center justify-between gap-3 border-b border-cyan-300/15 px-5 py-4 text-left transition hover:bg-white/[0.03]"
               >
-                <span className="text-sm sm:text-base text-cyan-300 tracking-[0.2em] uppercase">
-                  Website Build
+                <span className="inline-flex items-center gap-3 text-cyan-300">
+                  <Code2 className="h-5 w-5" />
+                  <span className="text-sm uppercase tracking-[0.22em]">
+                    Website Build
+                  </span>
                 </span>
-
-                <span
-                  className={`text-cyan-300 text-2xl transition-transform duration-300 ${
-                    siteVersionOpen ? "rotate-180" : "rotate-0"
+                <ChevronDown
+                  className={`h-5 w-5 text-cyan-300 transition ${
+                    siteVersionOpen ? "rotate-180" : ""
                   }`}
-                >
-                  ▼
-                </span>
+                />
               </button>
 
               <div
@@ -878,18 +1197,18 @@ export default function HomePage() {
                     : "max-h-0 opacity-0"
                 }`}
               >
-                <div className="px-4 pb-4">
+                <div className="space-y-3 p-4">
                   {loadingSiteVersion ? (
-                    <div className="text-center text-gray-400 py-4 animate-pulse">
+                    <div className="py-4 text-center text-sm text-gray-400 animate-pulse">
                       Loading website version...
                     </div>
                   ) : !siteVersion ? (
-                    <div className="rounded-xl border border-red-400/20 bg-red-500/5 p-4 text-sm text-red-300">
+                    <div className="border border-red-400/20 bg-red-500/5 p-4 text-sm text-red-300">
                       Unable to load website version data.
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+                      <div className="border border-cyan-300/15 bg-black/45 p-4">
                         <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
                           Version
                         </div>
@@ -898,7 +1217,7 @@ export default function HomePage() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+                      <div className="border border-cyan-300/15 bg-black/45 p-4">
                         <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
                           Latest Commit
                         </div>
@@ -907,8 +1226,8 @@ export default function HomePage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="border border-cyan-300/15 bg-black/45 p-4">
                           <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
                             Commit
                           </div>
@@ -929,7 +1248,7 @@ export default function HomePage() {
                           )}
                         </div>
 
-                        <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+                        <div className="border border-cyan-300/15 bg-black/45 p-4">
                           <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
                             Author
                           </div>
@@ -939,7 +1258,7 @@ export default function HomePage() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl border border-cyan-400/20 bg-black/55 p-4">
+                      <div className="border border-cyan-300/15 bg-black/45 p-4">
                         <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
                           Updated
                         </div>
@@ -952,212 +1271,34 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+            </div>
+          </section>
 
-            <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden">
-              <button
-                onClick={() => setLeaderboardOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-4 hover:bg-black/40 transition-all"
-              >
-                <span className="text-sm sm:text-base text-[#00ff66] tracking-[0.2em] uppercase">
-                  XP Leaderboard
-                </span>
-
-                <span
-                  className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
-                    leaderboardOpen ? "rotate-180" : "rotate-0"
-                  }`}
-                >
-                  ▼
-                </span>
-              </button>
-
-              <div
-                className={`overflow-hidden transition-all duration-500 ${
-                  leaderboardOpen
-                    ? "max-h-[980px] opacity-100"
-                    : "max-h-0 opacity-0"
-                }`}
-              >
-                <div className="space-y-3 px-4 pb-4">
-                  <div className="rounded-xl border border-[#00ff66]/20 bg-black/55 p-3 text-xs leading-5 text-gray-400">
-                    Link your Steam account to your personnel profile to appear
-                    on the board and earn XP from tracked Arma events.
-                    <button
-                      onClick={() => router.push("/member-link")}
-                      className="ml-2 text-[#00ff66] underline decoration-[#00ff66]/40 underline-offset-4 transition hover:text-white"
-                    >
-                      Link Steam
-                    </button>
-                  </div>
-
-                  {loadingXpLeaderboard ? (
-                    <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4 text-center text-sm text-gray-400 animate-pulse">
-                      Loading XP standings...
-                    </div>
-                  ) : xpLeaderboard.length === 0 ? (
-                    <div className="rounded-xl border border-[#00ff66]/15 bg-black/40 p-4 text-sm text-gray-400">
-                      No XP records yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {xpLeaderboard.slice(0, 5).map((entry) => (
-                        <button
-                          key={entry.personnelId}
-                          onClick={() =>
-                            router.push(`/personnel-profile?id=${entry.personnelId}`)
-                          }
-                          className="group w-full rounded-xl border border-[#00ff66]/20 bg-black/55 p-3 text-left transition hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#00ff66]/30 bg-[#00ff66]/10 text-sm font-bold text-[#00ff66]">
-                                {entry.position}
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="truncate text-[10px] uppercase tracking-[0.14em] text-[#00ff66]">
-                                  {entry.displayedRank}
-                                </div>
-                                <div className="mt-1 truncate text-sm font-semibold text-white group-hover:text-[#00ff66]">
-                                  {entry.name}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="shrink-0 text-right">
-                              <div className="text-[10px] uppercase tracking-[0.14em] text-gray-500">
-                                Lvl
-                              </div>
-                              <div className="text-lg font-bold text-white">
-                                {entry.currentLevel}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 grid grid-cols-4 gap-2 text-[11px]">
-                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
-                              <div className="text-gray-500">XP</div>
-                              <div className="mt-1 font-bold text-[#00ff66]">
-                                {entry.totalXp.toLocaleString()}
-                              </div>
-                            </div>
-                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
-                              <div className="text-gray-500">K</div>
-                              <div className="mt-1 font-bold text-white">
-                                {entry.kills.toLocaleString()}
-                              </div>
-                            </div>
-                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
-                              <div className="text-gray-500">D</div>
-                              <div className="mt-1 font-bold text-white">
-                                {entry.deaths.toLocaleString()}
-                              </div>
-                            </div>
-                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
-                              <div className="text-gray-500">TK</div>
-                              <div className="mt-1 font-bold text-red-300">
-                                {entry.teamkills.toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+          <aside className="space-y-5 xl:sticky xl:top-5 xl:h-fit">
+            <section className="border border-[#00ff66]/15 bg-black/35 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-[#00ff66]/60">
+                    Operations
+                  </p>
+                  <h2 className="mt-1 text-2xl font-semibold text-white">
+                    Upcoming Events
+                  </h2>
                 </div>
+                <CalendarDays className="h-7 w-7 text-[#00ff66]/70" />
               </div>
-            </div>
-          </div>
-        </div>
 
-        <main className="order-1 xl:order-2 flex-1 flex flex-col items-center pt-24 sm:pt-32 xl:pt-40 px-4 sm:px-8">
-          <h1 className="mt-10 text-3xl sm:text-4xl md:text-6xl font-bold tracking-[0.18em] sm:tracking-[0.3em] md:tracking-[0.4em] text-[#00ff66] text-center">
-            101ST
-            <br />
-            DOOM BATTALION
-          </h1>
-
-          <p className="mt-4 max-w-2xl text-sm sm:text-base text-gray-300 text-center px-2">
-            Operational Command & Personnel Management System
-          </p>
-
-          <div className="group mt-8 sm:mt-10 w-full max-w-5xl h-[240px] sm:h-[360px] lg:h-[540px] relative overflow-hidden rounded-2xl border border-[#00ff66]/30 shadow-[0_0_30px_rgba(0,255,100,0.3)]">
-            {slides.map((slide, index) => (
-              <div
-                key={slide}
-                className={`absolute inset-0 transition-all duration-1000 ${
-                  index === currentSlide
-                    ? "opacity-100 scale-105"
-                    : "opacity-0 scale-100"
-                }`}
-              >
-                <img
-                  loading="lazy"
-                  src={slide}
-                  alt="slideshow"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-              </div>
-            ))}
-
-            <div className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 flex max-w-[85%] flex-wrap justify-center gap-2 z-20">
-              {slides.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => setCurrentSlide(index)}
-                  className={`h-2 rounded-full transition-all ${
-                    index === currentSlide
-                      ? "w-7 sm:w-8 bg-[#00ff66]"
-                      : "w-2 bg-gray-500 hover:bg-gray-300"
-                  }`}
-                  aria-label={`Go to slide ${index + 1}`}
-                />
-              ))}
-            </div>
-
-            <button
-              onClick={() =>
-                setCurrentSlide((prev) =>
-                  prev === 0 ? slides.length - 1 : prev - 1,
-                )
-              }
-              className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 bg-black/60 text-[#00ff66] p-2 sm:p-3 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/80 z-20"
-              aria-label="Previous slide"
-            >
-              ◀
-            </button>
-
-            <button
-              onClick={() =>
-                setCurrentSlide((prev) =>
-                  prev === slides.length - 1 ? 0 : prev + 1,
-                )
-              }
-              className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 bg-black/60 text-[#00ff66] p-2 sm:p-3 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/80 z-20"
-              aria-label="Next slide"
-            >
-              ▶
-            </button>
-          </div>
-
-        </main>
-
-        <aside className="order-3 w-full xl:w-[400px] xl:min-h-screen border-t xl:border-t-0 xl:border-l border-[#00ff66]/30 p-4 sm:p-6 bg-black/35 backdrop-blur-2xl shadow-2xl flex flex-col">
-          <div className="mb-4">
-            <h2 className="text-lg sm:text-xl text-[#00ff66] tracking-widest">
-              Upcoming Events
-            </h2>
-
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[#00ff66]/30 bg-black/50 px-3 py-3">
+              <div className="mt-5 flex items-center justify-between gap-3 border border-[#00ff66]/20 bg-black/45 px-3 py-3">
               <button
+                type="button"
                 onClick={() => changeEventDate(-1)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#00ff66]/30 text-[#00ff66] hover:bg-[#00ff66]/10 hover:scale-105 transition-all"
+                className="grid h-10 w-10 shrink-0 place-items-center border border-[#00ff66]/25 text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                aria-label="Previous day"
               >
-                ◀
+                <ChevronLeft className="h-5 w-5" />
               </button>
 
-              <div className="flex-1 min-w-0 text-center">
+              <div className="min-w-0 flex-1 text-center">
                 <div className="text-sm text-[#00ff66] font-semibold truncate">
                   {selectedEventDateLabel}
                 </div>
@@ -1172,29 +1313,31 @@ export default function HomePage() {
               </div>
 
               <button
+                type="button"
                 onClick={() => changeEventDate(1)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#00ff66]/30 text-[#00ff66] hover:bg-[#00ff66]/10 hover:scale-105 transition-all"
+                className="grid h-10 w-10 shrink-0 place-items-center border border-[#00ff66]/25 text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                aria-label="Next day"
               >
-                ▶
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
 
             <button
+              type="button"
               onClick={jumpToToday}
-              className="mt-3 w-full rounded-xl border border-[#00ff66]/25 bg-black/40 px-4 py-2 text-sm text-[#00ff66] hover:bg-[#00ff66]/10 transition-all"
+              className="mt-3 w-full border border-[#00ff66]/20 bg-black/40 px-4 py-2 text-sm text-[#00ff66] transition hover:bg-[#00ff66]/10"
             >
               Jump to Today
             </button>
-          </div>
 
           {featuredEvent && (
-            <div className="mb-5 rounded-2xl border border-[#00ff66]/40 bg-[linear-gradient(135deg,rgba(0,255,102,0.12),rgba(0,0,0,0.5))] p-4 shadow-[0_0_18px_rgba(0,255,102,0.12)]">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="mt-5 border border-[#00ff66]/35 bg-[#00ff66]/8 p-4">
+              <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] tracking-[0.2em] uppercase text-[#00ff66]">
                   Next Operation
                 </div>
 
-                <div className="w-fit rounded-full border border-[#00ff66]/30 px-2 py-1 text-[10px] text-[#00ff66]">
+                <div className="w-fit border border-[#00ff66]/25 px-2 py-1 text-[10px] text-[#00ff66]">
                   SERVER {featuredEvent.server_id}
                 </div>
               </div>
@@ -1208,7 +1351,7 @@ export default function HomePage() {
               </div>
 
               <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="w-fit rounded-lg bg-black/50 px-3 py-1 text-xs text-gray-200 border border-[#00ff66]/20">
+                <div className="w-fit border border-[#00ff66]/15 bg-black/50 px-3 py-1 text-xs text-gray-200">
                   {new Date(featuredEvent.start_time).toLocaleTimeString([], {
                     hour: "numeric",
                     minute: "2-digit",
@@ -1222,61 +1365,57 @@ export default function HomePage() {
             </div>
           )}
 
-          {events.length === 0 ? (
-            <div className="text-gray-400 py-4 text-center">
-              No upcoming events for this date.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {regularEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
-                        Server {event.server_id}
-                      </div>
-
-                      <div className="font-semibold mt-2 text-white break-words">
-                        {event.title}
-                      </div>
-
-                      <div className="text-gray-300 text-sm mt-1 break-words">
-                        {event.personnel?.name || "Unknown"}
-                      </div>
-                    </div>
-
-                    <div className="w-fit shrink-0 rounded-lg border border-[#00ff66]/25 bg-black/50 px-3 py-1 text-xs text-[#00ff66]">
-                      {new Date(event.start_time).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  </div>
+              {events.length === 0 ? (
+                <div className="py-5 text-center text-sm text-gray-400">
+                  No upcoming events for this date.
                 </div>
-              ))}
-            </div>
-          )}
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {regularEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="border border-[#00ff66]/15 bg-black/45 p-4 transition hover:border-[#00ff66]/45"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]">
+                            Server {event.server_id}
+                          </div>
+                          <div className="mt-2 break-words font-semibold text-white">
+                            {event.title}
+                          </div>
+                          <div className="mt-1 break-words text-sm text-gray-300">
+                            {event.personnel?.name || "Unknown"}
+                          </div>
+                        </div>
+                        <div className="w-fit shrink-0 border border-[#00ff66]/20 bg-black/50 px-3 py-1 text-xs text-[#00ff66]">
+                          {new Date(event.start_time).toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
           {showEarlierTodaySection && (
             <div className="mt-5">
               <button
+                type="button"
                 onClick={() => setPastEventsOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl border border-[#00ff66]/35 bg-black/40 hover:bg-black/55 transition-all"
+                className="flex w-full items-center justify-between gap-3 border border-[#00ff66]/25 bg-black/40 p-4 transition hover:bg-black/55"
               >
                 <span className="text-sm text-[#00ff66] tracking-[0.16em] sm:tracking-[0.2em] uppercase text-left">
                   Earlier Today ({pastEvents.length})
                 </span>
 
-                <span
-                  className={`text-[#00ff66] text-xl transition-transform duration-300 ${
-                    pastEventsOpen ? "rotate-180" : "rotate-0"
+                <ChevronDown
+                  className={`h-5 w-5 text-[#00ff66] transition ${
+                    pastEventsOpen ? "rotate-180" : ""
                   }`}
-                >
-                  ▼
-                </span>
+                />
               </button>
 
               <div
@@ -1286,13 +1425,13 @@ export default function HomePage() {
                     : "max-h-0 opacity-0"
                 }`}
               >
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {pastEvents.map((event) => (
                     <div
                       key={event.id}
-                      className="p-4 rounded-xl border border-[#00ff66]/15 bg-black/35 opacity-80 hover:opacity-100 transition-all"
+                      className="border border-[#00ff66]/10 bg-black/35 p-4 opacity-80 transition hover:opacity-100"
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-[11px] uppercase tracking-[0.18em] text-[#00ff66]/80">
                             Server {event.server_id}
@@ -1307,7 +1446,7 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        <div className="w-fit shrink-0 rounded-lg border border-[#00ff66]/15 bg-black/40 px-3 py-1 text-xs text-gray-300">
+                        <div className="w-fit shrink-0 border border-[#00ff66]/15 bg-black/40 px-3 py-1 text-xs text-gray-300">
                           {new Date(event.start_time).toLocaleTimeString([], {
                             hour: "numeric",
                             minute: "2-digit",
@@ -1324,39 +1463,41 @@ export default function HomePage() {
               </div>
             </div>
           )}
+            </section>
 
           <div className="hidden">
             101st Doom Battalion Star Wars MilSim Military Roleplay Arma Unit
             Tactical Gaming Community
           </div>
 
-          <div className="mt-8">
+            <section className="border border-[#00ff66]/15 bg-black/35">
             <button
+              type="button"
               onClick={() => setWeeklyOpen(!weeklyOpen)}
-              className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl border border-[#00ff66]/60 bg-black/50 hover:bg-black/70 transition-all cursor-pointer"
+              className="flex w-full items-center justify-between gap-3 border-b border-[#00ff66]/15 px-5 py-4 text-left transition hover:bg-white/[0.03]"
             >
-              <span className="text-lg sm:text-xl text-[#00ff66] tracking-widest">
-                Weekly Events
+              <span className="inline-flex items-center gap-3 text-[#00ff66]">
+                <Activity className="h-5 w-5" />
+                <span className="text-sm uppercase tracking-[0.22em]">
+                  Weekly Events
+                </span>
               </span>
-
-              <span
-                className={`text-[#00ff66] text-2xl transition-transform duration-300 ${
-                  weeklyOpen ? "rotate-180" : "rotate-0"
+              <ChevronDown
+                className={`h-5 w-5 text-[#00ff66] transition ${
+                  weeklyOpen ? "rotate-180" : ""
                 }`}
-              >
-                ▼
-              </span>
+              />
             </button>
 
             <div
               className={`overflow-hidden transition-all duration-500 ${
                 weeklyOpen
                   ? "max-h-[1000px] opacity-100 mt-4"
-                  : "max-h-0 opacity-0"
+                : "max-h-0 opacity-0"
               }`}
             >
-              <div className="p-4 rounded-2xl border border-[#00ff66]/40 bg-black/40">
-                <div className="space-y-4">
+              <div className="p-4">
+                <div className="space-y-3">
                   {weeklyEvents.map((event) => {
                     const nextOccurrence = getNextOccurrence(
                       event.day,
@@ -1367,9 +1508,9 @@ export default function HomePage() {
                     return (
                       <div
                         key={event.name}
-                        className="p-4 rounded-xl border border-[#00ff66]/30 bg-black/60 hover:border-[#00ff66] transition-all"
+                        className="border border-[#00ff66]/15 bg-black/45 p-4 transition hover:border-[#00ff66]/45"
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="text-[#00ff66] font-semibold">
                               {event.name}
@@ -1389,7 +1530,7 @@ export default function HomePage() {
                             </div>
                           </div>
 
-                          <div className="w-fit rounded-lg border border-[#00ff66]/25 bg-black/50 px-3 py-1 text-[11px] text-[#00ff66] whitespace-nowrap">
+                          <div className="w-fit border border-[#00ff66]/20 bg-black/50 px-3 py-1 text-[11px] text-[#00ff66] whitespace-nowrap">
                             {getRelativeCountdown(nextOccurrence)}
                           </div>
                         </div>
@@ -1399,43 +1540,57 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-          </div>
+            </section>
 
-          <div className="mt-6 border-t border-[#00ff66]/30 pt-6">
-            <h3 className="text-[#00ff66] tracking-widest mb-4">
-              Unit Connections
-            </h3>
+            <section className="border border-[#00ff66]/15 bg-black/35 p-5">
+              <h3 className="flex items-center gap-3 text-sm uppercase tracking-[0.22em] text-[#00ff66]">
+                <Gamepad2 className="h-5 w-5" />
+                Unit Connections
+              </h3>
 
             {[
               {
-                label: "💬 Join Our Discord",
+                label: "Join Our Discord",
                 href: "https://discord.gg/dZhRghrDfX",
+                icon: MessageCircle,
               },
               {
-                label: "📘 Unit Reddit",
+                label: "Unit Reddit",
                 href: "https://www.reddit.com/user/101stDBMediaTeam/",
+                icon: BookOpen,
               },
               {
-                label: "📸 Unit Instagram",
+                label: "Unit Instagram",
                 href: "https://www.instagram.com/101stdoombattalion_mediateam?igsh=MWk2d2t5cWd1amFhZw==",
+                icon: Instagram,
               },
               {
-                label: "🎧 Join TeamSpeak Server",
+                label: "Join TeamSpeak Server",
                 href: "ts3server://ts.101stdoombattalion.com",
+                icon: Headphones,
               },
-            ].map((item) => (
+            ].map((item) => {
+              const Icon = item.icon;
+
+              return (
               <a
                 key={item.label}
                 href={item.href}
                 target="_blank"
                 rel="noreferrer"
-                className="block mb-4 px-4 py-3 text-center rounded-xl border border-[#00ff66]/30 hover:bg-[#00ff66]/10 hover:scale-[1.02] sm:hover:scale-105 transition-all break-words"
+                className="mt-3 flex items-center justify-between gap-3 border border-[#00ff66]/15 bg-black/40 px-4 py-3 text-sm text-gray-200 transition hover:border-[#00ff66]/45 hover:bg-[#00ff66]/10 hover:text-[#00ff66]"
               >
-                {item.label}
+                <span className="inline-flex min-w-0 items-center gap-3">
+                  <Icon className="h-4 w-4 shrink-0 text-[#00ff66]/80" />
+                  <span className="truncate">{item.label}</span>
+                </span>
+                <ExternalLink className="h-4 w-4 shrink-0" />
               </a>
-            ))}
-          </div>
-        </aside>
+              );
+            })}
+            </section>
+          </aside>
+        </main>
       </div>
     </div>
   );

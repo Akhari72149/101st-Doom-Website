@@ -1,8 +1,19 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  Grid3X3,
+  ImageIcon,
+  Search,
+  X,
+} from "lucide-react";
 
 type Commander = {
   name: string;
@@ -10,25 +21,43 @@ type Commander = {
   images: string[];
 };
 
-type SortMode = "az" | "za" | "most-files" | "least-files";
+type GalleryItem = {
+  src: string;
+  commanderName: string;
+  folder: string;
+  fileName: string;
+  folderIndex: number;
+  globalIndex: number;
+};
+
+type SortMode = "az" | "za" | "newest" | "folder";
+
+const sortLabels: Record<SortMode, string> = {
+  az: "Name A-Z",
+  za: "Name Z-A",
+  newest: "Newest First",
+  folder: "Folder Order",
+};
+
+function getFileName(src: string) {
+  return decodeURIComponent(src.split("/").pop() || src);
+}
 
 export default function ArtOfWarPage() {
   const router = useRouter();
 
   const [commanders, setCommanders] = useState<Commander[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [sortMode, setSortMode] = useState<SortMode>("az");
-  const [animationState, setAnimationState] = useState<
-    "idle" | "opening" | "closing"
-  >("idle");
-
-  const animationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeFolder, setActiveFolder] = useState("all");
+  const [sortMode, setSortMode] = useState<SortMode>("folder");
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchArt = async () => {
+    let active = true;
+
+    async function fetchArt() {
       try {
         setError(null);
 
@@ -39,413 +68,448 @@ export default function ArtOfWarPage() {
         }
 
         const data = await res.json();
-        setCommanders(Array.isArray(data) ? data : []);
+
+        if (active) {
+          setCommanders(Array.isArray(data) ? data : []);
+        }
       } catch (err) {
         console.error("Failed loading art data", err);
-        setError("Unable to load archive records right now.");
+
+        if (active) {
+          setError("Unable to load archive records right now.");
+        }
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
-    };
+    }
 
     fetchArt();
 
     return () => {
-      if (animationTimeoutRef.current) {
-        clearTimeout(animationTimeoutRef.current);
-      }
+      active = false;
     };
   }, []);
 
-  const activeCommander = commanders.find((c) => c.folder === selected);
+  const allItems = useMemo<GalleryItem[]>(() => {
+    return commanders.flatMap((commander) =>
+      commander.images.map((src, index) => ({
+        src,
+        commanderName: commander.name,
+        folder: commander.folder,
+        fileName: getFileName(src),
+        folderIndex: index,
+        globalIndex: 0,
+      })),
+    ).map((item, index) => ({
+      ...item,
+      globalIndex: index,
+    }));
+  }, [commanders]);
 
-  const filteredAndSortedCommanders = useMemo(() => {
-    const filtered = commanders.filter((commander) =>
-      commander.name.toLowerCase().includes(search.toLowerCase())
-    );
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    const filtered = allItems.filter((item) => {
+      const matchesFolder = activeFolder === "all" || item.folder === activeFolder;
+      const haystack = `${item.commanderName} ${item.folder} ${item.fileName}`.toLowerCase();
+      const matchesSearch = !query || haystack.includes(query);
+
+      return matchesFolder && matchesSearch;
+    });
 
     const sorted = [...filtered];
 
     switch (sortMode) {
       case "az":
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        sorted.sort((a, b) => a.fileName.localeCompare(b.fileName));
         break;
       case "za":
-        sorted.sort((a, b) => b.name.localeCompare(a.name));
+        sorted.sort((a, b) => b.fileName.localeCompare(a.fileName));
         break;
-      case "most-files":
-        sorted.sort((a, b) => b.images.length - a.images.length);
+      case "newest":
+        sorted.sort((a, b) => b.globalIndex - a.globalIndex);
         break;
-      case "least-files":
-        sorted.sort((a, b) => a.images.length - b.images.length);
+      case "folder":
+        sorted.sort((a, b) => {
+          const folderCompare = a.commanderName.localeCompare(b.commanderName);
+          return folderCompare || a.folderIndex - b.folderIndex;
+        });
         break;
     }
 
     return sorted;
-  }, [commanders, search, sortMode]);
+  }, [activeFolder, allItems, search, sortMode]);
 
-  const totalFiles = useMemo(() => {
-    return commanders.reduce((sum, commander) => sum + commander.images.length, 0);
-  }, [commanders]);
+  const activeViewerItem =
+    viewerIndex === null ? null : filteredItems[viewerIndex] || null;
 
-  const openCommander = (folder: string) => {
-    if (animationState !== "idle") return;
+  const totalFiles = allItems.length;
+  const activeFolderName =
+    activeFolder === "all"
+      ? "All Archives"
+      : commanders.find((commander) => commander.folder === activeFolder)?.name ||
+        activeFolder;
 
-    if (animationTimeoutRef.current) {
-      clearTimeout(animationTimeoutRef.current);
-    }
-
-    setAnimationState("opening");
-
-    animationTimeoutRef.current = setTimeout(() => {
-      setSelected(folder);
-      setAnimationState("idle");
-    }, 250);
+  const openViewer = (index: number) => {
+    setViewerIndex(index);
   };
 
-  const closeCommander = () => {
-    if (animationState !== "idle") return;
+  const closeViewer = useCallback(() => {
+    setViewerIndex(null);
+  }, []);
 
-    if (animationTimeoutRef.current) {
-      clearTimeout(animationTimeoutRef.current);
+  const showPrevious = useCallback(() => {
+    setViewerIndex((current) => {
+      if (current === null || filteredItems.length === 0) return current;
+      return (current - 1 + filteredItems.length) % filteredItems.length;
+    });
+  }, [filteredItems.length]);
+
+  const showNext = useCallback(() => {
+    setViewerIndex((current) => {
+      if (current === null || filteredItems.length === 0) return current;
+      return (current + 1) % filteredItems.length;
+    });
+  }, [filteredItems.length]);
+
+  useEffect(() => {
+    if (viewerIndex === null) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeViewer();
+      if (event.key === "ArrowLeft") showPrevious();
+      if (event.key === "ArrowRight") showNext();
     }
 
-    setAnimationState("closing");
+    window.addEventListener("keydown", handleKeyDown);
 
-    animationTimeoutRef.current = setTimeout(() => {
-      setSelected(null);
-      setAnimationState("idle");
-    }, 250);
-  };
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeViewer, showNext, showPrevious, viewerIndex]);
+
+  useEffect(() => {
+    setViewerIndex(null);
+  }, [activeFolder, search, sortMode]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black text-white font-orbitron">
+    <div className="min-h-screen bg-[#020704] text-white font-orbitron">
       <div
-        className="absolute inset-0 bg-center bg-cover opacity-15 pointer-events-none"
+        className="fixed inset-0 bg-center bg-cover opacity-10"
         style={{ backgroundImage: "url('/background/bg.jpg')" }}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]" />
-      <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(0,255,102,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.05)_1px,transparent_1px)] bg-[size:40px_40px]" />
+      <div className="fixed inset-0 bg-[linear-gradient(90deg,rgba(0,255,102,0.05)_1px,transparent_1px),linear-gradient(rgba(0,255,102,0.04)_1px,transparent_1px)] bg-[size:64px_64px]" />
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_top,rgba(0,255,102,0.12),transparent_36%),linear-gradient(180deg,rgba(2,7,4,0.58),#020704_82%)]" />
 
-      <div className="relative z-10 p-6 md:p-10">
-        <button
-          onClick={() => router.push("/")}
-          className="
-            mb-6 px-6 py-2 rounded-lg
-            border border-[#00ff66]/60
-            text-[#00ff66]
-            bg-black/40
-            hover:bg-[#00ff66]/10
-            hover:shadow-[0_0_15px_rgba(0,255,102,0.25)]
-            transition-all
-          "
-        >
-          ← Back to Home
-        </button>
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1800px] flex-col px-4 py-5 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-5 border-b border-[#00ff66]/15 pb-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="inline-flex h-10 w-fit items-center gap-2 rounded-md border border-[#00ff66]/35 bg-black/35 px-3 text-sm text-[#00ff66] transition hover:border-[#00ff66]/70 hover:bg-[#00ff66]/10"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Home
+            </button>
 
-        {!selected && (
-          <>
-            <div className="mb-6 rounded-3xl border border-[#00ff66]/25 bg-black/45 backdrop-blur-md shadow-[0_0_35px_rgba(0,255,102,0.08)] overflow-hidden">
-              <div className="border-b border-[#00ff66]/15 px-6 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                  <div className="text-xs tracking-[0.35em] text-[#00ff66]/65 uppercase">
-                    War Archive System
-                  </div>
-                  <h1 className="mt-2 text-3xl md:text-5xl font-bold text-[#00ff66]">
-                    Art of War
-                  </h1>
-                  <p className="mt-3 text-sm md:text-base text-gray-400 max-w-3xl">
-                    Browse archived commander galleries, campaign visuals, and
-                    reference imagery through the 101st visual archive interface.
-                  </p>
-                </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.34em] text-[#00ff66]/60">
+                War Archive System
+              </p>
+              <h1 className="mt-2 text-4xl font-bold tracking-normal text-[#00ff66] sm:text-5xl lg:text-6xl">
+                Art of War
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-400">
+                Visual records, commander galleries, and campaign artwork from
+                the 101st archive.
+              </p>
+            </div>
+          </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 min-w-full lg:min-w-[420px]">
-                  <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.25em] text-[#00ff66]/55">
-                      Folders
-                    </div>
-                    <div className="mt-2 text-2xl font-bold text-white">
-                      {commanders.length}
-                    </div>
-                  </div>
+          <div className="grid grid-cols-3 gap-2 sm:w-[520px]">
+            <div className="border-l border-[#00ff66]/30 bg-black/20 px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">
+                Folders
+              </p>
+              <p className="mt-1 text-2xl font-bold text-white">
+                {commanders.length}
+              </p>
+            </div>
+            <div className="border-l border-[#00ff66]/30 bg-black/20 px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">
+                Images
+              </p>
+              <p className="mt-1 text-2xl font-bold text-white">{totalFiles}</p>
+            </div>
+            <div className="border-l border-[#00ff66]/30 bg-black/20 px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">
+                Showing
+              </p>
+              <p className="mt-1 text-2xl font-bold text-white">
+                {filteredItems.length}
+              </p>
+            </div>
+          </div>
+        </header>
 
-                  <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.25em] text-[#00ff66]/55">
-                      Files
-                    </div>
-                    <div className="mt-2 text-2xl font-bold text-white">
-                      {totalFiles}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-4 py-3 col-span-2 md:col-span-1">
-                    <div className="text-[10px] uppercase tracking-[0.25em] text-[#00ff66]/55">
-                      Visible
-                    </div>
-                    <div className="mt-2 text-2xl font-bold text-white">
-                      {filteredAndSortedCommanders.length}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-6 py-4 flex flex-col xl:flex-row xl:items-center gap-4">
-                <div className="flex-1">
-                  <label className="block text-[11px] uppercase tracking-[0.25em] text-[#00ff66]/55 mb-2">
-                    Search Archive
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Search commander folders..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="
-                      w-full px-4 py-3 rounded-xl
-                      border border-[#00ff66]/25
-                      bg-black/50
-                      text-white
-                      placeholder:text-gray-500
-                      outline-none
-                      focus:border-[#00ff66]/60
-                      focus:shadow-[0_0_15px_rgba(0,255,102,0.18)]
-                      transition-all
-                    "
-                  />
-                </div>
-
-                <div className="w-full xl:w-[260px]">
-                  <label className="block text-[11px] uppercase tracking-[0.25em] text-[#00ff66]/55 mb-2">
-                    Sort Records
-                  </label>
-                  <select
-                    value={sortMode}
-                    onChange={(e) => setSortMode(e.target.value as SortMode)}
-                    className="
-                      w-full px-4 py-3 rounded-xl
-                      border border-[#00ff66]/25
-                      bg-black/50
-                      text-white
-                      outline-none
-                      focus:border-[#00ff66]/60
-                      transition-all
-                    "
+        <div className="grid flex-1 gap-5 py-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="h-fit border border-[#00ff66]/15 bg-black/35 backdrop-blur-md lg:sticky lg:top-5">
+            <div className="border-b border-[#00ff66]/15 px-4 py-4">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#00ff66]/65" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search images..."
+                  className="h-11 w-full rounded-md border border-[#00ff66]/20 bg-black/55 pl-10 pr-10 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-[#00ff66]/60"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-gray-500 transition hover:bg-white/5 hover:text-white"
+                    aria-label="Clear search"
                   >
-                    <option value="az">Name A–Z</option>
-                    <option value="za">Name Z–A</option>
-                    <option value="most-files">Most Files</option>
-                    <option value="least-files">Least Files</option>
-                  </select>
-                </div>
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
+
+              <label className="mt-4 block text-[10px] uppercase tracking-[0.24em] text-[#00ff66]/55">
+                Sort
+              </label>
+              <select
+                value={sortMode}
+                onChange={(event) => setSortMode(event.target.value as SortMode)}
+                className="mt-2 h-11 w-full rounded-md border border-[#00ff66]/20 bg-black/55 px-3 text-sm text-white outline-none transition focus:border-[#00ff66]/60"
+              >
+                {Object.entries(sortLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="px-3 py-4">
+              <p className="px-2 text-[10px] uppercase tracking-[0.24em] text-[#00ff66]/55">
+                Folders
+              </p>
+              <div className="mt-3 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveFolder("all")}
+                  className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${
+                    activeFolder === "all"
+                      ? "bg-[#00ff66]/12 text-[#00ff66]"
+                      : "text-gray-400 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Grid3X3 className="h-4 w-4" />
+                    All
+                  </span>
+                  <span className="text-xs text-gray-500">{totalFiles}</span>
+                </button>
+
+                {commanders.map((commander) => (
+                  <button
+                    key={commander.folder}
+                    type="button"
+                    onClick={() => setActiveFolder(commander.folder)}
+                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${
+                      activeFolder === commander.folder
+                        ? "bg-[#00ff66]/12 text-[#00ff66]"
+                        : "text-gray-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <ImageIcon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{commander.name}</span>
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {commander.images.length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          <main className="min-w-0">
+            <div className="mb-5 flex flex-col gap-3 border-b border-[#00ff66]/15 pb-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-[#00ff66]/55">
+                  Current View
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold text-white">
+                  {activeFolderName}
+                </h2>
+              </div>
+              <p className="text-sm text-gray-500">
+                {loading
+                  ? "Indexing archive..."
+                  : `${filteredItems.length} of ${totalFiles} images`}
+              </p>
             </div>
 
             {loading && (
-              <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-6 py-8 text-[#00ff66]">
+              <div className="border border-[#00ff66]/15 bg-black/30 px-5 py-8 text-sm text-[#00ff66]">
                 Loading archive records...
               </div>
             )}
 
             {error && !loading && (
-              <div className="rounded-2xl border border-red-500/40 bg-red-950/25 px-6 py-8 text-red-300">
+              <div className="border border-red-500/35 bg-red-950/20 px-5 py-8 text-sm text-red-300">
                 {error}
               </div>
             )}
 
-            {!loading && !error && filteredAndSortedCommanders.length === 0 && (
-              <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-6 py-10 text-center">
-                <div className="text-xl text-[#00ff66]">No archive matches found</div>
-                <div className="mt-2 text-sm text-gray-400">
-                  Try changing the search term or sort mode.
+            {!loading && !error && filteredItems.length === 0 && (
+              <div className="grid min-h-[320px] place-items-center border border-[#00ff66]/15 bg-black/25 px-5 py-10 text-center">
+                <div>
+                  <ImageIcon className="mx-auto h-10 w-10 text-[#00ff66]/65" />
+                  <p className="mt-4 text-lg text-[#00ff66]">
+                    No archive matches found
+                  </p>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Try another folder, search term, or sort mode.
+                  </p>
                 </div>
               </div>
             )}
 
-            {!loading && !error && filteredAndSortedCommanders.length > 0 && (
-              <div
-                className={`
-                  grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6
-                  transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
-                  ${
-                    animationState === "opening"
-                      ? "opacity-0 -translate-y-4 scale-[0.99]"
-                      : animationState === "closing"
-                      ? "opacity-0 translate-y-4 scale-[0.99]"
-                      : "opacity-100 translate-y-0 scale-100"
-                  }
-                `}
-              >
-                {filteredAndSortedCommanders.map((commander) => (
+            {!loading && !error && filteredItems.length > 0 && (
+              <div className="columns-1 gap-4 sm:columns-2 2xl:columns-3 [column-fill:_balance]">
+                {filteredItems.map((item, index) => (
                   <button
-                    key={commander.folder}
+                    key={`${item.src}-${item.globalIndex}`}
                     type="button"
-                    onClick={() => openCommander(commander.folder)}
-                    className="
-                      group relative text-left rounded-3xl overflow-hidden
-                      border border-[#00ff66]/25
-                      bg-black/60
-                      hover:border-[#00ff66]/70
-                      hover:scale-[1.02]
-                      hover:shadow-[0_0_40px_rgba(0,255,102,0.18)]
-                      transition-all duration-300
-                      focus:outline-none focus:ring-2 focus:ring-[#00ff66]/50
-                    "
+                    onClick={() => openViewer(index)}
+                    className="group mb-4 block w-full break-inside-avoid overflow-hidden border border-[#00ff66]/15 bg-black/35 text-left transition hover:border-[#00ff66]/60 hover:shadow-[0_0_30px_rgba(0,255,102,0.12)] focus:outline-none focus:ring-2 focus:ring-[#00ff66]/50"
                   >
-                    <div className="relative aspect-[5/4]">
-                      {commander.images[0] ? (
-                        <Image
-                          src={commander.images[0]}
-                          alt={`${commander.name} preview`}
-                          fill
-                          sizes="(max-width: 768px) 100vw, (max-width: 1536px) 50vw, 33vw"
-                          className="object-cover opacity-30 group-hover:opacity-45 transition-all duration-300"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 bg-black/50" />
-                      )}
-
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
-
-                      <div className="absolute top-0 left-0 right-0 px-5 py-3 border-b border-[#00ff66]/15 bg-black/55 backdrop-blur-sm">
-                        <div className="text-[10px] uppercase tracking-[0.3em] text-[#00ff66]/65">
-                          Commander Archive
-                        </div>
-                      </div>
-
-                      <div className="absolute top-4 right-4 rounded-full border border-[#00ff66]/25 bg-black/60 px-3 py-1 text-xs text-[#00ff66]">
-                        {commander.images.length} files
-                      </div>
-
-                      <div className="absolute inset-x-0 bottom-0 p-6">
-                        <div className="text-2xl md:text-3xl font-bold text-[#00ff66]">
-                          {commander.name}
-                        </div>
-
-                        <div className="mt-2 text-xs uppercase tracking-[0.25em] text-gray-400">
-                          /archive/{commander.folder}
-                        </div>
-
-                        <div className="mt-4 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">
-                            Visual records indexed
-                          </span>
-                          <span className="text-xs text-[#00ff66]/75 opacity-0 group-hover:opacity-100 transition-all">
-                            Open Folder →
-                          </span>
-                        </div>
+                    <div
+                      className={`relative ${
+                        index % 5 === 0
+                          ? "aspect-[4/5]"
+                          : index % 4 === 0
+                            ? "aspect-[16/10]"
+                            : "aspect-[4/3]"
+                      }`}
+                    >
+                      <Image
+                        src={item.src}
+                        alt={`${item.commanderName} artwork ${item.folderIndex + 1}`}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1536px) 50vw, 33vw"
+                        className="object-cover transition duration-500 group-hover:scale-[1.04]"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent opacity-80 transition group-hover:opacity-60" />
+                      <div className="absolute inset-x-0 bottom-0 p-4">
+                        <p className="text-sm font-semibold text-[#00ff66]">
+                          {item.commanderName}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-gray-400">
+                          {item.fileName}
+                        </p>
                       </div>
                     </div>
                   </button>
                 ))}
               </div>
             )}
-          </>
-        )}
+          </main>
+        </div>
+      </div>
 
-        {selected && activeCommander && (
-          <div
-            className={`
-              transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
-              ${
-                animationState === "opening"
-                  ? "opacity-100 translate-y-0"
-                  : animationState === "closing"
-                  ? "opacity-0 -translate-y-4"
-                  : "opacity-100 translate-y-0"
-              }
-            `}
-          >
-            <div className="sticky top-0 z-20 mb-6 rounded-3xl border border-[#00ff66]/20 bg-black/75 backdrop-blur-md shadow-[0_0_25px_rgba(0,255,102,0.08)] overflow-hidden">
-              <div className="px-6 py-5 border-b border-[#00ff66]/15 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.3em] text-[#00ff66]/60">
-                    Archive Folder
-                  </div>
-                  <h2 className="mt-2 text-3xl md:text-4xl font-bold text-[#00ff66]">
-                    {activeCommander.name}
-                  </h2>
-                  <div className="mt-2 text-sm text-gray-400">
-                    /archive/{activeCommander.folder}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-4 py-3 min-w-[130px]">
-                    <div className="text-[10px] uppercase tracking-[0.25em] text-[#00ff66]/55">
-                      Files
-                    </div>
-                    <div className="mt-2 text-xl font-bold text-white">
-                      {activeCommander.images.length}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={closeCommander}
-                    className="
-                      px-6 py-3 rounded-xl
-                      border border-red-500/60
-                      text-red-400
-                      bg-black/40
-                      hover:bg-red-500/10
-                      hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]
-                      transition-all
-                    "
-                  >
-                    ← Back to Folders
-                  </button>
-                </div>
-              </div>
+      {activeViewerItem && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/95 text-white"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="flex items-center justify-between border-b border-[#00ff66]/15 px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-[#00ff66]/60">
+                {activeViewerItem.commanderName}
+              </p>
+              <p className="mt-1 truncate text-sm text-gray-300">
+                {activeViewerItem.fileName}
+              </p>
             </div>
 
-            {activeCommander.images.length === 0 ? (
-              <div className="rounded-2xl border border-[#00ff66]/20 bg-black/40 px-6 py-8 text-gray-400">
-                No artwork found in this archive folder.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
-                {activeCommander.images.map((img, index) => (
-                  <div
-                    key={`${img}-${index}`}
-                    className="
-                      group relative rounded-3xl overflow-hidden
-                      border border-[#00ff66]/25
-                      bg-black/50
-                      hover:border-[#00ff66]/65
-                      hover:shadow-[0_0_30px_rgba(0,255,102,0.14)]
-                      transition-all
-                    "
-                  >
-                    <div className="relative aspect-[4/3]">
-                      <Image
-                        src={img}
-                        alt={`${activeCommander.name} artwork ${index + 1}`}
-                        fill
-                        sizes="(max-width: 768px) 100vw, (max-width: 1536px) 50vw, 33vw"
-                        className="object-cover transition-transform duration-500 group-hover:scale-110"
-                      />
-
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-
-                      <div className="absolute top-4 left-4 rounded-full border border-[#00ff66]/25 bg-black/60 px-3 py-1 text-xs text-[#00ff66]">
-                        File {index + 1}
-                      </div>
-
-                      <div className="absolute bottom-0 left-0 right-0 px-5 py-4">
-                        <div className="text-sm font-semibold text-[#00ff66]">
-                          {activeCommander.name}
-                        </div>
-                        <div className="mt-1 text-xs text-gray-400 break-all">
-                          {img}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <a
+                href={activeViewerItem.src}
+                download
+                className="grid h-10 w-10 place-items-center rounded-md border border-[#00ff66]/20 text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                aria-label="Download image"
+              >
+                <Download className="h-4 w-4" />
+              </a>
+              <a
+                href={activeViewerItem.src}
+                target="_blank"
+                rel="noreferrer"
+                className="grid h-10 w-10 place-items-center rounded-md border border-[#00ff66]/20 text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                aria-label="Open image in new tab"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+              <button
+                type="button"
+                onClick={closeViewer}
+                className="grid h-10 w-10 place-items-center rounded-md border border-red-500/35 text-red-300 transition hover:bg-red-500/10"
+                aria-label="Close viewer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+
+          <div className="relative flex min-h-0 flex-1 items-center justify-center px-12 py-6">
+            {filteredItems.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={showPrevious}
+                  className="absolute left-3 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md border border-[#00ff66]/20 bg-black/50 text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+                <button
+                  type="button"
+                  onClick={showNext}
+                  className="absolute right-3 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md border border-[#00ff66]/20 bg-black/50 text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              </>
+            )}
+
+            <div className="relative h-full w-full">
+              <Image
+                src={activeViewerItem.src}
+                alt={`${activeViewerItem.commanderName} artwork`}
+                fill
+                sizes="100vw"
+                className="object-contain"
+                priority
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-[#00ff66]/15 px-4 py-3 text-center text-xs text-gray-500">
+            {(viewerIndex || 0) + 1} / {filteredItems.length}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

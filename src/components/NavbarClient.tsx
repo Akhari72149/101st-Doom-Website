@@ -288,6 +288,13 @@ export default function NavbarClient() {
           category: "Records",
         },
         {
+          href: "/admin/discord-attendance",
+          label: "Discord Attendance",
+          description: "Schedule reaction-based Discord attendance embeds",
+          allowedRoles: ["admin", "nco", "Akhari"],
+          category: "Records",
+        },
+        {
           href: "/admin/medals",
           label: "Medals",
           description: "Award medals shown on personnel profiles",

@@ -4,6 +4,7 @@ import {
   attendanceAssignableRoles,
   attendancePingRoles,
 } from "@/data/discordAttendanceRoles";
+import { refreshDiscordAttendanceMessage } from "@/lib/refreshDiscordAttendance";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const VALID_REPEAT_TYPES = new Set(["none", "weekly"]);
@@ -17,6 +18,7 @@ const DEFAULT_OPTIONS = [
 ];
 
 type AttendanceOptionInput = {
+  id: string | null;
   emoji: string;
   label: string;
   sort_order: number;
@@ -41,9 +43,17 @@ function cleanAllowedRoleId(value: unknown, allowedRoleIds: Set<string>) {
   return roleId && allowedRoleIds.has(roleId) ? roleId : "";
 }
 
+function cleanUuid(value: unknown) {
+  const id = String(value || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    ? id
+    : "";
+}
+
 function cleanOption(option: unknown, index: number) {
   const entry = option && typeof option === "object" ? option as Record<string, unknown> : {};
   return {
+    id: cleanUuid(entry.id) || null,
     emoji: String(entry.emoji || "").trim(),
     label: String(entry.label || "").trim(),
     assign_role_id: cleanAllowedRoleId(entry.assign_role_id, allowedAssignableRoleIds) || null,
@@ -220,26 +230,61 @@ export async function PATCH(
     return jsonError(updateError.message || "Failed to update attendance event", 500);
   }
 
-  const { error: deleteOptionError } = await supabaseAdmin
+  const optionIdsToKeep = options
+    .map((option) => option.id)
+    .filter((id): id is string => Boolean(id));
+
+  let deleteOptionsQuery = supabaseAdmin
     .from("discord_attendance_options")
     .delete()
     .eq("event_id", eventId);
 
+  if (optionIdsToKeep.length > 0) {
+    deleteOptionsQuery = deleteOptionsQuery.not("id", "in", `(${optionIdsToKeep.join(",")})`);
+  }
+
+  const { error: deleteOptionError } = await deleteOptionsQuery;
+
   if (deleteOptionError) {
-    return jsonError(deleteOptionError.message || "Failed to replace attendance options", 500);
+    return jsonError(deleteOptionError.message || "Failed to remove deleted attendance options", 500);
   }
 
-  const { error: optionError } = await supabaseAdmin
-    .from("discord_attendance_options")
-    .insert(options.map((option) => ({ ...option, event_id: eventId })));
+  for (const option of options) {
+    const optionPayload = {
+      emoji: option.emoji,
+      label: option.label,
+      assign_role_id: option.assign_role_id,
+      sort_order: option.sort_order,
+      event_id: eventId,
+    };
 
-  if (optionError) {
-    return jsonError(optionError.message || "Failed to save attendance options", 500);
+    if (option.id) {
+      const { error: optionUpdateError } = await supabaseAdmin
+        .from("discord_attendance_options")
+        .update(optionPayload)
+        .eq("id", option.id)
+        .eq("event_id", eventId);
+
+      if (optionUpdateError) {
+        return jsonError(optionUpdateError.message || "Failed to update attendance option", 500);
+      }
+    } else {
+      const { error: optionInsertError } = await supabaseAdmin
+        .from("discord_attendance_options")
+        .insert(optionPayload);
+
+      if (optionInsertError) {
+        return jsonError(optionInsertError.message || "Failed to add attendance option", 500);
+      }
+    }
   }
+
+  const refreshResult = await refreshDiscordAttendanceMessage(eventId);
 
   return NextResponse.json({
     success: true,
     id: eventId,
+    discord_message_refreshed: refreshResult.refreshed,
   });
 }
 

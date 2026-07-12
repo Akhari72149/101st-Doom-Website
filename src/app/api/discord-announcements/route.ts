@@ -1,11 +1,23 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
+import { getAdminRouteAuth, hasAnyAdminRole } from "@/lib/admin-route-auth";
 
 const VALID_REPEAT_TYPES = ["none", "daily", "weekly", "monthly", "custom"] as const;
 const DISCORD_MESSAGE_LIMIT = 2000;
+const ANNOUNCEMENT_ADMIN_ROLES = ["admin", "logistics"];
+
+function isValidRepeatType(value: string): value is (typeof VALID_REPEAT_TYPES)[number] {
+  return VALID_REPEAT_TYPES.some((repeatType) => repeatType === value);
+}
 
 export async function POST(req: Request) {
+  const { userId, roles } = await getAdminRouteAuth(req);
+
+  if (!userId || !hasAnyAdminRole(roles, ANNOUNCEMENT_ADMIN_ROLES)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await req.json();
 
   const title = String(body.title || "").trim();
@@ -24,7 +36,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  if (!VALID_REPEAT_TYPES.includes(repeatType as any)) {
+  if (!isValidRepeatType(repeatType)) {
     return NextResponse.json({ error: "Invalid repeat type" }, { status: 400 });
   }
 
@@ -85,6 +97,12 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const { userId, roles } = await getAdminRouteAuth(req);
+
+  if (!userId || !hasAnyAdminRole(roles, ANNOUNCEMENT_ADMIN_ROLES)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await req.json();
 
   const id = String(body.id || "").trim();
@@ -108,7 +126,7 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  if (!VALID_REPEAT_TYPES.includes(repeatType as any)) {
+  if (!isValidRepeatType(repeatType)) {
     return NextResponse.json({ error: "Invalid repeat type" }, { status: 400 });
   }
 

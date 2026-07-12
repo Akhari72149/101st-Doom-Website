@@ -1,15 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { animate, stagger } from "animejs";
 import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
-
-type DiscordChannel = {
-  id: string;
-  name: string;
-};
 
 type Announcement = {
   id: string;
@@ -55,7 +50,12 @@ const sortOptions = [
   { value: "active_first", label: "Active First" },
 ] as const;
 
-function getExpectedPingRoleId(isScheduled: boolean) {
+type CurrentUser = {
+  id: string;
+  email?: string | null;
+};
+
+function getExpectedPingRoleId() {
   return CORRECT_ANNOUNCEMENT_ROLE_ID;
 }
 
@@ -66,7 +66,7 @@ function getDisplayPingRoleId(item: Announcement) {
     item.ping_role_id === LEGACY_WRONG_SCHEDULED_ROLE_ID ||
     !item.ping_role_id
   ) {
-    return getExpectedPingRoleId(true);
+    return getExpectedPingRoleId();
   }
 
   return item.ping_role_id;
@@ -79,7 +79,7 @@ export default function DiscordAnnouncementsPage() {
   const [loadingPage, setLoadingPage] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -99,6 +99,7 @@ export default function DiscordAnnouncementsPage() {
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [successPulse, setSuccessPulse] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [listFilter, setListFilter] = useState<
     "all" | "active" | "inactive" | "repeating" | "one-time"
@@ -126,6 +127,25 @@ export default function DiscordAnnouncementsPage() {
   }, []);
 
   useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const fetchAnnouncements = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("discord_announcements")
+      .select("*")
+      .order("scheduled_for", { ascending: true });
+
+    if (error) {
+      console.error("Failed to fetch announcements", error);
+      return;
+    }
+
+    setAnnouncements((data || []) as Announcement[]);
+  }, []);
+
+  useEffect(() => {
     const init = async () => {
       setLoadingAuth(true);
 
@@ -145,7 +165,7 @@ export default function DiscordAnnouncementsPage() {
         .select("role")
         .eq("user_id", user.id);
 
-      const roleList = roleRows?.map((r: any) => r.role) || [];
+      const roleList = roleRows?.map((row: { role: string }) => row.role) || [];
       setRoles(roleList);
 
       if (!roleList.includes("admin") && !roleList.includes("logistics")) {
@@ -169,7 +189,7 @@ export default function DiscordAnnouncementsPage() {
     };
 
     load();
-  }, [canAccess]);
+  }, [canAccess, fetchAnnouncements]);
 
   useEffect(() => {
     if (!successPulse) return;
@@ -180,20 +200,6 @@ export default function DiscordAnnouncementsPage() {
 
     return () => clearTimeout(timer);
   }, [successPulse]);
-
-  const fetchAnnouncements = async () => {
-    const { data, error } = await supabase
-      .from("discord_announcements")
-      .select("*")
-      .order("scheduled_for", { ascending: true });
-
-    if (error) {
-      console.error("Failed to fetch announcements", error);
-      return;
-    }
-
-    setAnnouncements((data || []) as Announcement[]);
-  };
 
   const resetForm = () => {
     setTitle("");
@@ -212,7 +218,7 @@ export default function DiscordAnnouncementsPage() {
     discordAnnouncementChannels.find((c) => c.id === channelId) || null;
 
   const currentPingRoleId = pingRole
-    ? getExpectedPingRoleId(scheduleEnabled)
+    ? getExpectedPingRoleId()
     : null;
 
   const previewMessage = pingRole
@@ -224,7 +230,7 @@ export default function DiscordAnnouncementsPage() {
 
   const selectedDate = scheduledFor ? new Date(scheduledFor) : null;
   const isPastTime =
-    scheduleEnabled && !!selectedDate && selectedDate.getTime() < Date.now();
+    scheduleEnabled && !!selectedDate && selectedDate.getTime() < nowMs;
 
   const repeatSummary = useMemo(() => {
     if (!scheduleEnabled) {
@@ -386,11 +392,21 @@ export default function DiscordAnnouncementsPage() {
     setSaving(true);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        setStatusMessage("You must be signed in to manage Discord announcements.");
+        setSaving(false);
+        return;
+      }
+
       if (!scheduleEnabled && !editingId) {
         const res = await fetch("/api/discord-announcements/send-now", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             title: title.trim(),
@@ -398,7 +414,7 @@ export default function DiscordAnnouncementsPage() {
             channel_id: channelId,
             channel_name: selectedChannel?.name || null,
             ping_role: pingRole,
-            ping_role_id: pingRole ? getExpectedPingRoleId(false) : null,
+            ping_role_id: pingRole ? getExpectedPingRoleId() : null,
             created_by: user?.id || null,
           }),
         });
@@ -422,6 +438,7 @@ export default function DiscordAnnouncementsPage() {
         method: editingId ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           id: editingId,
@@ -437,7 +454,7 @@ export default function DiscordAnnouncementsPage() {
               ? Number(repeatIntervalMinutes)
               : null,
           ping_role: pingRole,
-          ping_role_id: pingRole ? getExpectedPingRoleId(true) : null,
+          ping_role_id: pingRole ? getExpectedPingRoleId() : null,
           created_by: user?.id || null,
         }),
       });
@@ -478,13 +495,26 @@ export default function DiscordAnnouncementsPage() {
   };
 
   const toggleActive = async (item: Announcement) => {
-    const { error } = await supabase
-      .from("discord_announcements")
-      .update({ active: !item.active })
-      .eq("id", item.id);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
 
-    if (error) {
-      console.error("Failed to toggle active state", error);
+    if (!token) {
+      setStatusMessage("You must be signed in to manage Discord announcements.");
+      return;
+    }
+
+    const res = await fetch(`/api/discord-announcements/${item.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ active: !item.active }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      setStatusMessage(data?.error || "Failed to toggle active state.");
       return;
     }
 
@@ -495,13 +525,24 @@ export default function DiscordAnnouncementsPage() {
     const confirmed = window.confirm("Delete this announcement?");
     if (!confirmed) return;
 
-    const { error } = await supabase
-      .from("discord_announcements")
-      .delete()
-      .eq("id", id);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
 
-    if (error) {
-      console.error("Failed to delete announcement", error);
+    if (!token) {
+      setStatusMessage("You must be signed in to manage Discord announcements.");
+      return;
+    }
+
+    const res = await fetch(`/api/discord-announcements/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      setStatusMessage(data?.error || "Failed to delete announcement.");
       return;
     }
 

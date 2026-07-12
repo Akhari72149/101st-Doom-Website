@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendDiscordMessage } from "@/lib/send-discord-message";
 
+type ProcessResult = {
+  id: string;
+  success: boolean;
+  error?: string;
+};
+
 function getNextScheduledFor(currentIso: string, repeatType: string, repeatIntervalMinutes: number | null) {
   const date = new Date(currentIso);
 
@@ -34,12 +40,7 @@ const expected = `Bearer ${process.env.CRON_SECRET}`;
 
 if (authHeader !== expected) {
   return NextResponse.json(
-    {
-      error: "Unauthorized",
-      received: authHeader,
-      expected,
-      hasSecret: !!process.env.CRON_SECRET,
-    },
+    { error: "Unauthorized" },
     { status: 401 }
   );
 }
@@ -58,7 +59,7 @@ if (authHeader !== expected) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const results: any[] = [];
+  const results: ProcessResult[] = [];
 
   for (const item of dueAnnouncements || []) {
     try {
@@ -97,8 +98,9 @@ if (authHeader !== expected) {
       }
 
       results.push({ id: item.id, success: true });
-    } catch (err: any) {
-      results.push({ id: item.id, success: false, error: err.message });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      results.push({ id: item.id, success: false, error: message });
     }
   }
 

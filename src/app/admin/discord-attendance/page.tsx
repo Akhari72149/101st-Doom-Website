@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarClock, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
 import {
@@ -58,6 +59,8 @@ const defaultOptions: AttendanceOption[] = [
   { emoji: "🚪", label: "Ride Along" },
   { emoji: "❌", label: "Not Attending" },
 ];
+
+const allowedAttendanceAdminRoles = ["admin", "nco", "akhari"];
 
 function toDatetimeLocalValue(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -121,6 +124,8 @@ function EmojiPreview({
 }
 
 export default function DiscordAttendancePage() {
+  const router = useRouter();
+  const [loadingAuth, setLoadingAuth] = useState(true);
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -239,7 +244,20 @@ export default function DiscordAttendancePage() {
     setLoadingEmojis(true);
 
     try {
-      const response = await fetch("/api/discord-attendance/emojis");
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        setEmojiOptions([]);
+        setLoadingEmojis(false);
+        return;
+      }
+
+      const response = await fetch("/api/discord-attendance/emojis", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const result = await response.json();
       setEmojiOptions(Array.isArray(result.emojis) ? result.emojis : []);
     } catch {
@@ -250,11 +268,40 @@ export default function DiscordAttendancePage() {
   }
 
   useEffect(() => {
-    queueMicrotask(() => {
-      void loadEvents();
-      void loadEmojiOptions();
-    });
-  }, []);
+    const checkAccess = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: roleData, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      if (error) {
+        router.replace("/");
+        return;
+      }
+
+      const roles = (roleData || []).map((row) => String(row.role).toLowerCase());
+      const allowed = roles.some((role) => allowedAttendanceAdminRoles.includes(role));
+
+      if (!allowed) {
+        router.replace("/");
+        return;
+      }
+
+      setLoadingAuth(false);
+      await Promise.all([loadEvents(), loadEmojiOptions()]);
+    };
+
+    void checkAccess();
+  }, [router]);
 
   function resetForm() {
     setEditingEventId(null);
@@ -431,6 +478,16 @@ export default function DiscordAttendancePage() {
     setStatusMessage("Attendance event deleted.");
     setDeletingEventId(null);
     await loadEvents();
+  }
+
+  if (loadingAuth) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#020704] px-4 text-[#00ff66]">
+        <div className="border border-[#00ff66]/20 bg-black/45 px-5 py-4 text-sm uppercase tracking-[0.18em]">
+          Checking attendance access...
+        </div>
+      </main>
+    );
   }
 
   return (

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { getAdminRouteAuth, hasAnyAdminRole } from "@/lib/admin-route-auth";
 
 const DISCORD_GUILD_ID = "445933549816774656";
+const ATTENDANCE_ADMIN_ROLES = ["admin", "nco", "akhari"];
 
 const baseNumberEmojis = [
   { label: "0", value: "\u0030\ufe0f\u20e3", preview: "\u0030\ufe0f\u20e3", source: "base" },
@@ -23,7 +25,13 @@ type DiscordGuildEmoji = {
   available?: boolean;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { userId, roles } = await getAdminRouteAuth(request);
+
+  if (!userId || !hasAnyAdminRole(roles, ATTENDANCE_ADMIN_ROLES)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
 
   if (!botToken) {

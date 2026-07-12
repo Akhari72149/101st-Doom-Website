@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
 import { sendDiscordMessage } from "@/lib/send-discord-message";
 import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
+import { getAdminRouteAuth, hasAnyAdminRole } from "@/lib/admin-route-auth";
 
 const DISCORD_MESSAGE_LIMIT = 2000;
+const ANNOUNCEMENT_ADMIN_ROLES = ["admin", "logistics"];
 
 export async function POST(req: Request) {
+  const { userId, roles } = await getAdminRouteAuth(req);
+
+  if (!userId || !hasAnyAdminRole(roles, ANNOUNCEMENT_ADMIN_ROLES)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await req.json();
 
   const title = String(body.title || "").trim();
@@ -49,9 +57,14 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || "Failed to send announcement" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to send announcement",
+      },
       { status: 500 }
     );
   }

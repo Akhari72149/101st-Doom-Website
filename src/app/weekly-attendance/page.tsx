@@ -42,6 +42,28 @@ type IndividualAttendanceMember = {
   nonAttendancePct: number;
 };
 
+type AttendanceRecordRow = {
+  id: string;
+  type: string | null;
+  status: string | null;
+  attendance_month?: string | null;
+  week_number?: number | null;
+  personnel:
+    | {
+        id: string | null;
+        name: string | null;
+        slotted_position: string | null;
+        ranks: { name: string | null } | { name: string | null }[] | null;
+      }
+    | {
+        id: string | null;
+        name: string | null;
+        slotted_position: string | null;
+        ranks: { name: string | null } | { name: string | null }[] | null;
+      }[]
+    | null;
+};
+
 const months = [
   "January",
   "February",
@@ -378,7 +400,8 @@ export default function AttendanceDashboardViewer() {
         return;
       }
 
-      const filtered = data.filter((row: any) => {
+      const attendanceRows = data as AttendanceRecordRow[];
+      const filtered = attendanceRows.filter((row) => {
         const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
         const slot = person?.slotted_position;
 
@@ -391,12 +414,12 @@ export default function AttendanceDashboardViewer() {
       });
 
       const formatted: ViewerMember[] = filtered
-        .map((row: any) => {
+        .map((row) => {
           const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
           const rankRow = Array.isArray(person?.ranks) ? person?.ranks[0] : person?.ranks;
 
           return {
-            id: person?.id,
+            id: person?.id ?? "",
             recordId: row.id,
             name: person?.name ?? "Unknown",
             rank: rankRow?.name ?? "Unknown",
@@ -476,7 +499,8 @@ export default function AttendanceDashboardViewer() {
         return;
       }
 
-      const filteredRows = data.filter((row: any) => {
+      const attendanceRows = data as AttendanceRecordRow[];
+      const filteredRows = attendanceRows.filter((row) => {
         const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
         const rankRow = Array.isArray(person?.ranks) ? person?.ranks[0] : person?.ranks;
 
@@ -618,36 +642,34 @@ export default function AttendanceDashboardViewer() {
   const currentSquads = activeTab ? platoons[activeTab] || [] : [];
 
   return (
-    <motion.div className="relative min-h-screen text-white font-orbitron overflow-hidden">
+    <motion.div className="relative min-h-screen overflow-hidden font-orbitron text-white">
       <div
-        className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-20 pointer-events-none z-0"
+        className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-20"
         style={{ backgroundImage: "url('/background/bg.jpg')" }}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] z-0" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,102,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none" />
+      <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_left,rgba(0,255,102,0.12),transparent_36%),radial-gradient(circle_at_70%_20%,rgba(0,255,102,0.07),transparent_32%),#020704]" />
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(rgba(0,255,102,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.035)_1px,transparent_1px)] bg-[size:40px_40px]" />
 
-      <div className="relative z-10 mx-auto max-w-7xl p-6 md:p-10 xl:p-12">
-        <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-6 md:p-8 shadow-[0_0_40px_rgba(0,255,102,0.08)] mb-8">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+      <div className="relative z-10 mx-auto max-w-[1600px] p-4 sm:p-6 xl:p-8">
+        <header className="mb-5 border border-[#00ff66]/20 bg-black/60 p-5 shadow-[0_0_35px_rgba(0,255,102,0.06)] backdrop-blur-xl">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-2xl">
-              <p className="text-xs uppercase tracking-[0.35em] text-[#00ff66]/60 mb-3">
+              <p className="mb-2 text-[11px] uppercase tracking-[0.32em] text-[#00ff66]/60">
                 Personnel Records
               </p>
-              <h1 className="text-3xl md:text-4xl font-bold text-[#00ff66] tracking-[0.18em]">
-                ATTENDANCE DASHBOARD
+              <h1 className="text-3xl font-bold tracking-[0.16em] text-[#00ff66] md:text-4xl">
+                Attendance Dashboard
               </h1>
-              <p className="mt-3 text-sm md:text-base text-[#b9d8c4]">
-                Review platoon and squad attendance for Training and MainOp periods.
-                Select a formation, review the roster, inspect attendance status, and
-                search historical attendance percentages for individual personnel.
+              <p className="mt-2 text-sm leading-6 text-[#b9d8c4]">
+                Select a period and formation, then review the attendance roster.
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 min-w-0 xl:min-w-[620px]">
+            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[680px] xl:grid-cols-4">
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+                className="h-12 border border-[#00ff66]/30 bg-[#06100a] px-4 text-[#00ff66] outline-none focus:border-[#00ff66]/70"
               >
                 {months.map((m) => (
                   <option key={m}>{m}</option>
@@ -657,7 +679,7 @@ export default function AttendanceDashboardViewer() {
               <select
                 value={selectedWeek}
                 onChange={(e) => setSelectedWeek(Number(e.target.value))}
-                className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+                className="h-12 border border-[#00ff66]/30 bg-[#06100a] px-4 text-[#00ff66] outline-none focus:border-[#00ff66]/70"
               >
                 {[1, 2, 3, 4, 5].map((w) => (
                   <option key={w} value={w}>
@@ -669,137 +691,326 @@ export default function AttendanceDashboardViewer() {
               <select
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value)}
-                className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+                className="h-12 border border-[#00ff66]/30 bg-[#06100a] px-4 text-[#00ff66] outline-none focus:border-[#00ff66]/70"
               >
                 <option value="Training">Training</option>
                 <option value="MainOp">MainOp</option>
               </select>
 
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#00ff66]/50" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#00ff66]/50" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search roster..."
-                  className="w-full bg-[#06100a] border border-[#00ff66]/30 text-white px-10 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
+                  className="h-12 w-full border border-[#00ff66]/30 bg-[#06100a] px-10 text-white outline-none focus:border-[#00ff66]/70"
                 />
               </div>
             </div>
           </div>
+        </header>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <div className="rounded-2xl border border-[#00ff66]/15 bg-[#08110c]/80 p-4">
-              <div className="flex items-center gap-3 text-[#00ff66]/70 text-xs uppercase tracking-[0.2em]">
-                <Users className="h-4 w-4" />
-                Selected Platoon
+        <section className="mb-6 grid gap-5 xl:grid-cols-[390px_minmax(0,1fr)]">
+          <div className="h-fit border border-[#00ff66]/20 bg-black/60 p-4 shadow-[0_0_30px_rgba(0,255,102,0.05)] backdrop-blur-xl xl:sticky xl:top-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-[#00ff66]/55">
+                  Formation
+                </p>
+                <h2 className="mt-1 text-xl font-bold text-white">Select Platoon</h2>
               </div>
-              <div className="mt-3 text-white font-semibold">
-                {activeTab || "None Selected"}
-              </div>
+              <ShieldCheck className="h-5 w-5 text-[#00ff66]/70" />
             </div>
 
-            <div className="rounded-2xl border border-[#00ff66]/15 bg-[#08110c]/80 p-4">
-              <div className="flex items-center gap-3 text-[#00ff66]/70 text-xs uppercase tracking-[0.2em]">
-                <ShieldCheck className="h-4 w-4" />
-                Selected Squad
-              </div>
-              <div className="mt-3 text-white font-semibold">
-                {activeSquad || "All"}
-              </div>
-            </div>
+            <div className="space-y-2">
+              {tabs.map((tab) => {
+                const isOpen = expandedTab === tab;
+                const isActive = activeTab === tab;
+                const squads = platoons[tab] || [];
 
-            <div className="rounded-2xl border border-[#00ff66]/15 bg-[#08110c]/80 p-4">
-              <div className="flex items-center gap-3 text-[#00ff66]/70 text-xs uppercase tracking-[0.2em]">
-                <Users className="h-4 w-4" />
-                Total
-              </div>
-              <div className="mt-3 text-white font-semibold">{stats.total}</div>
-            </div>
+                return (
+                  <div
+                    key={tab}
+                    className={`border transition ${
+                      isActive
+                        ? "border-[#00ff66]/50 bg-[#08110c]/90"
+                        : "border-[#00ff66]/15 bg-[#030806]/85"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isOpen) {
+                          setExpandedTab(null);
+                          return;
+                        }
 
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-              <div className="flex items-center gap-3 text-emerald-300/80 text-xs uppercase tracking-[0.2em]">
-                <CheckCircle2 className="h-4 w-4" />
-                Y
-              </div>
-              <div className="mt-3 text-white font-semibold">
-                {stats.yes}
-                <span className="ml-2 text-sm text-emerald-300/80">
-                  {formatPercentage(stats.yesPct)}
-                </span>
-              </div>
-            </div>
+                        setExpandedTab(tab);
+                        setActiveTab(tab);
+                        setActiveSquad(squads[0] || null);
+                      }}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left"
+                    >
+                      <div>
+                        <div className="font-semibold text-white">{tab}</div>
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-[#00ff66]/55">
+                          {squads.length} formations
+                        </div>
+                      </div>
 
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-              <div className="flex items-center gap-3 text-red-300/80 text-xs uppercase tracking-[0.2em]">
-                <XCircle className="h-4 w-4" />
-                N
-              </div>
-              <div className="mt-3 text-white font-semibold">
-                {stats.no}
-                <span className="ml-2 text-sm text-red-300/80">
-                  {formatPercentage(stats.noPct)}
-                </span>
-              </div>
-            </div>
+                      {isOpen ? (
+                        <ChevronDown className="h-5 w-5 text-[#00ff66]/70" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-[#00ff66]/70" />
+                      )}
+                    </button>
 
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-              <div className="flex items-center gap-3 text-amber-300/80 text-xs uppercase tracking-[0.2em]">
-                <PlaneTakeoff className="h-4 w-4" />
-                Excused / LOA
-              </div>
-              <div className="mt-3 text-white font-semibold">
-                {stats.excused + stats.loa}
-                <span className="ml-2 text-sm text-amber-300/80">
-                  {formatPercentage(stats.excusedLoaPct)}
-                </span>
-              </div>
+                    {isOpen && squads.length > 0 && (
+                      <div className="border-t border-[#00ff66]/10 px-3 pb-3 pt-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          {squads.map((squad) => (
+                            <button
+                              key={squad}
+                              type="button"
+                              onClick={() => {
+                                setActiveTab(tab);
+                                setActiveSquad(squad);
+                              }}
+                              className={`min-h-10 border px-3 py-2 text-sm transition ${
+                                activeSquad === squad && activeTab === tab
+                                  ? "border-[#00ff66] bg-[#00ff66] text-black"
+                                  : "border-[#00ff66]/25 bg-black/40 text-[#a9efbc] hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
+                              }`}
+                            >
+                              {squad}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
-            <div className="rounded-2xl border border-emerald-500/20 bg-[#08110c]/80 p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-300/70">
-                    Attending Percentage
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-white">
-                    {formatPercentage(stats.yesPct)}
-                  </p>
+          <div className="border border-[#00ff66]/20 bg-black/60 p-4 shadow-[0_0_30px_rgba(0,255,102,0.05)] backdrop-blur-xl md:p-5">
+            <div className="mb-4 flex flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-[#00ff66]/55">
+                  {selectedMonth} / Week {selectedWeek} / {selectedType}
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-white">
+                  {activeTab || "No Platoon Selected"}
+                </h2>
+                <p className="mt-1 text-sm text-[#9bc4a8]">
+                  {activeSquad
+                    ? `Viewing attendance for ${activeSquad}`
+                    : "Select a squad to begin reviewing attendance."}
+                </p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-4 2xl:min-w-[560px]">
+                <div className="border border-[#00ff66]/15 bg-[#08110c]/80 p-3">
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[#00ff66]/60">
+                    <Users className="h-3.5 w-3.5" />
+                    Total
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-white">{stats.total}</div>
                 </div>
-                <BarChart3 className="h-5 w-5 text-emerald-300/70" />
-              </div>
-              <div className="mt-4 h-2 rounded-full bg-black/50 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-emerald-400 transition-all"
-                  style={{ width: `${Math.min(stats.yesPct, 100)}%` }}
-                />
-              </div>
-            </div>
 
-            <div className="rounded-2xl border border-red-500/20 bg-[#08110c]/80 p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-red-300/70">
-                    Non-Attending Percentage
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-white">
-                    {formatPercentage(stats.noPct)}
-                  </p>
+                <div className="border border-emerald-500/20 bg-emerald-500/10 p-3">
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-emerald-300/80">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Y
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-white">
+                    {stats.yes}
+                    <span className="ml-2 text-xs text-emerald-300/80">
+                      {formatPercentage(stats.yesPct)}
+                    </span>
+                  </div>
                 </div>
-                <BarChart3 className="h-5 w-5 text-red-300/70" />
-              </div>
-              <div className="mt-4 h-2 rounded-full bg-black/50 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-red-400 transition-all"
-                  style={{ width: `${Math.min(stats.noPct, 100)}%` }}
-                />
+
+                <div className="border border-red-500/20 bg-red-500/10 p-3">
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-red-300/80">
+                    <XCircle className="h-3.5 w-3.5" />
+                    N
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-white">
+                    {stats.no}
+                    <span className="ml-2 text-xs text-red-300/80">
+                      {formatPercentage(stats.noPct)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="border border-amber-500/20 bg-amber-500/10 p-3">
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-amber-300/80">
+                    <PlaneTakeoff className="h-3.5 w-3.5" />
+                    Excused / LOA
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-white">
+                    {stats.excused + stats.loa}
+                    <span className="ml-2 text-xs text-amber-300/80">
+                      {formatPercentage(stats.excusedLoaPct)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-5 md:p-6 shadow-[0_0_30px_rgba(0,255,102,0.05)] mb-8">
+            <div className="mb-5 grid gap-3 xl:grid-cols-2">
+              <div className="border border-emerald-500/20 bg-[#08110c]/80 p-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-300/70">
+                      Attending
+                    </p>
+                    <p className="mt-1 text-xl font-bold text-white">
+                      {formatPercentage(stats.yesPct)}
+                    </p>
+                  </div>
+                  <BarChart3 className="h-5 w-5 text-emerald-300/70" />
+                </div>
+                <div className="mt-3 h-2 overflow-hidden bg-black/50">
+                  <div
+                    className="h-full bg-emerald-400 transition-all"
+                    style={{ width: `${Math.min(stats.yesPct, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="border border-red-500/20 bg-[#08110c]/80 p-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-red-300/70">
+                      Non-Attending
+                    </p>
+                    <p className="mt-1 text-xl font-bold text-white">
+                      {formatPercentage(stats.noPct)}
+                    </p>
+                  </div>
+                  <BarChart3 className="h-5 w-5 text-red-300/70" />
+                </div>
+                <div className="mt-3 h-2 overflow-hidden bg-black/50">
+                  <div
+                    className="h-full bg-red-400 transition-all"
+                    style={{ width: `${Math.min(stats.noPct, 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <p className="py-16 text-center text-gray-400">
+                Loading selected attendance roster...
+              </p>
+            ) : filteredRoster.length === 0 ? (
+              <div className="border border-[#00ff66]/10 bg-[#08110c]/70 px-6 py-16 text-center">
+                <p className="text-lg text-white">No roster entries found.</p>
+                <p className="mt-2 text-sm text-[#88b596]">
+                  Select a platoon and squad, or adjust the attendance filters.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="hidden overflow-hidden border border-[#00ff66]/15 lg:block">
+                  <table className="min-w-full">
+                    <thead className="bg-[#0d1611] text-left text-xs uppercase tracking-[0.18em] text-[#00ff66]/60">
+                      <tr>
+                        <th className="px-5 py-4">Personnel</th>
+                        <th className="px-5 py-4">Rank</th>
+                        <th className="px-5 py-4">Slot</th>
+                        <th className="px-5 py-4">Type</th>
+                        <th className="px-5 py-4">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRoster.map((member) => (
+                        <tr
+                          key={member.recordId}
+                          className="border-t border-[#00ff66]/10 bg-black/20"
+                        >
+                          <td className="px-5 py-4 font-medium text-white">
+                            {member.name}
+                          </td>
+                          <td className="px-5 py-4 text-[#a8d7b7]">{member.rank}</td>
+                          <td className="px-5 py-4 text-[#a8d7b7]">{member.slot}</td>
+                          <td className="px-5 py-4 text-[#a8d7b7]">{member.type}</td>
+                          <td className="px-5 py-4">
+                            <span
+                              className={`inline-flex border px-3 py-1 text-xs font-semibold ${getStatusPillStyles(member.status)}`}
+                            >
+                              {member.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid gap-3 lg:hidden">
+                  {filteredRoster.map((member) => (
+                    <div
+                      key={member.recordId}
+                      className="border border-[#00ff66]/15 bg-[#07100b]/80 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-[#dfffea]">
+                            {member.name}
+                          </h3>
+                          <p className="mt-1 text-sm text-[#9fc6ac]">{member.rank}</p>
+                        </div>
+
+                        <span
+                          className={`inline-flex border px-3 py-1 text-xs font-semibold ${getStatusPillStyles(member.status)}`}
+                        >
+                          {member.status}
+                        </span>
+                      </div>
+
+                      <p className="mt-4 text-sm text-[#a8d7b7]">
+                        Slot: <span className="break-all text-white">{member.slot}</span>
+                      </p>
+                      <p className="mt-2 text-sm text-[#a8d7b7]">
+                        Type: <span className="text-white">{member.type}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {currentSquads.length > 0 && activeTab && (
+              <div className="mt-5 border-t border-[#00ff66]/10 pt-5">
+                <p className="mb-3 text-xs uppercase tracking-[0.2em] text-[#00ff66]/55">
+                  Quick Squad Switch
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {currentSquads.map((squad) => (
+                    <button
+                      key={squad}
+                      type="button"
+                      onClick={() => setActiveSquad(squad)}
+                      className={`border px-3 py-2 text-sm transition ${
+                        activeSquad === squad
+                          ? "border-[#00ff66] bg-[#00ff66] text-black"
+                          : "border-[#00ff66]/25 bg-black/40 text-[#a9efbc] hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
+                      }`}
+                    >
+                      {squad}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <div className="border border-[#00ff66]/20 bg-black/55 p-5 shadow-[0_0_30px_rgba(0,255,102,0.05)] backdrop-blur-xl md:p-6">
           <div className="mb-6">
             <div className="flex items-center gap-3">
               <UserSearch className="h-5 w-5 text-[#00ff66]/70" />
@@ -1022,205 +1233,6 @@ export default function AttendanceDashboardViewer() {
           )}
         </div>
 
-        <div className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-5 shadow-[0_0_30px_rgba(0,255,102,0.05)] h-fit">
-            <div className="mb-5">
-              <h2 className="text-lg font-bold text-white">Formation Selection</h2>
-              <p className="text-sm text-[#9bc4a8] mt-1">
-                Expand a platoon, then choose the squad to review.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              {tabs.map((tab) => {
-                const isOpen = expandedTab === tab;
-                const isActive = activeTab === tab;
-                const squads = platoons[tab] || [];
-
-                return (
-                  <div
-                    key={tab}
-                    className={`rounded-2xl border transition-all ${
-                      isActive
-                        ? "border-[#00ff66]/45 bg-[#08110c]/90"
-                        : "border-[#00ff66]/15 bg-[#060b08]/80"
-                    }`}
-                  >
-                    <button
-                      onClick={() => {
-                        if (isOpen) {
-                          setExpandedTab(null);
-                          return;
-                        }
-
-                        setExpandedTab(tab);
-                        setActiveTab(tab);
-                        setActiveSquad(squads[0] || null);
-                      }}
-                      className="w-full px-5 py-4 flex items-center justify-between text-left"
-                    >
-                      <div>
-                        <div className="text-white font-semibold">{tab}</div>
-                        <div className="text-xs uppercase tracking-[0.18em] text-[#00ff66]/55 mt-1">
-                          {squads.length} formations
-                        </div>
-                      </div>
-
-                      {isOpen ? (
-                        <ChevronDown className="h-5 w-5 text-[#00ff66]/70" />
-                      ) : (
-                        <ChevronRight className="h-5 w-5 text-[#00ff66]/70" />
-                      )}
-                    </button>
-
-                    {isOpen && squads.length > 0 && (
-                      <div className="px-4 pb-4">
-                        <div className="border-t border-[#00ff66]/10 pt-4 flex flex-wrap gap-2">
-                          {squads.map((squad) => (
-                            <button
-                              key={squad}
-                              onClick={() => {
-                                setActiveTab(tab);
-                                setActiveSquad(squad);
-                              }}
-                              className={`px-3 py-2 rounded-xl border text-sm transition ${
-                                activeSquad === squad && activeTab === tab
-                                  ? "bg-[#00ff66] text-black border-[#00ff66]"
-                                  : "bg-black/40 border-[#00ff66]/25 text-[#a9efbc] hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
-                              }`}
-                            >
-                              {squad}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-5 md:p-6 shadow-[0_0_30px_rgba(0,255,102,0.05)]">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-white">
-                  {activeTab || "No Platoon Selected"}
-                </h2>
-                <p className="text-sm text-[#9bc4a8] mt-1">
-                  {activeSquad
-                    ? `Viewing ${selectedType} attendance for ${activeSquad}`
-                    : "Select a squad to begin reviewing attendance."}
-                </p>
-              </div>
-            </div>
-
-            {loading ? (
-              <p className="text-center text-gray-400 py-16">
-                Loading selected attendance roster...
-              </p>
-            ) : filteredRoster.length === 0 ? (
-              <div className="rounded-2xl border border-[#00ff66]/10 bg-[#08110c]/70 px-6 py-16 text-center">
-                <p className="text-lg text-white">No roster entries found.</p>
-                <p className="text-sm text-[#88b596] mt-2">
-                  Select a platoon and squad, or adjust the attendance filters.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="hidden lg:block overflow-hidden rounded-2xl border border-[#00ff66]/15">
-                  <table className="min-w-full">
-                    <thead className="bg-[#0d1611] text-left text-xs uppercase tracking-[0.18em] text-[#00ff66]/60">
-                      <tr>
-                        <th className="px-5 py-4">Personnel</th>
-                        <th className="px-5 py-4">Rank</th>
-                        <th className="px-5 py-4">Slot</th>
-                        <th className="px-5 py-4">Type</th>
-                        <th className="px-5 py-4">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRoster.map((member) => (
-                        <tr
-                          key={member.recordId}
-                          className="border-t border-[#00ff66]/10 bg-black/20"
-                        >
-                          <td className="px-5 py-4 text-white font-medium">
-                            {member.name}
-                          </td>
-                          <td className="px-5 py-4 text-[#a8d7b7]">{member.rank}</td>
-                          <td className="px-5 py-4 text-[#a8d7b7]">{member.slot}</td>
-                          <td className="px-5 py-4 text-[#a8d7b7]">{member.type}</td>
-                          <td className="px-5 py-4">
-                            <span
-                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusPillStyles(member.status)}`}
-                            >
-                              {member.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid gap-4 lg:hidden">
-                  {filteredRoster.map((member) => (
-                    <div
-                      key={member.recordId}
-                      className="rounded-2xl border border-[#00ff66]/15 bg-[#07100b]/80 p-5"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h3 className="text-lg text-[#dfffea] font-semibold">
-                            {member.name}
-                          </h3>
-                          <p className="text-[#9fc6ac] text-sm mt-1">{member.rank}</p>
-                        </div>
-
-                        <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusPillStyles(member.status)}`}
-                        >
-                          {member.status}
-                        </span>
-                      </div>
-
-                      <p className="text-sm mt-4 text-[#a8d7b7]">
-                        Slot: <span className="text-white break-all">{member.slot}</span>
-                      </p>
-                      <p className="text-sm mt-2 text-[#a8d7b7]">
-                        Type: <span className="text-white">{member.type}</span>
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {currentSquads.length > 0 && activeTab && (
-              <div className="mt-6 pt-6 border-t border-[#00ff66]/10">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#00ff66]/55 mb-3">
-                  Quick Squad Switch
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {currentSquads.map((squad) => (
-                    <button
-                      key={squad}
-                      onClick={() => setActiveSquad(squad)}
-                      className={`px-3 py-2 rounded-xl border text-sm transition ${
-                        activeSquad === squad
-                          ? "bg-[#00ff66] text-black border-[#00ff66]"
-                          : "bg-black/40 border-[#00ff66]/25 text-[#a9efbc] hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
-                      }`}
-                    >
-                      {squad}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </motion.div>
   );

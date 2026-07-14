@@ -179,6 +179,11 @@ export default function NavbarClient() {
           description: "Reserve and manage training or event time",
         },
         {
+          href: "/Galactic-Campaign/operation-last-stand",
+          label: "Operation Last Stand",
+          description: "Live Altis survival campaign progress",
+        },
+        {
           href: "/Art-of-War",
           label: "Art of War",
           description: "Operational archive and doctrine reference",

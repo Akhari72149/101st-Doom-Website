@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import LegalAcknowledgement from "@/components/legal/LegalAcknowledgement";
 
 type SelectedPersonnel = {
   id: string;
@@ -417,6 +418,10 @@ function MemberLinkContent() {
               <p>The Discord ID is never shown in the browser.</p>
               <p>The verification code is never stored in readable form.</p>
             </div>
+
+            <div className="mt-6 border-t border-[#00ff66]/20 pt-5">
+              <LegalAcknowledgement />
+            </div>
           </aside>
         </div>
       </div>
@@ -471,6 +476,9 @@ function SteamAuthStage() {
       >
         Sign In Through Steam
       </a>
+      <div className="mt-5 max-w-3xl">
+        <LegalAcknowledgement />
+      </div>
     </div>
   );
 }
@@ -676,6 +684,9 @@ function DiscordStage({
         >
           Choose Another Record
         </button>
+      </div>
+      <div className="mt-5">
+        <LegalAcknowledgement />
       </div>
       {sent && (
         <div className="mt-6 space-y-4">

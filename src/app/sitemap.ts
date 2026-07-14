@@ -15,6 +15,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/roster",
     "/servers",
     "/vault",
+    "/legal/privacy",
+    "/legal/terms",
+    "/legal/cookies",
   ];
 
   return routes.map((route) => ({

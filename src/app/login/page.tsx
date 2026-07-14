@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import LegalAcknowledgement from "@/components/legal/LegalAcknowledgement";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -125,6 +126,10 @@ export default function Login() {
         >
           LOGIN
         </button>
+
+        <div className="mt-6">
+          <LegalAcknowledgement />
+        </div>
 
       </div>
     </div>

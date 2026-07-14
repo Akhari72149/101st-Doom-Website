@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
@@ -14,6 +14,28 @@ type Booking = {
   personnel?: {
     name: string;
   };
+};
+
+type ServerBookingRow = {
+  id: string;
+  server_id: number;
+  start_time: string;
+  end_time: string;
+  title: string;
+  booked_for: string;
+};
+
+type RecurringServerBlockRow = {
+  id: string;
+  server_id: number;
+  start_at: string | null;
+  end_at: string | null;
+  title: string;
+};
+
+type RecurringServerBlockWithTimes = RecurringServerBlockRow & {
+  start_at: string;
+  end_at: string;
 };
 
 type PersonnelSearchRow = {
@@ -32,6 +54,14 @@ type PendingAction =
 type DurationHours = 1 | 2 | 4;
 
 type ServerDayCounts = Record<number, number>;
+
+const MAX_BOOKING_DURATION_HOURS = 4;
+
+function hasRecurringBlockTimes(
+  block: RecurringServerBlockRow
+): block is RecurringServerBlockWithTimes {
+  return Boolean(block.start_at && block.end_at);
+}
 
 export default function ServersPage() {
   const router = useRouter();
@@ -99,35 +129,6 @@ export default function ServersPage() {
   }, []);
 
   useEffect(() => {
-    fetchBookingsForActiveServer();
-    fetchServerCountsForDay();
-
-    const channel = supabase
-      .channel("server-bookings")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "server_bookings" },
-        () => {
-          fetchBookingsForActiveServer();
-          fetchServerCountsForDay();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "recurring_server_blocks" },
-        () => {
-          fetchBookingsForActiveServer();
-          fetchServerCountsForDay();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [activeServer, selectedDate]);
-
-  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
         resultsRef.current &&
@@ -141,17 +142,20 @@ export default function ServersPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  async function fetchBookingsForActiveServer() {
+  const fetchBookingsForActiveServer = useCallback(async () => {
     const fetchToken = ++fetchTokenRef.current;
     setIsLoadingBookings(true);
 
     const [start, end] = getDayBounds(selectedDate);
+    const overlapLookupEnd = new Date(
+      end.getTime() + MAX_BOOKING_DURATION_HOURS * 60 * 60 * 1000
+    );
 
     const { data: bookingData, error: bookingError } = await supabase
       .from("server_bookings")
       .select("*")
       .eq("server_id", activeServer)
-      .lt("start_time", end.toISOString())
+      .lt("start_time", overlapLookupEnd.toISOString())
       .gt("end_time", start.toISOString());
 
     if (bookingError) {
@@ -162,7 +166,8 @@ export default function ServersPage() {
       return;
     }
 
-    const personnelIds = [...new Set((bookingData || []).map((b) => b.booked_for))];
+    const bookingRows = (bookingData || []) as ServerBookingRow[];
+    const personnelIds = [...new Set(bookingRows.map((booking) => booking.booked_for))];
 
     const { data: personnelData } =
       personnelIds.length > 0
@@ -173,16 +178,16 @@ export default function ServersPage() {
       (personnelData || []).map((p) => [p.id, p.name])
     );
 
-    const enriched: Booking[] = (bookingData || []).map((b: any) => ({
-      ...b,
-      personnel: { name: personnelMap[b.booked_for] || "Unknown" },
+    const enriched: Booking[] = bookingRows.map((booking) => ({
+      ...booking,
+      personnel: { name: personnelMap[booking.booked_for] || "Unknown" },
     }));
 
     const { data: recurringData, error: recurringError } = await supabase
       .from("recurring_server_blocks")
       .select("*")
       .eq("server_id", activeServer)
-      .lt("start_at", end.toISOString())
+      .lt("start_at", overlapLookupEnd.toISOString())
       .gt("end_at", start.toISOString());
 
     if (recurringError) {
@@ -193,9 +198,10 @@ export default function ServersPage() {
       return;
     }
 
-    const recurringBookings: Booking[] = (recurringData ?? [])
-      .filter((r) => r.start_at && r.end_at)
-      .map((r: any) => ({
+    const recurringRows = (recurringData ?? []) as RecurringServerBlockRow[];
+    const recurringBookings: Booking[] = recurringRows
+      .filter(hasRecurringBlockTimes)
+      .map((r) => ({
         id: `recurring-${r.id}`,
         server_id: r.server_id,
         start_time: new Date(r.start_at).toISOString(),
@@ -209,9 +215,9 @@ export default function ServersPage() {
       setBookings([...enriched, ...recurringBookings]);
       setIsLoadingBookings(false);
     }
-  }
+  }, [activeServer, selectedDate]);
 
-  async function fetchServerCountsForDay() {
+  const fetchServerCountsForDay = useCallback(async () => {
     const [start, end] = getDayBounds(selectedDate);
 
     const initialCounts: ServerDayCounts = {
@@ -239,16 +245,47 @@ export default function ServersPage() {
       .lt("start_at", end.toISOString())
       .gt("end_at", start.toISOString());
 
-    (bookingData || []).forEach((row: any) => {
+    ((bookingData || []) as { server_id: number }[]).forEach((row) => {
       initialCounts[row.server_id] = (initialCounts[row.server_id] || 0) + 1;
     });
 
-    (recurringData || []).forEach((row: any) => {
+    ((recurringData || []) as { server_id: number }[]).forEach((row) => {
       initialCounts[row.server_id] = (initialCounts[row.server_id] || 0) + 1;
     });
 
     setServerCounts(initialCounts);
-  }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      fetchBookingsForActiveServer();
+      fetchServerCountsForDay();
+    });
+
+    const channel = supabase
+      .channel("server-bookings")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "server_bookings" },
+        () => {
+          fetchBookingsForActiveServer();
+          fetchServerCountsForDay();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "recurring_server_blocks" },
+        () => {
+          fetchBookingsForActiveServer();
+          fetchServerCountsForDay();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchBookingsForActiveServer, fetchServerCountsForDay]);
 
   function getBookingsForSlot(slot: Date) {
     return bookings.filter((b) => {
@@ -266,16 +303,17 @@ export default function ServersPage() {
   function wouldSelectionConflict(startIndex: number | null, duration: DurationHours) {
     if (startIndex === null) return false;
 
-    const durationSlots = duration * 2;
-    const endIndex = startIndex + durationSlots;
+    const selectionStart = slots[startIndex];
+    if (!selectionStart) return true;
 
-    if (endIndex > slots.length) return true;
+    const selectionEnd = new Date(selectionStart.getTime() + duration * 60 * 60 * 1000);
 
-    for (let i = startIndex; i < endIndex; i++) {
-      if (isBlocked(slots[i])) return true;
-    }
+    return bookings.some((booking) => {
+      const bookingStart = new Date(booking.start_time);
+      const bookingEnd = new Date(booking.end_time);
 
-    return false;
+      return selectionStart < bookingEnd && selectionEnd > bookingStart;
+    });
   }
 
   async function handleDelete(id: string) {

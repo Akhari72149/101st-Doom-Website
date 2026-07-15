@@ -25,6 +25,29 @@ type Member = {
   status: string;
 };
 
+type UserRoleRow = {
+  role: string;
+};
+
+type AttendanceRecordRow = {
+  id: string;
+  status: string | null;
+  personnel:
+    | {
+        id: string | null;
+        name: string | null;
+        slotted_position: string | null;
+        ranks: { name: string | null } | { name: string | null }[] | null;
+      }
+    | {
+        id: string | null;
+        name: string | null;
+        slotted_position: string | null;
+        ranks: { name: string | null } | { name: string | null }[] | null;
+      }[]
+    | null;
+};
+
 const assignmentOptions = ["Y", "N", "Excused", "LOA"];
 
 const months = [
@@ -171,7 +194,7 @@ function extractSquadKeyFromSlot(slotValue: string | null | undefined) {
     return `${tomahawkMatch[1]}-${tomahawkMatch[2]}`.toLowerCase();
   }
 
-  const daggerMatch = slot.match(/^dagger(\d)-(\d)-\d+[ab]?/i);
+  const daggerMatch = slot.match(/^dagger\d+-(\d)-(\d+)[ab]?/i);
   if (daggerMatch) {
     return `${daggerMatch[1]}-${daggerMatch[2]}`.toLowerCase();
   }
@@ -259,7 +282,7 @@ export default function AttendancePage() {
 
   const [selectedMonth, setSelectedMonth] = useState(defaultPeriod.month);
   const [selectedWeek, setSelectedWeek] = useState(defaultPeriod.week);
-  const [selectedType, setSelectedType] = useState("Training");
+  const [selectedType, setSelectedType] = useState("MainOp");
   const [search, setSearch] = useState("");
   const [updatingAll, setUpdatingAll] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
@@ -296,7 +319,7 @@ export default function AttendancePage() {
         .select("role")
         .eq("user_id", user.id);
 
-      const roleList = roles?.map((r: any) => r.role) || [];
+      const roleList = ((roles || []) as UserRoleRow[]).map((row) => row.role);
       const allowedRoles = ["admin", "nco"];
 
       if (!roleList.some((role) => allowedRoles.includes(role))) {
@@ -338,7 +361,8 @@ export default function AttendancePage() {
         return;
       }
 
-      const filtered = data.filter((row: any) => {
+      const attendanceRows = data as AttendanceRecordRow[];
+      const filtered = attendanceRows.filter((row) => {
         const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
         const slot = person?.slotted_position;
 
@@ -351,12 +375,12 @@ export default function AttendancePage() {
       });
 
       const formatted: Member[] = filtered
-        .map((row: any) => {
+        .map((row) => {
           const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
           const rankRow = Array.isArray(person?.ranks) ? person?.ranks[0] : person?.ranks;
 
           return {
-            id: person?.id,
+            id: person?.id ?? row.id,
             recordId: row.id,
             name: person?.name ?? "Unknown",
             rank: rankRow?.name ?? "Unknown",

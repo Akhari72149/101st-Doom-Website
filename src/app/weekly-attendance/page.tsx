@@ -188,7 +188,7 @@ function extractSquadKeyFromSlot(slotValue: string | null | undefined) {
     return `${tomahawkMatch[1]}-${tomahawkMatch[2]}`.toLowerCase();
   }
 
-  const daggerMatch = slot.match(/^dagger(\d)-(\d)-\d+[ab]?/i);
+  const daggerMatch = slot.match(/^dagger\d+-(\d)-(\d+)[ab]?/i);
   if (daggerMatch) {
     return `${daggerMatch[1]}-${daggerMatch[2]}`.toLowerCase();
   }

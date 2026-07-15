@@ -113,24 +113,86 @@ function sanitizeError(error: unknown) {
 }
 
 export async function GET() {
-  const { data, error } = await supabaseAdmin
-    .from("arma_campaign_status_current")
-    .select("*")
-    .eq("campaign_id", "operation-last-stand")
-    .order("received_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const [currentResult, historyResult, storyEpisodeResult, storyObjectivesResult] = await Promise.all([
+    supabaseAdmin
+      .from("arma_campaign_status_current")
+      .select("*")
+      .eq("campaign_id", "operation-last-stand")
+      .order("received_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("arma_campaign_status_history")
+      .select(
+        "id, server_id, mission_id, campaign_id, occurred_at, received_at, world, player_count, global_infection, research_data, safehouse_count, unlocked_safehouse_count, active_horde_count, safehouse_siege_active, story_week, story_active_count, story_complete_count, story_evidence_count, payload",
+      )
+      .eq("campaign_id", "operation-last-stand")
+      .order("received_at", { ascending: false })
+      .limit(1),
+    supabaseAdmin
+      .from("arma_campaign_story_episodes")
+      .select("id, campaign_id, week_number, title, summary, status, starts_at, created_at, updated_at")
+      .eq("campaign_id", "operation-last-stand")
+      .eq("status", "active")
+      .order("week_number", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("arma_campaign_story_objectives")
+      .select("id, campaign_id, week_number, size, title, description, marker, implementation_note, action, sort_order, status, created_at, updated_at")
+      .eq("campaign_id", "operation-last-stand")
+      .order("week_number", { ascending: false })
+      .order("sort_order", { ascending: true }),
+  ]);
 
-  if (error) {
+  if (currentResult.error) {
     console.error("[arma-campaign] Status read failed:", {
-      code: error.code,
-      message: error.message,
+      code: currentResult.error.code,
+      message: currentResult.error.message,
     });
 
     return jsonResponse({ ok: false, error: "CAMPAIGN_STATUS_READ_FAILED" }, 500);
   }
 
-  return jsonResponse({ ok: true, snapshot: data ?? null });
+  if (historyResult.error) {
+    console.error("[arma-campaign] History read failed:", {
+      code: historyResult.error.code,
+      message: historyResult.error.message,
+    });
+
+    return jsonResponse({ ok: false, error: "CAMPAIGN_STATUS_HISTORY_READ_FAILED" }, 500);
+  }
+
+  if (storyEpisodeResult.error) {
+    console.error("[arma-campaign] Story episode read failed:", {
+      code: storyEpisodeResult.error.code,
+      message: storyEpisodeResult.error.message,
+    });
+
+    return jsonResponse({ ok: false, error: "CAMPAIGN_STORY_READ_FAILED" }, 500);
+  }
+
+  if (storyObjectivesResult.error) {
+    console.error("[arma-campaign] Story objectives read failed:", {
+      code: storyObjectivesResult.error.code,
+      message: storyObjectivesResult.error.message,
+    });
+
+    return jsonResponse({ ok: false, error: "CAMPAIGN_STORY_OBJECTIVES_READ_FAILED" }, 500);
+  }
+
+  const activeEpisode = storyEpisodeResult.data ?? null;
+  const storyObjectives = activeEpisode
+    ? (storyObjectivesResult.data ?? []).filter((objective) => objective.week_number === activeEpisode.week_number)
+    : [];
+
+  return jsonResponse({
+    ok: true,
+    snapshot: currentResult.data ?? null,
+    history: historyResult.data ?? [],
+    storyEpisode: activeEpisode,
+    storyObjectives,
+  });
 }
 
 export async function POST(request: Request) {
@@ -179,10 +241,12 @@ export async function POST(request: Request) {
 
   const { error: historyError } = await supabaseAdmin
     .from("arma_campaign_status_history")
-    .insert(historySnapshot);
+    .upsert(historySnapshot, {
+      onConflict: "server_id,mission_id,campaign_id",
+    });
 
   if (historyError) {
-    console.error("[arma-campaign] History insert failed:", {
+    console.error("[arma-campaign] History upsert failed:", {
       code: historyError.code,
       message: historyError.message,
     });

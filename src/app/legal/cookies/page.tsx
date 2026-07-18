@@ -14,7 +14,7 @@ const cookieSections: LegalSection[] = [
     title: "1. Overview",
     paragraphs: [
       "This Cookie Policy explains how the 101st Doom Battalion website uses cookies and similar browser storage technologies.",
-      "A review of the current project found essential authentication and session storage, including Supabase authentication storage and a short-lived Steam linking cookie. No non-essential analytics or advertising tracker was found in the repository at the time this policy was created.",
+      "Only essential authentication and session storage, including Supabase authentication storage and a short-lived Steam linking cookie are used on this website. No non-essential analytics or advertising trackers are in use.",
     ],
   },
   {

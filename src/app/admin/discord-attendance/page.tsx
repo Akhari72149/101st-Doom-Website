@@ -61,6 +61,15 @@ const defaultOptions: AttendanceOption[] = [
 ];
 
 const allowedAttendanceAdminRoles = ["admin", "nco", "akhari"];
+const weekDays = [
+  { value: "1", label: "Monday" },
+  { value: "2", label: "Tuesday" },
+  { value: "3", label: "Wednesday" },
+  { value: "4", label: "Thursday" },
+  { value: "5", label: "Friday" },
+  { value: "6", label: "Saturday" },
+  { value: "0", label: "Sunday" },
+] as const;
 
 function toDatetimeLocalValue(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -69,6 +78,60 @@ function toDatetimeLocalValue(date: Date) {
 
 function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+function padTimePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function toTimeInputValue(date: Date) {
+  return `${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}`;
+}
+
+function getWeekdayValue(date: Date) {
+  return String(date.getDay());
+}
+
+function getWeekdayLabel(value: string) {
+  return weekDays.find((day) => day.value === value)?.label || "Weekly";
+}
+
+function formatWeeklySend(value: string | null | undefined) {
+  const date = value ? new Date(value) : null;
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return "Weekly send not scheduled";
+  }
+
+  return `Every ${getWeekdayLabel(getWeekdayValue(date))} at ${toTimeInputValue(date)}`;
+}
+
+function getNextWeeklyDate(dayValue: string, timeValue: string) {
+  const targetDay = Number(dayValue);
+  const [hours = 0, minutes = 0] = timeValue.split(":").map(Number);
+  const now = new Date();
+
+  if (
+    !Number.isInteger(targetDay) ||
+    targetDay < 0 ||
+    targetDay > 6 ||
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes)
+  ) {
+    return null;
+  }
+
+  const next = new Date(now);
+  next.setHours(hours, minutes, 0, 0);
+
+  const dayOffset = (targetDay - now.getDay() + 7) % 7;
+  next.setDate(now.getDate() + dayOffset);
+
+  if (next <= now) {
+    next.setDate(next.getDate() + 7);
+  }
+
+  return next;
 }
 
 function toStoredDatetimeLocalValue(value: string | null | undefined, fallback: Date) {
@@ -139,8 +202,11 @@ export default function DiscordAttendancePage() {
   const [eventStartsAt, setEventStartsAt] = useState(() =>
     toDatetimeLocalValue(addHours(new Date(), 24)),
   );
-  const [scheduledSendAt, setScheduledSendAt] = useState(() =>
-    toDatetimeLocalValue(addHours(new Date(), 23)),
+  const [repeatSendDay, setRepeatSendDay] = useState(() =>
+    getWeekdayValue(addHours(new Date(), 23)),
+  );
+  const [repeatSendTime, setRepeatSendTime] = useState(() =>
+    toTimeInputValue(addHours(new Date(), 23)),
   );
   const [durationMinutes, setDurationMinutes] = useState("120");
   const [repeatEnabled, setRepeatEnabled] = useState(true);
@@ -309,7 +375,8 @@ export default function DiscordAttendancePage() {
     setDescription("");
     setChannelId(discordAnnouncementChannels[0]?.id || "");
     setEventStartsAt(toDatetimeLocalValue(addHours(new Date(), 24)));
-    setScheduledSendAt(toDatetimeLocalValue(addHours(new Date(), 23)));
+    setRepeatSendDay(getWeekdayValue(addHours(new Date(), 23)));
+    setRepeatSendTime(toTimeInputValue(addHours(new Date(), 23)));
     setDurationMinutes("120");
     setRepeatEnabled(true);
     setFooterText("Role on Start");
@@ -328,12 +395,12 @@ export default function DiscordAttendancePage() {
     setDescription(event.description || "");
     setChannelId(event.channel_id || discordAnnouncementChannels[0]?.id || "");
     setEventStartsAt(toStoredDatetimeLocalValue(event.event_starts_at, addHours(new Date(), 24)));
-    setScheduledSendAt(
-      toStoredDatetimeLocalValue(
-        event.repeat_scheduled_send_at || event.scheduled_send_at,
-        addHours(new Date(), 23),
-      ),
-    );
+    const repeatSendDate = new Date(event.repeat_scheduled_send_at || event.scheduled_send_at);
+    const safeRepeatSendDate = Number.isNaN(repeatSendDate.getTime())
+      ? addHours(new Date(), 23)
+      : repeatSendDate;
+    setRepeatSendDay(getWeekdayValue(safeRepeatSendDate));
+    setRepeatSendTime(toTimeInputValue(safeRepeatSendDate));
     setDurationMinutes(String(event.duration_minutes || 120));
     setRepeatEnabled(Boolean(event.repeat_enabled));
     setFooterText(event.footer_text || "Role on Start");
@@ -377,16 +444,28 @@ export default function DiscordAttendancePage() {
       return;
     }
 
+    const nextRepeatSendAt = repeatEnabled
+      ? getNextWeeklyDate(repeatSendDay, repeatSendTime)
+      : null;
+
+    if (repeatEnabled && !nextRepeatSendAt) {
+      setStatusMessage("Choose a valid weekly send day and time.");
+      setSaving(false);
+      return;
+    }
+
+    const repeatSendIso = nextRepeatSendAt?.toISOString() || null;
+
     const payload = {
       title,
       description,
       channel_id: channelId,
       event_starts_at: new Date(eventStartsAt).toISOString(),
       scheduled_send_at: repeatEnabled
-        ? new Date(scheduledSendAt).toISOString()
+        ? repeatSendIso
         : new Date().toISOString(),
       repeat_scheduled_send_at: repeatEnabled
-        ? new Date(scheduledSendAt).toISOString()
+        ? repeatSendIso
         : null,
       duration_minutes: Number(durationMinutes),
       repeat_enabled: repeatEnabled,
@@ -639,17 +718,48 @@ export default function DiscordAttendancePage() {
             </label>
 
             {repeatEnabled && (
-              <label className="mt-4 block border border-[#00ff66]/15 bg-black/35 p-4">
-                <span className="text-xs uppercase tracking-[0.18em] text-gray-500">
-                  Weekly Message Sends At
-                </span>
-                <input
-                  type="datetime-local"
-                  value={scheduledSendAt}
-                  onChange={(event) => setScheduledSendAt(event.target.value)}
-                  className="mt-2 h-11 w-full border border-[#00ff66]/25 bg-black/50 px-3 text-sm text-white outline-none focus:border-[#00ff66]/70"
-                />
-              </label>
+              <div className="mt-4 border border-[#00ff66]/15 bg-black/35 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-gray-500">
+                  Weekly Message Sends
+                </div>
+                <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1fr)_180px]">
+                  <fieldset>
+                    <legend className="sr-only">Weekly send day</legend>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                      {weekDays.map((day) => (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => setRepeatSendDay(day.value)}
+                          className={`h-11 border px-3 text-xs font-semibold uppercase tracking-[0.12em] transition ${
+                            repeatSendDay === day.value
+                              ? "border-[#00ff66] bg-[#00ff66]/15 text-[#00ff66]"
+                              : "border-[#00ff66]/20 bg-black/45 text-gray-400 hover:border-[#00ff66]/60 hover:text-[#00ff66]"
+                          }`}
+                        >
+                          {day.label.slice(0, 3)}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  <label className="block">
+                    <span className="text-xs uppercase tracking-[0.18em] text-gray-500">
+                      Time
+                    </span>
+                    <input
+                      type="time"
+                      value={repeatSendTime}
+                      onChange={(event) => setRepeatSendTime(event.target.value)}
+                      className="mt-2 h-11 w-full border border-[#00ff66]/25 bg-black/50 px-3 text-sm text-white outline-none focus:border-[#00ff66]/70"
+                    />
+                  </label>
+                </div>
+                <p className="mt-3 text-xs text-gray-500">
+                  Next send will be calculated as the next {getWeekdayLabel(repeatSendDay)} at{" "}
+                  {repeatSendTime || "00:00"}.
+                </p>
+              </div>
             )}
 
             <div className="mt-4 border border-[#00ff66]/15 bg-black/35 p-4">
@@ -864,7 +974,9 @@ export default function DiscordAttendancePage() {
                       Event: {new Date(event.event_starts_at).toLocaleString()}
                     </p>
                     <p className="mt-1 text-sm text-gray-500">
-                      Sends: {new Date(event.scheduled_send_at).toLocaleString()}
+                      {event.repeat_enabled
+                        ? formatWeeklySend(event.repeat_scheduled_send_at || event.scheduled_send_at)
+                        : `Sends: ${new Date(event.scheduled_send_at).toLocaleString()}`}
                     </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.14em] text-gray-600">
                       {event.repeat_enabled ? "Repeats weekly" : "One time"}

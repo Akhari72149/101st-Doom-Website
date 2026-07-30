@@ -454,7 +454,7 @@ export default function ServersPage() {
   const freeSlotCount = slots.length - blockedSlotCount;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] px-4 py-8 text-white sm:px-6 lg:px-10">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] px-3 py-5 text-white sm:px-6 sm:py-8 lg:px-10">
       {showPasswordPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
           <div className="w-full max-w-md rounded-2xl border border-[#00ff66]/50 bg-black p-6 shadow-[0_0_40px_rgba(0,255,100,0.25)]">
@@ -501,12 +501,12 @@ export default function ServersPage() {
           ← Return to Dashboard
         </button>
 
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <div className="text-xs uppercase tracking-[0.4em] text-[#7da28c]">
             Server Operations
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <h1 className="text-4xl font-bold tracking-[0.3em] text-[#00ff66]">
+            <h1 className="text-3xl font-bold tracking-[0.16em] text-[#00ff66] sm:text-4xl sm:tracking-[0.3em]">
               SERVER BOOKINGS
             </h1>
 
@@ -518,10 +518,10 @@ export default function ServersPage() {
           </div>
         </div>
 
-        <div className="sticky top-4 z-30 mb-8 rounded-3xl border border-[#00ff66]/20 bg-black/55 p-4 backdrop-blur-xl shadow-[0_0_35px_rgba(0,255,100,0.08)]">
+        <div className="mb-6 rounded-2xl border border-[#00ff66]/20 bg-black/55 p-3 backdrop-blur-xl shadow-[0_0_35px_rgba(0,255,100,0.08)] sm:sticky sm:top-4 sm:z-30 sm:mb-8 sm:rounded-3xl sm:p-4">
           <div className="grid grid-cols-1 gap-6">
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
+            <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
+              <div className="col-span-3 sm:col-span-1">
                 <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-[#7fa08e]">
                   Date
                 </label>
@@ -532,13 +532,13 @@ export default function ServersPage() {
                     setSelectedDate(e.target.value);
                     clearBookingDraft();
                   }}
-                  className="rounded-2xl border border-[#00ff66]/30 bg-black/40 px-4 py-3 text-[#00ff66] outline-none transition focus:border-[#00ff66]"
+                  className="w-full rounded-xl border border-[#00ff66]/30 bg-black/40 px-3 py-3 text-[#00ff66] outline-none transition focus:border-[#00ff66] sm:w-auto sm:rounded-2xl sm:px-4"
                 />
               </div>
 
               <button
                 onClick={() => shiftDate(-1)}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-white transition hover:border-white/20"
+                className="rounded-xl border border-white/10 bg-white/[0.03] px-2 py-3 text-sm font-semibold text-white transition hover:border-white/20 sm:rounded-2xl sm:px-4"
               >
                 ← Previous
               </button>
@@ -548,14 +548,14 @@ export default function ServersPage() {
                   setSelectedDate(getLocalDateString());
                   clearBookingDraft();
                 }}
-                className="rounded-2xl border border-[#00ff66]/25 bg-[#00ff66]/6 px-4 py-3 text-sm font-semibold text-[#00ff66] transition hover:bg-[#00ff66]/12"
+                className="rounded-xl border border-[#00ff66]/25 bg-[#00ff66]/6 px-2 py-3 text-sm font-semibold text-[#00ff66] transition hover:bg-[#00ff66]/12 sm:rounded-2xl sm:px-4"
               >
                 Today
               </button>
 
               <button
                 onClick={() => shiftDate(1)}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-white transition hover:border-white/20"
+                className="rounded-xl border border-white/10 bg-white/[0.03] px-2 py-3 text-sm font-semibold text-white transition hover:border-white/20 sm:rounded-2xl sm:px-4"
               >
                 Next →
               </button>
@@ -565,7 +565,7 @@ export default function ServersPage() {
               <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-[#7fa08e]">
                 Server Selection
               </label>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-6">
                 {[1, 2, 3, 4, 5, 6].map((server) => {
                   const count = serverCounts[server] || 0;
                   const hasBookings = count > 0;
@@ -577,7 +577,7 @@ export default function ServersPage() {
                         setActiveServer(server);
                         clearBookingDraft();
                       }}
-                      className={`rounded-2xl border p-4 text-left transition-all duration-200 ${
+                      className={`rounded-xl border p-3 text-left transition-all duration-200 sm:rounded-2xl sm:p-4 ${
                         activeServer === server
                           ? "scale-[1.02] border-[#00ff66] bg-[#00ff66]/12 shadow-[0_0_20px_rgba(0,255,100,0.2)]"
                           : "border-[#00ff66]/20 bg-black/35 hover:border-[#00ff66]/45 hover:bg-[#00ff66]/6"
@@ -589,11 +589,11 @@ export default function ServersPage() {
                       <div className="mt-1 text-lg font-bold text-[#00ff66]">
                         {server}
                       </div>
-                      <div className="mt-2 text-xs text-[#cbead6]">
+                      <div className="mt-1 text-[11px] text-[#cbead6] sm:mt-2 sm:text-xs">
                         {count} item{count !== 1 ? "s" : ""}
                       </div>
                       <div
-                        className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                        className={`mt-2 hidden rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] sm:inline-flex ${
                           hasBookings
                             ? "bg-amber-500/10 text-amber-300"
                             : "bg-[#00ff66]/10 text-[#00ff66]"
@@ -611,7 +611,7 @@ export default function ServersPage() {
               <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-[#7fa08e]">
                 Legend
               </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-2 overflow-x-auto pb-1">
                 <LegendChip label="Available" className="border-white/10 bg-white/[0.03] text-white" />
                 <LegendChip label="Selected" className="border-[#00ff66]/40 bg-[#00ff66]/12 text-[#00ff66]" />
                 <LegendChip label="Booked" className="border-[#00ff66]/30 bg-[#002714] text-[#9cffc8]" />
@@ -622,14 +622,14 @@ export default function ServersPage() {
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mb-6 grid grid-cols-2 gap-2 sm:mb-8 sm:gap-4 lg:grid-cols-4">
           <SummaryCard label="Bookings" value={String(directBookings.length)} accent />
           <SummaryCard label="System Blocks" value={String(recurringBlocks.length)} />
           <SummaryCard label="Booked Hours" value={totalBookedHours.toFixed(1)} />
           <SummaryCard label="Free Half-Hours" value={String(freeSlotCount)} />
         </div>
 
-        <div className="grid grid-cols-1 gap-8 2xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="grid grid-cols-1 gap-6 sm:gap-8 2xl:grid-cols-[minmax(0,1fr)_400px]">
           <section className="min-w-0">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -648,8 +648,8 @@ export default function ServersPage() {
               )}
             </div>
 
-            <div className="rounded-3xl border border-[#00ff66]/25 bg-black/35 p-4 shadow-[0_0_30px_rgba(0,255,100,0.06)]">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/35 p-2 shadow-[0_0_30px_rgba(0,255,100,0.06)] sm:rounded-3xl sm:p-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
                 {slots.map((slot, index) => {
                   const slotBookings = getBookingsForSlot(slot);
                   const blocked = slotBookings.length > 0;
@@ -679,17 +679,26 @@ export default function ServersPage() {
                     <div
                       key={slot.toISOString()}
                       onClick={() => handleSlotClick(index, blocked)}
-                      className={`min-h-[185px] rounded-2xl border p-4 transition-all duration-200 ${slotClass}`}
+                      role="button"
+                      tabIndex={blocked ? -1 : 0}
+                      aria-disabled={blocked}
+                      onKeyDown={(event) => {
+                        if (!blocked && (event.key === "Enter" || event.key === " ")) {
+                          event.preventDefault();
+                          handleSlotClick(index, false);
+                        }
+                      }}
+                      className={`min-h-[112px] rounded-xl border p-3 transition-all duration-200 sm:min-h-[185px] sm:rounded-2xl sm:p-4 ${slotClass}`}
                     >
                       <div className="mb-3 flex items-start justify-between gap-2">
-                        <div className="text-lg font-bold text-[#00ff66]">
+                        <div className="text-base font-bold text-[#00ff66] sm:text-lg">
                           {slot.toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </div>
 
-                        <div className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        <div className="hidden rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-gray-400 sm:block">
                           {Math.floor(index / 2)
                             .toString()
                             .padStart(2, "0")}
@@ -699,7 +708,7 @@ export default function ServersPage() {
 
                       <div className="space-y-2">
                         {slotBookings.length === 0 ? (
-                          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-3 text-sm text-gray-500">
+                          <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] px-2 py-2 text-xs text-gray-500 sm:rounded-xl sm:px-3 sm:py-3 sm:text-sm">
                             Available
                           </div>
                         ) : (
@@ -767,7 +776,7 @@ export default function ServersPage() {
           </section>
 
           <aside className="min-w-0 2xl:sticky 2xl:top-[360px] 2xl:self-start">
-            <div className="rounded-3xl border border-[#00ff66]/25 bg-black/55 p-6 backdrop-blur-xl shadow-[0_0_35px_rgba(0,255,100,0.08)]">
+            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/55 p-4 backdrop-blur-xl shadow-[0_0_35px_rgba(0,255,100,0.08)] sm:rounded-3xl sm:p-6">
               <div className="mb-5">
                 <div className="text-xs uppercase tracking-[0.25em] text-[#7f9f8f]">
                   Booking Console
@@ -887,18 +896,18 @@ export default function ServersPage() {
                     />
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <button
                       onClick={handleConfirmBooking}
                       disabled={!selectedPerson || hasSelectionConflict}
-                      className="rounded-xl bg-[#00ff66] px-4 py-3 font-semibold text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="w-full rounded-xl bg-[#00ff66] px-4 py-3 font-semibold text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Confirm Booking
                     </button>
 
                     <button
                       onClick={clearBookingDraft}
-                      className="rounded-xl border border-red-500 px-4 py-3 font-semibold text-red-400 transition hover:bg-red-500 hover:text-black"
+                      className="w-full rounded-xl border border-red-500 px-4 py-3 font-semibold text-red-400 transition hover:bg-red-500 hover:text-black"
                     >
                       Cancel
                     </button>
@@ -928,7 +937,7 @@ function LegendChip({
 }) {
   return (
     <span
-      className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${className}`}
+      className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${className}`}
     >
       {label}
     </span>
@@ -945,11 +954,11 @@ function SummaryCard({
   accent?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-[#00ff66]/20 bg-black/35 p-4">
+    <div className="rounded-xl border border-[#00ff66]/20 bg-black/35 p-3 sm:rounded-2xl sm:p-4">
       <div className="text-[11px] uppercase tracking-[0.18em] text-[#7f9f8f]">
         {label}
       </div>
-      <div className={`mt-2 text-2xl font-bold ${accent ? "text-[#00ff66]" : "text-white"}`}>
+      <div className={`mt-2 text-xl font-bold sm:text-2xl ${accent ? "text-[#00ff66]" : "text-white"}`}>
         {value}
       </div>
     </div>

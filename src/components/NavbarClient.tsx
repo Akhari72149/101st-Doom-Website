@@ -14,11 +14,13 @@ import {
   FileText,
   Hammer,
   Home,
+  Menu,
   Newspaper,
   Shield,
   User,
   Users,
   Wrench,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,6 +59,7 @@ export default function NavbarClient() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
 
   /* ================= AUTH ================= */
@@ -399,8 +402,11 @@ export default function NavbarClient() {
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            onClick={() => setOpenMobileGroup(null)}
-            className="flex items-center gap-2 rounded-xl border border-[#00ff66]/20 bg-[#00ff66]/5 px-4 py-2 text-[#00ff66] transition hover:border-[#00ff66]/40 hover:bg-[#00ff66]/10"
+            onClick={() => {
+              setOpenMobileGroup(null);
+              setMobileMenuOpen(false);
+            }}
+            className="flex min-h-11 items-center gap-2 rounded-xl border border-[#00ff66]/20 bg-[#00ff66]/5 px-3 py-2 text-[#00ff66] transition hover:border-[#00ff66]/40 hover:bg-[#00ff66]/10 sm:px-4"
           >
             <Home size={16} />
             <span className="text-sm font-medium uppercase tracking-[0.18em]">
@@ -546,6 +552,16 @@ export default function NavbarClient() {
 
         {/* ================= RIGHT ================= */}
         <div className="flex items-center gap-3 sm:gap-4">
+          <button
+            type="button"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-navigation"
+            aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-[#00ff66]/30 bg-[#00ff66]/5 text-[#00ff66] transition hover:bg-[#00ff66]/10 xl:hidden"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
           {user ? (
             <>
               <div className="hidden text-right md:block">
@@ -585,7 +601,12 @@ export default function NavbarClient() {
       </div>
 
       {/* ================= MOBILE NAV ================= */}
-      <div className="border-t border-[#00ff66]/10 px-4 py-3 xl:hidden">
+      <div
+        id="mobile-navigation"
+        className={`border-t border-[#00ff66]/10 px-4 py-3 xl:hidden ${
+          mobileMenuOpen ? "block" : "hidden"
+        }`}
+      >
         <div className="mb-3 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
             Navigation
@@ -650,7 +671,10 @@ export default function NavbarClient() {
                                 <Link
                                   key={item.href}
                                   href={item.href}
-                                  onClick={() => setOpenMobileGroup(null)}
+                                  onClick={() => {
+                                    setOpenMobileGroup(null);
+                                    setMobileMenuOpen(false);
+                                  }}
                                   className="group/mobile block rounded-lg border border-[#00ff66]/10 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/25 hover:bg-[#00ff66]/10"
                                 >
                                   <div className="flex items-start gap-3">
@@ -679,7 +703,10 @@ export default function NavbarClient() {
                           <Link
                             key={item.href}
                             href={item.href}
-                            onClick={() => setOpenMobileGroup(null)}
+                            onClick={() => {
+                              setOpenMobileGroup(null);
+                              setMobileMenuOpen(false);
+                            }}
                             className="group/mobile block rounded-lg border border-[#00ff66]/10 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/25 hover:bg-[#00ff66]/10"
                           >
                             <div className="flex items-start gap-3">

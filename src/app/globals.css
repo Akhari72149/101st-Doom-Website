@@ -7,6 +7,11 @@
   --foreground: #00ff66;
 }
 
+html {
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
 /* Tailwind Theme Tokens */
 @theme inline {
   --color-background: var(--background);
@@ -38,6 +43,27 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   letter-spacing: 0.06em;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+table {
+  max-width: 100%;
 }
 
 /* ================= GREEN HOLOGRAM OVERLAY ================= */
@@ -144,4 +170,133 @@ body::after {
   );
   animation: shineMove 4s linear infinite;
   pointer-events: none;
+}
+
+/* ================= MOBILE SAFETY NET =================
+   Pages in this app range from dashboards to data-heavy admin tools. These
+   rules keep shared utility patterns usable at phone widths, including older
+   pages that predate the responsive layout system. */
+
+@media (max-width: 767px) {
+  body {
+    letter-spacing: 0.035em;
+  }
+
+  main,
+  section,
+  article,
+  header,
+  footer,
+  nav,
+  form,
+  fieldset,
+  div {
+    min-width: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  a,
+  button,
+  label,
+  dd,
+  dt,
+  td,
+  th {
+    overflow-wrap: anywhere;
+  }
+
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+    font-size: 16px;
+  }
+
+  button,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    min-height: 44px;
+  }
+
+  table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .p-10,
+  .p-12 {
+    padding: 1.25rem;
+  }
+
+  .p-8 {
+    padding: 1.25rem;
+  }
+
+  .px-10,
+  .px-12 {
+    padding-inline: 1.25rem;
+  }
+
+  .grid-cols-5,
+  .grid-cols-6,
+  .grid-cols-7,
+  .grid-cols-8,
+  .grid-cols-9,
+  .grid-cols-10,
+  .grid-cols-11,
+  .grid-cols-12 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [class*="min-w-["],
+  [class*="w-["] {
+    max-width: 100%;
+  }
+
+  .animate-ticker {
+    animation-duration: 45s;
+  }
+}
+
+@media (max-width: 479px) {
+  .grid-cols-3,
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .text-4xl,
+  .text-5xl,
+  .text-6xl,
+  .text-7xl,
+  .text-8xl,
+  .text-9xl {
+    font-size: clamp(1.75rem, 9vw, 2.5rem);
+    line-height: 1.08;
+  }
+
+  .tracking-\[0\.25em\],
+  .tracking-\[0\.3em\],
+  .tracking-\[0\.35em\],
+  .tracking-\[0\.4em\] {
+    letter-spacing: 0.14em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -351,6 +351,13 @@ export default function NavbarClient() {
           allowedRoles: ["ServerMaintenance", "Akhari"],
           category: "Systems",
         },
+        {
+          href: "/admin/permissions",
+          label: "Permissions",
+          description: "Manage accounts and page access",
+          allowedRoles: ["admin", "Akhari"],
+          category: "Systems",
+        },
       ],
     },
   ], []);

@@ -130,6 +130,22 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["admin", "akhari"],
   },
   {
+    key: "admin.account-management",
+    pagePath: "/admin/permissions/accounts",
+    label: "Account Management",
+    category: "Systems",
+    description: "Create, disable, enable, and delete website login accounts.",
+    legacyRoles: [],
+  },
+  {
+    key: "admin.account-password-reset",
+    pagePath: "/admin/permissions/password-reset",
+    label: "Password Reset",
+    category: "Systems",
+    description: "Issue a temporary password and require a password change at next login.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.updater",
     pagePath: "/admin/updater",
     label: "Updater",

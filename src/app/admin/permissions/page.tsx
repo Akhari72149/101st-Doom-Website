@@ -8,6 +8,7 @@ import {
   Copy,
   KeyRound,
   Loader2,
+  RotateCcw,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -43,9 +44,27 @@ type PermissionResponse = {
   permissionDefinitions: PagePermissionDefinition[];
   levels: PagePermissionAccess[];
   currentUserId: string | null;
+  capabilities?: {
+    canManagePermissions: boolean;
+    canManageAccounts: boolean;
+    canResetPasswords: boolean;
+    isSuperUser: boolean;
+  };
+};
+
+type TemporaryCredential = {
+  username: string;
+  password: string;
 };
 
 const editableLevels = pagePermissionLevels;
+const levelWeight: Record<PagePermissionAccess, number> = { none: 0, read: 1, edit: 2, full: 3 };
+const protectedDelegationPermissions = new Set([
+  "admin.permissions",
+  "admin.account-management",
+  "admin.account-password-reset",
+  "admin.updater",
+]);
 
 function formatDate(value: string | undefined) {
   if (!value) return "Never";
@@ -89,10 +108,18 @@ export default function AdminPermissionsPage() {
   const [definitions, setDefinitions] = useState<PagePermissionDefinition[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [capabilities, setCapabilities] = useState({
+    canManagePermissions: false,
+    canManageAccounts: false,
+    canResetPasswords: false,
+    isSuperUser: false,
+  });
   const [draftPermissions, setDraftPermissions] = useState<Record<string, PagePermissionAccess>>({});
   const [showCreateAccount, setShowCreateAccount] = useState(false);
-  const [newUsername, setNewUsername] = useState("");
-  const [createdCredentials, setCreatedCredentials] = useState<{ username: string; password: string } | null>(null);
+  const [newUsernames, setNewUsernames] = useState("");
+  const [createdCredentials, setCreatedCredentials] = useState<TemporaryCredential[]>([]);
+  const [skippedAccounts, setSkippedAccounts] = useState<Array<{ username: string; reason: string }>>([]);
+  const [resetCredentials, setResetCredentials] = useState<TemporaryCredential | null>(null);
   const [credentialsCopied, setCredentialsCopied] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -142,6 +169,25 @@ export default function AdminPermissionsPage() {
     return { active, disabled, permissioned };
   }, [accounts]);
 
+  const currentAccount = useMemo(
+    () => accounts.find((account) => account.id === currentUserId) || null,
+    [accounts, currentUserId],
+  );
+
+  function canSetPermission(
+    definition: PagePermissionDefinition,
+    option: PagePermissionAccess,
+  ) {
+    if (!selectedAccount || !capabilities.canManagePermissions) return false;
+    if (capabilities.isSuperUser) return true;
+    if (selectedAccount.id === currentUserId) return false;
+    if (protectedDelegationPermissions.has(definition.key)) return false;
+    const callerLevel = currentAccount?.permissions[definition.key] || "none";
+    const targetLevel = selectedAccount.permissions[definition.key] || "none";
+    return levelWeight[callerLevel] >= levelWeight[targetLevel]
+      && levelWeight[callerLevel] >= levelWeight[option];
+  }
+
   async function loadPermissions() {
     setLoading(true);
     setStatus(null);
@@ -164,6 +210,12 @@ export default function AdminPermissionsPage() {
     setAccounts(payload.accounts || []);
     setDefinitions(payload.permissionDefinitions || []);
     setCurrentUserId(payload.currentUserId || null);
+    setCapabilities(payload.capabilities || {
+      canManagePermissions: true,
+      canManageAccounts: true,
+      canResetPasswords: false,
+      isSuperUser: false,
+    });
     setLoading(false);
   }
 
@@ -282,19 +334,25 @@ export default function AdminPermissionsPage() {
         ...(await getAppAuthHeaders()),
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ username: newUsername }),
+      body: JSON.stringify({
+        usernames: newUsernames.split(/\r?\n|,/).map((value) => value.trim()).filter(Boolean),
+      }),
     });
     const body = await response.json().catch(() => null) as {
       error?: string;
-      account?: { username: string };
-      temporaryPassword?: string;
+      created?: Array<{ username: string; temporaryPassword: string }>;
+      skipped?: Array<{ username: string; reason: string }>;
     } | null;
-    if (!response.ok || !body?.account || !body.temporaryPassword) {
+    if (!response.ok || !body?.created) {
       setCreateError(body?.error || "Unable to create account");
       setSaving(false);
       return;
     }
-    setCreatedCredentials({ username: body.account.username, password: body.temporaryPassword });
+    setCreatedCredentials(body.created.map((entry) => ({
+      username: entry.username,
+      password: entry.temporaryPassword,
+    })));
+    setSkippedAccounts(body.skipped || []);
     setCredentialsCopied(false);
     setCreateError("");
     await loadPermissions();
@@ -303,21 +361,61 @@ export default function AdminPermissionsPage() {
 
   function closeCreateAccount() {
     setShowCreateAccount(false);
-    setNewUsername("");
-    setCreatedCredentials(null);
+    setNewUsernames("");
+    setCreatedCredentials([]);
+    setSkippedAccounts([]);
     setCredentialsCopied(false);
     setCreateError("");
   }
 
   async function copyCredentials() {
-    if (!createdCredentials) return;
+    if (createdCredentials.length === 0) return;
     try {
       await navigator.clipboard.writeText(
-        `Username: ${createdCredentials.username}\nTemporary password: ${createdCredentials.password}`,
+        createdCredentials
+          .map((entry) => `Username: ${entry.username}\nTemporary password: ${entry.password}`)
+          .join("\n\n"),
       );
       setCredentialsCopied(true);
     } catch {
       setCreateError("Clipboard access was blocked. Select the credentials and copy them manually.");
+    }
+  }
+
+  async function resetPassword(account: Account) {
+    if (!window.confirm(`Reset the password for ${account.displayName || account.username}? Existing sessions will be signed out.`)) return;
+    setSaving(true);
+    setStatus(null);
+    setCredentialsCopied(false);
+    const response = await fetch("/api/admin/permissions", {
+      method: "PATCH",
+      headers: { ...(await getAppAuthHeaders()), "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reset-password", userId: account.id }),
+    });
+    const body = await response.json().catch(() => null) as {
+      error?: string;
+      username?: string;
+      temporaryPassword?: string;
+    } | null;
+    if (!response.ok || !body?.username || !body.temporaryPassword) {
+      setStatus(body?.error || "Password reset failed");
+      setSaving(false);
+      return;
+    }
+    setResetCredentials({ username: body.username, password: body.temporaryPassword });
+    await loadPermissions();
+    setSaving(false);
+  }
+
+  async function copyResetCredentials() {
+    if (!resetCredentials) return;
+    try {
+      await navigator.clipboard.writeText(
+        `Username: ${resetCredentials.username}\nTemporary password: ${resetCredentials.password}`,
+      );
+      setCredentialsCopied(true);
+    } catch {
+      setStatus("Clipboard access was blocked. Select the credentials and copy them manually.");
     }
   }
 
@@ -389,7 +487,8 @@ export default function AdminPermissionsPage() {
             <button
               type="button"
               onClick={() => setShowCreateAccount(true)}
-              disabled={saving}
+              disabled={saving || !capabilities.canManageAccounts}
+              title={!capabilities.canManageAccounts ? "Full Account Management permission is required" : undefined}
               className="inline-flex items-center justify-center gap-2 border border-cyan-400/35 bg-cyan-400/10 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300 transition hover:bg-cyan-400/20 disabled:opacity-50"
             >
               <UserPlus size={16} />
@@ -448,7 +547,7 @@ export default function AdminPermissionsPage() {
                 const permissionCount = Object.values(account.permissions || {}).filter(
                   (level) => level && level !== "none",
                 ).length;
-                const canManage = !account.protected || account.id === currentUserId;
+                const canManageProtected = !account.protected || account.id === currentUserId;
                 const isCurrentAccount = account.id === currentUserId;
 
                 return (
@@ -508,8 +607,8 @@ export default function AdminPermissionsPage() {
                       <button
                         type="button"
                         onClick={() => openPermissionModal(account)}
-                        disabled={!canManage}
-                        title={!canManage ? "Only Akhari can edit this account" : undefined}
+                        disabled={!capabilities.canManagePermissions || !canManageProtected}
+                        title={!capabilities.canManagePermissions ? "Full Permissions access is required" : !canManageProtected ? "Only Akhari can edit this account" : undefined}
                         className="inline-flex items-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/16 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-gray-600"
                       >
                         <KeyRound size={15} />
@@ -517,9 +616,19 @@ export default function AdminPermissionsPage() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => void resetPassword(account)}
+                        disabled={saving || !capabilities.canResetPasswords || !canManageProtected}
+                        title={!capabilities.canResetPasswords ? "Full Password Reset permission is required" : !canManageProtected ? "Only Akhari can reset this account" : undefined}
+                        className="inline-flex items-center gap-2 border border-cyan-400/30 bg-cyan-400/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300 transition hover:bg-cyan-400/15 disabled:opacity-50"
+                      >
+                        <RotateCcw size={15} />
+                        Reset Password
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => runAccountAction(account.disabled ? "enable" : "disable", account)}
-                        disabled={saving || !canManage || isCurrentAccount}
-                        title={!canManage ? "Only Akhari can modify this account" : isCurrentAccount ? "You cannot disable your current account" : undefined}
+                        disabled={saving || !capabilities.canManageAccounts || !canManageProtected || isCurrentAccount}
+                        title={!capabilities.canManageAccounts ? "Full Account Management permission is required" : !canManageProtected ? "Only Akhari can modify this account" : isCurrentAccount ? "You cannot disable your current account" : undefined}
                         className="inline-flex items-center gap-2 border border-amber-300/30 bg-amber-300/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-200 transition hover:bg-amber-300/15 disabled:opacity-50"
                       >
                         <Ban size={15} />
@@ -528,8 +637,8 @@ export default function AdminPermissionsPage() {
                       <button
                         type="button"
                         onClick={() => runAccountAction("delete", account)}
-                        disabled={saving || !canManage || isCurrentAccount}
-                        title={!canManage ? "Only Akhari can delete this account" : isCurrentAccount ? "You cannot delete your current account" : undefined}
+                        disabled={saving || !capabilities.canManageAccounts || !canManageProtected || isCurrentAccount}
+                        title={!capabilities.canManageAccounts ? "Full Account Management permission is required" : !canManageProtected ? "Only Akhari can delete this account" : isCurrentAccount ? "You cannot delete your current account" : undefined}
                         className="inline-flex items-center gap-2 border border-red-400/30 bg-red-500/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-red-300 transition hover:bg-red-500/15 disabled:opacity-50"
                       >
                         <Trash2 size={15} />
@@ -619,10 +728,11 @@ export default function AdminPermissionsPage() {
                                       [definition.key]: option,
                                     }))
                                   }
+                                  disabled={!canSetPermission(definition, option)}
                                   className={`min-w-24 border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition ${
                                     selected
                                       ? `${accessClass(option)} shadow-[0_0_18px_rgba(0,255,102,0.08)]`
-                                      : "border-white/10 bg-white/[0.02] text-gray-600 hover:border-[#00ff66]/30 hover:text-gray-200"
+                                      : "border-white/10 bg-white/[0.02] text-gray-600 hover:border-[#00ff66]/30 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-35"
                                   }`}
                                 >
                                   {accessLabel(option)}
@@ -649,11 +759,40 @@ export default function AdminPermissionsPage() {
               <button
                 type="button"
                 onClick={savePermissions}
-                disabled={saving}
+                disabled={saving || !capabilities.canManagePermissions}
                 className="inline-flex items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/10 px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:opacity-50"
               >
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
                 Save Permissions
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {resetCredentials && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-lg border border-cyan-400/25 bg-[#020806] shadow-[0_0_60px_rgba(34,211,238,0.12)]">
+            <div className="flex items-start justify-between gap-4 border-b border-cyan-400/15 p-5">
+              <div>
+                <div className="flex items-center gap-3 text-cyan-300"><RotateCcw size={20} /><span className="text-xs font-bold uppercase tracking-[0.22em]">Password Reset</span></div>
+                <p className="mt-3 text-sm leading-6 text-gray-400">The account has been signed out and must change this password at next login.</p>
+              </div>
+              <button type="button" onClick={() => setResetCredentials(null)} className="grid h-10 w-10 place-items-center border border-white/10 text-gray-400 transition hover:border-red-400/40 hover:text-red-300"><X size={18} /></button>
+            </div>
+            <div className="p-5">
+              <div className="border border-amber-300/30 bg-amber-300/8 p-4 text-sm leading-6 text-amber-100">
+                This temporary password is shown only once. Send it through a secure channel.
+              </div>
+              <div className="mt-4 border border-cyan-400/15 bg-black/60 p-4">
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Username</div>
+                <div className="mt-2 break-all font-mono text-base text-white">{resetCredentials.username}</div>
+                <div className="mt-5 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Temporary Password</div>
+                <div className="mt-2 break-all font-mono text-base text-cyan-300">{resetCredentials.password}</div>
+              </div>
+              <button type="button" onClick={() => void copyResetCredentials()} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-cyan-400/35 bg-cyan-400/10 px-4 text-sm font-bold uppercase tracking-[0.14em] text-cyan-300 transition hover:bg-cyan-400/20">
+                {credentialsCopied ? <CheckCircle2 size={17} /> : <Copy size={17} />}
+                {credentialsCopied ? "Credentials Copied" : "Copy Credentials"}
               </button>
             </div>
           </section>
@@ -673,34 +812,50 @@ export default function AdminPermissionsPage() {
 
             <div className="p-5">
               {createError && <div className="mb-4 border border-red-400/35 bg-red-500/10 p-3 text-sm text-red-200">{createError}</div>}
-              {createdCredentials ? (
+              {createdCredentials.length > 0 || skippedAccounts.length > 0 ? (
                 <div>
-                  <div className="border border-amber-300/30 bg-amber-300/8 p-4 text-sm leading-6 text-amber-100">
-                    This temporary password is shown only once. Send it to the account holder through a secure channel.
-                  </div>
-                  <div className="mt-4 border border-[#00ff66]/15 bg-black/60 p-4">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Username</div>
-                    <div className="mt-2 break-all font-mono text-base text-white">{createdCredentials.username}</div>
-                    <div className="mt-5 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Temporary Password</div>
-                    <div className="mt-2 break-all font-mono text-base text-[#00ff66]">{createdCredentials.password}</div>
-                  </div>
-                  <button type="button" onClick={() => void copyCredentials()} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/10 px-4 text-sm font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20">
-                    {credentialsCopied ? <CheckCircle2 size={17} /> : <Copy size={17} />}
-                    {credentialsCopied ? "Credentials Copied" : "Copy Credentials"}
-                  </button>
+                  {createdCredentials.length > 0 && (
+                    <>
+                      <div className="border border-amber-300/30 bg-amber-300/8 p-4 text-sm leading-6 text-amber-100">
+                        These temporary passwords are shown only once. Send each one through a secure channel.
+                      </div>
+                      <div className="mt-4 max-h-80 overflow-y-auto border border-[#00ff66]/15 bg-black/60">
+                        {createdCredentials.map((credential) => (
+                          <div key={credential.username} className="grid gap-2 border-b border-[#00ff66]/10 p-4 last:border-b-0 sm:grid-cols-[1fr_1.4fr]">
+                            <div className="break-all font-mono text-sm text-white">{credential.username}</div>
+                            <div className="break-all font-mono text-sm text-[#00ff66]">{credential.password}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => void copyCredentials()} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/10 px-4 text-sm font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20">
+                        {credentialsCopied ? <CheckCircle2 size={17} /> : <Copy size={17} />}
+                        {credentialsCopied ? "Credentials Copied" : "Copy All Credentials"}
+                      </button>
+                    </>
+                  )}
+                  {skippedAccounts.length > 0 && (
+                    <div className="mt-4 border border-white/10 bg-white/[0.03] p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Skipped</div>
+                      <div className="mt-3 space-y-2 text-sm text-gray-400">
+                        {skippedAccounts.map((entry, index) => (
+                          <div key={`${entry.username}-${index}`}><span className="text-white">{entry.username}</span>: {entry.reason}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>
                   <label className="block">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Username</span>
-                    <input value={newUsername} onChange={(event) => setNewUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""))} autoComplete="off" maxLength={40} placeholder="username"
-                      className="mt-2 min-h-12 w-full border border-[#00ff66]/20 bg-black/70 px-4 text-white outline-none transition placeholder:text-gray-600 focus:border-[#00ff66]/60" />
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Usernames</span>
+                    <textarea value={newUsernames} onChange={(event) => setNewUsernames(event.target.value)} autoComplete="off" rows={12} placeholder={"Advisor\nAkhari\nArcher\nSix-Ten"}
+                      className="mt-2 w-full resize-y border border-[#00ff66]/20 bg-black/70 px-4 py-3 text-white outline-none transition placeholder:text-gray-600 focus:border-[#00ff66]/60" />
                   </label>
-                  <p className="mt-2 text-xs leading-5 text-gray-500">Use 3-40 lowercase letters, numbers, underscores, or dots.</p>
-                  <button type="button" onClick={() => void createAccount()} disabled={saving || !/^[a-z0-9_.]{3,40}$/.test(newUsername)}
+                  <p className="mt-2 text-xs leading-5 text-gray-500">Enter one per line. Existing accounts are skipped. Usernames use 2-40 letters, numbers, hyphens, underscores, or dots.</p>
+                  <button type="button" onClick={() => void createAccount()} disabled={saving || !newUsernames.trim()}
                     className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/15 px-5 font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/25 disabled:cursor-not-allowed disabled:opacity-45">
                     {saving ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
-                    Generate Account
+                    Generate Accounts
                   </button>
                 </div>
               )}

@@ -53,7 +53,11 @@ export function makeAuthOptions(database, env = process.env) {
       cookiePrefix: 'doom_native',
       useSecureCookies: config.origin.startsWith('https:'),
     },
-    plugins: [username({ minUsernameLength: 3, maxUsernameLength: 40 })],
+    plugins: [username({
+      minUsernameLength: 2,
+      maxUsernameLength: 40,
+      usernameValidator: (value) => /^[a-zA-Z0-9_.-]+$/.test(value),
+    })],
     databaseHooks: {
       session: {
         create: {

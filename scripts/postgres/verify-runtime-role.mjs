@@ -34,6 +34,7 @@ const requiredPrivileges = [
   ['public.user_roles', 'SELECT,INSERT,UPDATE,DELETE'],
   ['public.server_bookings', 'SELECT,INSERT,UPDATE,DELETE'],
   ['public.discord_role_outbox', 'SELECT,UPDATE'],
+  ['public.website_update_jobs', 'SELECT,INSERT'],
   ['public.discord_announcements', 'SELECT,INSERT,UPDATE,DELETE'],
   ['public.discord_attendance_events', 'SELECT,INSERT,UPDATE,DELETE'],
   ['public.discord_attendance_options', 'SELECT,INSERT,UPDATE,DELETE'],
@@ -68,6 +69,11 @@ const protectedFunctions = [
   'record_arma_medical_event',
   'reset_arma_xp_weekly_data',
   'finalize_steam_link_from_discord',
+];
+const trustedTriggerFunctions = [
+  'notify_cert_change',
+  'notify_user_created',
+  'sync_personnel_discord_tags',
 ];
 
 const pool = new Pool(postgresConfig());
@@ -122,6 +128,19 @@ try {
   for (const fn of functions.rows) {
     assert.equal(fn.runtime_execute, true, `Runtime cannot execute ${fn.signature}`);
     assert.equal(fn.public_execute, false, `PUBLIC can still execute ${fn.signature}`);
+  }
+
+  const triggers = await pool.query(`select p.proname, p.prosecdef,
+      has_function_privilege('public', p.oid, 'EXECUTE') as public_execute
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = any($1::text[])
+    order by p.proname`, [trustedTriggerFunctions]);
+  assert.equal(triggers.rowCount, trustedTriggerFunctions.length,
+    'Expected Discord outbox trigger functions were not found');
+  for (const fn of triggers.rows) {
+    assert.equal(fn.prosecdef, true, `${fn.proname} must be SECURITY DEFINER`);
+    assert.equal(fn.public_execute, false, `PUBLIC can execute ${fn.proname}`);
   }
 
   console.log(`PASS: ${expectedRole} has only the checked application privileges; sensitive tables and protected functions are not public.`);

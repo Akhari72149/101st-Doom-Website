@@ -34,6 +34,24 @@ try {
     assert.doesNotMatch(row.definition, /net\.http_post/);
   }
 
+  const triggerSecurity = await client.query(`
+    select p.proname, p.prosecdef,
+      has_function_privilege('public', p.oid, 'EXECUTE') public_execute
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = any($1::text[])
+  `, [[
+    'notify_cert_change',
+    'notify_user_created',
+    'sync_personnel_discord_tags',
+  ]]);
+  assert.equal(triggerSecurity.rowCount, 3);
+  for (const row of triggerSecurity.rows) {
+    assert.equal(row.prosecdef, true, `${row.proname} must be SECURITY DEFINER`);
+    assert.equal(row.public_execute, false, `PUBLIC can execute ${row.proname}`);
+  }
+
   const certification = await client.query(`
     select pc.personnel_id, pc.certification_id, p.discord_id, c.cert_id
     from public.personnel_certifications pc

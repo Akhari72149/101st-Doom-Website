@@ -21,6 +21,8 @@ PG16_BIN=C:\Program Files\PostgreSQL\16\bin
 PG17_BIN=C:\PrivateTools\postgresql-17\pgsql\bin
 POSTGRES_RUNTIME_ENV_FILE=.env.postgres-runtime-cutover.local
 POSTGRES_SCHEDULER_ENV_FILE=.env.postgres-scheduler-cutover.local
+POSTGRES_BACKUP_ENV_FILE=.env.postgres-backup-cutover.local
+POSTGRES_BACKUP_DIRECTORY=C:\Migration\101st-Roster\backups\production
 DATABASE_POOL_MAX=10
 APP_ORIGIN=https://101stdoombattalion.com
 NATIVE_AUTH_SECRET=REPLACE_WITH_A_RANDOM_SECRET_OF_AT_LEAST_32_CHARACTERS
@@ -41,9 +43,11 @@ npm run db:auth-schema-cutover
 npm run db:provision-cutover
 npm run db:migrate-cutover
 npm run db:provision-scheduler-cutover
+npm run db:provision-backup-cutover
 npm run db:check-cutover
 npm run db:verify-cutover
 npm run db:verify-scheduler-cutover
+npm run db:verify-backup-cutover
 
 # Exercise each scheduler path without retaining changes.
 npm run db:run-scheduled-job-cutover -- --job arma-weekly-xp-reset --rollback
@@ -139,3 +143,65 @@ If acceptance fails, stop native writers, restore the previous website and bot
 configuration, re-enable hosted Supabase backends, and restart the old deployment.
 Reconcile any records written only to native PostgreSQL before another attempt.
 Do not point both deployments at writable databases simultaneously.
+
+## 7. Production backups
+
+After migration `023_backup_privileges.sql` is applied, provision the restricted
+backup login and enable its private environment file:
+
+```powershell
+npm run db:provision-backup-cutover
+
+$BackupEnv = ".env.postgres-backup-cutover.local"
+$BackupContents = [IO.File]::ReadAllText($BackupEnv) `
+  -replace '(?m)^NATIVE_BACKUP_EXECUTION_ENABLED=false$', 'NATIVE_BACKUP_EXECUTION_ENABLED=true'
+[IO.File]::WriteAllText($BackupEnv, $BackupContents, (New-Object Text.UTF8Encoding($false)))
+
+npm run db:verify-backup-cutover
+npm run db:backup-cutover
+```
+
+Schedule `npm run db:backup-cutover` daily under the same protected Windows
+service account used for maintenance. A successful run creates a custom-format
+dump, archive inventory and SHA-256 manifest in a timestamped directory. Restrict
+the environment and backup directory ACLs to SYSTEM and Administrators.
+
+The local archive protects against database damage, but not loss of the server.
+Copy completed timestamped directories to encrypted off-server storage, monitor
+failed task results, and perform a restore test at least quarterly. Do not delete
+the hosted Supabase rollback project until this backup cycle has succeeded and a
+restore from one of these production archives has been verified.
+
+## 8. Website updater
+
+The `/admin/updater` page only queues the exact `origin/main` commit reported by
+GitHub. Assign `admin.updater` explicitly in the Permissions page. Read and Edit
+may inspect the page; only Full can queue an installation. No legacy role grants
+access automatically.
+
+The updater must run outside the website process. Copy the cutover environment to
+`C:\Migration\101st-Roster\private\website-updater.env`, restrict it to SYSTEM and
+Administrators, and add these private values:
+
+```dotenv
+WEBSITE_UPDATE_EXECUTION_ENABLED=true
+WEBSITE_ROOT=C:\Apps\101st-Doom-Website
+WEBSITE_TASK_NAME=101st Doom Website
+WEBSITE_HEALTH_URL=http://127.0.0.1:3000/api/site-version
+POSTGRES_BACKUP_ENV_FILE=C:\Apps\101st-Doom-Website\.env.postgres-backup-cutover.local
+```
+
+Preview and then register the managed website and one-minute updater tasks from
+an elevated PowerShell window:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\updater\register-windows-updater.ps1
+powershell -ExecutionPolicy Bypass -File scripts\updater\register-windows-updater.ps1 -Apply
+```
+
+Stop the old interactive website console before starting the new managed website
+task. Never run both launch methods at the same time.
+
+Set `WEBSITE_UPDATER_ENABLED=true` in the website's `.env.local`. Keep it false
+until both tasks and the verified production backup command work under SYSTEM.
+The updater refuses dirty trees, changed approvals and non-fast-forward updates.

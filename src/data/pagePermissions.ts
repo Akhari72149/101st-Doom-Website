@@ -130,6 +130,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["admin", "akhari"],
   },
   {
+    key: "admin.updater",
+    pagePath: "/admin/updater",
+    label: "Updater",
+    category: "Systems",
+    description: "Review releases and install approved website updates.",
+    legacyRoles: [],
+  },
+  {
     key: "gc.asset-log",
     pagePath: "/GC-Asset-Log",
     label: "GC Asset Log",

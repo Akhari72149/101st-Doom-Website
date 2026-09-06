@@ -351,6 +351,13 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "Akhari"],
           category: "Systems",
         },
+        {
+          href: "/admin/updater",
+          label: "Updater",
+          description: "Review and install website releases",
+          allowedRoles: [],
+          category: "Systems",
+        },
       ],
     },
   ], []);

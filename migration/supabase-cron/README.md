@@ -14,3 +14,9 @@ These jobs were read from hosted Supabase project `lrtbwyyqkeyqaopncewt`.
 The SQL in `jobs.json` is an archive of the deployed behavior. Do not enable
 the replacement schedules until the final cutover, otherwise both hosted and
 self-hosted systems may execute the same weekly operations.
+
+The two archived `generate_attendance_records_training` jobs reference a function
+that is absent from the exported schema. The native scheduler replaces both with
+one call to `ensure_current_attendance_week()`, which creates Training and MainOp
+records idempotently. Use `scripts/postgres/run-scheduled-job.mjs` with the
+least-privilege `roster_app_scheduler` role; rehearsal calls require `--rollback`.

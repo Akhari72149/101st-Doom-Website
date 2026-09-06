@@ -197,7 +197,7 @@ Do not drop `auth.users` or remove old account records before that work is compl
 ## Application rehearsal
 
 The PostgreSQL rehearsal has migrations through
-`021_campaign_status_privileges.sql` applied. The migrations create
+`022_scheduler_privileges.sql` applied. The migrations create
 the page permission tables when the source snapshot predates them, import all current
 permission definitions, and add the server-booking permission. Migration 004 grants
 the restricted runtime role the initial application privileges; migration 005 adds

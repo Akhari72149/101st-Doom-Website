@@ -113,6 +113,7 @@ async function getNativeAccounts() {
     id: user.id,
     displayName: profilesByUser.get(user.id)?.display_name || user.name || user.username || "",
     username: user.username || "",
+    protected: String(user.username || "").trim().toLowerCase() === "akhari",
     createdAt: user.created_at,
     lastSignInAt: null,
     disabled: user.disabled,
@@ -122,7 +123,7 @@ async function getNativeAccounts() {
 }
 
 export async function GET(request: Request) {
-  const { allowed } = await requirePermissionManager(request);
+  const { auth, allowed } = await requirePermissionManager(request);
 
   if (!allowed) {
     return jsonError("Unauthorized", 401);
@@ -131,6 +132,7 @@ export async function GET(request: Request) {
   if (process.env.NATIVE_AUTH_ENABLED === "true") {
     return NextResponse.json({
       accounts: await getNativeAccounts(),
+      currentUserId: auth.userId,
       permissionDefinitions: pagePermissionDefinitions,
       levels: pagePermissionLevels,
     });
@@ -182,10 +184,16 @@ export async function GET(request: Request) {
       new Date(user.banned_until || 0).getTime() > Date.now(),
     roles: rolesByUser.get(user.id) || [],
     permissions: permissionsByUser.get(user.id) || {},
+    protected: [
+      user.user_metadata?.username,
+      user.user_metadata?.display_name,
+      user.email?.split("@")[0],
+    ].some((value) => String(value || "").trim().toLowerCase() === "akhari"),
   }));
 
   return NextResponse.json({
     accounts,
+    currentUserId: auth.userId,
     permissionDefinitions: pagePermissionDefinitions,
     levels: pagePermissionLevels,
   });
@@ -210,6 +218,26 @@ export async function PATCH(request: Request) {
 
   if (!userId) {
     return jsonError("Invalid user id");
+  }
+
+  let protectedAccount = false;
+  if (process.env.NATIVE_AUTH_ENABLED === "true") {
+    const target = await getPostgresPool().query<{ username: string | null }>(
+      "select username from public.app_auth_users where id = $1",
+      [userId],
+    );
+    protectedAccount = String(target.rows[0]?.username || "").trim().toLowerCase() === "akhari";
+  } else {
+    const { data } = await supabaseAdmin.auth.admin.getUserById(userId);
+    protectedAccount = [
+      data.user?.user_metadata?.username,
+      data.user?.user_metadata?.display_name,
+      data.user?.email?.split("@")[0],
+    ].some((value) => String(value || "").trim().toLowerCase() === "akhari");
+  }
+
+  if (protectedAccount && userId !== auth.userId) {
+    return jsonError("Only the Akhari super user can modify this account", 403);
   }
 
   if (userId === auth.userId && (action === "disable" || action === "delete")) {

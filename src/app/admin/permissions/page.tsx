@@ -31,12 +31,15 @@ type Account = {
   disabled: boolean;
   roles: string[];
   permissions: Record<string, PagePermissionAccess>;
+  username?: string;
+  protected?: boolean;
 };
 
 type PermissionResponse = {
   accounts: Account[];
   permissionDefinitions: PagePermissionDefinition[];
   levels: PagePermissionAccess[];
+  currentUserId: string | null;
 };
 
 const editableLevels = pagePermissionLevels;
@@ -82,6 +85,7 @@ export default function AdminPermissionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [definitions, setDefinitions] = useState<PagePermissionDefinition[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [draftPermissions, setDraftPermissions] = useState<Record<string, PagePermissionAccess>>({});
 
   const groupedDefinitions = useMemo(() => {
@@ -150,6 +154,7 @@ export default function AdminPermissionsPage() {
     const payload = body as PermissionResponse;
     setAccounts(payload.accounts || []);
     setDefinitions(payload.permissionDefinitions || []);
+    setCurrentUserId(payload.currentUserId || null);
     setLoading(false);
   }
 
@@ -166,7 +171,6 @@ export default function AdminPermissionsPage() {
     };
 
     checkAccess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   function openPermissionModal(account: Account) {
@@ -376,6 +380,8 @@ export default function AdminPermissionsPage() {
                 const permissionCount = Object.values(account.permissions || {}).filter(
                   (level) => level && level !== "none",
                 ).length;
+                const canManage = !account.protected || account.id === currentUserId;
+                const isCurrentAccount = account.id === currentUserId;
 
                 return (
                   <article
@@ -392,6 +398,11 @@ export default function AdminPermissionsPage() {
                         {account.disabled && (
                           <span className="border border-red-400/35 bg-red-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-red-300">
                             Disabled
+                          </span>
+                        )}
+                        {account.protected && (
+                          <span className="border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">
+                            Super User
                           </span>
                         )}
                       </div>
@@ -424,7 +435,9 @@ export default function AdminPermissionsPage() {
                       <button
                         type="button"
                         onClick={() => openPermissionModal(account)}
-                        className="inline-flex items-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/16"
+                        disabled={!canManage}
+                        title={!canManage ? "Only Akhari can edit this account" : undefined}
+                        className="inline-flex items-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/16 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-gray-600"
                       >
                         <KeyRound size={15} />
                         Permissions
@@ -432,7 +445,8 @@ export default function AdminPermissionsPage() {
                       <button
                         type="button"
                         onClick={() => runAccountAction(account.disabled ? "enable" : "disable", account)}
-                        disabled={saving}
+                        disabled={saving || !canManage || isCurrentAccount}
+                        title={!canManage ? "Only Akhari can modify this account" : isCurrentAccount ? "You cannot disable your current account" : undefined}
                         className="inline-flex items-center gap-2 border border-amber-300/30 bg-amber-300/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-200 transition hover:bg-amber-300/15 disabled:opacity-50"
                       >
                         <Ban size={15} />
@@ -441,7 +455,8 @@ export default function AdminPermissionsPage() {
                       <button
                         type="button"
                         onClick={() => runAccountAction("delete", account)}
-                        disabled={saving}
+                        disabled={saving || !canManage || isCurrentAccount}
+                        title={!canManage ? "Only Akhari can delete this account" : isCurrentAccount ? "You cannot delete your current account" : undefined}
                         className="inline-flex items-center gap-2 border border-red-400/30 bg-red-500/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-red-300 transition hover:bg-red-500/15 disabled:opacity-50"
                       >
                         <Trash2 size={15} />

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppSession, signOutOfApp, type AppUser } from "@/lib/client-auth";
+import { pagePermissionDefinitions } from "@/data/pagePermissions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -40,33 +41,24 @@ type DashboardItem = {
 export default function Home() {
   const router = useRouter();
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
+  const [permissions, setPermissions] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      setUser(user);
-
-      if (user) {
-        const { data } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id);
-
-        setRoles(data?.map((r) => r.role) || []);
-      }
+      const session = await getAppSession();
+      setUser(session?.user || null);
+      setRoles(session?.roles || []);
+      setPermissions(session?.permissions || {});
     };
 
     getUser();
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOutOfApp();
     setUser(null);
     setRoles([]);
     router.push("/login");
@@ -173,6 +165,8 @@ export default function Home() {
   );
 
   const canAccessItem = (item: DashboardItem) => {
+    const permissionKey = pagePermissionDefinitions.find((entry) => entry.pagePath === item.href)?.key;
+    if (permissionKey && permissions[permissionKey]) return true;
     if (!item.allowedRoles) return true;
     return item.allowedRoles.some((role) =>
       normalizedRoles.includes(role.toLowerCase())
@@ -207,13 +201,11 @@ export default function Home() {
     }, {});
   }, [searchedItems]);
 
-  const accessibleCount = useMemo(() => {
-    return items.filter(canAccessItem).length;
-  }, [items, normalizedRoles]);
+  const accessibleCount = items.filter(canAccessItem).length;
 
   const displayName =
-    user?.user_metadata?.display_name ||
-    user?.user_metadata?.full_name ||
+    user?.displayName ||
+    user?.username ||
     user?.email ||
     "Guest Operator";
 

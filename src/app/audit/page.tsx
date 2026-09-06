@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
 import {
   RefreshCw,
@@ -72,12 +72,30 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     const init = async () => {
-      await fetchFilterOptions();
+      const session = await getAppSession();
+      const legacyAccess = session?.roles.some((role) => ["admin", "nco", "trainer", "di"].includes(role.toLowerCase()));
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+      if (!legacyAccess && !hasAppPermission(session, "records.audit")) {
+        router.replace("/");
+        return;
+      }
+      const response = await fetch("/api/audit-logs?options=true", {
+        cache: "no-store", headers: await getAppAuthHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json() as { users?: string[]; actions?: string[]; personnel?: string[] };
+        setUsers(data.users || []);
+        setActions(data.actions || []);
+        setPersonnelList(data.personnel || []);
+      }
       setLoadingAuth(false);
     };
 
     init();
-  }, []);
+  }, [router]);
 
   const renderName = (name: string) => {
     if (!name) return <span className="text-gray-500">Unknown</span>;
@@ -97,43 +115,6 @@ export default function AuditLogsPage() {
     return <span className="text-white">{name}</span>;
   };
 
-  const fetchFilterOptions = async () => {
-    const [{ data: userData }, { data: actionData }, { data: personnelData }] =
-      await Promise.all([
-        supabase.from("profiles").select("display_name").order("display_name"),
-        supabase.from("audit_logs").select("action"),
-        supabase.from("personnel").select("name").order("name"),
-      ]);
-
-    if (userData) {
-      setUsers(
-        userData
-          .map((u) => u.display_name)
-          .filter((value): value is string => Boolean(value))
-      );
-    }
-
-    if (actionData) {
-      const uniqueActions = Array.from(
-        new Set(
-          actionData
-            .map((a) => a.action)
-            .filter((value): value is string => Boolean(value))
-        )
-      ).sort();
-
-      setActions(uniqueActions);
-    }
-
-    if (personnelData) {
-      setPersonnelList(
-        personnelData
-          .map((p) => p.name)
-          .filter((value): value is string => Boolean(value))
-      );
-    }
-  };
-
   const fetchLogs = async (isManualRefresh = false) => {
     if (isManualRefresh) {
       setRefreshing(true);
@@ -141,30 +122,8 @@ export default function AuditLogsPage() {
       setLoadingLogs(true);
     }
 
-    let query = supabase
-      .from("audit_logs")
-      .select(`
-        id,
-        action,
-        created_at,
-        user_id,
-        processed_by,
-        profiles:user_id ( display_name ),
-        processor:processed_by ( name ),
-        personnel:target_personnel_id ( name ),
-        ranks:target_rank_id ( name ),
-        oldRank:old_rank_id ( name ),
-        certifications:target_certification_id ( name ),
-        target_slot_label,
-        target_slot_section,
-        target_slot_subsection
-      `)
-      .order("created_at", { ascending: false })
-      .limit(200);
-
-    if (selectedAction !== "all") {
-      query = query.eq("action", selectedAction);
-    }
+    const params = new URLSearchParams();
+    if (selectedAction !== "all") params.set("action", selectedAction);
 
     if (selectedDate !== "all") {
       const start = new Date(selectedDate);
@@ -173,69 +132,47 @@ export default function AuditLogsPage() {
       const end = new Date(selectedDate);
       end.setHours(23, 59, 59, 999);
 
-      query = query
-        .gte("created_at", start.toISOString())
-        .lte("created_at", end.toISOString());
+      params.set("start", start.toISOString());
+      params.set("end", end.toISOString());
     } else if (!hasManualFilter) {
       const recentStart = new Date();
       recentStart.setDate(recentStart.getDate() - DEFAULT_RECENT_DAYS);
       recentStart.setHours(0, 0, 0, 0);
 
-      query = query.gte("created_at", recentStart.toISOString());
+      params.set("start", recentStart.toISOString());
     }
 
     if (selectedUser !== "all") {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("display_name", selectedUser)
-        .maybeSingle();
-
-      if (profile?.id) {
-        query = query.eq("user_id", profile.id);
-      } else {
-        setLogs([]);
-        setLoadingLogs(false);
-        setRefreshing(false);
-        return;
-      }
+      params.set("user", selectedUser);
     }
 
     if (selectedPersonnel !== "all") {
-      const { data: personnel } = await supabase
-        .from("personnel")
-        .select("id")
-        .eq("name", selectedPersonnel)
-        .maybeSingle();
-
-      if (personnel?.id) {
-        query = query.eq("target_personnel_id", personnel.id);
-      } else {
-        setLogs([]);
-        setLoadingLogs(false);
-        setRefreshing(false);
-        return;
-      }
+      params.set("personnel", selectedPersonnel);
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      alert(error.message);
+    const response = await fetch(`/api/audit-logs?${params}`, {
+      cache: "no-store", headers: await getAppAuthHeaders(),
+    });
+    const payload = await response.json().catch(() => null) as { logs?: LogRow[]; error?: string } | null;
+    if (!response.ok) {
+      alert(payload?.error || "Failed to load audit logs");
       setLoadingLogs(false);
       setRefreshing(false);
       return;
     }
 
-    setLogs((data || []) as LogRow[]);
+    setLogs(payload?.logs || []);
     setLoadingLogs(false);
     setRefreshing(false);
   };
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
     if (!loadingAuth) {
-      fetchLogs();
+        void fetchLogs();
     }
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [
     loadingAuth,
     selectedUser,

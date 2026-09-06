@@ -9,7 +9,9 @@ import {
   addSteamLinkAudit,
   getVerifiedSteamSession,
   noStoreHeaders,
+  getMemberLinkBackend,
 } from "@/lib/member-link";
+import { getPostgresPool } from "@/lib/postgres/pool";
 import {
   STEAM_LINK_SESSION_COOKIE,
   getExpiredSteamCookieOptions,
@@ -79,15 +81,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: challenge } = await supabaseAdmin
-    .from("personnel_discord_verification_challenges")
-    .select("id,code_hash,failed_attempts,max_attempts,expires_at")
-    .eq("steam_link_session_id", session.id)
-    .eq("personnel_id", session.selected_personnel_id)
-    .eq("status", "SENT")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<ChallengeRow>();
+  let challenge: ChallengeRow | null;
+  if (getMemberLinkBackend() === "postgres") {
+    const result = await getPostgresPool().query<ChallengeRow>(`select id,code_hash,failed_attempts,max_attempts,expires_at from public.personnel_discord_verification_challenges where steam_link_session_id=$1 and personnel_id=$2 and status='SENT' order by created_at desc limit 1`, [session.id,session.selected_personnel_id]);
+    challenge = result.rows[0] || null;
+  } else {
+    const result = await supabaseAdmin.from("personnel_discord_verification_challenges").select("id,code_hash,failed_attempts,max_attempts,expires_at").eq("steam_link_session_id", session.id).eq("personnel_id", session.selected_personnel_id).eq("status", "SENT").order("created_at", { ascending: false }).limit(1).maybeSingle<ChallengeRow>();
+    challenge = result.data || null;
+  }
 
   if (!challenge) {
     return NextResponse.json(
@@ -97,10 +98,8 @@ export async function POST(request: Request) {
   }
 
   if (new Date(challenge.expires_at).getTime() <= Date.now()) {
-    await supabaseAdmin
-      .from("personnel_discord_verification_challenges")
-      .update({ status: "EXPIRED" })
-      .eq("id", challenge.id);
+    if (getMemberLinkBackend() === "postgres") await getPostgresPool().query("update public.personnel_discord_verification_challenges set status='EXPIRED' where id=$1", [challenge.id]);
+    else await supabaseAdmin.from("personnel_discord_verification_challenges").update({ status: "EXPIRED" }).eq("id", challenge.id);
 
     return NextResponse.json(
       { error: "CODE_EXPIRED" },
@@ -109,10 +108,8 @@ export async function POST(request: Request) {
   }
 
   if (challenge.failed_attempts >= challenge.max_attempts) {
-    await supabaseAdmin
-      .from("personnel_discord_verification_challenges")
-      .update({ status: "FAILED" })
-      .eq("id", challenge.id);
+    if (getMemberLinkBackend() === "postgres") await getPostgresPool().query("update public.personnel_discord_verification_challenges set status='FAILED' where id=$1", [challenge.id]);
+    else await supabaseAdmin.from("personnel_discord_verification_challenges").update({ status: "FAILED" }).eq("id", challenge.id);
 
     return NextResponse.json(
       { error: "TOO_MANY_ATTEMPTS" },
@@ -138,13 +135,8 @@ export async function POST(request: Request) {
     const remainingAttempts = Math.max(0, challenge.max_attempts - failedAttempts);
     const failed = failedAttempts >= challenge.max_attempts;
 
-    await supabaseAdmin
-      .from("personnel_discord_verification_challenges")
-      .update({
-        failed_attempts: failedAttempts,
-        status: failed ? "FAILED" : "SENT",
-      })
-      .eq("id", challenge.id);
+    if (getMemberLinkBackend() === "postgres") await getPostgresPool().query("update public.personnel_discord_verification_challenges set failed_attempts=$2,status=$3 where id=$1", [challenge.id,failedAttempts,failed?"FAILED":"SENT"]);
+    else await supabaseAdmin.from("personnel_discord_verification_challenges").update({ failed_attempts: failedAttempts, status: failed ? "FAILED" : "SENT" }).eq("id", challenge.id);
 
     await addSteamLinkAudit("DISCORD_CODE_FAILED", {
       personnelId: session.selected_personnel_id,
@@ -164,13 +156,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: result, error: finalizeError } = await supabaseAdmin.rpc(
-    "finalize_steam_link_from_discord",
-    {
-      p_steam_link_session_id: session.id,
-      p_discord_challenge_id: challenge.id,
-    },
-  );
+  let result: unknown;
+  let finalizeError: { code?: string; message?: string } | null = null;
+  if (getMemberLinkBackend() === "postgres") {
+    try {
+      const finalized = await getPostgresPool().query("select * from public.finalize_steam_link_from_discord($1,$2)", [session.id,challenge.id]);
+      result = finalized.rows[0] || null;
+    } catch (error) {
+      finalizeError = { code: error && typeof error === "object" && "code" in error ? String(error.code) : undefined, message: error instanceof Error ? error.message : "Database operation failed" };
+    }
+  } else {
+    const finalized = await supabaseAdmin.rpc("finalize_steam_link_from_discord", { p_steam_link_session_id: session.id, p_discord_challenge_id: challenge.id });
+    result = finalized.data;
+    finalizeError = finalized.error;
+  }
 
   if (finalizeError) {
     const safeError = getFinalizeErrorResponse(finalizeError.message || "");
@@ -191,11 +190,15 @@ export async function POST(request: Request) {
     | { link_id?: string; personnel_id?: string }
     | null;
 
-  const { data: person } = await supabaseAdmin
-    .from("personnel")
-    .select("id,name")
-    .eq("id", finalized?.personnel_id || session.selected_personnel_id)
-    .maybeSingle<PersonnelRow>();
+  let person: PersonnelRow | null;
+  const finalPersonnelId = finalized?.personnel_id || session.selected_personnel_id;
+  if (getMemberLinkBackend() === "postgres") {
+    const personResult = await getPostgresPool().query<PersonnelRow>("select id,name from public.personnel where id=$1", [finalPersonnelId]);
+    person = personResult.rows[0] || null;
+  } else {
+    const personResult = await supabaseAdmin.from("personnel").select("id,name").eq("id", finalPersonnelId).maybeSingle<PersonnelRow>();
+    person = personResult.data || null;
+  }
 
   await addSteamLinkAudit("DISCORD_CODE_VERIFIED", {
     personnelId: finalized?.personnel_id || session.selected_personnel_id,

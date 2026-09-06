@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 type Profile = {
   id: string;
@@ -82,60 +81,27 @@ export default function TaskboardViewerPage() {
 
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const init = async () => {
-      await Promise.all([fetchProfiles(), fetchTasks()]);
-      setLoadingPage(false);
-    };
-
-    init();
-  }, []);
-
-  const fetchProfiles = async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .order("display_name");
-
-    if (!error) {
-      setProfiles((data as Profile[] | null) || []);
-    }
+  async function fetchProfiles() {
+    const response = await fetch("/api/taskboard", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json() as { profiles?: Profile[] };
+    setProfiles(data.profiles || []);
   };
 
-  const fetchTasks = async () => {
+  async function fetchTasks() {
     setLoadingTasks(true);
 
-    const { data, error } = await supabase
-      .from("taskboard_tasks")
-      .select("*")
-      .order("status", { ascending: true })
-      .order("position", { ascending: true })
-      .order("created_at", { ascending: false });
-
-    if (!error) {
-      setTasks((data as Task[] | null) || []);
-      await fetchComments();
+    const response = await fetch("/api/taskboard", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json() as { tasks?: Task[]; comments?: RawCommentRow[] };
+      setTasks(data.tasks || []);
+      applyComments(data.comments || []);
     }
 
     setLoadingTasks(false);
   };
 
-  const fetchComments = async () => {
-    const { data, error } = await supabase
-      .from("taskboard_comments")
-      .select(`
-        id,
-        task_id,
-        user_id,
-        content,
-        created_at,
-        profiles:user_id ( display_name )
-      `)
-      .order("created_at", { ascending: true });
-
-    if (error || !data) return;
-
-    const rawComments = data as RawCommentRow[];
+  function applyComments(rawComments: RawCommentRow[]) {
     const grouped: Record<string, TaskComment[]> = {};
 
     const typedComments: TaskComment[] = rawComments.map((comment) => ({
@@ -158,6 +124,14 @@ export default function TaskboardViewerPage() {
 
     setCommentsByTask(grouped);
   };
+
+  useEffect(() => {
+    const init = async () => {
+      await Promise.all([fetchProfiles(), fetchTasks()]);
+      setLoadingPage(false);
+    };
+    void init();
+  }, []);
 
   const refreshBoard = async () => {
     setRefreshing(true);

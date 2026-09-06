@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { sendDiscordMessage } from "@/lib/send-discord-message";
 import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
-import { getAdminRouteAuth, hasAnyAdminRole } from "@/lib/admin-route-auth";
+import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 
 const DISCORD_MESSAGE_LIMIT = 2000;
-const ANNOUNCEMENT_ADMIN_ROLES = ["admin", "logistics"];
-
 export async function POST(req: Request) {
-  const { userId, roles } = await getAdminRouteAuth(req);
-
-  if (!userId || !hasAnyAdminRole(roles, ANNOUNCEMENT_ADMIN_ROLES)) {
+  if (!requestHasSameOrigin(req)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  if (!(await requirePageAccess(req, "admin.discord-announcements", "edit"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

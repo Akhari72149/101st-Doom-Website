@@ -18,12 +18,36 @@ export const pagePermissionLevels: PagePermissionAccess[] = [
 
 export const pagePermissionDefinitions: PagePermissionDefinition[] = [
   {
+    key: "records.audit",
+    pagePath: "/audit",
+    label: "Audit Log",
+    category: "Records",
+    description: "Review system and personnel audit actions.",
+    legacyRoles: ["admin", "nco", "trainer", "di"],
+  },
+  {
+    key: "admin.taskboard",
+    pagePath: "/admin/Taskboard",
+    label: "Taskboard",
+    category: "Systems",
+    description: "Create and manage website taskboard items.",
+    legacyRoles: ["admin", "akhari"],
+  },
+  {
+    key: "admin.mod-taskboard",
+    pagePath: "/admin/Mod-Taskboard",
+    label: "Mod Taskboard",
+    category: "Systems",
+    description: "Create and manage mod development pipeline items.",
+    legacyRoles: ["akhari"],
+  },
+  {
     key: "admin.create",
     pagePath: "/admin/create",
     label: "Create Accounts",
     category: "Personnel Admin",
     description: "Create new website and personnel records.",
-    legacyRoles: ["admin", "recruiter"],
+    legacyRoles: ["admin", "recruiter", "di", "nco"],
   },
   {
     key: "admin.positions",
@@ -145,5 +169,20 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     description: "Create and edit operational planning boards.",
     legacyRoles: ["admin", "logistics", "nco", "trainer"],
   },
+  {
+    key: "operations.server-bookings",
+    pagePath: "/servers",
+    label: "Server Booking",
+    category: "Operations",
+    description: "Create and cancel Arma server bookings.",
+    legacyRoles: ["admin", "nco", "trainer", "akhari"],
+  },
+  {
+    key: "operations.randomiser",
+    pagePath: "/Randomiser",
+    label: "Side Operation Randomiser",
+    category: "Operations",
+    description: "Manage side-operation signups, weighted selection, and operation settings.",
+    legacyRoles: ["admin", "logistics"],
+  },
 ];
-

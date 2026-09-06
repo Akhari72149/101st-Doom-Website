@@ -5,7 +5,9 @@ import {
   getVerifiedSteamSession,
   noStoreHeaders,
   toPersonnelSummary,
+  getMemberLinkBackend,
 } from "@/lib/member-link";
+import { getPostgresPool } from "@/lib/postgres/pool";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +41,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: [] }, { headers: noStoreHeaders });
   }
 
-  const [{ data: personnelData }, { data: linkedData }, rankMap] = await Promise.all([
+  let personnelData: PersonnelRow[] = [];
+  let linkedData: Array<{ personnel_id: string }> = [];
+  let rankMap: Map<string, string>;
+  if (getMemberLinkBackend() === "postgres") {
+    const [personnel, linked, ranks] = await Promise.all([
+      getPostgresPool().query<PersonnelRow>("select id,rank_id,name,slotted_position,status,mos,created_at,discord_id from public.personnel order by name limit 500"),
+      getPostgresPool().query<{ personnel_id: string }>("select personnel_id from public.personnel_steam_links where revoked_at is null"),
+      getRankMap(),
+    ]);
+    personnelData = personnel.rows;
+    linkedData = linked.rows;
+    rankMap = ranks;
+  } else {
+    const [personnel, linked, ranks] = await Promise.all([
     supabaseAdmin
       .from("personnel")
       .select("id,rank_id,name,slotted_position,status,mos,created_at,discord_id")
@@ -51,15 +66,19 @@ export async function GET(request: Request) {
       .is("revoked_at", null),
     getRankMap(),
   ]);
+    personnelData = (personnel.data || []) as PersonnelRow[];
+    linkedData = (linked.data || []) as Array<{ personnel_id: string }>;
+    rankMap = ranks;
+  }
 
   const activeLinkedPersonnel = new Set(
-    ((linkedData || []) as Array<{ personnel_id: string }>).map(
+    linkedData.map(
       (link) => link.personnel_id,
     ),
   );
 
   const normalizedQuery = query.toLowerCase();
-  const results = ((personnelData || []) as PersonnelRow[])
+  const results = personnelData
     .map((person) =>
       toPersonnelSummary(
         person,

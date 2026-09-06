@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getActiveLinkBySteamId, getMemberLinkBackend } from "@/lib/member-link";
+import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import {
   STEAM_LINK_SESSION_COOKIE,
   constantTimeCompare,
@@ -46,13 +48,16 @@ export async function GET(request: Request) {
   const sessionTokenHash = hashToken(sessionToken);
   const stateHash = hashToken(state);
 
-  const { data: session, error } = await supabaseAdmin
-    .from("steam_link_sessions")
-    .select("session_token_hash,state_hash,expires_at,consumed_at")
-    .eq("session_token_hash", sessionTokenHash)
-    .maybeSingle<SteamLinkSession>();
+  let session: SteamLinkSession | null;
+  if (getMemberLinkBackend() === "postgres") {
+    const result = await getPostgresPool().query<SteamLinkSession>("select session_token_hash,state_hash,expires_at,consumed_at from public.steam_link_sessions where session_token_hash=$1", [sessionTokenHash]);
+    session = result.rows[0] || null;
+  } else {
+    const result = await supabaseAdmin.from("steam_link_sessions").select("session_token_hash,state_hash,expires_at,consumed_at").eq("session_token_hash", sessionTokenHash).maybeSingle<SteamLinkSession>();
+    session = result.data || null;
+  }
 
-  if (error || !session) {
+  if (!session) {
     return redirectToMemberLink("invalid_session");
   }
 
@@ -78,44 +83,21 @@ export async function GET(request: Request) {
     );
     const profile = await getSteamPublicProfile(steamId);
 
-    const { data: existingLink } = await supabaseAdmin
-      .from("personnel_steam_links")
-      .select("personnel_id,linked_at,linked_method")
-      .eq("steam_id", steamId)
-      .is("revoked_at", null)
-      .maybeSingle<{
-        personnel_id: string;
-        linked_at: string;
-        linked_method: string;
-      }>();
+    const existingLink = await getActiveLinkBySteamId(steamId);
 
     const verifiedAt = new Date().toISOString();
 
-    const { error: updateError } = await supabaseAdmin
-      .from("steam_link_sessions")
-      .update({
-        steam_id: steamId,
-        steam_display_name: profile.displayName,
-        steam_profile_url: profile.profileUrl,
-        steam_avatar_url: profile.avatarUrl,
-        verified_at: verifiedAt,
-      })
-      .eq("session_token_hash", sessionTokenHash);
-
-    if (updateError) {
-      return redirectToMemberLink("verification_failed");
+    if (getMemberLinkBackend() === "postgres") {
+      await withPostgresTransaction(async (client) => {
+        const update = await client.query(`update public.steam_link_sessions set steam_id=$2,steam_display_name=$3,steam_profile_url=$4,steam_avatar_url=$5,verified_at=$6 where session_token_hash=$1 and consumed_at is null and expires_at>now()`, [sessionTokenHash,steamId,profile.displayName,profile.profileUrl,profile.avatarUrl,verifiedAt]);
+        if (!update.rowCount) throw new Error("SESSION_UPDATE_FAILED");
+        await client.query(`insert into public.personnel_steam_link_audit(action,personnel_id,steam_id,actor_type,details) values('STEAM_AUTH_VERIFIED',$1,$2,'SYSTEM',$3::jsonb)`, [existingLink?.personnel_id??null,steamId,JSON.stringify({already_linked:Boolean(existingLink),verified_at:verifiedAt})]);
+      });
+    } else {
+      const update = await supabaseAdmin.from("steam_link_sessions").update({ steam_id:steamId,steam_display_name:profile.displayName,steam_profile_url:profile.profileUrl,steam_avatar_url:profile.avatarUrl,verified_at:verifiedAt }).eq("session_token_hash",sessionTokenHash);
+      if (update.error) return redirectToMemberLink("verification_failed");
+      await supabaseAdmin.from("personnel_steam_link_audit").insert({ action:"STEAM_AUTH_VERIFIED",personnel_id:existingLink?.personnel_id??null,steam_id:steamId,actor_type:"SYSTEM",details:{already_linked:Boolean(existingLink),verified_at:verifiedAt} });
     }
-
-    await supabaseAdmin.from("personnel_steam_link_audit").insert({
-      action: "STEAM_AUTH_VERIFIED",
-      personnel_id: existingLink?.personnel_id ?? null,
-      steam_id: steamId,
-      actor_type: "website",
-      details: {
-        already_linked: Boolean(existingLink),
-        verified_at: verifiedAt,
-      },
-    });
 
     const successUrl = new URL("/member-link", getSiteUrl());
     successUrl.searchParams.set(

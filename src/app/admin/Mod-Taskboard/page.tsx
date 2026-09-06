@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type Assignee = {
   id: string;
@@ -50,10 +50,6 @@ type Task = {
   position: number;
   created_at: string;
   updated_at: string;
-};
-
-type RoleRow = {
-  role: string;
 };
 
 type RawCommentRow = {
@@ -151,99 +147,43 @@ export default function ModPipelinePage() {
 
   useEffect(() => {
     const init = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/Task-Viewer");
         return;
       }
-
-      setUserId(user.id);
-
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = (roleData as RoleRow[] | null)?.map((r) => r.role) || [];
-      const allowedRoles = ["Akhari"];
-
-      if (!roleList.some((role) => allowedRoles.includes(role))) {
+      const legacyAccess = session.roles.some((role) => role.toLowerCase() === "akhari");
+      if (!legacyAccess && !hasAppPermission(session, "admin.mod-taskboard", "read")) {
         router.replace("/");
         return;
       }
-
-      await Promise.all([fetchAssignees(), fetchProfiles(), fetchTasks()]);
+      setUserId(session.user.id);
+      await fetchTasks();
       setLoadingAuth(false);
     };
 
     init();
   }, [router]);
 
-  const fetchAssignees = async () => {
-    const { data, error } = await supabase
-      .from("mod_pipeline_assignees")
-      .select("id, name")
-      .order("name");
-
-    if (!error) {
-      setAssignees((data as Assignee[] | null) || []);
-    }
-  };
-
-  const fetchProfiles = async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .order("display_name");
-
-    if (!error) {
-      setProfiles((data as Profile[] | null) || []);
-    }
-  };
-
   const fetchTasks = async () => {
     setLoadingTasks(true);
-
-    const { data, error } = await supabase
-      .from("mod_pipeline_tasks")
-      .select("*")
-      .order("status", { ascending: true })
-      .order("position", { ascending: true })
-      .order("created_at", { ascending: false });
-
-    if (!error) {
+    const response = await fetch("/api/mod-taskboard", { cache: "no-store", headers: await getAppAuthHeaders() });
+    if (response.ok) {
+      const data = await response.json() as { assignees?: Assignee[]; profiles?: Profile[]; tasks?: Task[]; comments?: RawCommentRow[] };
       const mappedTasks =
-        ((data as Task[] | null) || []).map((task) => ({
+        (data.tasks || []).map((task) => ({
           ...task,
           tags: Array.isArray(task.tags) ? task.tags : [],
-        })) || [];
-
+        }));
+      setAssignees(data.assignees || []);
+      setProfiles(data.profiles || []);
       setTasks(mappedTasks);
-      await fetchComments();
+      applyComments(data.comments || []);
     }
-
     setLoadingTasks(false);
   };
 
-  const fetchComments = async () => {
-    const { data, error } = await supabase
-      .from("mod_pipeline_comments")
-      .select(`
-        id,
-        task_id,
-        user_id,
-        content,
-        created_at,
-        profiles:user_id ( display_name )
-      `)
-      .order("created_at", { ascending: true });
-
-    if (error || !data) return;
-
-    const rawComments = data as RawCommentRow[];
+  const applyComments = (rawComments: RawCommentRow[]) => {
     const grouped: Record<string, TaskComment[]> = {};
 
     const typedComments: TaskComment[] = rawComments.map((comment) => ({
@@ -265,6 +205,13 @@ export default function ModPipelinePage() {
     }
 
     setCommentsByTask(grouped);
+  };
+
+  const fetchComments = async () => {
+    const response = await fetch("/api/mod-taskboard", { cache: "no-store", headers: await getAppAuthHeaders() });
+    if (!response.ok) return;
+    const data = await response.json() as { comments?: RawCommentRow[] };
+    applyComments(data.comments || []);
   };
 
   const refreshBoard = async () => {
@@ -326,12 +273,14 @@ const toggleEditTagSelection = (tag: ModTag) => {
       position: nextPosition,
     };
 
-    const { error } = await supabase.from("mod_pipeline_tasks").insert(payload);
+    const response = await fetch("/api/mod-taskboard", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify(payload) });
 
     setSaving(false);
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to create mod task");
       return;
     }
 
@@ -369,9 +318,9 @@ const toggleEditTagSelection = (tag: ModTag) => {
           : 0;
     }
 
-    const { error } = await supabase
-      .from("mod_pipeline_tasks")
-      .update({
+    const response = await fetch("/api/mod-taskboard", { method: "PATCH", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({
+        id: editingTaskId,
         title: editTitle.trim(),
         description: editDescription.trim() || null,
         priority: editPriority,
@@ -381,11 +330,11 @@ const toggleEditTagSelection = (tag: ModTag) => {
         assigned_to: editAssignedTo === "unassigned" ? null : editAssignedTo,
         due_date: editDueDate ? new Date(`${editDueDate}T12:00:00`).toISOString() : null,
         position: nextPosition,
-      })
-      .eq("id", editingTaskId);
+      }) });
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to update mod task");
       return;
     }
 
@@ -397,13 +346,12 @@ const toggleEditTagSelection = (tag: ModTag) => {
     const confirmed = window.confirm("Delete this pipeline item?");
     if (!confirmed) return;
 
-    const { error } = await supabase
-      .from("mod_pipeline_tasks")
-      .delete()
-      .eq("id", taskId);
+    const response = await fetch(`/api/mod-taskboard?id=${encodeURIComponent(taskId)}`, { method: "DELETE",
+      credentials: "same-origin", headers: await getAppAuthHeaders() });
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to delete mod task");
       return;
     }
 
@@ -420,16 +368,17 @@ const toggleEditTagSelection = (tag: ModTag) => {
         ? Math.max(...columnTasks.map((task) => task.position || 0)) + 1
         : 0;
 
-    const { error } = await supabase
-      .from("mod_pipeline_tasks")
-      .update({
+    const response = await fetch("/api/mod-taskboard", { method: "PATCH", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({
+        kind: "move",
+        id: taskId,
         status: newStatus,
         position: nextPosition,
-      })
-      .eq("id", taskId);
+      }) });
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to move mod task");
       return;
     }
 
@@ -440,14 +389,13 @@ const toggleEditTagSelection = (tag: ModTag) => {
     const content = newComment[taskId]?.trim();
     if (!content || !userId) return;
 
-    const { error } = await supabase.from("mod_pipeline_comments").insert({
-      task_id: taskId,
-      user_id: userId,
-      content,
-    });
+    const response = await fetch("/api/mod-taskboard", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+      body: JSON.stringify({ kind: "comment", taskId, content }) });
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to add comment");
       return;
     }
 

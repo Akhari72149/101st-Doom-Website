@@ -6,6 +6,12 @@ import {
 } from "@/data/discordAttendanceRoles";
 import { refreshDiscordAttendanceMessage } from "@/lib/refreshDiscordAttendance";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
+import { getDiscordDatabaseBackend } from "@/lib/discord-database";
+import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const VALID_REPEAT_TYPES = new Set(["none", "weekly"]);
 const DEFAULT_OPTIONS = [
@@ -61,37 +67,6 @@ function cleanOption(option: unknown, index: number) {
   };
 }
 
-async function getUserAndRoles(request: Request) {
-  const authHeader = request.headers.get("authorization") || "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-
-  if (!token) {
-    return { userId: null, email: null, roles: [] as string[] };
-  }
-
-  const { data: userData } = await supabaseAdmin.auth.getUser(token);
-  const userId = userData.user?.id || null;
-
-  if (!userId) {
-    return { userId: null, email: null, roles: [] as string[] };
-  }
-
-  const { data: roleData } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
-
-  return {
-    userId,
-    email: userData.user?.email || null,
-    roles: (roleData || []).map((row) => String(row.role).toLowerCase()),
-  };
-}
-
-function canManageAttendance(roles: string[]) {
-  return roles.some((role) => ["admin", "nco", "akhari"].includes(role));
-}
-
 async function deleteDiscordAttendanceMessage(channelId: string | null, messageId: string | null) {
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
 
@@ -121,9 +96,10 @@ export async function PATCH(
   request: Request,
   context: { params: { id: string } | Promise<{ id: string }> },
 ) {
-  const { userId, roles } = await getUserAndRoles(request);
+  if (!requestHasSameOrigin(request)) return jsonError("Invalid request origin", 403);
+  const attendanceAccess = await requirePageAccess(request, "admin.discord-attendance", "edit");
 
-  if (!userId || !canManageAttendance(roles)) {
+  if (!attendanceAccess) {
     return jsonError("Unauthorized", 401);
   }
 
@@ -134,14 +110,13 @@ export async function PATCH(
     return jsonError("Missing attendance event id");
   }
 
-  const { data: existingEvent, error: existingError } = await supabaseAdmin
-    .from("discord_attendance_events")
-    .select("id")
-    .eq("id", eventId)
-    .single();
-
-  if (existingError || !existingEvent) {
-    return jsonError("Attendance event not found", 404);
+  if (!cleanUuid(eventId)) return jsonError("Invalid attendance event id");
+  if (getDiscordDatabaseBackend() === "postgres") {
+    const existing = await getPostgresPool().query("select id from public.discord_attendance_events where id=$1", [eventId]);
+    if (!existing.rowCount) return jsonError("Attendance event not found", 404);
+  } else {
+    const existing = await supabaseAdmin.from("discord_attendance_events").select("id").eq("id", eventId).maybeSingle();
+    if (existing.error || !existing.data) return jsonError("Attendance event not found", 404);
   }
 
   const body = await request.json();
@@ -201,6 +176,41 @@ export async function PATCH(
 
   if (reminderDate && Number.isNaN(reminderDate.getTime())) {
     return jsonError("Invalid reminder date");
+  }
+
+  if (getDiscordDatabaseBackend() === "postgres") {
+    try {
+      await withPostgresTransaction(async (client) => {
+        await client.query(`update public.discord_attendance_events set
+          title=$2,description=$3,channel_id=$4,channel_name=$5,event_starts_at=$6,
+          scheduled_send_at=$7,duration_minutes=$8,repeat_enabled=$9,repeat_type=$10,
+          repeat_timezone=$11,repeat_scheduled_send_at=$12,footer_text=$13,ping_role_id=$14,
+          reminder_enabled=$15,reminder_scheduled_at=$16,reminder_message=$17,
+          reminder_role_id=$18,updated_at=now() where id=$1`,
+          [eventId,title,description||null,channelId,channel.name,eventDate.toISOString(),
+            sendDate.toISOString(),durationMinutes,repeatEnabled,repeatType,
+            repeatTimezone||"Europe/London",repeatEnabled?sendDate.toISOString():null,
+            footerText||null,pingRoleId||null,reminderEnabled,
+            reminderEnabled&&reminderDate?reminderDate.toISOString():null,
+            reminderEnabled?reminderMessage:null,
+            reminderEnabled&&reminderRoleId?reminderRoleId:null]);
+        const ids = options.map((option) => option.id).filter((id): id is string => Boolean(id));
+        await client.query(`delete from public.discord_attendance_options where event_id=$1 and not(id=any($2::uuid[]))`, [eventId, ids]);
+        for (const option of options) {
+          if (option.id) {
+            const updated = await client.query(`update public.discord_attendance_options set emoji=$3,label=$4,assign_role_id=$5,sort_order=$6 where id=$2 and event_id=$1`, [eventId,option.id,option.emoji,option.label,option.assign_role_id,option.sort_order]);
+            if (!updated.rowCount) throw new Error("Attendance option not found");
+          } else {
+            await client.query(`insert into public.discord_attendance_options(event_id,emoji,label,assign_role_id,sort_order) values($1,$2,$3,$4,$5)`, [eventId,option.emoji,option.label,option.assign_role_id,option.sort_order]);
+          }
+        }
+      });
+      const refreshResult = await refreshDiscordAttendanceMessage(eventId);
+      return NextResponse.json({ success: true, id: eventId, discord_message_refreshed: refreshResult.refreshed });
+    } catch (error) {
+      console.error("[discord-attendance] Native update failed", error);
+      return jsonError("Failed to update attendance event", 500);
+    }
   }
 
   const { error: updateError } = await supabaseAdmin
@@ -292,9 +302,10 @@ export async function DELETE(
   request: Request,
   context: { params: { id: string } | Promise<{ id: string }> },
 ) {
-  const { userId, roles } = await getUserAndRoles(request);
+  if (!requestHasSameOrigin(request)) return jsonError("Invalid request origin", 403);
+  const attendanceAccess = await requirePageAccess(request, "admin.discord-attendance", "edit");
 
-  if (!userId || !canManageAttendance(roles)) {
+  if (!attendanceAccess) {
     return jsonError("Unauthorized", 401);
   }
 
@@ -305,15 +316,17 @@ export async function DELETE(
     return jsonError("Missing attendance event id");
   }
 
-  const { data: existingEvent, error: existingError } = await supabaseAdmin
-    .from("discord_attendance_events")
-    .select("id,channel_id,discord_message_id")
-    .eq("id", eventId)
-    .single();
-
-  if (existingError || !existingEvent) {
-    return jsonError("Attendance event not found", 404);
+  if (!cleanUuid(eventId)) return jsonError("Invalid attendance event id");
+  let existingEvent: { id: string; channel_id: string | null; discord_message_id: string | null } | null = null;
+  if (getDiscordDatabaseBackend() === "postgres") {
+    const existing = await getPostgresPool().query<{ id: string; channel_id: string | null; discord_message_id: string | null }>("select id,channel_id,discord_message_id from public.discord_attendance_events where id=$1", [eventId]);
+    existingEvent = existing.rows[0] || null;
+  } else {
+    const existing = await supabaseAdmin.from("discord_attendance_events").select("id,channel_id,discord_message_id").eq("id", eventId).maybeSingle();
+    if (existing.error) return jsonError("Failed to load attendance event", 500);
+    existingEvent = existing.data;
   }
+  if (!existingEvent) return jsonError("Attendance event not found", 404);
 
   try {
     await deleteDiscordAttendanceMessage(
@@ -329,13 +342,11 @@ export async function DELETE(
     );
   }
 
-  const { error: deleteError } = await supabaseAdmin
-    .from("discord_attendance_events")
-    .delete()
-    .eq("id", eventId);
-
-  if (deleteError) {
-    return jsonError(deleteError.message || "Failed to delete attendance event", 500);
+  if (getDiscordDatabaseBackend() === "postgres") {
+    await getPostgresPool().query("delete from public.discord_attendance_events where id=$1", [eventId]);
+  } else {
+    const deleted = await supabaseAdmin.from("discord_attendance_events").delete().eq("id", eventId);
+    if (deleted.error) return jsonError(deleted.error.message || "Failed to delete attendance event", 500);
   }
 
   return NextResponse.json({ success: true, id: eventId });

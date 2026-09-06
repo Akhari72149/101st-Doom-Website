@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { animate, stagger } from "animejs";
 import {
   Activity,
@@ -36,10 +35,6 @@ type Event = {
   personnel?: {
     name: string;
   } | null;
-};
-
-type ServerBookingRow = Omit<Event, "personnel"> & {
-  personnel?: Event["personnel"] | Array<{ name: string }>;
 };
 
 type Server = {
@@ -147,14 +142,6 @@ export default function HomePage() {
     { name: "Broadsword 3", day: 0, hour: 1, minute: 0 },
     { name: "Dagger", day: 6, hour: 22, minute: 0 },
   ];
-
-  useEffect(() => {
-    const getUser = async () => {
-      await supabase.auth.getUser();
-    };
-
-    getUser();
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -396,31 +383,19 @@ export default function HomePage() {
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
 
-    const { data: bookings } = await supabase
-      .from("server_bookings")
-      .select(
-        `
-        id,
-        server_id,
-        title,
-        start_time,
-        personnel:booked_for ( name )
-      `,
-      )
-      .gte("start_time", start.toISOString())
-      .lt("start_time", end.toISOString())
-      .order("start_time", { ascending: true });
-
-    const safeEvents: Event[] = ((bookings as unknown as ServerBookingRow[]) || []).map((b) => {
-      const relation = Array.isArray(b.personnel)
-        ? b.personnel[0] ?? null
-        : b.personnel ?? null;
-
-      return {
-        ...b,
-        personnel: relation,
-      };
+    const params = new URLSearchParams({
+      kind: "events",
+      start: start.toISOString(),
+      end: end.toISOString(),
     });
+    const response = await fetch(`/api/home-dashboard?${params}`, { cache: "no-store" });
+    const body = (await response.json().catch(() => null)) as { events?: Event[] } | null;
+    if (!response.ok || !body) {
+      setEvents([]);
+      setPastEvents([]);
+      return;
+    }
+    const safeEvents = body.events || [];
 
     const now = new Date();
     const selectedIsToday = isSameDay(start, now);
@@ -481,31 +456,21 @@ export default function HomePage() {
       const end = new Date(start);
       end.setDate(end.getDate() + 1);
 
-      const { data, error } = await supabase
-        .from("audit_logs")
-        .select(
-          `
-          id,
-          action,
-          details,
-          created_at,
-          targetPersonnel:target_personnel_id ( name ),
-          targetCertification:target_certification_id ( name ),
-          targetRank:target_rank_id ( name )
-        `,
-        )
-        .in("action", ["CERTIFICATION_ASSIGNED", "RANK_CHANGED"])
-        .gte("created_at", start.toISOString())
-        .lt("created_at", end.toISOString())
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Failed to fetch audit highlights", error);
+      const params = new URLSearchParams({
+        kind: "highlights",
+        start: start.toISOString(),
+        end: end.toISOString(),
+      });
+      const response = await fetch(`/api/home-dashboard?${params}`, { cache: "no-store" });
+      const body = (await response.json().catch(() => null)) as {
+        highlights?: AuditHighlight[];
+      } | null;
+      if (!response.ok || !body) {
         setDailyHighlights([]);
         return;
       }
 
-      const filtered = ((data as AuditHighlight[]) || [])
+      const filtered = (body.highlights || [])
         .filter((row) => isPromotionOrCertLog(row))
         .slice(0, 8);
 

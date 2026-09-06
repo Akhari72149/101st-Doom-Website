@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { animate, stagger } from "animejs";
 import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
 
@@ -112,7 +112,7 @@ export default function DiscordAnnouncementsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const canAccess = useMemo(
-    () => roles.includes("admin") || roles.includes("logistics"),
+    () => roles.includes("admin") || roles.includes("logistics") || roles.includes("__permission"),
     [roles]
   );
 
@@ -132,43 +132,30 @@ export default function DiscordAnnouncementsPage() {
   }, []);
 
   const fetchAnnouncements = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("discord_announcements")
-      .select("*")
-      .order("scheduled_for", { ascending: true });
-
-    if (error) {
-      console.error("Failed to fetch announcements", error);
+    const response = await fetch("/api/discord-announcements", { cache: "no-store", headers: await getAppAuthHeaders() });
+    const data = await response.json().catch(() => null) as { announcements?: Announcement[]; error?: string } | null;
+    if (!response.ok) {
+      console.error("Failed to fetch announcements", data?.error);
       return;
     }
-
-    setAnnouncements((data || []) as Announcement[]);
+    setAnnouncements(data?.announcements || []);
   }, []);
 
   useEffect(() => {
     const init = async () => {
       setLoadingAuth(true);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
+      setUser(session.user);
+      const roleList = session.roles.map((role) => role.toLowerCase());
+      const permissionAccess = hasAppPermission(session, "admin.discord-announcements", "read");
+      setRoles(permissionAccess ? [...roleList, "__permission"] : roleList);
 
-      setUser(user);
-
-      const { data: roleRows } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = roleRows?.map((row: { role: string }) => row.role) || [];
-      setRoles(roleList);
-
-      if (!roleList.includes("admin") && !roleList.includes("logistics")) {
+      if (!roleList.includes("admin") && !roleList.includes("logistics") && !permissionAccess) {
         router.replace("/");
         return;
       }
@@ -392,21 +379,14 @@ export default function DiscordAnnouncementsPage() {
     setSaving(true);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-
-      if (!token) {
-        setStatusMessage("You must be signed in to manage Discord announcements.");
-        setSaving(false);
-        return;
-      }
+      const authHeaders = await getAppAuthHeaders();
 
       if (!scheduleEnabled && !editingId) {
         const res = await fetch("/api/discord-announcements/send-now", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+            ...authHeaders,
           },
           body: JSON.stringify({
             title: title.trim(),
@@ -438,7 +418,7 @@ export default function DiscordAnnouncementsPage() {
         method: editingId ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...authHeaders,
         },
         body: JSON.stringify({
           id: editingId,
@@ -495,19 +475,11 @@ export default function DiscordAnnouncementsPage() {
   };
 
   const toggleActive = async (item: Announcement) => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
-    if (!token) {
-      setStatusMessage("You must be signed in to manage Discord announcements.");
-      return;
-    }
-
     const res = await fetch(`/api/discord-announcements/${item.id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        ...(await getAppAuthHeaders()),
       },
       body: JSON.stringify({ active: !item.active }),
     });
@@ -525,19 +497,9 @@ export default function DiscordAnnouncementsPage() {
     const confirmed = window.confirm("Delete this announcement?");
     if (!confirmed) return;
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
-    if (!token) {
-      setStatusMessage("You must be signed in to manage Discord announcements.");
-      return;
-    }
-
     const res = await fetch(`/api/discord-announcements/${id}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: await getAppAuthHeaders(),
     });
 
     const data = await res.json();

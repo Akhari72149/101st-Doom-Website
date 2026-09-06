@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -73,23 +73,14 @@ export default function ServerControl() {
 
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
-
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = data?.map((r) => r.role) || [];
-
-      if (!roleList.includes("ServerMaintenance") && !roleList.includes("Akhari")) {
+      const roleList = session.roles;
+      const legacyAccess = roleList.some((role) => ["servermaintenance", "akhari"].includes(role.toLowerCase()));
+      if (!legacyAccess && !hasAppPermission(session, "admin.server-control", "read")) {
         router.replace("/");
         return;
       }
@@ -207,7 +198,7 @@ export default function ServerControl() {
 
       const res = await fetch("/api/server-control", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
         body: JSON.stringify({ command }),
       });
 

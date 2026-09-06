@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { calculateArmaXpDelta, normalizeArmaXpPayload, verifyArmaXpSignature } from "@/lib/arma-xp";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { callArmaDatabase } from "@/lib/arma-database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,8 +68,7 @@ export async function POST(request: Request) {
   const event = validation.event;
   const xpDelta = calculateArmaXpDelta(event);
 
-  const { data, error } = await supabaseAdmin
-    .rpc("record_arma_xp_event", {
+  const { data, error } = await callArmaDatabase<RecordArmaXpEventResult>("record_arma_xp_event", {
       p_event_uid: event.eventUid,
       p_event_type: event.eventType,
       p_steam_id: event.steamId,
@@ -80,8 +79,7 @@ export async function POST(request: Request) {
       p_target_category: event.targetCategory,
       p_target_class: event.targetClass || null,
       p_target_display_name: event.targetDisplayName || null,
-    })
-    .maybeSingle<RecordArmaXpEventResult>();
+    });
 
   if (error) {
     console.error("[arma-xp] Event ingest failed:", {

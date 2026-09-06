@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 
@@ -66,59 +65,31 @@ export default function CertificationLookupByTag() {
   const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
 
-  useEffect(() => {
-    fetchRanks();
-  }, []);
-
-  useEffect(() => {
-    const trimmed = search.trim();
-
-    if (!trimmed) {
-      setCertificationResults([]);
-      setLoadingResults(false);
+  async function fetchRanks() {
+    const response = await fetch("/api/tag-lookup?mode=bootstrap", { cache: "no-store" });
+    const payload = await response.json().catch(() => null) as { ranks?: RankRow[]; error?: string } | null;
+    if (!response.ok) {
+      console.error("Error fetching ranks:", payload?.error);
       return;
     }
-
-    const timeout = setTimeout(() => {
-      fetchCertifications(trimmed);
-    }, 250);
-
-    return () => clearTimeout(timeout);
-  }, [search]);
-
-  const fetchRanks = async () => {
-    const { data, error } = await supabase
-      .from("ranks")
-      .select("id, name")
-      .order("name");
-
-    if (error) {
-      console.error("Error fetching ranks:", error);
-      return;
-    }
-
-    setRanks((data as RankRow[]) || []);
+    setRanks(payload?.ranks || []);
   };
 
-  const fetchCertifications = async (value: string) => {
+  async function fetchCertifications(value: string) {
     setLoadingResults(true);
     setErrorMessage("");
 
-    const { data, error } = await supabase
-      .from("certifications")
-      .select("id, name")
-      .ilike("name", `%${value}%`)
-      .order("name");
-
-    if (error) {
-      console.error("Error fetching certifications:", error);
+    const response = await fetch(`/api/tag-lookup?mode=search&query=${encodeURIComponent(value)}`, { cache: "no-store" });
+    const payload = await response.json().catch(() => null) as { certifications?: CertificationRow[]; error?: string } | null;
+    if (!response.ok) {
+      console.error("Error fetching certifications:", payload?.error);
       setCertificationResults([]);
       setLoadingResults(false);
       setErrorMessage("Failed to load tags.");
       return;
     }
 
-    const results = [...((data as CertificationRow[]) || [])];
+    const results = [...(payload?.certifications || [])];
     const lower = value.toLowerCase();
 
     const shouldShowReservist =
@@ -156,37 +127,36 @@ export default function CertificationLookupByTag() {
     setLoadingResults(false);
   };
 
+  useEffect(() => {
+    void fetchRanks();
+  }, []);
+
+  useEffect(() => {
+    const trimmed = search.trim();
+    if (!trimmed) {
+      setCertificationResults([]);
+      setLoadingResults(false);
+      return;
+    }
+    const timeout = setTimeout(() => void fetchCertifications(trimmed), 250);
+    return () => clearTimeout(timeout);
+  }, [search]);
+
   const fetchPersonnelByCertification = async (certificationId: string) => {
     setLoadingPersonnel(true);
     setErrorMessage("");
 
-    const { data, error } = await supabase
-      .from("personnel_certifications")
-      .select(`
-        id,
-        awarded_at,
-        personnel:personnel_id (
-          id,
-          name,
-          rank_id,
-          status,
-          slotted_position,
-          reservist_since,
-          mos
-        )
-      `)
-      .eq("certification_id", certificationId)
-      .order("awarded_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching personnel by certification:", error);
+    const response = await fetch(`/api/tag-lookup?mode=personnel&certificationId=${encodeURIComponent(certificationId)}`, { cache: "no-store" });
+    const payload = await response.json().catch(() => null) as { personnelCertifications?: PersonnelCertificationQueryRow[]; error?: string } | null;
+    if (!response.ok) {
+      console.error("Error fetching personnel by certification:", payload?.error);
       setPersonnel([]);
       setLoadingPersonnel(false);
       setErrorMessage("Failed to load personnel for the selected tag.");
       return;
     }
 
-    const mappedPeople = ((data as PersonnelCertificationQueryRow[]) || [])
+    const mappedPeople = (payload?.personnelCertifications || [])
       .map((row) => {
         const person = Array.isArray(row.personnel)
           ? row.personnel[0] ?? null
@@ -221,21 +191,17 @@ export default function CertificationLookupByTag() {
     setLoadingPersonnel(true);
     setErrorMessage("");
 
-    const { data, error } = await supabase
-      .from("personnel")
-      .select("id, name, rank_id, status, slotted_position, reservist_since, mos")
-      .is("slotted_position", null)
-      .order("reservist_since", { ascending: false, nullsFirst: false });
-
-    if (error) {
-      console.error("Error fetching reservists:", error);
+    const response = await fetch("/api/tag-lookup?mode=reservists", { cache: "no-store" });
+    const payload = await response.json().catch(() => null) as { personnel?: Omit<PersonRow, "personnelCertificationId" | "awarded_at">[]; error?: string } | null;
+    if (!response.ok) {
+      console.error("Error fetching reservists:", payload?.error);
       setPersonnel([]);
       setLoadingPersonnel(false);
       setErrorMessage("Failed to load reservists.");
       return;
     }
 
-    const people = ((data as Omit<PersonRow, "personnelCertificationId" | "awarded_at">[]) || [])
+    const people = (payload?.personnel || [])
       .filter((p) => {
         const status = (p.status || "").trim().toLowerCase();
         return status !== "retired" && status !== "removed";

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { callArmaDatabase } from "@/lib/arma-database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,9 +37,7 @@ async function resetWeeklyXp(request: Request) {
     return jsonResponse({ ok: false, error: "UNAUTHORIZED" }, 401);
   }
 
-  const { data, error } = await supabaseAdmin
-    .rpc("reset_arma_xp_weekly_data")
-    .maybeSingle<ResetResult>();
+  const { data, error } = await callArmaDatabase<ResetResult>("reset_arma_xp_weekly_data");
 
   if (error) {
     console.error("[arma-xp] Weekly XP reset failed:", {

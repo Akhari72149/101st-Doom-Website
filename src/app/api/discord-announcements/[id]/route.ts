@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAdminRouteAuth, hasAnyAdminRole } from "@/lib/admin-route-auth";
+import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getDiscordDatabaseBackend } from "@/lib/discord-database";
+import { getPostgresPool } from "@/lib/postgres/pool";
 
-const ANNOUNCEMENT_ADMIN_ROLES = ["admin", "logistics"];
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function cleanUuid(value: unknown) {
   const id = String(value || "").trim();
@@ -12,14 +15,14 @@ function cleanUuid(value: unknown) {
 }
 
 async function requireAnnouncementAdmin(request: Request) {
-  const { userId, roles } = await getAdminRouteAuth(request);
-  return Boolean(userId && hasAnyAdminRole(roles, ANNOUNCEMENT_ADMIN_ROLES));
+  return requirePageAccess(request, "admin.discord-announcements", "edit");
 }
 
 export async function PATCH(
   request: Request,
   context: { params: { id: string } | Promise<{ id: string }> },
 ) {
+  if (!requestHasSameOrigin(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   if (!(await requireAnnouncementAdmin(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -35,22 +38,27 @@ export async function PATCH(
     return NextResponse.json({ error: "Missing active state" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
-    .from("discord_announcements")
-    .update({ active: body.active })
-    .eq("id", id);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    if (getDiscordDatabaseBackend() === "postgres") {
+      const result = await getPostgresPool().query("update public.discord_announcements set active=$2 where id=$1", [id, body.active]);
+      if (!result.rowCount) return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
+    } else {
+      const result = await supabaseAdmin.from("discord_announcements").update({ active: body.active }).eq("id", id).select("id").maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
+    }
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[discord-announcements] Active-state update failed", error);
+    return NextResponse.json({ error: "Failed to update announcement" }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true });
 }
 
 export async function DELETE(
   request: Request,
   context: { params: { id: string } | Promise<{ id: string }> },
 ) {
+  if (!requestHasSameOrigin(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   if (!(await requireAnnouncementAdmin(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -61,14 +69,18 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid announcement id" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
-    .from("discord_announcements")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    if (getDiscordDatabaseBackend() === "postgres") {
+      const result = await getPostgresPool().query("delete from public.discord_announcements where id=$1", [id]);
+      if (!result.rowCount) return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
+    } else {
+      const result = await supabaseAdmin.from("discord_announcements").delete().eq("id", id).select("id").maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
+    }
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[discord-announcements] Delete failed", error);
+    return NextResponse.json({ error: "Failed to delete announcement" }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true });
 }

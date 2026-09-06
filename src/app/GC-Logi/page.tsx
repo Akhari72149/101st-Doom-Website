@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type Platoon = {
   id: string;
@@ -63,7 +63,6 @@ export default function GCLogisticsHub() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [amount, setAmount] = useState(0);
   const [assetSearch, setAssetSearch] = useState("");
-  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [stats, setStats] = useState({
     totalAssets: 0,
     totalAssetValue: 0,
@@ -102,34 +101,13 @@ export default function GCLogisticsHub() {
     const checkAccess = async () => {
       setErrorMessage("");
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
-
-      setCurrentUserId(user.id);
-
-      const { data, error: roleError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      if (roleError) {
-        setErrorMessage("Failed to verify access.");
-        router.replace("/GC-Platoon-Logi");
-        return;
-      }
-
-      const userRoles = data?.map((r) => r.role) || [];
-
-      const hasAccess =
-        userRoles.includes("Akhari") ||
-        userRoles.includes("logistics");
+      const hasAccess = session.roles.some((role) => ["akhari", "logistics"].includes(role.toLowerCase())) ||
+        hasAppPermission(session, "gc.logistics", "read");
 
       if (!hasAccess) {
         router.replace("/GC-Platoon-Logi");
@@ -176,99 +154,41 @@ export default function GCLogisticsHub() {
   /* ================= FETCH DATA ================= */
 
   const fetchPlatoons = async () => {
-    const { data, error } = await supabase
-      .from("platoons")
-      .select("*")
-      .order("sort_order", { ascending: true });
-
-    if (error) {
+    const response = await fetch("/api/gc-logistics", { cache:"no-store", headers:await getAppAuthHeaders() });
+    if (!response.ok) {
       setErrorMessage("Failed to load platoons.");
       return;
     }
-
-    setPlatoons(data || []);
+    const data=await response.json() as {platoons?:Platoon[]};setPlatoons(data.platoons||[]);
   };
 
   const fetchAssets = async (platoonId: string) => {
     if (!platoonId) return;
 
-    const { data: platoonData, error: platoonError } = await supabase
-      .from("platoons")
-      .select("name")
-      .eq("id", platoonId)
-      .single();
-
-    if (platoonError) {
-      setErrorMessage("Failed to determine platoon asset access.");
-      return;
-    }
-
-    const platoonName = platoonData?.name?.toLowerCase();
-
-    const hasFullAccess =
-      platoonName?.includes("company") ||
-      platoonName?.includes("blinds basket");
-
-    let query = supabase.from("hq_assets").select("*");
-
-    if (!hasFullAccess) {
-      query = query.eq("category", "platoon");
-    }
-
-    const { data, error } = await query.order("name", { ascending: true });
-
-    if (error) {
+    const response=await fetch(`/api/gc-logistics?platoonId=${encodeURIComponent(platoonId)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
+    if(!response.ok){
       setErrorMessage("Failed to load asset shop.");
       return;
     }
-
-    setAssets((data || []) as Asset[]);
+    const data=await response.json() as {assets?:Asset[]};setAssets(data.assets||[]);
   };
 
   const fetchTransactions = async (platoonId: string) => {
-    const { data, error } = await supabase
-      .from("token_transactions")
-      .select("*")
-      .eq("platoon_id", platoonId)
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    const response=await fetch(`/api/gc-logistics?platoonId=${encodeURIComponent(platoonId)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
+    if(!response.ok){
       setErrorMessage("Failed to load transactions.");
       return;
     }
-
-    setTransactions((data || []) as Transaction[]);
+    const data=await response.json() as {transactions?:Transaction[]};setTransactions(data.transactions||[]);
   };
 
 const fetchOwnedAssets = async (platoonId: string) => {
-  const { data, error } = await supabase
-    .from("platoon_assets")
-    .select(`
-      id,
-      quantity,
-      asset:asset_id (
-        id,
-        name,
-        token_cost,
-        description,
-        inventory,
-        category
-      )
-    `)
-    .eq("platoon_id", platoonId);
-
-  if (error) {
+  const response=await fetch(`/api/gc-logistics?platoonId=${encodeURIComponent(platoonId)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
+  if(!response.ok){
     setErrorMessage("Failed to load owned assets.");
     return;
   }
-
-  const normalized: OwnedAsset[] = (data || []).map((row: any) => ({
-    id: row.id,
-    quantity: row.quantity,
-    asset: Array.isArray(row.asset) ? row.asset[0] || null : row.asset || null,
-  }));
-
-  setOwnedAssets(normalized);
+  const data=await response.json() as {ownedAssets?:OwnedAsset[]};setOwnedAssets(data.ownedAssets||[]);
 };
 
   const loadPlatoonData = async (platoonId: string) => {
@@ -316,36 +236,10 @@ const fetchOwnedAssets = async (platoonId: string) => {
     setProcessingAction(true);
     setErrorMessage("");
 
-    const { error: updateError } = await supabase
-      .from("platoons")
-      .update({ tokens: selected.tokens + validAmount })
-      .eq("id", selected.id);
-
-    if (updateError) {
+    const response=await fetch("/api/gc-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({action:"addTokens",platoonId:selected.id,amount:validAmount})});
+    if(!response.ok){
       setProcessingAction(false);
       setErrorMessage("Failed to add tokens.");
-      return;
-    }
-
-    const { error: logError } = await supabase.from("token_transactions").insert([
-      {
-        platoon_id: selected.id,
-        action: "ADD_TOKENS",
-        amount: validAmount,
-        quantity: 0,
-        asset_id: null,
-        asset_name: null,
-        performed_by: currentUserId,
-        notes: `Added ${validAmount} tokens to ${selected.name}`,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-
-    if (logError) {
-      setProcessingAction(false);
-      setErrorMessage("Tokens were added, but transaction logging failed.");
-      await fetchPlatoons();
-      await fetchTransactions(selected.id);
       return;
     }
 
@@ -462,77 +356,11 @@ const fetchOwnedAssets = async (platoonId: string) => {
     setProcessingAction(true);
     setErrorMessage("");
 
-    const { error: platoonUpdateError } = await supabase
-      .from("platoons")
-      .update({ tokens: selected.tokens - cartTotal })
-      .eq("id", selected.id);
-
-    if (platoonUpdateError) {
+    const response=await fetch("/api/gc-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({action:"checkout",platoonId:selected.id,items:Object.entries(cart).map(([assetId,quantity])=>({assetId,quantity}))})});
+    if(!response.ok){
       setProcessingAction(false);
-      setErrorMessage("Failed to deduct tokens during checkout.");
+      const body=await response.json().catch(()=>null) as {error?:string}|null;setErrorMessage(body?.error||"Failed to complete checkout.");
       return;
-    }
-
-    for (const [assetId, qty] of Object.entries(cart)) {
-      const asset = assets.find((a) => a.id === assetId);
-      if (!asset) continue;
-
-      const existing = ownedAssets.find((o) => o.asset?.id === assetId);
-
-      if (existing) {
-        const { error: updateOwnedError } = await supabase
-          .from("platoon_assets")
-          .update({ quantity: existing.quantity + qty })
-          .eq("id", existing.id);
-
-        if (updateOwnedError) {
-          setProcessingAction(false);
-          setErrorMessage(`Checkout partially failed while updating ${asset.name}.`);
-          await fetchPlatoons();
-          await loadPlatoonData(selected.id);
-          return;
-        }
-      } else {
-        const { error: insertOwnedError } = await supabase
-          .from("platoon_assets")
-          .insert([
-            {
-              platoon_id: selected.id,
-              asset_id: assetId,
-              quantity: qty,
-            },
-          ]);
-
-        if (insertOwnedError) {
-          setProcessingAction(false);
-          setErrorMessage(`Checkout partially failed while adding ${asset.name}.`);
-          await fetchPlatoons();
-          await loadPlatoonData(selected.id);
-          return;
-        }
-      }
-
-      const { error: logError } = await supabase.from("token_transactions").insert([
-        {
-          platoon_id: selected.id,
-          action: "BUY_ASSET",
-          amount: asset.token_cost * qty,
-          quantity: qty,
-          asset_id: asset.id,
-          asset_name: asset.name,
-          performed_by: currentUserId,
-          notes: `Bought ${qty} x ${asset.name} for ${selected.name} (${asset.token_cost * qty} tokens)`,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-
-      if (logError) {
-        setProcessingAction(false);
-        setErrorMessage(`Checkout completed, but logging failed for ${asset.name}.`);
-        await fetchPlatoons();
-        await loadPlatoonData(selected.id);
-        return;
-      }
     }
 
     setCart({});
@@ -553,54 +381,12 @@ const fetchOwnedAssets = async (platoonId: string) => {
       return;
     }
 
-    const newQty = owned.quantity - qtyToRemove;
-
     setProcessingAction(true);
     setErrorMessage("");
-
-    if (newQty > 0) {
-      const { error: updateError } = await supabase
-        .from("platoon_assets")
-        .update({ quantity: newQty })
-        .eq("id", owned.id);
-
-      if (updateError) {
-        setProcessingAction(false);
-        setErrorMessage("Failed to update owned asset quantity.");
-        return;
-      }
-    } else {
-      const { error: deleteError } = await supabase
-        .from("platoon_assets")
-        .delete()
-        .eq("id", owned.id);
-
-      if (deleteError) {
-        setProcessingAction(false);
-        setErrorMessage("Failed to remove owned asset.");
-        return;
-      }
-    }
-
-    const { error: logError } = await supabase.from("token_transactions").insert([
-      {
-        platoon_id: selected.id,
-        action: "REMOVE_ASSET",
-        amount: 0,
-        quantity: qtyToRemove,
-        asset_id: owned.asset?.id || null,
-        asset_name: owned.asset?.name || null,
-        performed_by: currentUserId,
-        notes: `Removed ${qtyToRemove} x ${owned.asset?.name || "asset"} from ${selected.name}`,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-
-    if (logError) {
+    const response=await fetch("/api/gc-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({action:"removeAsset",platoonId:selected.id,ownedId:owned.id,quantity:qtyToRemove})});
+    if(!response.ok){
       setProcessingAction(false);
-      setErrorMessage("Asset removed, but transaction logging failed.");
-      await fetchOwnedAssets(selected.id);
-      await fetchTransactions(selected.id);
+      setErrorMessage("Failed to remove owned asset.");
       return;
     }
 

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import {
   ChevronDown,
@@ -377,30 +376,18 @@ export default function AttendanceDashboardViewer() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("attendance_records")
-        .select(`
-          id,
-          type,
-          status,
-          personnel (
-            id,
-            name,
-            slotted_position,
-            ranks ( name )
-          )
-        `)
-        .eq("attendance_month", selectedMonth)
-        .eq("week_number", selectedWeek)
-        .eq("type", selectedType);
-
-      if (error || !data) {
-        console.error(error);
+      const response = await fetch(
+        `/api/attendance?mode=roster&month=${encodeURIComponent(selectedMonth)}&week=${selectedWeek}&type=${encodeURIComponent(selectedType)}`,
+        { cache: "no-store" },
+      );
+      const payload = await response.json().catch(() => null) as { records?: AttendanceRecordRow[]; error?: string } | null;
+      if (!response.ok || !payload?.records) {
+        console.error(payload?.error || "Failed to load attendance");
         setRecords([]);
         return;
       }
 
-      const attendanceRows = data as AttendanceRecordRow[];
+      const attendanceRows = payload.records;
       const filtered = attendanceRows.filter((row) => {
         const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
         const slot = person?.slotted_position;
@@ -470,36 +457,20 @@ export default function AttendanceDashboardViewer() {
         rangeEndWeek
       );
 
-      let query = supabase
-        .from("attendance_records")
-        .select(`
-          id,
-          type,
-          status,
-          attendance_month,
-          week_number,
-          personnel (
-            id,
-            name,
-            slotted_position,
-            ranks ( name )
-          )
-        `)
-        .in("attendance_month", monthsToQuery);
-
-      if (individualType !== "All") {
-        query = query.eq("type", individualType);
-      }
-
-      const { data, error } = await query;
-
-      if (error || !data) {
-        console.error(error);
+      const params = new URLSearchParams({
+        mode: "individual",
+        months: monthsToQuery.join(","),
+        type: individualType,
+      });
+      const response = await fetch(`/api/attendance?${params}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { records?: AttendanceRecordRow[]; error?: string } | null;
+      if (!response.ok || !payload?.records) {
+        console.error(payload?.error || "Failed to load attendance");
         setIndividualResults([]);
         return;
       }
 
-      const attendanceRows = data as AttendanceRecordRow[];
+      const attendanceRows = payload.records;
       const filteredRows = attendanceRows.filter((row) => {
         const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
         const rankRow = Array.isArray(person?.ranks) ? person?.ranks[0] : person?.ranks;

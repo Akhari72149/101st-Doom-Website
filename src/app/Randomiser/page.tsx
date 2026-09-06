@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import {
   ChevronDown,
   Dice5,
@@ -32,7 +32,7 @@ type LevelRow = {
 };
 
 export default function SideOperationPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string } | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [operation, setOperation] = useState<any>(null);
   const [signups, setSignups] = useState<Signup[]>([]);
@@ -57,17 +57,11 @@ export default function SideOperationPage() {
 
   useEffect(() => {
     const loadUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
-
-      if (data.user) {
-        const { data: roleData } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", data.user.id);
-
-        setRoles(roleData?.map((r) => r.role) || []);
-      }
+      const session = await getAppSession();
+      setUser(session ? { id: session.user.id } : null);
+      if (!session) return;
+      const customAccess = hasAppPermission(session, "operations.randomiser", "edit");
+      setRoles(customAccess ? [...session.roles, "logistics"] : session.roles);
     };
 
     loadUser();
@@ -117,90 +111,24 @@ export default function SideOperationPage() {
     }
   };
 
-  const fetchKnownPeople = async () => {
-    const { data, error } = await supabase
-      .from("side_operation_levels")
-      .select("*")
-      .order("name", { ascending: true });
-
-    if (error) {
-      console.error("FETCH KNOWN PEOPLE ERROR:", error);
-      return [];
-    }
-
-    return (data || []) as LevelRow[];
-  };
-
-  const fetchLevelsMap = async (names: string[]) => {
-    if (names.length === 0) return new Map<string, LevelRow>();
-
-    const uniqueNames = Array.from(new Set(names.map((n) => n.trim())));
-
-    const { data, error } = await supabase
-      .from("side_operation_levels")
-      .select("*")
-      .in("name", uniqueNames);
-
-    if (error) {
-      console.error("FETCH LEVELS ERROR:", error);
-      return new Map<string, LevelRow>();
-    }
-
-    return new Map(
-      (data || []).map((row) => [normaliseName(row.name), row as LevelRow])
-    );
-  };
-
   const fetchData = async () => {
     setLoading(true);
-
-    const { data: op, error: opError } = await supabase
-      .from("side_operations")
-      .select("*")
-      .limit(1)
-      .single();
-
-    if (opError) {
-      console.error("FETCH OPERATION ERROR:", opError);
+    const response = await fetch("/api/randomiser", { cache: "no-store" });
+    if (!response.ok) {
+      console.error("FETCH OPERATION ERROR:", await response.text());
       setLoading(false);
       return;
     }
-
+    const data = await response.json() as { operation: any; signups: Signup[]; knownPeople: LevelRow[] };
+    const op = data.operation;
     if (!op) {
       setLoading(false);
       return;
     }
-
-    const { data: signupData, error: signupError } = await supabase
-      .from("side_operation_signups")
-      .select("*")
-      .eq("operation_id", op.id);
-
-    if (signupError) {
-      console.error("FETCH SIGNUPS ERROR:", signupError);
-      setLoading(false);
-      return;
-    }
-
-    const rawSignups: Signup[] = signupData || [];
-    const levelsMap = await fetchLevelsMap(rawSignups.map((s) => s.name));
-    const people = await fetchKnownPeople();
-
-    const enrichedSignups = rawSignups.map((signup) => {
-      const matchedLevel = levelsMap.get(normaliseName(signup.name));
-      const level = matchedLevel?.level ?? 1;
-
-      return {
-        ...signup,
-        level,
-        weight: getWeightFromLevel(level),
-      };
-    });
-
-    setKnownPeople(people);
+    setKnownPeople(data.knownPeople || []);
     setOperation(op);
     setSignupsOpen(op.open);
-    setSignups(enrichedSignups);
+    setSignups(data.signups || []);
     setLoading(false);
   };
 
@@ -262,15 +190,13 @@ export default function SideOperationPage() {
 
     setSignupError("");
 
-    const { error } = await supabase.from("side_operation_signups").insert({
-      operation_id: operation.id,
-      name: cleanedName,
-      selected: false,
-    });
+    const response = await fetch("/api/randomiser", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+      body: JSON.stringify({ action: "signup", operationId: operation.id, name: cleanedName }) });
 
-    if (error) {
-      console.error("SIGNUP INSERT ERROR:", error);
-      setSignupError("Failed to add signup.");
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      setSignupError(body?.error || "Failed to add signup.");
       return;
     }
 
@@ -283,13 +209,11 @@ export default function SideOperationPage() {
     if (!isPrivileged) return;
     if (!confirm("Remove this signup?")) return;
 
-    const { error } = await supabase
-      .from("side_operation_signups")
-      .delete()
-      .eq("id", id);
+    const response = await fetch(`/api/randomiser?signupId=${encodeURIComponent(id)}`, { method: "DELETE",
+      credentials: "same-origin", headers: await getAppAuthHeaders() });
 
-    if (error) {
-      console.error("REMOVE SIGNUP ERROR:", error);
+    if (!response.ok) {
+      console.error("REMOVE SIGNUP ERROR:", await response.text());
       return;
     }
 
@@ -320,17 +244,13 @@ export default function SideOperationPage() {
 
     setSavingOperation(true);
 
-    const { error } = await supabase
-      .from("side_operations")
-      .update({
-        title: trimmedTitle,
-        description: trimmedDescription,
-        slot_count: parsedSlotCount,
-      })
-      .eq("id", operation.id);
+    const response = await fetch("/api/randomiser", { method: "PATCH", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+      body: JSON.stringify({ action:"details", operationId:operation.id, title:trimmedTitle,
+        description:trimmedDescription, slotCount:parsedSlotCount }) });
 
-    if (error) {
-      console.error("SAVE OPERATION DETAILS ERROR:", error);
+    if (!response.ok) {
+      console.error("SAVE OPERATION DETAILS ERROR:", await response.text());
       setSavingOperation(false);
       return;
     }
@@ -345,149 +265,18 @@ export default function SideOperationPage() {
     setSavingOperation(false);
   };
 
-  function weightedPick<T extends { id: string; weight: number }>(
-    items: T[]
-  ): T | null {
-    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
-    if (totalWeight <= 0) return null;
-
-    let random = Math.random() * totalWeight;
-
-    for (const item of items) {
-      random -= item.weight;
-      if (random <= 0) return item;
-    }
-
-    return items[items.length - 1] || null;
-  }
-
-  function pickMultipleWeighted<T extends { id: string; weight: number }>(
-    items: T[],
-    count: number
-  ): T[] {
-    const pool = [...items];
-    const chosen: T[] = [];
-
-    while (chosen.length < count && pool.length > 0) {
-      const picked = weightedPick(pool);
-      if (!picked) break;
-
-      chosen.push(picked);
-
-      const index = pool.findIndex((p) => p.id === picked.id);
-      if (index !== -1) pool.splice(index, 1);
-    }
-
-    return chosen;
-  }
-
-  const incrementLevelsForChosen = async (chosen: Signup[]) => {
-    for (const person of chosen) {
-      const { data: existing, error: fetchError } = await supabase
-        .from("side_operation_levels")
-        .select("*")
-        .eq("name", person.name)
-        .maybeSingle();
-
-      if (fetchError) {
-        console.error("FETCH PERSON LEVEL ERROR:", fetchError);
-        continue;
-      }
-
-      if (!existing) {
-        const { error: insertError } = await supabase
-          .from("side_operation_levels")
-          .insert({
-            name: person.name,
-            level: 2,
-          });
-
-        if (insertError) {
-          console.error("INSERT PERSON LEVEL ERROR:", insertError);
-        }
-
-        continue;
-      }
-
-      const newLevel = Math.min((existing.level ?? 1) + 1, 4);
-
-      const { error: updateError } = await supabase
-        .from("side_operation_levels")
-        .update({ level: newLevel })
-        .eq("id", existing.id);
-
-      if (updateError) {
-        console.error("UPDATE PERSON LEVEL ERROR:", updateError);
-      }
-    }
-  };
-
   const handleRandomise = async () => {
     if (!isPrivileged || !operation) return;
 
     setProcessing(true);
 
     try {
-      const { data: latestSignups, error: signupFetchError } = await supabase
-        .from("side_operation_signups")
-        .select("*")
-        .eq("operation_id", operation.id);
-
-      if (signupFetchError) {
-        console.error("FETCH LATEST SIGNUPS ERROR:", signupFetchError);
-        return;
-      }
-
-      const freshSignups: Signup[] = latestSignups || [];
-      const available = freshSignups.filter((s) => !s.selected);
-
-      if (available.length === 0) {
-        return;
-      }
-
-      const levelsMap = await fetchLevelsMap(available.map((s) => s.name));
-
-      const weightedPool: (Signup & { level: number; weight: number })[] =
-        available.map((signup) => {
-          const matchedLevel = levelsMap.get(normaliseName(signup.name));
-          const level = matchedLevel?.level ?? 1;
-          const weight = getWeightFromLevel(level);
-
-          return {
-            ...signup,
-            level,
-            weight,
-          };
-        });
-
-      const chosen = pickMultipleWeighted(weightedPool, operation.slot_count);
-
       await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      for (const person of chosen) {
-        const { error } = await supabase
-          .from("side_operation_signups")
-          .update({ selected: true })
-          .eq("id", person.id);
-
-        if (error) {
-          console.error("SIGNUP UPDATE ERROR:", error);
-          return;
-        }
-      }
-
-      const { error: opUpdateError } = await supabase
-        .from("side_operations")
-        .update({ randomised: true })
-        .eq("id", operation.id);
-
-      if (opUpdateError) {
-        console.error("OPERATION UPDATE ERROR:", opUpdateError);
-        return;
-      }
-
-      await incrementLevelsForChosen(chosen);
-      fetchData();
+      const response = await fetch("/api/randomiser", { method:"PATCH", credentials:"same-origin",
+        headers:{ "Content-Type":"application/json", ...(await getAppAuthHeaders()) },
+        body:JSON.stringify({ action:"randomise", operationId:operation.id }) });
+      if (!response.ok) console.error("RANDOMISE ERROR:", await response.text());
+      else await fetchData();
     } catch (error) {
       console.error("RANDOMISE ERROR:", error);
     } finally {
@@ -499,23 +288,11 @@ export default function SideOperationPage() {
     if (!isPrivileged || !operation) return;
     if (!confirm("Reset the current randomiser results?")) return;
 
-    const { error: resetSignupError } = await supabase
-      .from("side_operation_signups")
-      .update({ selected: false })
-      .eq("operation_id", operation.id);
-
-    if (resetSignupError) {
-      console.error("RESET SIGNUPS ERROR:", resetSignupError);
-      return;
-    }
-
-    const { error: resetOpError } = await supabase
-      .from("side_operations")
-      .update({ randomised: false })
-      .eq("id", operation.id);
-
-    if (resetOpError) {
-      console.error("RESET OPERATION ERROR:", resetOpError);
+    const response = await fetch("/api/randomiser", { method:"PATCH", credentials:"same-origin",
+      headers:{ "Content-Type":"application/json", ...(await getAppAuthHeaders()) },
+      body:JSON.stringify({ action:"reset", operationId:operation.id }) });
+    if (!response.ok) {
+      console.error("RESET OPERATION ERROR:", await response.text());
       return;
     }
 
@@ -545,13 +322,12 @@ export default function SideOperationPage() {
 
     setTogglingSignups(true);
 
-    const { error } = await supabase
-      .from("side_operations")
-      .update({ open: nextState })
-      .eq("id", operation.id);
+    const response = await fetch("/api/randomiser", { method:"PATCH", credentials:"same-origin",
+      headers:{ "Content-Type":"application/json", ...(await getAppAuthHeaders()) },
+      body:JSON.stringify({ action:"toggle", operationId:operation.id, open:nextState }) });
 
-    if (error) {
-      console.error("TOGGLE SIGNUPS ERROR:", error);
+    if (!response.ok) {
+      console.error("TOGGLE SIGNUPS ERROR:", await response.text());
       setTogglingSignups(false);
       return;
     }

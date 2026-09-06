@@ -8,7 +8,7 @@ import {
   attendanceAssignableRoles,
   attendancePingRoles,
 } from "@/data/discordAttendanceRoles";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type AttendanceOption = {
   id?: string;
@@ -257,45 +257,13 @@ export default function DiscordAttendancePage() {
   async function loadEvents() {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("discord_attendance_events")
-      .select(`
-        id,
-        title,
-        description,
-        channel_id,
-        channel_name,
-        event_starts_at,
-        duration_minutes,
-        scheduled_send_at,
-        repeat_scheduled_send_at,
-        repeat_enabled,
-        repeat_type,
-        footer_text,
-        status,
-        discord_message_id,
-        ping_role_id,
-        reminder_enabled,
-        reminder_scheduled_at,
-        reminder_sent_at,
-        reminder_message,
-        reminder_role_id,
-        options:discord_attendance_options (
-          id,
-          emoji,
-          label,
-          assign_role_id,
-          sort_order
-        )
-      `)
-      .order("scheduled_send_at", { ascending: true })
-      .limit(40);
-
-    if (error) {
-      setStatusMessage(error.message);
+    const response = await fetch("/api/discord-attendance", { cache: "no-store", headers: await getAppAuthHeaders() });
+    const payload = await response.json().catch(() => null) as { events?: AttendanceEvent[]; error?: string } | null;
+    if (!response.ok) {
+      setStatusMessage(payload?.error || "Failed to load attendance events");
       setEvents([]);
     } else {
-      const mappedEvents = ((data || []) as AttendanceEvent[]).map((event) => ({
+      const mappedEvents = (payload?.events || []).map((event) => ({
         ...event,
         options: cleanOptionsForForm(event.options),
       }));
@@ -310,19 +278,8 @@ export default function DiscordAttendancePage() {
     setLoadingEmojis(true);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-
-      if (!token) {
-        setEmojiOptions([]);
-        setLoadingEmojis(false);
-        return;
-      }
-
       const response = await fetch("/api/discord-attendance/emojis", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await getAppAuthHeaders(),
       });
       const result = await response.json();
       setEmojiOptions(Array.isArray(result.emojis) ? result.emojis : []);
@@ -335,29 +292,15 @@ export default function DiscordAttendancePage() {
 
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
-
-      const { data: roleData, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      if (error) {
-        router.replace("/");
-        return;
-      }
-
-      const roles = (roleData || []).map((row) => String(row.role).toLowerCase());
+      const roles = session.roles.map((role) => role.toLowerCase());
       const allowed = roles.some((role) => allowedAttendanceAdminRoles.includes(role));
 
-      if (!allowed) {
+      if (!allowed && !hasAppPermission(session, "admin.discord-attendance", "read")) {
         router.replace("/");
         return;
       }
@@ -435,15 +378,6 @@ export default function DiscordAttendancePage() {
     setSaving(true);
     setStatusMessage("");
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
-    if (!token) {
-      setStatusMessage("You must be signed in to create or update attendance events.");
-      setSaving(false);
-      return;
-    }
-
     const nextRepeatSendAt = repeatEnabled
       ? getNextWeeklyDate(repeatSendDay, repeatSendTime)
       : null;
@@ -494,7 +428,7 @@ export default function DiscordAttendancePage() {
         method: isEditing ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(await getAppAuthHeaders()),
         },
         body: JSON.stringify(payload),
       },
@@ -526,20 +460,9 @@ export default function DiscordAttendancePage() {
     setDeletingEventId(event.id);
     setStatusMessage("");
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
-    if (!token) {
-      setStatusMessage("You must be signed in to delete attendance events.");
-      setDeletingEventId(null);
-      return;
-    }
-
     const response = await fetch(`/api/discord-attendance/${event.id}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: await getAppAuthHeaders(),
     });
 
     const result = await response.json();

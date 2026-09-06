@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { hasRole } from "@/lib/permissions";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type RankRow = {
   id: string;
@@ -17,21 +16,10 @@ type ProcessorRow = {
   status: string | null;
 };
 
-type PersonnelDuplicateRow = {
-  id: string;
-  status: string | null;
-};
-
 type DuplicateState = "idle" | "checking" | "available" | "duplicate" | "error";
 
 export default function CreatePersonnel() {
   const router = useRouter();
-
-  const PROCESSOR_CERT_IDS = [
-    "079827bf-8b8f-4f37-9b6c-664942689a0a",
-    "c579ef59-7010-4bcc-bcd4-9cd448ac5bf5",
-    "8eff73b9-9793-452a-b77d-c16cde5b9b4c",
-  ];
 
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -58,11 +46,6 @@ export default function CreatePersonnel() {
   const [processorError, setProcessorError] = useState("");
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-
-  const isInactiveStatus = (status: string | null | undefined) => {
-    const clean = (status || "").trim().toLowerCase();
-    return clean === "removed" || clean === "retired";
-  };
 
   const cleanNameValue = (value: string) =>
     value.replace(/\s+/g, " ").trim();
@@ -98,75 +81,24 @@ export default function CreatePersonnel() {
 
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session=await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
 
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = roles?.map((r) => r.role) || [];
-
-      if (!hasRole(roleList, ["recruiter", "di", "nco"])) {
+      if (!session.roles.some(role=>["recruiter","di","nco"].includes(role.toLowerCase()))&&!hasAppPermission(session,"admin.create","read")) {
         router.replace("/");
         return;
       }
 
-      const [{ data: rankData, error: rankError }, { data: certPersonnel, error: certError }] =
-        await Promise.all([
-          supabase.from("ranks").select("id, name, rank_level").order("rank_level", { ascending: true }),
-          supabase
-            .from("personnel_certifications")
-            .select("personnel_id")
-            .in("certification_id", PROCESSOR_CERT_IDS),
-        ]);
-
-      if (rankError) {
-        console.error("Failed to load ranks:", rankError);
-        setRanks([]);
-      } else {
-        setRanks(rankData || []);
-      }
-
-      if (certError) {
-        console.error("Failed to load processor certifications:", certError);
+      const response=await fetch("/api/admin/personnel-operations?scope=create",{cache:"no-store",headers:await getAppAuthHeaders()});
+      if(!response.ok){
         setProcessors([]);
         setLoadingAuth(false);
         return;
       }
-
-      if (!certPersonnel || certPersonnel.length === 0) {
-        setProcessors([]);
-        setLoadingAuth(false);
-        return;
-      }
-
-      const personnelIds = [...new Set(certPersonnel.map((c) => c.personnel_id))];
-
-      const { data: personnelData, error: personnelError } = await supabase
-        .from("personnel")
-        .select("id, name, status")
-        .in("id", personnelIds)
-        .order("name", { ascending: true });
-
-      if (personnelError) {
-        console.error("Failed to load processors:", personnelError);
-        setProcessors([]);
-      } else {
-        const activeProcessors = (personnelData || []).filter((person) => {
-          const status = (person.status || "").trim().toLowerCase();
-          return status !== "removed" && status !== "retired";
-        });
-
-        setProcessors(activeProcessors);
-      }
+      const data=await response.json() as {ranks?:RankRow[];processors?:ProcessorRow[]};setRanks(data.ranks||[]);setProcessors(data.processors||[]);
 
       setLoadingAuth(false);
     };
@@ -227,22 +159,15 @@ export default function CreatePersonnel() {
 
     setNameStatus("checking");
 
-    const { data, error } = await supabase
-      .from("personnel")
-      .select("id, status")
-      .eq("name", clean);
-
-    if (error) {
+    const response=await fetch(`/api/admin/personnel-operations?scope=create&duplicate=name&value=${encodeURIComponent(clean)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
+    if(!response.ok){
       setNameStatus("error");
       setNameError("Failed to check existing names.");
       return false;
     }
 
-    const activeDuplicate = (data || []).find(
-      (row: PersonnelDuplicateRow) => !isInactiveStatus(row.status)
-    );
-
-    if (activeDuplicate) {
+    const data=await response.json() as {duplicate?:boolean};
+    if (data.duplicate) {
       setNameStatus("duplicate");
       setNameError("Name already exists on an active personnel record.");
       return true;
@@ -264,22 +189,15 @@ export default function CreatePersonnel() {
 
     setBirthStatus("checking");
 
-    const { data, error } = await supabase
-      .from("personnel")
-      .select("id, status")
-      .eq("birth_number", clean);
-
-    if (error) {
+    const response=await fetch(`/api/admin/personnel-operations?scope=create&duplicate=birth_number&value=${encodeURIComponent(clean)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
+    if(!response.ok){
       setBirthStatus("error");
       setBirthError("Failed to check existing birth numbers.");
       return false;
     }
 
-    const activeDuplicate = (data || []).find(
-      (row: PersonnelDuplicateRow) => !isInactiveStatus(row.status)
-    );
-
-    if (activeDuplicate) {
+    const data=await response.json() as {duplicate?:boolean};
+    if (data.duplicate) {
       setBirthStatus("duplicate");
       setBirthError("Birth number already exists on an active personnel record.");
       return true;
@@ -343,102 +261,8 @@ export default function CreatePersonnel() {
     setSubmitting(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
-      const { data: processorExists } = await supabase
-        .from("personnel")
-        .select("id")
-        .eq("id", selectedProcessor)
-        .maybeSingle();
-
-      if (!processorExists) {
-        setProcessorError("Selected processor does not exist.");
-        setSubmitting(false);
-        return;
-      }
-
-      const insertPayload: {
-        rank_id: string | null;
-        birth_number: string;
-        name: string;
-        discord_id: string | null;
-        ts_id: string | null;
-        auto_role_sync: boolean;
-        status: null;
-        created_at?: string | null;
-      } = {
-        rank_id: rankId || null,
-        birth_number: cleanBirthNumber,
-        name: cleanName,
-        discord_id: cleanDiscordId || null,
-        ts_id: cleanTeamspeakId || null,
-        auto_role_sync: !importFromDiscord,
-        status: null,
-      };
-
-      if (createdAt) {
-        insertPayload.created_at = new Date(createdAt).toISOString();
-      }
-
-      const { data, error } = await supabase
-        .from("personnel")
-        .insert([insertPayload])
-        .select()
-        .single();
-
-      if (error) {
-        setFormError(error.message);
-        setSubmitting(false);
-        return;
-      }
-
-      const { error: auditError } = await supabase
-        .from("audit_logs")
-        .insert([
-          {
-            user_id: user.id,
-            target_personnel_id: data.id,
-            action: "NEW_MEMBER",
-            details: "New member added to system",
-            processed_by: selectedProcessor,
-          },
-        ]);
-
-      if (auditError) {
-        console.error("Audit Insert Error:", auditError);
-        setFormError("Audit log failed: " + auditError.message);
-        setSubmitting(false);
-        return;
-      }
-
-      if (importFromDiscord && cleanDiscordId) {
-        const { data: importData, error: importError } =
-          await supabase.functions.invoke("discord-full-import", {
-            body: {
-              discord_id: cleanDiscordId,
-              personnel_id: data.id,
-            },
-          });
-
-        if (importError) {
-          setFormError(importError.message);
-          setSubmitting(false);
-          return;
-        }
-
-        if (importData?.error) {
-          setFormError(importData.error);
-          setSubmitting(false);
-          return;
-        }
-      }
+      const response=await fetch("/api/admin/personnel-operations",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({scope:"create",action:"create",rankId:rankId||null,birthNumber:cleanBirthNumber,name:cleanName,discordId:cleanDiscordId,teamspeakId:cleanTeamspeakId,importFromDiscord,createdAt:createdAt?new Date(createdAt).toISOString():null,processorId:selectedProcessor})});
+      if(!response.ok){const body=await response.json().catch(()=>null) as {error?:string}|null;setFormError(body?.error||"Failed to create personnel");return;}
 
       setSuccessMessage("✅ Personnel created successfully.");
       setRankId("");

@@ -1,10 +1,10 @@
 "use client";
 
-import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { getAppSession, signOutOfApp, type AppUser } from "@/lib/client-auth";
+import { pagePermissionDefinitions } from "@/data/pagePermissions";
 import {
   BookOpen,
   CalendarDays,
@@ -56,8 +56,9 @@ type NavGroup = {
 export default function NavbarClient() {
   const router = useRouter();
 
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
+  const [permissions, setPermissions] = useState<Record<string, string>>({});
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
@@ -66,27 +67,17 @@ export default function NavbarClient() {
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      setUser(user);
-
-      if (user) {
-        const { data } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id);
-
-        setRoles(data?.map((r) => r.role) || []);
-      }
+      const session = await getAppSession();
+      setUser(session?.user || null);
+      setRoles(session?.roles || []);
+      setPermissions(session?.permissions || {});
     };
 
     getUser();
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOutOfApp();
     setUser(null);
     router.push("/login");
   };
@@ -167,6 +158,7 @@ export default function NavbarClient() {
           href: "/audit",
           label: "Audit Log",
           description: "Review logged system and personnel actions",
+          allowedRoles: ["admin", "nco", "trainer", "di"],
         },
       ],
     },
@@ -241,6 +233,7 @@ export default function NavbarClient() {
           href: "/admin/Taskboard",
           label: "TaskBoard",
           description: "Track tasks, work items and progress",
+          allowedRoles: ["admin", "Akhari"],
         },
       ],
     },
@@ -365,22 +358,20 @@ export default function NavbarClient() {
   /* ================= ROLE FILTER ================= */
 
   const filteredGroups = useMemo(() => {
+    const normalizedRoles = new Set(roles.map((role) => role.toLowerCase()));
+    const permissionByPath = new Map(pagePermissionDefinitions.map((entry) => [entry.pagePath, entry.key]));
+    const canSeeItem = (item: NavItem) => {
+      const permissionKey = permissionByPath.get(item.href);
+      if (permissionKey && permissions[permissionKey]) return true;
+      return !item.allowedRoles || item.allowedRoles.some((role) => normalizedRoles.has(role.toLowerCase()));
+    };
     return navGroups
-      .filter(
-        (group) =>
-          !group.allowedRoles ||
-          group.allowedRoles.some((role) => roles.includes(role))
-      )
       .map((group) => ({
         ...group,
-        items: group.items.filter(
-          (item) =>
-            !item.allowedRoles ||
-            item.allowedRoles.some((role) => roles.includes(role))
-        ),
+        items: group.items.filter(canSeeItem),
       }))
       .filter((group) => group.items.length > 0);
-  }, [navGroups, roles]);
+  }, [navGroups, permissions, roles]);
 
   const getItemIcon = (groupLabel: string) => {
     if (groupLabel === "Public") return <FileText size={14} />;
@@ -572,7 +563,9 @@ export default function NavbarClient() {
           {user ? (
             <>
               <div className="hidden text-right md:block">
-                <div className="text-sm text-gray-300">{user.email}</div>
+                <div className="text-sm text-gray-300">
+                  {user.displayName || user.username || user.email}
+                </div>
 
                 {roles.length > 0 && (
                   <div className="mt-1 flex flex-wrap justify-end gap-1">

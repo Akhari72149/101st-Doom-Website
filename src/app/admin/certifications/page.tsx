@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
 
 export default function ManageCertifications() {
@@ -26,37 +26,23 @@ export default function ManageCertifications() {
 
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
 
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = roles?.map((r) => r.role) || [];
+      const roleList = session.roles.map((role) => role.toLowerCase());
       const allowedRoles = ["admin", "trainer"];
 
-      const hasAccess = roleList.some((role) => allowedRoles.includes(role));
+      const hasAccess = roleList.some((role) => allowedRoles.includes(role)) || hasAppPermission(session,"admin.certifications","read");
 
       if (!hasAccess) {
         router.replace("/");
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      setProcessedByName(profile?.display_name || user.email || "Unknown");
+      setProcessedByName(session.user.displayName || session.user.email || "Unknown");
       setLoadingAuth(false);
     };
 
@@ -81,6 +67,7 @@ export default function ManageCertifications() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(await getAppAuthHeaders()),
         },
         body: JSON.stringify(payload),
       });
@@ -90,98 +77,15 @@ export default function ManageCertifications() {
   };
 
   const fetchData = async () => {
-    const { data: people } = await supabase
-      .from("personnel")
-      .select("*")
-      .order("name");
-
-    const { data: rankData } = await supabase
-      .from("ranks")
-      .select("*")
-      .order("rank_level", { ascending: true });
-
-    const { data: certs } = await supabase
-      .from("certifications")
-      .select("*")
-      .order("name");
-
-    setPersonnel(people || []);
-    setRanks(rankData || []);
-    setCertifications(certs || []);
+    const response=await fetch("/api/admin/certifications",{cache:"no-store",headers:await getAppAuthHeaders()});
+    if(!response.ok)return;const data=await response.json();
+    setPersonnel(data.personnel||[]);setRanks(data.ranks||[]);setCertifications(data.certifications||[]);setTrainerPersonnel(data.trainers||[]);
+    if((data.trainers||[]).some((t:any)=>t.id===data.currentUserId))setSelectedTrainer(data.currentUserId);else if((data.trainers||[]).length===1)setSelectedTrainer(data.trainers[0].id);
   };
 
-  useEffect(() => {
-    const fetchTrainers = async () => {
-      const { data: trainerCerts } = await supabase
-        .from("certifications")
-        .select("id")
-        .eq("is_trainer_cert", true);
-
-      const trainerCertIds = trainerCerts?.map((c) => c.id) || [];
-
-      if (trainerCertIds.length === 0) {
-        setTrainerPersonnel([]);
-        return;
-      }
-
-      const { data: trainerData } = await supabase
-        .from("personnel_certifications")
-        .select(
-          `
-          personnel_id,
-          personnel:personnel_id ( id, name, rank_id )
-        `
-        )
-        .in("certification_id", trainerCertIds);
-
-      if (!trainerData) {
-        setTrainerPersonnel([]);
-        return;
-      }
-
-      const uniqueTrainers = Array.from(
-        new Map(
-          trainerData.map((item: any) => [item.personnel?.id, item.personnel])
-        ).values()
-      ).filter(Boolean);
-
-      setTrainerPersonnel(uniqueTrainers);
-
-      const { data: session } = await supabase.auth.getUser();
-      const loggedInUserId = session?.user?.id;
-
-      const loggedInTrainer = uniqueTrainers.find(
-        (t: any) => t.id === loggedInUserId
-      );
-
-      if (loggedInTrainer) {
-        setSelectedTrainer(loggedInTrainer.id);
-        return;
-      }
-
-      if (uniqueTrainers.length === 1) {
-        setSelectedTrainer((uniqueTrainers[0] as any).id);
-      }
-    };
-
-    if (!loadingAuth) {
-      fetchTrainers();
-    }
-  }, [loadingAuth]);
-
   const fetchPersonCerts = async (personId: string) => {
-    const { data } = await supabase
-      .from("personnel_certifications")
-      .select(
-        `
-        id,
-        personnel_id,
-        certification:certification_id ( id, name )
-      `
-      )
-      .eq("personnel_id", personId);
-
-    setPersonCerts(data || []);
+    const response=await fetch(`/api/admin/certifications?personId=${encodeURIComponent(personId)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
+    const data=await response.json().catch(()=>null);setPersonCerts(response.ok?data?.personCerts||[]:[]);
   };
 
   const assignCertification = async () => {
@@ -196,31 +100,12 @@ export default function ManageCertifications() {
 
     setLoading(true);
 
-    const inserts = [];
-
-    for (const personId of selectedPeople) {
-      for (const certId of selectedCerts) {
-        inserts.push({
-          personnel_id: personId,
-          certification_id: certId,
-          awarded_at: new Date().toISOString(),
-          awarded_by: selectedTrainer,
-        });
-      }
-    }
-
-    const { error } = await supabase
-      .from("personnel_certifications")
-      .insert(inserts);
+    const response=await fetch("/api/admin/certifications",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({personnelIds:selectedPeople,certificationIds:selectedCerts,awardedBy:selectedTrainer})});
 
     setLoading(false);
 
-    if (error) {
-      if (error.code === "23505") {
-        alert("⚠ Some certifications were already assigned.");
-      } else {
-        alert(error.message);
-      }
+    if (!response.ok) {
+      const data=await response.json().catch(()=>null);alert(data?.error||"Failed to assign certifications");
       return;
     }
 
@@ -250,13 +135,9 @@ export default function ManageCertifications() {
       certRecord?.personnel_id || selectedPeople[0] || null;
     const certName = certRecord?.certification?.name || "Unknown Certification";
 
-    const { error } = await supabase
-      .from("personnel_certifications")
-      .delete()
-      .eq("id", recordId);
-
-    if (error) {
-      alert(error.message);
+    const response=await fetch(`/api/admin/certifications?id=${encodeURIComponent(recordId)}`,{method:"DELETE",credentials:"same-origin",headers:await getAppAuthHeaders()});
+    if (!response.ok) {
+      const data=await response.json().catch(()=>null);alert(data?.error||"Failed to revoke certification");
       return;
     }
 

@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
+import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
 export async function POST(req: Request) {
+  if (!requestHasSameOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+  if (!(await requirePageAccess(req, "admin.positions", "edit"))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const body = await req.json();
 
@@ -27,9 +34,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { error: err.message },
+      { error: err instanceof Error ? err.message : "Rank update failed" },
       { status: 500 }
     );
   }

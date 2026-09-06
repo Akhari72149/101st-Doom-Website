@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { normalizeArmaMedicalPayload } from "@/lib/arma-medical";
 import { verifyArmaXpSignature } from "@/lib/arma-xp";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { callArmaDatabase } from "@/lib/arma-database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,8 +94,7 @@ export async function POST(request: Request) {
 
   const event = validation.event;
 
-  const { data, error } = await supabaseAdmin
-    .rpc("record_arma_medical_event", {
+  const { data, error } = await callArmaDatabase<RecordArmaMedicalEventResult>("record_arma_medical_event", {
       p_event_uid: event.eventUid,
       p_steam_id: event.steamId,
       p_medical_metric: event.medicalMetric,
@@ -108,8 +107,7 @@ export async function POST(request: Request) {
       p_treatment_class: event.treatmentClass || null,
       p_body_part: event.bodyPart || null,
       p_patient_steam_id: event.patientSteamId || null,
-    })
-    .maybeSingle<RecordArmaMedicalEventResult>();
+    });
 
   if (error) {
     console.error("[arma-medical] Event ingest failed:", {

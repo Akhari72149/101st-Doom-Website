@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
 
 type Booking = {
@@ -16,52 +16,22 @@ type Booking = {
   };
 };
 
-type ServerBookingRow = {
-  id: string;
-  server_id: number;
-  start_time: string;
-  end_time: string;
-  title: string;
-  booked_for: string;
-};
-
-type RecurringServerBlockRow = {
-  id: string;
-  server_id: number;
-  start_at: string | null;
-  end_at: string | null;
-  title: string;
-};
-
-type RecurringServerBlockWithTimes = RecurringServerBlockRow & {
-  start_at: string;
-  end_at: string;
-};
-
 type PersonnelSearchRow = {
   id: string;
   name: string;
-  personnel_certifications?: {
-    certification_id: string;
-  }[];
 };
-
-type PendingAction =
-  | { type: "book"; slotIndex: number }
-  | { type: "delete"; bookingId: string }
-  | null;
 
 type DurationHours = 1 | 2 | 4;
 
 type ServerDayCounts = Record<number, number>;
 
-const MAX_BOOKING_DURATION_HOURS = 4;
-
-function hasRecurringBlockTimes(
-  block: RecurringServerBlockRow
-): block is RecurringServerBlockWithTimes {
-  return Boolean(block.start_at && block.end_at);
-}
+type BookingApiResponse = {
+  bookings: Booking[];
+  counts: Record<string, number>;
+  personnel: PersonnelSearchRow[];
+  canEdit: boolean;
+  error?: string;
+};
 
 export default function ServersPage() {
   const router = useRouter();
@@ -87,12 +57,10 @@ export default function ServersPage() {
   const [showResults, setShowResults] = useState(false);
   const [bookingTitle, setBookingTitle] = useState("");
 
-  const [adminPassword, setAdminPassword] = useState("");
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [canBook, setCanBook] = useState(false);
 
   const [isLoadingBookings, setIsLoadingBookings] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   const resultsRef = useRef<HTMLDivElement>(null);
   const fetchTokenRef = useRef(0);
@@ -104,29 +72,6 @@ export default function ServersPage() {
       person.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [personnelList, searchQuery]);
-
-  useEffect(() => {
-    const certificationIds = [
-      "0a559b7d-b2d4-4972-a2a7-a64d805d968e",
-      "5d61393e-ce1e-40c9-b698-2526b020a486",
-      "d6555eb7-3eac-4019-81cb-e11291437156",
-      "a4316aa4-f69d-4265-aff0-0760614ff987",
-    ];
-
-    supabase
-      .from("personnel")
-      .select(`
-        id,
-        name,
-        personnel_certifications!inner (
-          certification_id
-        )
-      `)
-      .in("personnel_certifications.certification_id", certificationIds)
-      .then(({ data }) => {
-        setPersonnelList((data as PersonnelSearchRow[]) || []);
-      });
-  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -145,147 +90,55 @@ export default function ServersPage() {
   const fetchBookingsForActiveServer = useCallback(async () => {
     const fetchToken = ++fetchTokenRef.current;
     setIsLoadingBookings(true);
+    setLoadError("");
 
     const [start, end] = getDayBounds(selectedDate);
-    const overlapLookupEnd = new Date(
-      end.getTime() + MAX_BOOKING_DURATION_HOURS * 60 * 60 * 1000
-    );
+    const params = new URLSearchParams({
+      serverId: String(activeServer),
+      start: start.toISOString(),
+      end: end.toISOString(),
+    });
+    const authHeaders = await getAppAuthHeaders();
 
-    const { data: bookingData, error: bookingError } = await supabase
-      .from("server_bookings")
-      .select("*")
-      .eq("server_id", activeServer)
-      .lt("start_time", overlapLookupEnd.toISOString())
-      .gt("end_time", start.toISOString());
-
-    if (bookingError) {
-      if (fetchToken === fetchTokenRef.current) {
-        setBookings([]);
-        setIsLoadingBookings(false);
+    try {
+      const response = await fetch(`/api/server-bookings?${params}`, {
+        cache: "no-store",
+        headers: authHeaders,
+      });
+      const data = (await response.json().catch(() => null)) as BookingApiResponse | null;
+      if (!response.ok || !data) {
+        throw new Error(data?.error || "Failed to load server bookings");
       }
-      return;
-    }
-
-    const bookingRows = (bookingData || []) as ServerBookingRow[];
-    const personnelIds = [...new Set(bookingRows.map((booking) => booking.booked_for))];
-
-    const { data: personnelData } =
-      personnelIds.length > 0
-        ? await supabase.from("personnel").select("id,name").in("id", personnelIds)
-        : { data: [] as { id: string; name: string }[] };
-
-    const personnelMap = Object.fromEntries(
-      (personnelData || []).map((p) => [p.id, p.name])
-    );
-
-    const enriched: Booking[] = bookingRows.map((booking) => ({
-      ...booking,
-      personnel: { name: personnelMap[booking.booked_for] || "Unknown" },
-    }));
-
-    const { data: recurringData, error: recurringError } = await supabase
-      .from("recurring_server_blocks")
-      .select("*")
-      .eq("server_id", activeServer)
-      .lt("start_at", overlapLookupEnd.toISOString())
-      .gt("end_at", start.toISOString());
-
-    if (recurringError) {
-      if (fetchToken === fetchTokenRef.current) {
-        setBookings(enriched);
-        setIsLoadingBookings(false);
+      if (fetchToken !== fetchTokenRef.current) return;
+      const counts: ServerDayCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+      for (const [serverId, count] of Object.entries(data.counts || {})) {
+        counts[Number(serverId)] = Number(count) || 0;
       }
-      return;
-    }
-
-    const recurringRows = (recurringData ?? []) as RecurringServerBlockRow[];
-    const recurringBookings: Booking[] = recurringRows
-      .filter(hasRecurringBlockTimes)
-      .map((r) => ({
-        id: `recurring-${r.id}`,
-        server_id: r.server_id,
-        start_time: new Date(r.start_at).toISOString(),
-        end_time: new Date(r.end_at).toISOString(),
-        title: r.title,
-        booked_for: "SYSTEM",
-        personnel: { name: "System Block" },
-      }));
-
-    if (fetchToken === fetchTokenRef.current) {
-      setBookings([...enriched, ...recurringBookings]);
-      setIsLoadingBookings(false);
+      setBookings(data.bookings || []);
+      setServerCounts(counts);
+      setPersonnelList(data.personnel || []);
+      setCanBook(Boolean(data.canEdit));
+    } catch (error) {
+      if (fetchToken !== fetchTokenRef.current) return;
+      setBookings([]);
+      setPersonnelList([]);
+      setCanBook(false);
+      setLoadError(error instanceof Error ? error.message : "Failed to load server bookings");
+    } finally {
+      if (fetchToken === fetchTokenRef.current) setIsLoadingBookings(false);
     }
   }, [activeServer, selectedDate]);
-
-  const fetchServerCountsForDay = useCallback(async () => {
-    const [start, end] = getDayBounds(selectedDate);
-
-    const initialCounts: ServerDayCounts = {
-      1: 0,
-      2: 0,
-      3: 0,
-      4: 0,
-      5: 0,
-      6: 0,
-    };
-
-    const { data: bookingData } = await supabase
-      .from("server_bookings")
-      .select("server_id")
-      .gte("server_id", 1)
-      .lte("server_id", 6)
-      .lt("start_time", end.toISOString())
-      .gt("end_time", start.toISOString());
-
-    const { data: recurringData } = await supabase
-      .from("recurring_server_blocks")
-      .select("server_id")
-      .gte("server_id", 1)
-      .lte("server_id", 6)
-      .lt("start_at", end.toISOString())
-      .gt("end_at", start.toISOString());
-
-    ((bookingData || []) as { server_id: number }[]).forEach((row) => {
-      initialCounts[row.server_id] = (initialCounts[row.server_id] || 0) + 1;
-    });
-
-    ((recurringData || []) as { server_id: number }[]).forEach((row) => {
-      initialCounts[row.server_id] = (initialCounts[row.server_id] || 0) + 1;
-    });
-
-    setServerCounts(initialCounts);
-  }, [selectedDate]);
 
   useEffect(() => {
     void Promise.resolve().then(() => {
       fetchBookingsForActiveServer();
-      fetchServerCountsForDay();
     });
-
-    const channel = supabase
-      .channel("server-bookings")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "server_bookings" },
-        () => {
-          fetchBookingsForActiveServer();
-          fetchServerCountsForDay();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "recurring_server_blocks" },
-        () => {
-          fetchBookingsForActiveServer();
-          fetchServerCountsForDay();
-        }
-      )
-      .subscribe();
+    const refreshTimer = window.setInterval(fetchBookingsForActiveServer, 10_000);
 
     return () => {
-      supabase.removeChannel(channel);
+      window.clearInterval(refreshTimer);
     };
-  }, [fetchBookingsForActiveServer, fetchServerCountsForDay]);
+  }, [fetchBookingsForActiveServer]);
 
   function getBookingsForSlot(slot: Date) {
     return bookings.filter((b) => {
@@ -318,26 +171,23 @@ export default function ServersPage() {
 
   async function handleDelete(id: string) {
     if (id.startsWith("recurring-")) return;
-
-    if (!canBook) {
-      setPendingAction({ type: "delete", bookingId: id });
-      setShowPasswordPrompt(true);
-      return;
-    }
+    if (!canBook) return;
 
     const old = bookings;
     setBookings((prev) => prev.filter((b) => b.id !== id));
-
-    const { error } = await supabase.from("server_bookings").delete().eq("id", id);
-
-    if (error) {
+    const authHeaders = await getAppAuthHeaders();
+    const response = await fetch(`/api/server-bookings?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: authHeaders,
+    });
+    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) {
       setBookings(old);
-      alert(error.message);
+      alert(result?.error || "Failed to cancel booking");
       return;
     }
 
-    fetchBookingsForActiveServer();
-    fetchServerCountsForDay();
+    await fetchBookingsForActiveServer();
   }
 
   async function handleConfirmBooking() {
@@ -356,24 +206,29 @@ export default function ServersPage() {
     const start = slots[selectedStartIndex];
     const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
 
-    const { error } = await supabase.from("server_bookings").insert([
-      {
-        server_id: activeServer,
-        booked_for: selectedPerson,
-        title: bookingTitle.trim() || "Server Booking",
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
+    const authHeaders = await getAppAuthHeaders();
+    const response = await fetch("/api/server-bookings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
       },
-    ]);
-
-    if (error) {
-      alert(error.message);
+      body: JSON.stringify({
+        serverId: activeServer,
+        bookedFor: selectedPerson,
+        title: bookingTitle.trim() || "Server Booking",
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+      }),
+    });
+    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) {
+      alert(result?.error || "Failed to create booking");
       return;
     }
 
     clearBookingDraft();
-    fetchBookingsForActiveServer();
-    fetchServerCountsForDay();
+    await fetchBookingsForActiveServer();
   }
 
   function clearBookingDraft() {
@@ -385,39 +240,11 @@ export default function ServersPage() {
     setDurationHours(1);
   }
 
-  async function handleUnlock() {
-    const { data } = await supabase.rpc("verify_admin_password", {
-      password_input: adminPassword,
-    });
-
-    if (data === true) {
-      setCanBook(true);
-      setShowPasswordPrompt(false);
-      setAdminPassword("");
-
-      if (pendingAction?.type === "book") {
-        setSelectedStartIndex(pendingAction.slotIndex);
-      }
-
-      if (pendingAction?.type === "delete") {
-        const deleteId = pendingAction.bookingId;
-        setPendingAction(null);
-        await handleDelete(deleteId);
-        return;
-      }
-
-      setPendingAction(null);
-    } else {
-      alert("Wrong password");
-    }
-  }
-
   function handleSlotClick(index: number, blocked: boolean) {
     if (blocked) return;
 
     if (!canBook) {
-      setPendingAction({ type: "book", slotIndex: index });
-      setShowPasswordPrompt(true);
+      alert("Your account has view-only access to server bookings.");
       return;
     }
 
@@ -455,44 +282,6 @@ export default function ServersPage() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] px-3 py-5 text-white sm:px-6 sm:py-8 lg:px-10">
-      {showPasswordPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#00ff66]/50 bg-black p-6 shadow-[0_0_40px_rgba(0,255,100,0.25)]">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <h2 className="text-lg font-bold text-[#00ff66]">
-                Admin Password Required
-              </h2>
-
-              <button
-                onClick={() => {
-                  setShowPasswordPrompt(false);
-                  setPendingAction(null);
-                  setAdminPassword("");
-                }}
-                className="shrink-0 text-2xl leading-none text-red-400 transition hover:text-red-300"
-              >
-                ✕
-              </button>
-            </div>
-
-            <input
-              type="password"
-              placeholder="Enter Password"
-              value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              className="w-full rounded-xl border border-[#00ff66]/40 bg-black px-4 py-3 text-white outline-none transition focus:border-[#00ff66]"
-            />
-
-            <button
-              onClick={handleUnlock}
-              className="mt-4 w-full rounded-xl bg-[#00ff66] px-4 py-3 font-semibold text-black transition hover:scale-[1.02]"
-            >
-              Unlock
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="mx-auto max-w-[1800px]">
         <button
           onClick={() => router.push("/pcs")}
@@ -510,12 +299,15 @@ export default function ServersPage() {
               SERVER BOOKINGS
             </h1>
 
-            {canBook && (
-              <span className="rounded-full border border-[#00ff66]/40 bg-[#00ff66]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#00ff66]">
-                Admin Unlocked
-              </span>
-            )}
+            <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${
+              canBook
+                ? "border-[#00ff66]/40 bg-[#00ff66]/10 text-[#00ff66]"
+                : "border-white/15 bg-white/[0.03] text-gray-400"
+            }`}>
+              {canBook ? "Booking Access" : "View Only"}
+            </span>
           </div>
+          {loadError && <p className="mt-3 text-sm text-red-300">{loadError}</p>}
         </div>
 
         <div className="mb-6 rounded-2xl border border-[#00ff66]/20 bg-black/55 p-3 backdrop-blur-xl shadow-[0_0_35px_rgba(0,255,100,0.08)] sm:sticky sm:top-4 sm:z-30 sm:mb-8 sm:rounded-3xl sm:p-4">

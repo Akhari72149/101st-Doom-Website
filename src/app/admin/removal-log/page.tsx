@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
 import {
   RefreshCw,
@@ -87,32 +87,12 @@ export default function RemovalLogsPage() {
     if (isManualRefresh) setRefreshing(true);
     else setLoadingLogs(true);
 
-    const { data, error } = await supabase
-      .from("audit_logs")
-      .select(
-        `
-    id,
-    action,
-    details,
-    created_at,
-    user_id,
-    processed_by,
-    target_personnel_id,
-    profiles:user_id ( display_name ),
-    processor:processed_by ( name ),
-    personnel:target_personnel_id ( name )
-  `,
-      )
-      .in("action", [
-        "PERSONNEL_REMOVED",
-        "PERSONNEL_RETIRED",
-        "PERSONNEL_TRANSFERRED",
-      ])
-      .order("created_at", { ascending: false })
-      .limit(200);
-
-    if (error) {
-      alert(error.message);
+    const response = await fetch("/api/audit-logs?scope=removals", {
+      cache: "no-store", headers: await getAppAuthHeaders(),
+    });
+    const payload = await response.json().catch(() => null) as { logs?: RemovalLogRowRaw[]; error?: string } | null;
+    if (!response.ok) {
+      alert(payload?.error || "Failed to load removal logs");
       setLogs([]);
       setLoadingLogs(false);
       setRefreshing(false);
@@ -120,7 +100,7 @@ export default function RemovalLogsPage() {
     }
 
     const cleanedLogs: RemovalLogRow[] = (
-      (data || []) as RemovalLogRowRaw[]
+      (payload?.logs || []) as RemovalLogRowRaw[]
     ).map((log) => ({
       id: log.id,
       action: log.action,
@@ -141,35 +121,15 @@ export default function RemovalLogsPage() {
 
   useEffect(() => {
     const checkAccessAndLoad = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
-
-      const [{ data: roles }, { data: profile }] = await Promise.all([
-        supabase.from("user_roles").select("role").eq("user_id", user.id),
-
-        supabase
-          .from("profiles")
-          .select("display_name")
-          .eq("id", user.id)
-          .maybeSingle(),
-      ]);
-
-      const roleList = roles?.map((r) => r.role?.toLowerCase()) || [];
-      const displayName = profile?.display_name?.trim().toLowerCase() || "";
-
-      const allowedRoles = ["recruiter", "nco", "admin", "akhari"];
-      const hasAllowedRole = roleList.some((role) =>
-        allowedRoles.includes(role),
+      const hasAllowedRole = session.roles.some((role) =>
+        ["recruiter", "nco", "admin", "akhari"].includes(role.toLowerCase()),
       );
-      const isAkhariByName = displayName === "akhari";
-
-      if (!hasAllowedRole && !isAkhariByName) {
+      if (!hasAllowedRole && !hasAppPermission(session, "admin.removal-log")) {
         router.replace("/");
         return;
       }

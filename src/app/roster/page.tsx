@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
 
@@ -56,6 +55,7 @@ export default function Roster() {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [rankHistory, setRankHistory] = useState<RankHistoryRow[]>([]);
+  const [loadError, setLoadError] = useState("");
 
   const [openSection, setOpenSection] = useState<number | null>(0);
   const [openSubSections, setOpenSubSections] = useState<string[]>([]);
@@ -64,23 +64,34 @@ export default function Roster() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>("all");
 
   useEffect(() => {
-    async function fetchData() {
-      const [{ data: rankData }, { data: personnelData }, { data: historyData }] =
-        await Promise.all([
-          supabase.from("ranks").select("*"),
-          supabase.from("personnel").select("*").order("rank_id", { ascending: true }),
-          supabase
-            .from("rank_history")
-            .select("personnel_id, new_rank_id, changed_at")
-            .order("changed_at", { ascending: false }),
-        ]);
+    const controller = new AbortController();
 
-      setRanks((rankData as Rank[]) || []);
-      setPersonnel((personnelData as Personnel[]) || []);
-      setRankHistory((historyData as RankHistoryRow[]) || []);
+    async function fetchData() {
+      try {
+        const result = await fetch("/api/roster", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = (await result.json().catch(() => null)) as {
+          ranks?: Rank[];
+          personnel?: Personnel[];
+          rankHistory?: RankHistoryRow[];
+        } | null;
+        if (!result.ok || !body) throw new Error("ROSTER_LOAD_FAILED");
+
+        setRanks(body.ranks || []);
+        setPersonnel(body.personnel || []);
+        setRankHistory(body.rankHistory || []);
+        setLoadError("");
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setLoadError("The roster could not be loaded. Please try again shortly.");
+        }
+      }
     }
 
     fetchData();
+    return () => controller.abort();
   }, []);
 
   const getRankName = (rankId: string | null) => {
@@ -258,14 +269,12 @@ export default function Roster() {
   };
 
   
-  const visibleSections = useMemo(() => {
-    return (structure as StructureSection[]).filter((section) => {
-      if (section.type !== "header") return false;
+  const visibleSections = (structure as StructureSection[]).filter((section) => {
+    if (section.type !== "header") return false;
 
-      const counts = getSectionCounts(section);
-      return counts.total > 0;
-    });
-  }, [personnel, ranks, searchTerm, displayMode]);
+    const counts = getSectionCounts(section);
+    return counts.total > 0;
+  });
 
   const expandAll = () => {
     const subKeys: string[] = [];
@@ -679,7 +688,11 @@ export default function Roster() {
           </div>
         </div>
 
-        {visibleSections.length > 0 ? (
+        {loadError ? (
+          <div className="rounded-3xl border border-red-400/25 bg-red-500/[0.06] px-6 py-10 text-center text-red-200">
+            {loadError}
+          </div>
+        ) : visibleSections.length > 0 ? (
           renderStructure()
         ) : (
           <div

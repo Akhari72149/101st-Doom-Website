@@ -19,7 +19,7 @@ import {
   type PagePermissionDefinition,
   pagePermissionLevels,
 } from "@/data/pagePermissions";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession } from "@/lib/client-auth";
 
 type Account = {
   id: string;
@@ -39,7 +39,6 @@ type PermissionResponse = {
   levels: PagePermissionAccess[];
 };
 
-const managerRoles = ["admin", "akhari"];
 const editableLevels = pagePermissionLevels;
 
 function formatDate(value: string | undefined) {
@@ -130,26 +129,14 @@ export default function AdminPermissionsPage() {
     return { active, disabled, permissioned };
   }, [accounts]);
 
-  async function getAccessToken() {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token || "";
-  }
-
   async function loadPermissions() {
     setLoading(true);
     setStatus(null);
 
-    const token = await getAccessToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
+    const authHeaders = await getAppAuthHeaders();
 
     const response = await fetch("/api/admin/permissions", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: authHeaders,
     });
 
     const body = (await response.json().catch(() => null)) as PermissionResponse | { error?: string } | null;
@@ -168,24 +155,9 @@ export default function AdminPermissionsPage() {
 
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
-        return;
-      }
-
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roles = (roleData || []).map((row) => String(row.role).toLowerCase());
-
-      if (!roles.some((role) => managerRoles.includes(role))) {
-        router.replace("/");
         return;
       }
 
@@ -216,11 +188,11 @@ export default function AdminPermissionsPage() {
     setSaving(true);
     setStatus(null);
 
-    const token = await getAccessToken();
+    const authHeaders = await getAppAuthHeaders();
     const response = await fetch("/api/admin/permissions", {
       method: "PATCH",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...authHeaders,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -259,11 +231,11 @@ export default function AdminPermissionsPage() {
       accessLevel: draftPermissions[definition.key] || "none",
     }));
 
-    const token = await getAccessToken();
+    const authHeaders = await getAppAuthHeaders();
     const response = await fetch("/api/admin/permissions", {
       method: "PATCH",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...authHeaders,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

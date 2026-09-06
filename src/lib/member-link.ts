@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { STEAM_LINK_SESSION_COOKIE, hashToken } from "@/lib/steam-link";
 import { structure } from "@/data/structure";
+import { getPostgresPool } from "@/lib/postgres/pool";
 
 export type VerifiedSteamSession = {
   id: string;
@@ -64,6 +65,12 @@ type StructureSection = {
 export const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
 };
+
+export function getMemberLinkBackend() {
+  const value = process.env.PERSONNEL_DATABASE_BACKEND || "supabase";
+  if (value !== "postgres" && value !== "supabase") throw new Error("Unknown PERSONNEL_DATABASE_BACKEND");
+  return value;
+}
 
 export function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -135,6 +142,21 @@ export async function getVerifiedSteamSession() {
     return { session: null, reason: "missing_session" };
   }
 
+  if (getMemberLinkBackend() === "postgres") {
+    const result = await getPostgresPool().query<VerifiedSteamSession & { verified_at: string | null }>(`select id,steam_id,steam_display_name,steam_profile_url,steam_avatar_url,selected_personnel_id,verified_at,consumed_at,expires_at from public.steam_link_sessions where session_token_hash=$1`, [hashToken(sessionToken)]);
+    const session = result.rows[0];
+    if (!session) return { session: null, reason: "invalid_session" };
+    if (new Date(session.expires_at).getTime() <= Date.now()) return { session: null, reason: "session_expired" };
+    if (session.consumed_at) return { session: null, reason: "session_consumed" };
+    if (!session.verified_at || !session.steam_id) return { session: null, reason: "steam_not_verified" };
+    return { session: {
+      id: session.id, steam_id: session.steam_id, steam_display_name: session.steam_display_name,
+      steam_profile_url: session.steam_profile_url, steam_avatar_url: session.steam_avatar_url,
+      selected_personnel_id: session.selected_personnel_id, consumed_at: session.consumed_at,
+      expires_at: session.expires_at,
+    }, reason: null };
+  }
+
   const { data: session, error } = await supabaseAdmin
     .from("steam_link_sessions")
     .select(
@@ -179,6 +201,10 @@ export async function getVerifiedSteamSession() {
 }
 
 export async function getRankMap() {
+  if (getMemberLinkBackend() === "postgres") {
+    const result = await getPostgresPool().query<RankRow>("select id,name from public.ranks");
+    return new Map(result.rows.map((rank) => [rank.id, rank.name]));
+  }
   const { data } = await supabaseAdmin.from("ranks").select("id,name");
   const ranks = (data || []) as RankRow[];
 
@@ -186,6 +212,10 @@ export async function getRankMap() {
 }
 
 export async function getActiveLinkBySteamId(steamId: string) {
+  if (getMemberLinkBackend() === "postgres") {
+    const result = await getPostgresPool().query<{ personnel_id: string; linked_at: string; linked_method: string }>("select personnel_id,linked_at,linked_method from public.personnel_steam_links where steam_id=$1 and revoked_at is null", [steamId]);
+    return result.rows[0] || null;
+  }
   const { data } = await supabaseAdmin
     .from("personnel_steam_links")
     .select("personnel_id,linked_at,linked_method")
@@ -201,6 +231,10 @@ export async function getActiveLinkBySteamId(steamId: string) {
 }
 
 export async function getActiveLinkByPersonnelId(personnelId: string) {
+  if (getMemberLinkBackend() === "postgres") {
+    const result = await getPostgresPool().query<{ personnel_id: string; steam_id: string; linked_at: string; linked_method: string }>("select personnel_id,steam_id,linked_at,linked_method from public.personnel_steam_links where personnel_id=$1 and revoked_at is null", [personnelId]);
+    return result.rows[0] || null;
+  }
   const { data } = await supabaseAdmin
     .from("personnel_steam_links")
     .select("personnel_id,steam_id,linked_at,linked_method")
@@ -226,6 +260,10 @@ export async function addSteamLinkAudit(
   },
 ) {
   try {
+    if (getMemberLinkBackend() === "postgres") {
+      await getPostgresPool().query(`insert into public.personnel_steam_link_audit(action,personnel_id,steam_id,link_id,actor_type,details) values($1,$2,$3,$4,'STEAM_MEMBER',$5::jsonb)`, [action,values.personnelId??null,values.steamId??null,values.linkId??null,JSON.stringify(values.details??{})]);
+      return;
+    }
     await supabaseAdmin.from("personnel_steam_link_audit").insert({
       action,
       personnel_id: values.personnelId ?? null,

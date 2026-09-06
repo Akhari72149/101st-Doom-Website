@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type TransactionRow = {
   id: string;
@@ -45,30 +45,17 @@ export default function GCLogisticsTransactionsPage() {
     let mounted = true;
 
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const session = await getAppSession();
 
       if (!mounted) return;
 
-      if (!user) {
+      if (!session) {
         router.replace("/login");
         return;
       }
 
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      if (!mounted) return;
-
-      const userRoles = data?.map((r) => r.role) || [];
-
-      const hasAccess =
-        userRoles.includes("Akhari") ||
-        userRoles.includes("logistics") ||
-        userRoles.includes("admin");
+      const hasAccess = session.roles.some((role) => ["akhari", "logistics", "admin"].includes(role.toLowerCase())) ||
+        hasAppPermission(session, "gc.asset-log", "read");
 
       if (!hasAccess) {
         router.replace("/GC-Platoon-Logi");
@@ -119,36 +106,16 @@ export default function GCLogisticsTransactionsPage() {
     setLoading(true);
     setError(null);
 
-    const { data, error } = await supabase
-      .from("token_transactions")
-      .select(`
-        id,
-        action,
-        amount,
-        quantity,
-        asset_name,
-        performed_by,
-        notes,
-        created_at,
-        platoon_id,
-        platoon:platoon_id (
-          name
-        ),
-        profile:performed_by (
-          display_name
-        )
-      `)
-      .in("action", ["ADD_TOKENS", "BUY_ASSET", "REMOVE_ASSET"])
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    const response=await fetch("/api/gc-logistics?scope=transactions",{cache:"no-store",headers:await getAppAuthHeaders()});
+    if(!response.ok){
       setTransactions([]);
       setError("Failed to load transactions.");
       setLoading(false);
       return;
     }
 
-    const formatted: TransactionRow[] = (data || []).map((tx: any) => {
+    const payload=await response.json() as {transactions?:any[]};
+    const formatted: TransactionRow[] = (payload.transactions || []).map((tx: any) => {
       const platoon = Array.isArray(tx.platoon) ? tx.platoon[0] ?? null : tx.platoon;
       const profile = Array.isArray(tx.profile) ? tx.profile[0] ?? null : tx.profile;
 

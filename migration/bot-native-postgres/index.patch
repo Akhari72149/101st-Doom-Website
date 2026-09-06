@@ -1,0 +1,59 @@
+diff --git a/index.js b/index.js
+--- a/index.js
++++ b/index.js
+@@ -14,6 +14,7 @@ const { exec } = require("child_process");
+ const express = require("express");
+ const { createClient } = require("@supabase/supabase-js");
+ const { registerSteamVerificationRoutes } = require("./steam-verification");
++const { createDiscordOutboxWorker } = require("./discord-outbox-worker");
+ 
+ const app = express();
+ 
+@@ -26,5 +27,9 @@ const modteamGuildId = process.env.MODTEAM_GUILD_ID;
+ 
+ const websiteSecret = process.env.WEBSITE_BOT_SECRET;
++const discordOutboxUrl = process.env.DISCORD_OUTBOX_URL?.trim();
++const discordOutboxPollIntervalMs = Number(
++  process.env.DISCORD_OUTBOX_POLL_INTERVAL_MS || 10000,
++);
+ const websiteActionPort = Number(
+   process.env.WEBSITE_ACTION_PORT ||
+     process.env.STEAM_VERIFICATION_PORT ||
+@@ -42,5 +47,6 @@ const remoteAgentBaseUrl = process.env.REMOTE_AGENT_BASE_URL;
+ const remoteAgentSecret = process.env.REMOTE_AGENT_SECRET;
+ let websiteActionServer = null;
++let discordOutboxWorker = null;
+ 
+ const remoteServers = Object.freeze({
+   server1: {
+@@ -1322,6 +1328,21 @@ client.once("ready", async () => {
+     );
+   });
+ 
++  if (discordOutboxUrl && websiteSecret && guildId) {
++    discordOutboxWorker = createDiscordOutboxWorker({
++      client,
++      endpoint: discordOutboxUrl,
++      secret: websiteSecret,
++      guildId,
++      intervalMs: discordOutboxPollIntervalMs,
++    });
++    discordOutboxWorker.start();
++  } else {
++    console.warn(
++      "[discord-outbox] Worker disabled; set DISCORD_OUTBOX_URL after native PostgreSQL cutover.",
++    );
++  }
++
+   if (supabase) {
+     await processDueAttendanceEvents();
+     attendancePollTimer = setInterval(
+@@ -2452,6 +2473,8 @@ client.on("guildMemberRemove", async (member) => {
+ function shutdown(signal) {
+   console.log(`[shutdown] Received ${signal}. Closing HTTP listener and Discord client.`);
+ 
++  discordOutboxWorker?.stop();
++
+   if (websiteActionServer) {
+     websiteActionServer.close(() => {
+       client.destroy();

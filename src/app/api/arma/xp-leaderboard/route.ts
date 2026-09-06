@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getPostgresPool } from "@/lib/postgres/pool";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +39,25 @@ function isInactiveStatus(status: string | null | undefined) {
 }
 
 export async function GET() {
+  const backend = process.env.PERSONNEL_DATABASE_BACKEND || "supabase";
+  if (backend === "postgres") {
+    try {
+      const result = await getPostgresPool().query(`
+        select xp.personnel_id,p.name,p.mos,r.name rank_name,xp.total_xp,xp.current_level,
+          xp.lifetime_kill_count,xp.lifetime_death_count,xp.lifetime_teamkill_count,xp.last_event_at
+        from public.personnel_xp_profiles xp
+        join public.personnel p on p.id=xp.personnel_id
+        left join public.ranks r on r.id=p.rank_id
+        where xp.total_xp>0 and lower(coalesce(p.status,'')) not in ('retired','removed','transferred')
+        order by xp.total_xp desc,xp.personnel_id limit 10`);
+      const leaderboard = result.rows.map((row,index)=>({position:index+1,personnelId:row.personnel_id,name:row.name||"Unknown Personnel",displayedRank:String(row.mos||"").trim()||row.rank_name||"Unranked",totalXp:Number(row.total_xp),currentLevel:Number(row.current_level),kills:Number(row.lifetime_kill_count),deaths:Number(row.lifetime_death_count),teamkills:Number(row.lifetime_teamkill_count),lastEventAt:row.last_event_at}));
+      return NextResponse.json({leaderboard},{headers:noStoreHeaders});
+    } catch (error) {
+      console.error("[arma-xp] Native leaderboard load failed",error);
+      return NextResponse.json({leaderboard:[]},{status:500,headers:noStoreHeaders});
+    }
+  }
+  if (backend !== "supabase") return NextResponse.json({leaderboard:[]},{status:500,headers:noStoreHeaders});
   const { data: profiles, error } = await supabaseAdmin
     .from("personnel_xp_profiles")
     .select(

@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { hasRole } from "@/lib/permissions";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { Search, ShieldAlert, ShieldCheck, UserRound, Users } from "lucide-react";
 
 type PersonnelRow = {
@@ -58,31 +57,15 @@ export default function RemovePersonnelPage() {
 
   const searchRef = useRef<HTMLDivElement | null>(null);
 
-  const PROCESSOR_CERT_IDS = [
-    "079827bf-8b8f-4f37-9b6c-664942689a0a",
-    "c579ef59-7010-4bcc-bcd4-9cd448ac5bf5",
-    "8eff73b9-9793-452a-b77d-c16cde5b9b4c",
-  ];
-
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session=await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
 
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = roles?.map((r) => r.role) || [];
-
-      if (!hasRole(roleList, ["nco", "admin"])) {
+      if (!session.roles.some(role=>["nco","admin"].includes(role.toLowerCase()))&&!hasAppPermission(session,"admin.removal","read")) {
         router.replace("/");
         return;
       }
@@ -95,40 +78,7 @@ export default function RemovePersonnelPage() {
 
   useEffect(() => {
     const loadProcessors = async () => {
-      const { data: certPersonnel, error: certError } = await supabase
-        .from("personnel_certifications")
-        .select("personnel_id")
-        .in("certification_id", PROCESSOR_CERT_IDS);
-
-      if (certError) {
-        console.error("Failed to load processor certifications:", certError);
-        return;
-      }
-
-      if (!certPersonnel || certPersonnel.length === 0) {
-        setProcessors([]);
-        return;
-      }
-
-      const personnelIds = [...new Set(certPersonnel.map((c) => c.personnel_id))];
-
-      const { data: personnelData, error: personnelError } = await supabase
-        .from("personnel")
-        .select("id, name, status")
-        .in("id", personnelIds)
-        .order("name", { ascending: true });
-
-      if (personnelError) {
-        console.error("Failed to load processors:", personnelError);
-        return;
-      }
-
-      const filteredProcessors = (personnelData || []).filter((person) => {
-        const status = (person.status || "").trim().toLowerCase();
-        return status !== "removed" && status !== "retired" && status !== "transferred";
-      });
-
-      setProcessors(filteredProcessors);
+      const response=await fetch("/api/admin/personnel-operations?scope=removal",{cache:"no-store",headers:await getAppAuthHeaders()});if(!response.ok)return;const data=await response.json() as {processors?:ProcessorRow[]};setProcessors(data.processors||[]);
     };
 
     loadProcessors();
@@ -138,24 +88,14 @@ export default function RemovePersonnelPage() {
     const loadPersonnel = async () => {
       setLoadingPersonnel(true);
 
-      const { data, error } = await supabase
-        .from("personnel")
-        .select("id, name, birth_number, status")
-        .order("name", { ascending: true });
-
-      if (error) {
-        console.error("Failed to load personnel:", error);
-        alert("Failed to load personnel: " + error.message);
+      const response=await fetch("/api/admin/personnel-operations?scope=removal",{cache:"no-store",headers:await getAppAuthHeaders()});
+      if(!response.ok){
+        alert("Failed to load personnel.");
         setLoadingPersonnel(false);
         return;
       }
 
-      const activePersonnel = (data || []).filter((person) => {
-        const status = (person.status || "").trim().toLowerCase();
-        return status !== "removed" && status !== "retired" && status !== "transferred";
-      });
-
-      setPersonnel(activePersonnel);
+      const data=await response.json() as {personnel?:PersonnelRow[]};setPersonnel(data.personnel||[]);
       setLoadingPersonnel(false);
     };
 
@@ -275,70 +215,8 @@ export default function RemovePersonnelPage() {
 
     setSubmitting(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      alert("You are no longer logged in.");
-      setSubmitting(false);
-      return;
-    }
-
-    const { data: processorExists } = await supabase
-      .from("personnel")
-      .select("id")
-      .eq("id", selectedProcessor)
-      .maybeSingle();
-
-    if (!processorExists) {
-      alert("Selected processor does not exist.");
-      setSubmitting(false);
-      return;
-    }
-
-    const { error: updateError } = await supabase
-      .from("personnel")
-      .update({
-        status: statusAction,
-        slotted_position: null,
-      })
-      .eq("id", selectedPersonnelId);
-
-    if (updateError) {
-      alert(updateError.message);
-      setSubmitting(false);
-      return;
-    }
-
-    const auditAction =
-      statusAction === "Retired"
-        ? "PERSONNEL_RETIRED"
-        : statusAction === "Transferred"
-          ? "PERSONNEL_TRANSFERRED"
-          : "PERSONNEL_REMOVED";
-
-    const transferDetails =
-      statusAction === "Transferred" ? ` Transfer unit: ${transferUnit}.` : "";
-
-    const auditDetails =
-      reason.trim().length > 0
-        ? `${statusAction} from active personnel.${transferDetails} Reason: ${reason.trim()}`
-        : `${statusAction} from active personnel.${transferDetails}`;
-
-    const { error: auditError } = await supabase.from("audit_logs").insert([
-      {
-        user_id: user.id,
-        target_personnel_id: selectedPersonnelId,
-        action: auditAction,
-        details: auditDetails,
-        processed_by: selectedProcessor,
-      },
-    ]);
-
-    if (auditError) {
-      console.error("Audit Insert Error:", auditError);
-      alert("Status updated, but audit log failed: " + auditError.message);
+    const response=await fetch("/api/admin/personnel-operations",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({scope:"removal",action:"status",personnelId:selectedPersonnelId,processorId:selectedProcessor,status:statusAction,transferUnit,reason})});
+    if(!response.ok){const body=await response.json().catch(()=>null) as {error?:string}|null;alert(body?.error||"Failed to update personnel status");
       setSubmitting(false);
       return;
     }

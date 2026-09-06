@@ -2,7 +2,6 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
 import {
@@ -243,6 +242,7 @@ async function fetchCombatStats(personnelId: string) {
     xpStats: XpStatsRow | null;
     medicalStats: MedicalStatsRow | null;
   };
+  if (!response.ok) throw new Error("PERSONNEL_STATS_LOAD_FAILED");
 
   return {
     xpStats: data.xpStats || null,
@@ -357,19 +357,29 @@ export default function PersonnelProfile() {
   const lastPlasmaLitres = useRef<number | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("qual");
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [directoryError, setDirectoryError] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const profileRequestId = useRef(0);
   const selectedPersonId = selectedPerson?.id;
 
   useEffect(() => {
     let active = true;
 
-    Promise.all([
-      supabase.from("ranks").select("*"),
-      supabase.from("personnel").select("*").order("name"),
-    ]).then(([{ data: rankData }, { data: personnelData }]) => {
-      if (!active) return;
-      setRanks((rankData as Rank[]) || []);
-      setPersonnel((personnelData as Person[]) || []);
-    });
+    fetch("/api/personnel-profile", { cache: "no-store" })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => null)) as {
+          ranks?: Rank[];
+          personnel?: Person[];
+        } | null;
+        if (!response.ok || !body) throw new Error("PERSONNEL_DIRECTORY_LOAD_FAILED");
+        if (!active) return;
+        setRanks(body.ranks || []);
+        setPersonnel(body.personnel || []);
+        setDirectoryError("");
+      })
+      .catch(() => {
+        if (active) setDirectoryError("The personnel directory could not be loaded.");
+      });
 
     return () => {
       active = false;
@@ -377,6 +387,7 @@ export default function PersonnelProfile() {
   }, []);
 
   const loadProfile = async (person: Person) => {
+    const requestId = ++profileRequestId.current;
     setSelectedPerson(person);
     setStatusAudit(null);
     setSteamLink(null);
@@ -386,85 +397,40 @@ export default function PersonnelProfile() {
     setPlasmaDirection("idle");
     lastPlasmaLitres.current = null;
     setLoadingProfile(true);
+    setProfileError("");
     setActiveTab("qual");
 
-    const [certResult, historyResult, auditResult, awardResult, steamResponse, xpResponse] =
-      await Promise.all([
-        supabase
-          .from("personnel_certifications")
-          .select(`certification:certification_id ( name )`)
-          .eq("personnel_id", person.id),
-
-        supabase
-          .from("rank_history")
-          .select(
-            `
-            id,
-            old_rank_id,
-            new_rank_id,
-            changed_at,
-            old_rank:ranks!rank_history_old_rank_id_fkey(name),
-            new_rank:ranks!rank_history_new_rank_id_fkey(name)
-          `,
-          )
-          .eq("personnel_id", person.id)
-          .order("changed_at", { ascending: false }),
-
-        supabase
-          .from("audit_logs")
-          .select(
-            `
-            id,
-            action,
-            created_at,
-            processor:processed_by ( name )
-          `,
-          )
-          .eq("target_personnel_id", person.id)
-          .in("action", [
-            "PERSONNEL_REMOVED",
-            "PERSONNEL_RETIRED",
-            "PERSONNEL_TRANSFERRED",
-          ])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-
-        supabase
-          .from("personnel_awards")
-          .select(
-            `
-            id,
-            awarded_at,
-            notes,
-            award:award_id (
-              id,
-              name,
-              description,
-              category,
-              icon_key,
-              ribbon_color
-            )
-          `,
-          )
-          .eq("personnel_id", person.id)
-          .order("awarded_at", { ascending: false }),
-
-        fetch(`/api/personnel/steam-link?personnelId=${encodeURIComponent(person.id)}`, {
+    try {
+      const [dossierResponse, xpResponse] = await Promise.all([
+        fetch(`/api/personnel-profile?personnelId=${encodeURIComponent(person.id)}`, {
           cache: "no-store",
-        }).then((response) => response.json() as Promise<{ steamLink: SteamLinkRow | null }>),
-
+        }),
         fetchCombatStats(person.id),
       ]);
+      const dossier = (await dossierResponse.json().catch(() => null)) as {
+        certifications?: CertificationRow[];
+        rankHistory?: RankHistoryRow[];
+        statusAudit?: StatusAuditRow | null;
+        awards?: AwardRow[];
+        steamLink?: SteamLinkRow | null;
+      } | null;
+      if (!dossierResponse.ok || !dossier) throw new Error("PERSONNEL_PROFILE_LOAD_FAILED");
+      if (profileRequestId.current !== requestId) return;
 
-    setCertifications((certResult.data as CertificationRow[]) || []);
-    setRankHistory((historyResult.data as RankHistoryRow[]) || []);
-    setStatusAudit((auditResult.data as StatusAuditRow) || null);
-    setAwards((awardResult.data as AwardRow[]) || []);
-    setSteamLink(steamResponse.steamLink || null);
-    setXpStats(xpResponse.xpStats || null);
-    setMedicalStats(xpResponse.medicalStats || null);
-    setLoadingProfile(false);
+      setCertifications(dossier.certifications || []);
+      setRankHistory(dossier.rankHistory || []);
+      setStatusAudit(dossier.statusAudit || null);
+      setAwards(dossier.awards || []);
+      setSteamLink(dossier.steamLink || null);
+      setXpStats(xpResponse.xpStats || null);
+      setMedicalStats(xpResponse.medicalStats || null);
+    } catch {
+      if (profileRequestId.current === requestId) {
+        setProfileError("This personnel dossier could not be loaded.");
+      }
+    } finally {
+      if (profileRequestId.current === requestId) setLoadingProfile(false);
+    }
   };
 
   useEffect(() => {
@@ -905,7 +871,9 @@ export default function PersonnelProfile() {
               <div
                 className={`max-h-[65vh] overflow-y-auto rounded-2xl border ${theme.secondaryBorder} bg-black/30`}
               >
-                {filteredPersonnel.length === 0 ? (
+                {directoryError ? (
+                  <div className="p-5 text-sm text-red-300">{directoryError}</div>
+                ) : filteredPersonnel.length === 0 ? (
                   <div className="p-5 text-sm text-gray-400">
                     No personnel matched your search.
                   </div>
@@ -1048,6 +1016,10 @@ export default function PersonnelProfile() {
                   </div>
                   <div className="h-72 rounded-3xl bg-white/10" />
                 </div>
+              </div>
+            ) : profileError ? (
+              <div className="rounded-3xl border border-red-400/25 bg-red-500/[0.06] p-8 text-center text-red-200">
+                {profileError}
               </div>
             ) : (
               <div className="space-y-8">

@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 
@@ -39,49 +38,67 @@ export default function CertificationByPerson() {
   const [certifications, setCertifications] = useState<CertificationRow[]>([]);
   const [loadingCertifications, setLoadingCertifications] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("normal");
+  const [directoryError, setDirectoryError] = useState("");
+  const [certificationError, setCertificationError] = useState("");
+  const requestId = useRef(0);
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-    const [{ data: people }, { data: rankData }] = await Promise.all([
-      supabase.from("personnel").select("*").order("name"),
-      supabase.from("ranks").select("*"),
-    ]);
-
-    setPersonnel((people as Person[]) || []);
-    setRanks((rankData as Rank[]) || []);
+    try {
+      const response = await fetch("/api/personnel-profile", { cache: "no-store" });
+      const body = (await response.json().catch(() => null)) as {
+        personnel?: Person[];
+        ranks?: Rank[];
+      } | null;
+      if (!response.ok || !body) throw new Error("CERTIFICATION_DIRECTORY_LOAD_FAILED");
+      setPersonnel(body.personnel || []);
+      setRanks(body.ranks || []);
+      setDirectoryError("");
+    } catch {
+      setDirectoryError("The personnel directory could not be loaded.");
+    }
   };
 
   const fetchCertifications = async (person: Person) => {
+    const currentRequest = ++requestId.current;
     setSelectedPerson(person);
     setLoadingCertifications(true);
     setCertifications([]);
+    setCertificationError("");
     setActiveTab("normal");
 
-    const { data } = await supabase
-      .from("personnel_certifications")
-      .select(`
-        id,
-        awarded_at,
-        certification:certification_id ( id, name )
-      `)
-      .eq("personnel_id", person.id)
-      .order("awarded_at", { ascending: false });
-
-    setCertifications((data as CertificationRow[]) || []);
-    setLoadingCertifications(false);
+    try {
+      const response = await fetch(
+        `/api/personnel-profile?personnelId=${encodeURIComponent(person.id)}`,
+        { cache: "no-store" },
+      );
+      const body = (await response.json().catch(() => null)) as {
+        certifications?: CertificationRow[];
+      } | null;
+      if (!response.ok || !body) throw new Error("CERTIFICATION_LOAD_FAILED");
+      if (requestId.current === currentRequest) {
+        setCertifications(body.certifications || []);
+      }
+    } catch {
+      if (requestId.current === currentRequest) {
+        setCertificationError("Certifications could not be loaded for this person.");
+      }
+    } finally {
+      if (requestId.current === currentRequest) setLoadingCertifications(false);
+    }
   };
 
   const rankMap = useMemo(() => {
     return Object.fromEntries(ranks.map((rank) => [rank.id, rank.name]));
   }, [ranks]);
 
-  const getRankName = (person: Person | null) => {
+  const getRankName = useCallback((person: Person | null) => {
     if (!person?.rank_id) return "Unranked";
     return rankMap[person.rank_id] || "Unranked";
-  };
+  }, [rankMap]);
 
   const normalizedSearch = search.trim().toLowerCase();
 
@@ -98,7 +115,7 @@ export default function CertificationByPerson() {
           .toLowerCase()
           .includes(normalizedSearch);
       });
-  }, [personnel, normalizedSearch, rankMap]);
+  }, [personnel, normalizedSearch, getRankName]);
 
   const trainerCerts = useMemo(() => {
     return certifications.filter((c) =>
@@ -203,7 +220,9 @@ export default function CertificationByPerson() {
                   shadow-[0_0_40px_rgba(0,255,100,0.08)]
                 "
               >
-                {filteredPersonnel.length === 0 ? (
+                {directoryError ? (
+                  <p className="p-4 text-sm text-red-300">{directoryError}</p>
+                ) : filteredPersonnel.length === 0 ? (
                   <p className="p-4 text-sm text-gray-400">
                     No personnel found.
                   </p>
@@ -347,6 +366,10 @@ export default function CertificationByPerson() {
                           className="h-14 animate-pulse rounded-xl border border-[#00ff66]/15 bg-white/[0.03]"
                         />
                       ))}
+                    </div>
+                  ) : certificationError ? (
+                    <div className="py-12 text-center text-red-300">
+                      {certificationError}
                     </div>
                   ) : (
                     <>

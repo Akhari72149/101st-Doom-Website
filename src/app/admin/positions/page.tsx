@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
 
@@ -87,56 +87,21 @@ export default function PositionEditor() {
 
   const typedStructure = structure as StructureSection[];
 
-  const broadcastWebsiteAction = async (payload: any) => {
-    try {
-      await fetch("/api/website-action", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-    } catch (error) {
-      console.error("Failed to broadcast website action:", error);
-    }
-  };
-
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session=await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
 
-      const { data: roles, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      if (error) {
+      const allowed=session.roles.some(role=>["admin","nco","di"].includes(role.toLowerCase()))||hasAppPermission(session,"admin.positions","read");
+      if (!allowed) {
         router.replace("/");
         return;
       }
 
-      const roleList = roles?.map((r) => r.role) || [];
-      const allowedRoles = ["admin", "nco", "di"];
-
-      if (!roleList.some((role) => allowedRoles.includes(role))) {
-        router.replace("/");
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      setProcessedByName(profile?.display_name || user.email || "Unknown");
+      setProcessedByName(session.user.displayName||session.user.username||"Unknown");
       setLoadingAuth(false);
     };
 
@@ -146,29 +111,21 @@ export default function PositionEditor() {
   const fetchData = async () => {
     setLoadingData(true);
 
-    const { data: personnelData, error: personnelError } = await supabase
-      .from("personnel")
-      .select("id, name, rank_id, slotted_position, status, mos")
-      .order("name", { ascending: true });
-
-    const { data: rankData, error: rankError } = await supabase
-      .from("ranks")
-      .select("id, name, rank_level")
-      .order("rank_level", { ascending: true });
-
-    if (personnelError || rankError) {
+    const response=await fetch("/api/admin/personnel-operations?scope=positions",{cache:"no-store",headers:await getAppAuthHeaders()});
+    if (!response.ok) {
       setErrorMessage("Failed to load personnel or ranks.");
       setLoadingData(false);
       return;
     }
 
-    const activePersonnel = (personnelData || []).filter((person) => {
+    const data=await response.json() as {personnel?:Personnel[];ranks?:Rank[]};
+    const activePersonnel = (data.personnel || []).filter((person) => {
       const status = (person.status || "").trim().toLowerCase();
       return status !== "retired" && status !== "removed";
     });
 
     setPersonnel((activePersonnel as Personnel[]) || []);
-    setRanks((rankData as Rank[]) || []);
+    setRanks(data.ranks || []);
     setLoadingData(false);
   };
 
@@ -380,43 +337,7 @@ export default function PositionEditor() {
     }
   };
 
-const insertRankHistory = async (
-  personnelId: string,
-  oldRankId: string | null,
-  newRankId: string | null,
-  changedAtDate: string
-) => {
-  if (!newRankId || !changedAtDate) return;
-
-  const changedAt = `${changedAtDate}T12:00:00+00:00`;
-
-  const { data: personRow, error: personError } = await supabase
-    .from("personnel")
-    .select("discord_id")
-    .eq("id", personnelId)
-    .maybeSingle();
-
-  if (personError) {
-    setErrorMessage(
-      `Rank updated, but failed to get Discord ID for rank history: ${personError.message}`
-    );
-    return;
-  }
-
-  const { error: insertError } = await supabase.from("rank_history").insert({
-    personnel_id: personnelId,
-    discord_id: personRow?.discord_id || null,
-    old_rank_id: oldRankId,
-    new_rank_id: newRankId,
-    changed_at: changedAt,
-  });
-
-  if (insertError) {
-    setErrorMessage(
-      `Rank updated, but failed to insert rank history: ${insertError.message}`
-    );
-  }
-};
+  const postOperation=async(payload:Record<string,unknown>)=>fetch("/api/admin/personnel-operations",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({scope:"positions",...payload})});
 
   const updatePosition = async () => {
     if (!selectedPerson || !selectedSlotId) {
@@ -428,71 +349,14 @@ const insertRankHistory = async (
     setErrorMessage("");
     setSuccessMessage("");
 
-    const oldSlot = selectedPerson.slotted_position;
     const currentOccupant = slotOccupants.get(selectedSlotId);
     const newSlotLabel = formatSlotToBillet(selectedSlotId);
-
-    if (currentOccupant && currentOccupant.id !== selectedPerson.id) {
-      const { error: clearOccupantError } = await supabase
-        .from("personnel")
-        .update({ slotted_position: null })
-        .eq("id", currentOccupant.id);
-
-      if (clearOccupantError) {
-        setProcessing(false);
-        setErrorMessage(
-          "Failed to clear existing occupant: " + clearOccupantError.message
-        );
-        return;
-      }
-
-      await supabase.functions.invoke("sync-slot-roles", {
-        body: {
-          personnelId: currentOccupant.id,
-          slotId: null,
-          oldSlotId: selectedSlotId,
-          forceDefaultRole: true,
-        },
-      });
-
-      await broadcastWebsiteAction({
-        action: "POSITION_UNASSIGNED",
-        target_personnel_id: currentOccupant.id,
-        processedBy: processedByName,
-        slotLabel: newSlotLabel,
-        slotSection: selectedSlotPath?.subHeader || selectedSlotPath?.header || "N/A",
-      });
-    }
-
-    const { error } = await supabase
-      .from("personnel")
-      .update({
-        slotted_position: selectedSlotId,
-      })
-      .eq("id", selectedPerson.id);
-
-    if (error) {
+    const response=await postOperation({action:"position",personnelId:selectedPerson.id,slotId:selectedSlotId,processedBy:processedByName,slotLabel:newSlotLabel,slotSection:selectedSlotPath?.subHeader||selectedSlotPath?.header||"N/A"});
+    if(!response.ok){
       setProcessing(false);
-      setErrorMessage("Update failed: " + error.message);
+      const body=await response.json().catch(()=>null) as {error?:string}|null;setErrorMessage(body?.error||"Position update failed.");
       return;
     }
-
-    await supabase.functions.invoke("sync-slot-roles", {
-      body: {
-        personnelId: selectedPerson.id,
-        slotId: selectedSlotId,
-        oldSlotId: oldSlot,
-        forceDefaultRole: false,
-      },
-    });
-
-    await broadcastWebsiteAction({
-      action: "POSITION_ASSIGNED",
-      target_personnel_id: selectedPerson.id,
-      processedBy: processedByName,
-      slotLabel: newSlotLabel,
-      slotSection: selectedSlotPath?.subHeader || selectedSlotPath?.header || "N/A",
-    });
 
     await fetchData();
     setProcessing(false);
@@ -518,45 +382,12 @@ const insertRankHistory = async (
     setErrorMessage("");
     setSuccessMessage("");
 
-    const oldRankId = selectedPerson.rank_id;
-    const oldRankName = getRankName(oldRankId);
-    const newRankName = selectedRankId ? getRankName(selectedRankId) : "Unranked";
-
-    const { error } = await supabase
-      .from("personnel")
-      .update({
-        rank_id: selectedRankId || null,
-      })
-      .eq("id", selectedPerson.id);
-
-    if (error) {
+    const response=await postOperation({action:"rank",personnelId:selectedPerson.id,rankId:selectedRankId||null,changedAt:`${rankChangedAt}T12:00:00+00:00`,processedBy:processedByName});
+    if(!response.ok){
       setProcessing(false);
-      setErrorMessage("Rank update failed: " + error.message);
+      const body=await response.json().catch(()=>null) as {error?:string}|null;setErrorMessage(body?.error||"Rank update failed.");
       return;
     }
-
-await insertRankHistory(
-  selectedPerson.id,
-  oldRankId,
-  selectedRankId || null,
-  rankChangedAt
-);
-
-    await supabase.functions.invoke("discord-rank-sync", {
-      body: {
-        personnelId: selectedPerson.id,
-        oldRankId,
-        newRankId: selectedRankId || null,
-      },
-    });
-
-    await broadcastWebsiteAction({
-      action: "RANK_CHANGED",
-      target_personnel_id: selectedPerson.id,
-      processedBy: processedByName,
-      oldRankName,
-      rankName: newRankName,
-    });
 
     await fetchData();
     setProcessing(false);
@@ -578,16 +409,10 @@ await insertRankHistory(
     setErrorMessage("");
     setSuccessMessage("");
 
-    const { error } = await supabase
-      .from("personnel")
-      .update({
-        mos: selectedMosValue || null,
-      })
-      .eq("id", selectedPerson.id);
-
-    if (error) {
+    const response=await postOperation({action:"mos",personnelId:selectedPerson.id,mos:selectedMosValue||null});
+    if(!response.ok){
       setProcessing(false);
-      setErrorMessage("MOS update failed: " + error.message);
+      const body=await response.json().catch(()=>null) as {error?:string}|null;setErrorMessage(body?.error||"MOS update failed.");
       return;
     }
 
@@ -610,37 +435,14 @@ await insertRankHistory(
     setErrorMessage("");
     setSuccessMessage("");
 
-    const oldSlot = selectedPerson.slotted_position;
-    const oldSlotPath = resolveSlotPath(oldSlot);
-    const oldSlotLabel = formatSlotToBillet(oldSlot);
-
-    const { error } = await supabase
-      .from("personnel")
-      .update({ slotted_position: null })
-      .eq("id", selectedPerson.id);
-
-    if (error) {
+    const oldSlotPath = resolveSlotPath(selectedPerson.slotted_position);
+    const oldSlotLabel = formatSlotToBillet(selectedPerson.slotted_position);
+    const response=await postOperation({action:"unassign",personnelId:selectedPerson.id,processedBy:processedByName,slotLabel:oldSlotLabel,slotSection:oldSlotPath?.subHeader||oldSlotPath?.header||"N/A"});
+    if(!response.ok){
       setProcessing(false);
-      setErrorMessage("Unassign failed: " + error.message);
+      const body=await response.json().catch(()=>null) as {error?:string}|null;setErrorMessage(body?.error||"Unassign failed.");
       return;
     }
-
-    await supabase.functions.invoke("sync-slot-roles", {
-      body: {
-        personnelId: selectedPerson.id,
-        slotId: null,
-        oldSlotId: oldSlot,
-        forceDefaultRole: true,
-      },
-    });
-
-    await broadcastWebsiteAction({
-      action: "POSITION_UNASSIGNED",
-      target_personnel_id: selectedPerson.id,
-      processedBy: processedByName,
-      slotLabel: oldSlotLabel,
-      slotSection: oldSlotPath?.subHeader || oldSlotPath?.header || "N/A",
-    });
 
     await fetchData();
     setSelectedSlotId("");

@@ -34,7 +34,7 @@ import {
   Gi3dHammer,
   GiServerRack,
 } from "react-icons/gi";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type Person = {
   id: string;
@@ -132,51 +132,32 @@ export default function MedalAwardingPage() {
       setLoadingPage(true);
       setErrorMessage("");
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
 
-      setCurrentUserId(user.id);
-
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roles = roleData?.map((r) => String(r.role).toLowerCase()) || [];
+      setCurrentUserId(session.user.id);
+      const roles = session.roles.map((role) => role.toLowerCase());
 
       if (
         !roles.includes("admin") &&
         !roles.includes("nco") &&
         !roles.includes("di") &&
         !roles.includes("recruiter") &&
-        !roles.includes("akhari")
+        !roles.includes("akhari") && !hasAppPermission(session, "admin.medals", "read")
       ) {
         router.replace("/pcs");
         return;
       }
 
-      const [{ data: people }, { data: rankData }, { data: medalData }] =
-        await Promise.all([
-          supabase.from("personnel").select("*").order("name"),
-          supabase.from("ranks").select("*"),
-          supabase
-            .from("awards")
-            .select("*")
-            .eq("award_type", "manual")
-            .eq("is_active", true)
-            .order("sort_order")
-            .order("name"),
-        ]);
-
-      setPersonnel((people as Person[]) || []);
-      setRanks((rankData as Rank[]) || []);
-      setMedals((medalData as MedalRecord[]) || []);
+      const response = await fetch("/api/admin/medals", { cache: "no-store", headers: await getAppAuthHeaders() });
+      const data = await response.json().catch(() => null) as { personnel?: Person[]; ranks?: Rank[]; medals?: MedalRecord[]; error?: string } | null;
+      if (!response.ok) { setErrorMessage(data?.error || "Failed to load medals"); setLoadingPage(false); return; }
+      setPersonnel(data?.personnel || []);
+      setRanks(data?.ranks || []);
+      setMedals(data?.medals || []);
       setLoadingPage(false);
     }
 
@@ -243,34 +224,16 @@ export default function MedalAwardingPage() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    const { data, error } = await supabase
-      .from("personnel_awards")
-      .select(
-        `
-        id,
-        awarded_at,
-        notes,
-        award:award_id (
-          id,
-          name,
-          description,
-          category,
-          icon_key,
-          ribbon_color
-        )
-      `,
-      )
-      .eq("personnel_id", person.id)
-      .order("awarded_at", { ascending: false });
-
-    if (error) {
-      setErrorMessage(error.message);
+    const response = await fetch(`/api/admin/medals?personId=${encodeURIComponent(person.id)}`, { cache: "no-store", headers: await getAppAuthHeaders() });
+    const data = await response.json().catch(() => null) as { personMedals?: PersonnelMedalRow[]; error?: string } | null;
+    if (!response.ok) {
+      setErrorMessage(data?.error || "Failed to load awarded medals");
       setPersonMedals([]);
       setLoadingMedals(false);
       return;
     }
 
-    setPersonMedals((data as PersonnelMedalRow[]) || []);
+    setPersonMedals(data?.personMedals || []);
     setLoadingMedals(false);
   }
 
@@ -287,18 +250,10 @@ export default function MedalAwardingPage() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    const { error } = await supabase.from("personnel_awards").insert([
-      {
-        personnel_id: selectedPerson.id,
-        award_id: selectedMedal.id,
-        awarded_at: new Date().toISOString(),
-        awarded_by: currentUserId,
-        notes: notes.trim() || null,
-      },
-    ]);
-
-    if (error) {
-      setErrorMessage(error.message);
+    const response = await fetch("/api/admin/medals", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({ personnelId:selectedPerson.id, awardId:selectedMedal.id, notes }) });
+    if (!response.ok) {
+      const data=await response.json().catch(()=>null) as {error?:string}|null;
+      setErrorMessage(data?.error || "Failed to award medal");
       setSubmitting(false);
       return;
     }
@@ -318,13 +273,10 @@ export default function MedalAwardingPage() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    const { error } = await supabase
-      .from("personnel_awards")
-      .delete()
-      .eq("id", rowId);
-
-    if (error) {
-      setErrorMessage(error.message);
+    const response = await fetch(`/api/admin/medals?id=${encodeURIComponent(rowId)}`, { method:"DELETE", credentials:"same-origin", headers:await getAppAuthHeaders() });
+    if (!response.ok) {
+      const data=await response.json().catch(()=>null) as {error?:string}|null;
+      setErrorMessage(data?.error || "Failed to remove medal");
       setRemovingMedalId(null);
       return;
     }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type PlanLayer = {
   id: string;
@@ -141,7 +141,6 @@ export default function PlanOpsPage() {
   const [isDraggingMarker, setIsDraggingMarker] = useState(false);
 
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
-  const channelRef = useRef<any>(null);
   const markersRef = useRef<PlanMarker[]>([]);
   const selectedPlanIdRef = useRef<string>("");
 
@@ -196,26 +195,16 @@ export default function PlanOpsPage() {
 
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session=await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
 
-      setUserId(user.id);
-
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = roles?.map((r: any) => String(r.role).toLowerCase()) || [];
-      const allowed = roleList.some((role) =>
+      setUserId(session.user.id);
+      const allowed = session.roles.some((role) =>
         ["admin", "logistics", "nco", "trainer"].includes(role)
-      );
+      )||hasAppPermission(session,"operations.planops","edit");
 
       setCanEdit(allowed);
       setLoadingAuth(false);
@@ -243,95 +232,26 @@ export default function PlanOpsPage() {
   }, [activeLayerId, selectedMarker]);
 
   useEffect(() => {
-    if (!selectedPlanId) {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      return;
-    }
-
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
-
-    const channel = supabase.channel(`planops:${selectedPlanId}`, {
-      config: {
-        broadcast: { self: false },
-        presence: userId ? { key: userId } : undefined,
-      },
-    });
-
-    channel
-      .on("broadcast", { event: "marker_move" }, ({ payload }) => {
-        if (!payload?.markerId) return;
-
-        setMarkers((prev) =>
-          prev.map((marker) =>
-            marker.id === payload.markerId
-              ? {
-                  ...marker,
-                  x: typeof payload.x === "number" ? payload.x : marker.x,
-                  y: typeof payload.y === "number" ? payload.y : marker.y,
-                  layerId:
-                    typeof payload.layerId === "string"
-                      ? payload.layerId
-                      : marker.layerId,
-                }
-              : marker
-          )
-        );
-      })
-      .on("broadcast", { event: "marker_create" }, ({ payload }) => {
-        if (!payload?.marker) return;
-
-        const incomingMarker = payload.marker as PlanMarker;
-
-        setMarkers((prev) => {
-          if (prev.some((marker) => marker.id === incomingMarker.id)) return prev;
-          return [...prev, incomingMarker];
-        });
-      })
-      .on("broadcast", { event: "marker_delete" }, ({ payload }) => {
-        if (!payload?.markerId) return;
-
-        setMarkers((prev) =>
-          prev.filter((marker) => marker.id !== payload.markerId)
-        );
-
-        setSelectedMarkerId((current) =>
-          current === payload.markerId ? null : current
-        );
-      })
-      .subscribe();
-
-    channelRef.current = channel;
-
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-    };
+    if(!selectedPlanId)return;
+    let cancelled=false;
+    const refresh=async()=>{if(dragMarkerRef.current.markerId)return;const response=await fetch(`/api/planops?id=${encodeURIComponent(selectedPlanId)}`,{cache:"no-store",headers:await getAppAuthHeaders()});if(!response.ok||cancelled)return;const data=await response.json() as {plans?:PlanRow[]};const plan=data.plans?.[0];if(plan&&Array.isArray(plan.markers)){setMarkers(plan.markers);markersRef.current=plan.markers;}};
+    const interval=window.setInterval(()=>void refresh(),3000);
+    return()=>{cancelled=true;window.clearInterval(interval);};
   }, [selectedPlanId, userId]);
 
-  const fetchPlans = async () => {
+  async function fetchPlans() {
     setLoadingPlans(true);
 
-    const { data, error } = await supabase
-      .from("operation_plans")
-      .select("*")
-      .order("updated_at", { ascending: false });
-
-    if (error) {
-      console.error("Failed to fetch plans", error);
+    const response=await fetch("/api/planops",{cache:"no-store",headers:await getAppAuthHeaders()});
+    if(!response.ok){
+      console.error("Failed to fetch plans",await response.text());
       setLoadingPlans(false);
       return;
     }
 
+    const payload=await response.json() as {plans?:any[]};
     const safePlans: PlanRow[] =
-      data?.map((row: any) => {
+      payload.plans?.map((row: any) => {
         const safeLayers: PlanLayer[] =
           Array.isArray(row.layers) && row.layers.length > 0
             ? row.layers.map((layer: any) => ({
@@ -377,21 +297,14 @@ export default function PlanOpsPage() {
     }
 
     setLoadingPlans(false);
-  };
+  }
 
   const persistMarkers = async (nextMarkers: PlanMarker[]) => {
     if (!selectedPlanIdRef.current) return;
 
-    const { error } = await supabase
-      .from("operation_plans")
-      .update({
-        markers: nextMarkers,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", selectedPlanIdRef.current);
-
-    if (error) {
-      console.error("Failed to persist markers", error);
+    const response=await fetch("/api/planops",{method:"PATCH",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({kind:"markers",id:selectedPlanIdRef.current,markers:nextMarkers})});
+    if(!response.ok){
+      console.error("Failed to persist markers",await response.text());
     }
   };
 
@@ -401,45 +314,15 @@ export default function PlanOpsPage() {
     y: number,
     layerId: string
   ) => {
-    if (!channelRef.current || !selectedPlanIdRef.current) return;
-
-    await channelRef.current.send({
-      type: "broadcast",
-      event: "marker_move",
-      payload: {
-        markerId,
-        x,
-        y,
-        layerId,
-        planId: selectedPlanIdRef.current,
-      },
-    });
+    void markerId;void x;void y;void layerId;
   };
 
   const broadcastMarkerCreate = async (marker: PlanMarker) => {
-    if (!channelRef.current || !selectedPlanIdRef.current) return;
-
-    await channelRef.current.send({
-      type: "broadcast",
-      event: "marker_create",
-      payload: {
-        marker,
-        planId: selectedPlanIdRef.current,
-      },
-    });
+    void marker;
   };
 
   const broadcastMarkerDelete = async (markerId: string) => {
-    if (!channelRef.current || !selectedPlanIdRef.current) return;
-
-    await channelRef.current.send({
-      type: "broadcast",
-      event: "marker_delete",
-      payload: {
-        markerId,
-        planId: selectedPlanIdRef.current,
-      },
-    });
+    void markerId;
   };
 
   const resetEditor = () => {
@@ -494,36 +377,26 @@ export default function PlanOpsPage() {
       map_name: selectedMap,
       layers,
       markers,
-      created_by: userId,
-      updated_at: new Date().toISOString(),
     };
 
     if (selectedPlanId) {
-      const { error } = await supabase
-        .from("operation_plans")
-        .update(payload)
-        .eq("id", selectedPlanId);
-
-      if (error) {
-        console.error("Failed to update plan", error);
+      const response=await fetch("/api/planops",{method:"PATCH",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({id:selectedPlanId,...payload})});
+      if(!response.ok){
+        console.error("Failed to update plan",await response.text());
         setSaving(false);
         return;
       }
     } else {
-      const { data, error } = await supabase
-        .from("operation_plans")
-        .insert(payload)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Failed to create plan", error);
+      const response=await fetch("/api/planops",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify(payload)});
+      if(!response.ok){
+        console.error("Failed to create plan",await response.text());
         setSaving(false);
         return;
       }
 
-      if (data?.id) {
-        setSelectedPlanId(data.id);
+      const data=await response.json() as {plan?:PlanRow};
+      if (data.plan?.id) {
+        setSelectedPlanId(data.plan.id);
       }
     }
 
@@ -537,13 +410,9 @@ export default function PlanOpsPage() {
     const confirmed = window.confirm("Delete this plan?");
     if (!confirmed) return;
 
-    const { error } = await supabase
-      .from("operation_plans")
-      .delete()
-      .eq("id", selectedPlanId);
-
-    if (error) {
-      console.error("Failed to delete plan", error);
+    const response=await fetch(`/api/planops?id=${encodeURIComponent(selectedPlanId)}`,{method:"DELETE",credentials:"same-origin",headers:await getAppAuthHeaders()});
+    if(!response.ok){
+      console.error("Failed to delete plan",await response.text());
       return;
     }
 

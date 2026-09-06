@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPostgresPool } from "@/lib/postgres/pool";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -175,6 +176,87 @@ function emptyMedicalWeekly() {
   };
 }
 
+function databaseBackend() {
+  const backend = process.env.PERSONNEL_DATABASE_BACKEND || "supabase";
+  if (backend !== "supabase" && backend !== "postgres") {
+    throw new Error("Unknown PERSONNEL_DATABASE_BACKEND");
+  }
+  return backend;
+}
+
+async function readFromPostgres(personnelId: string) {
+  const pool = getPostgresPool();
+  const [profile, weekly, targets, medicalProfile, medicalWeekly] = await Promise.all([
+    pool.query<XpProfileRow>(`select total_xp, current_level, lifetime_kill_count,
+      lifetime_death_count, lifetime_teamkill_count, last_event_at
+      from public.personnel_xp_profiles where personnel_id = $1 limit 1`, [personnelId]),
+    pool.query<WeeklyRow>(`select week_start_date, week_end_at, week_xp, week_positive_xp,
+      week_negative_xp, week_kill_count, week_death_count, week_teamkill_count,
+      infantry_kill_count, specialist_kill_count, static_weapon_kill_count,
+      light_vehicle_kill_count, vehicle_kill_count, apc_ifv_kill_count,
+      tank_kill_count, aircraft_kill_count, unknown_kill_count, last_event_at
+      from public.personnel_xp_weekly_stats where personnel_id = $1 limit 1`, [personnelId]),
+    pool.query<WeeklyTargetRow>(`select target_category, target_class, target_display_name,
+      kill_count, xp_total, last_killed_at
+      from public.personnel_xp_weekly_target_stats where personnel_id = $1
+      order by kill_count desc limit 12`, [personnelId]),
+    pool.query<MedicalProfileRow>(`select lifetime_blood_litres, lifetime_plasma_litres,
+      lifetime_saline_litres, lifetime_bandage_count, lifetime_stitched_body_part_count,
+      lifetime_surgery_count, lifetime_heart_restart_count, lifetime_lung_treatment_count,
+      lifetime_airway_check_count, lifetime_fracture_check_count,
+      lifetime_ultrasound_scan_count, lifetime_chest_seal_count, last_event_at
+      from public.personnel_medical_profiles where personnel_id = $1 limit 1`, [personnelId]),
+    pool.query<MedicalWeeklyRow>(`select week_start_date, week_end_at, week_blood_litres,
+      week_plasma_litres, week_saline_litres, week_bandage_count,
+      week_stitched_body_part_count, week_surgery_count, week_heart_restart_count,
+      week_lung_treatment_count, week_airway_check_count, week_fracture_check_count,
+      week_ultrasound_scan_count, week_chest_seal_count, last_event_at
+      from public.personnel_medical_weekly_stats where personnel_id = $1 limit 1`, [personnelId]),
+  ]);
+  return {
+    profile: profile.rows[0] || null,
+    weekly: weekly.rows[0] || null,
+    targets: targets.rows,
+    medicalProfile: medicalProfile.rows[0] || null,
+    medicalWeekly: medicalWeekly.rows[0] || null,
+  };
+}
+
+async function readFromSupabase(personnelId: string) {
+  const results = await Promise.all([
+    supabaseAdmin
+      .from("personnel_xp_profiles")
+      .select("total_xp,current_level,lifetime_kill_count,lifetime_death_count,lifetime_teamkill_count,last_event_at")
+      .eq("personnel_id", personnelId).maybeSingle<XpProfileRow>(),
+    supabaseAdmin
+      .from("personnel_xp_weekly_stats")
+      .select("week_start_date,week_end_at,week_xp,week_positive_xp,week_negative_xp,week_kill_count,week_death_count,week_teamkill_count,infantry_kill_count,specialist_kill_count,static_weapon_kill_count,light_vehicle_kill_count,vehicle_kill_count,apc_ifv_kill_count,tank_kill_count,aircraft_kill_count,unknown_kill_count,last_event_at")
+      .eq("personnel_id", personnelId).maybeSingle<WeeklyRow>(),
+    supabaseAdmin
+      .from("personnel_xp_weekly_target_stats")
+      .select("target_category,target_class,target_display_name,kill_count,xp_total,last_killed_at")
+      .eq("personnel_id", personnelId).order("kill_count", { ascending: false }).limit(12)
+      .returns<WeeklyTargetRow[]>(),
+    supabaseAdmin
+      .from("personnel_medical_profiles")
+      .select("lifetime_blood_litres,lifetime_plasma_litres,lifetime_saline_litres,lifetime_bandage_count,lifetime_stitched_body_part_count,lifetime_surgery_count,lifetime_heart_restart_count,lifetime_lung_treatment_count,lifetime_airway_check_count,lifetime_fracture_check_count,lifetime_ultrasound_scan_count,lifetime_chest_seal_count,last_event_at")
+      .eq("personnel_id", personnelId).maybeSingle<MedicalProfileRow>(),
+    supabaseAdmin
+      .from("personnel_medical_weekly_stats")
+      .select("week_start_date,week_end_at,week_blood_litres,week_plasma_litres,week_saline_litres,week_bandage_count,week_stitched_body_part_count,week_surgery_count,week_heart_restart_count,week_lung_treatment_count,week_airway_check_count,week_fracture_check_count,week_ultrasound_scan_count,week_chest_seal_count,last_event_at")
+      .eq("personnel_id", personnelId).maybeSingle<MedicalWeeklyRow>(),
+  ]);
+  const error = results.find((result) => result.error)?.error;
+  if (error) throw error;
+  return {
+    profile: results[0].data,
+    weekly: results[1].data,
+    targets: results[2].data || [],
+    medicalProfile: results[3].data,
+    medicalWeekly: results[4].data,
+  };
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const personnelId = url.searchParams.get("personnelId") || "";
@@ -186,105 +268,19 @@ export async function GET(request: Request) {
     );
   }
 
-  const [
-    { data: profile },
-    { data: weekly },
-    { data: targets },
-    { data: medicalProfile },
-    { data: medicalWeekly },
-  ] =
-    await Promise.all([
-      supabaseAdmin
-        .from("personnel_xp_profiles")
-        .select(
-          "total_xp,current_level,lifetime_kill_count,lifetime_death_count,lifetime_teamkill_count,last_event_at",
-        )
-        .eq("personnel_id", personnelId)
-        .maybeSingle<XpProfileRow>(),
-
-      supabaseAdmin
-        .from("personnel_xp_weekly_stats")
-        .select(
-          [
-            "week_start_date",
-            "week_end_at",
-            "week_xp",
-            "week_positive_xp",
-            "week_negative_xp",
-            "week_kill_count",
-            "week_death_count",
-            "week_teamkill_count",
-            "infantry_kill_count",
-            "specialist_kill_count",
-            "static_weapon_kill_count",
-            "light_vehicle_kill_count",
-            "vehicle_kill_count",
-            "apc_ifv_kill_count",
-            "tank_kill_count",
-            "aircraft_kill_count",
-            "unknown_kill_count",
-            "last_event_at",
-          ].join(","),
-        )
-        .eq("personnel_id", personnelId)
-        .maybeSingle<WeeklyRow>(),
-
-      supabaseAdmin
-        .from("personnel_xp_weekly_target_stats")
-        .select(
-          "target_category,target_class,target_display_name,kill_count,xp_total,last_killed_at",
-        )
-        .eq("personnel_id", personnelId)
-        .order("kill_count", { ascending: false })
-        .limit(12)
-        .returns<WeeklyTargetRow[]>(),
-
-      supabaseAdmin
-        .from("personnel_medical_profiles")
-        .select(
-          [
-            "lifetime_blood_litres",
-            "lifetime_plasma_litres",
-            "lifetime_saline_litres",
-            "lifetime_bandage_count",
-            "lifetime_stitched_body_part_count",
-            "lifetime_surgery_count",
-            "lifetime_heart_restart_count",
-            "lifetime_lung_treatment_count",
-            "lifetime_airway_check_count",
-            "lifetime_fracture_check_count",
-            "lifetime_ultrasound_scan_count",
-            "lifetime_chest_seal_count",
-            "last_event_at",
-          ].join(","),
-        )
-        .eq("personnel_id", personnelId)
-        .maybeSingle<MedicalProfileRow>(),
-
-      supabaseAdmin
-        .from("personnel_medical_weekly_stats")
-        .select(
-          [
-            "week_start_date",
-            "week_end_at",
-            "week_blood_litres",
-            "week_plasma_litres",
-            "week_saline_litres",
-            "week_bandage_count",
-            "week_stitched_body_part_count",
-            "week_surgery_count",
-            "week_heart_restart_count",
-            "week_lung_treatment_count",
-            "week_airway_check_count",
-            "week_fracture_check_count",
-            "week_ultrasound_scan_count",
-            "week_chest_seal_count",
-            "last_event_at",
-          ].join(","),
-        )
-        .eq("personnel_id", personnelId)
-        .maybeSingle<MedicalWeeklyRow>(),
-    ]);
+  let loaded;
+  try {
+    loaded = databaseBackend() === "postgres"
+      ? await readFromPostgres(personnelId)
+      : await readFromSupabase(personnelId);
+  } catch (error) {
+    console.error("[personnel-profile] Failed to load XP stats:", error);
+    return NextResponse.json(
+      { xpStats: null, medicalStats: null, error: "PERSONNEL_STATS_LOAD_FAILED" },
+      { status: 500, headers: noStoreHeaders },
+    );
+  }
+  const { profile, weekly, targets, medicalProfile, medicalWeekly } = loaded;
 
   const profileStats = profile
     ? {

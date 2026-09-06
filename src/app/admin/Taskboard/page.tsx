@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type Profile = {
   id: string;
@@ -33,10 +33,6 @@ type Task = {
   position: number;
   created_at: string;
   updated_at: string;
-};
-
-type RoleRow = {
-  role: string;
 };
 
 type RawCommentRow = {
@@ -108,84 +104,27 @@ export default function TaskboardPage() {
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const init = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.replace("/Task-Viewer");
-        return;
-      }
-
-      setUserId(user.id);
-
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = (roleData as RoleRow[] | null)?.map((r) => r.role) || [];
-      const allowedRoles = ["Akhari", "admin"];
-
-      if (!roleList.some((role) => allowedRoles.includes(role))) {
-        router.replace("/");
-        return;
-      }
-
-      await Promise.all([fetchProfiles(), fetchTasks()]);
-      setLoadingAuth(false);
-    };
-
-    init();
-  }, [router]);
-
-  const fetchProfiles = async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .order("display_name");
-
-    if (!error) {
-      setProfiles((data as Profile[] | null) || []);
-    }
+  async function fetchProfiles() {
+    const response = await fetch("/api/taskboard", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json() as { profiles?: Profile[] };
+    setProfiles(data.profiles || []);
   };
 
-  const fetchTasks = async () => {
+  async function fetchTasks() {
     setLoadingTasks(true);
 
-    const { data, error } = await supabase
-      .from("taskboard_tasks")
-      .select("*")
-      .order("status", { ascending: true })
-      .order("position", { ascending: true })
-      .order("created_at", { ascending: false });
-
-    if (!error) {
-      setTasks((data as Task[] | null) || []);
-      await fetchComments();
+    const response = await fetch("/api/taskboard", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json() as { tasks?: Task[]; comments?: RawCommentRow[] };
+      setTasks(data.tasks || []);
+      applyComments(data.comments || []);
     }
 
     setLoadingTasks(false);
   };
 
-  const fetchComments = async () => {
-    const { data, error } = await supabase
-      .from("taskboard_comments")
-      .select(`
-        id,
-        task_id,
-        user_id,
-        content,
-        created_at,
-        profiles:user_id ( display_name )
-      `)
-      .order("created_at", { ascending: true });
-
-    if (error || !data) return;
-
-    const rawComments = data as RawCommentRow[];
+  function applyComments(rawComments: RawCommentRow[]) {
     const grouped: Record<string, TaskComment[]> = {};
 
     const typedComments: TaskComment[] = rawComments.map((comment) => ({
@@ -208,6 +147,32 @@ export default function TaskboardPage() {
 
     setCommentsByTask(grouped);
   };
+
+  const fetchComments = async () => {
+    const response = await fetch("/api/taskboard", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json() as { comments?: RawCommentRow[] };
+    applyComments(data.comments || []);
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      const session = await getAppSession();
+      if (!session) {
+        router.replace("/Task-Viewer");
+        return;
+      }
+      setUserId(session.user.id);
+      const legacyAccess = session.roles.some((role) => ["akhari", "admin"].includes(role.toLowerCase()));
+      if (!legacyAccess && !hasAppPermission(session, "admin.taskboard", "read")) {
+        router.replace("/");
+        return;
+      }
+      await Promise.all([fetchProfiles(), fetchTasks()]);
+      setLoadingAuth(false);
+    };
+    void init();
+  }, [router]);
 
   const refreshBoard = async () => {
     setRefreshing(true);
@@ -248,12 +213,14 @@ export default function TaskboardPage() {
       position: nextPosition,
     };
 
-    const { error } = await supabase.from("taskboard_tasks").insert(payload);
+    const response = await fetch("/api/taskboard", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify(payload) });
 
     setSaving(false);
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to create task");
       return;
     }
 
@@ -290,9 +257,9 @@ export default function TaskboardPage() {
           : 0;
     }
 
-    const { error } = await supabase
-      .from("taskboard_tasks")
-      .update({
+    const response = await fetch("/api/taskboard", { method: "PATCH", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({
+        id: editingTaskId,
         title: editTitle.trim(),
         description: editDescription.trim() || null,
         priority: editPriority,
@@ -301,11 +268,11 @@ export default function TaskboardPage() {
         assigned_to: editAssignedTo === "unassigned" ? null : editAssignedTo,
         due_date: editDueDate ? new Date(`${editDueDate}T12:00:00`).toISOString() : null,
         position: nextPosition,
-      })
-      .eq("id", editingTaskId);
+      }) });
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to update task");
       return;
     }
 
@@ -317,13 +284,12 @@ export default function TaskboardPage() {
     const confirmed = window.confirm("Delete this task?");
     if (!confirmed) return;
 
-    const { error } = await supabase
-      .from("taskboard_tasks")
-      .delete()
-      .eq("id", taskId);
+    const response = await fetch(`/api/taskboard?id=${encodeURIComponent(taskId)}`, { method: "DELETE",
+      credentials: "same-origin", headers: await getAppAuthHeaders() });
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to delete task");
       return;
     }
 
@@ -340,16 +306,16 @@ export default function TaskboardPage() {
         ? Math.max(...columnTasks.map((task) => task.position || 0)) + 1
         : 0;
 
-    const { error } = await supabase
-      .from("taskboard_tasks")
-      .update({
+    const response = await fetch("/api/taskboard", { method: "PATCH", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({
+        kind: "move", id: taskId,
         status: newStatus,
         position: nextPosition,
-      })
-      .eq("id", taskId);
+      }) });
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to move task");
       return;
     }
 
@@ -360,14 +326,13 @@ export default function TaskboardPage() {
     const content = newComment[taskId]?.trim();
     if (!content || !userId) return;
 
-    const { error } = await supabase.from("taskboard_comments").insert({
-      task_id: taskId,
-      user_id: userId,
-      content,
-    });
+    const response = await fetch("/api/taskboard", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+      body: JSON.stringify({ kind: "comment", taskId, content }) });
 
-    if (error) {
-      alert(error.message);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      alert(body?.error || "Failed to add comment");
       return;
     }
 

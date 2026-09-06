@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, memo } from "react";
-import { supabase } from "@/lib/supabase";
 import { buildTree } from "@/utils/buildTree";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import {
+  TransformWrapper,
+  TransformComponent,
+  type ReactZoomPanPinchContentRef,
+} from "react-zoom-pan-pinch";
 import { useRouter } from "next/navigation";
 
 /* ===================================================== */
@@ -60,8 +63,9 @@ export default function GrandOrbat() {
   const [openNodes, setOpenNodes] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [loadError, setLoadError] = useState("");
 
-  const transformRef = useRef<any>(null);
+  const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
   const treeContainerRef = useRef<HTMLDivElement>(null);
 
   /* ===================================================== */
@@ -70,51 +74,30 @@ export default function GrandOrbat() {
 
   useEffect(() => {
     async function fetchData() {
-      const { data } = await supabase
-        .from("org_nodes")
-        .select("*")
-        .order("order_index", { ascending: true });
+      try {
+        const response = await fetch("/api/grand-orbat", { cache: "no-store" });
+        const body = (await response.json().catch(() => null)) as {
+          nodes?: OrgNodeRow[];
+          personnel?: Personnel[];
+        } | null;
+        if (!response.ok || !body) throw new Error("ORBAT_LOAD_FAILED");
 
-      const tree = buildTree((data || []) as OrgNodeRow[]) as OrgNode[];
-      setOrgTree(tree);
-
-      const map: Record<string, boolean> = {};
-
-      const expand = (nodes: OrgNode[]) => {
-        nodes.forEach((node) => {
-          map[node.id] = true;
-          if (node.children?.length) expand(node.children);
-        });
-      };
-
-      expand(tree);
-      setOpenNodes(map);
-
-      const { data: personnelData } = await supabase
-        .from("personnel")
-        .select("id, name, slotted_position, mos, ranks(*)");
-
-      type PersonnelRow = {
-        id: string;
-        name: string;
-        slotted_position: string | null;
-        mos?: string | null;
-        ranks?: Rank | Rank[] | null;
-      };
-
-      const normalizedPersonnel: Personnel[] = (
-        (personnelData || []) as PersonnelRow[]
-      ).map((person) => ({
-        id: person.id,
-        name: person.name,
-        slotted_position: person.slotted_position,
-        mos: person.mos || null,
-        ranks: Array.isArray(person.ranks)
-          ? person.ranks[0] || null
-          : person.ranks || null,
-      }));
-
-      setPersonnel(normalizedPersonnel);
+        const tree = buildTree(body.nodes || []) as OrgNode[];
+        setOrgTree(tree);
+        const map: Record<string, boolean> = {};
+        const expand = (nodes: OrgNode[]) => {
+          nodes.forEach((node) => {
+            map[node.id] = true;
+            if (node.children?.length) expand(node.children);
+          });
+        };
+        expand(tree);
+        setOpenNodes(map);
+        setPersonnel(body.personnel || []);
+        setLoadError("");
+      } catch {
+        setLoadError("The organizational chart could not be loaded.");
+      }
     }
 
     fetchData();
@@ -128,7 +111,7 @@ export default function GrandOrbat() {
     if (!transformRef.current) return;
 
     const timer = setTimeout(() => {
-      transformRef.current.setTransform(-200, 100, 0.3, 800);
+      transformRef.current?.setTransform(-200, 100, 0.3, 800);
     }, 300);
 
     return () => clearTimeout(timer);
@@ -400,7 +383,9 @@ export default function GrandOrbat() {
       </div>
 
       <div className="overflow-hidden border border-[#00ff66]/40 rounded-3xl shadow-[0_0_40px_rgba(0,255,100,0.08)]">
-        <TransformWrapper
+        {loadError ? (
+          <div className="p-10 text-center text-red-300">{loadError}</div>
+        ) : <TransformWrapper
           ref={transformRef}
           limitToBounds={false}
           smooth
@@ -421,7 +406,7 @@ export default function GrandOrbat() {
               ))}
             </div>
           </TransformComponent>
-        </TransformWrapper>
+        </TransformWrapper>}
       </div>
     </main>
   );

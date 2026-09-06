@@ -61,7 +61,7 @@ values
   ('admin.positions', '/admin/positions', 'Ranks & Slots', 'Personnel Admin', 'Manage ranks, MOS, slots, and billet assignments.'),
   ('admin.certifications', '/admin/certifications', 'Certifications', 'Personnel Admin', 'Award and remove personnel certifications.'),
   ('admin.medals', '/admin/medals', 'Medals', 'Personnel Admin', 'Award and remove medals on personnel dossiers.'),
-  ('admin.weekly-attendance', '/admin/weekly-attendance', 'Weekly Attendance Admin', 'Update weekly attendance records.'),
+  ('admin.weekly-attendance', '/admin/weekly-attendance', 'Weekly Attendance Admin', 'Records', 'Update weekly attendance records.'),
   ('admin.discord-attendance', '/admin/discord-attendance', 'Discord Attendance', 'Records', 'Create and manage Discord attendance embeds.'),
   ('admin.removal', '/admin/removal', 'Remove / Retire', 'Records', 'Remove, retire, or archive personnel records.'),
   ('admin.removal-log', '/admin/removal-log', 'Removal Log', 'Records', 'Review removal and retirement history.'),
@@ -141,4 +141,3 @@ from public.user_roles as ur
 join legacy_role_permissions as legacy
   on lower(ur.role) = legacy.role_name
 on conflict (user_id, permission_key) do nothing;
-

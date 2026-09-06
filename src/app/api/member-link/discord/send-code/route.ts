@@ -14,7 +14,9 @@ import {
   getActiveLinkBySteamId,
   getVerifiedSteamSession,
   noStoreHeaders,
+  getMemberLinkBackend,
 } from "@/lib/member-link";
+import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,24 +51,16 @@ export async function POST() {
     );
   }
 
-  const [{ data: person }, steamLink, personnelLink, { data: lastChallenge }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("personnel")
-        .select("id,name,discord_id")
-        .eq("id", session.selected_personnel_id)
-        .maybeSingle<PersonnelRow>(),
-      getActiveLinkBySteamId(session.steam_id),
-      getActiveLinkByPersonnelId(session.selected_personnel_id),
-      supabaseAdmin
-        .from("personnel_discord_verification_challenges")
-        .select("id,last_sent_at,created_at")
-        .eq("steam_link_session_id", session.id)
-        .in("status", ["PENDING", "SENT"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<ChallengeRow>(),
-    ]);
+  const [person, steamLink, personnelLink, lastChallenge] = await Promise.all([
+    getMemberLinkBackend() === "postgres"
+      ? getPostgresPool().query<PersonnelRow>("select id,name,discord_id from public.personnel where id=$1", [session.selected_personnel_id]).then((result) => result.rows[0] || null)
+      : supabaseAdmin.from("personnel").select("id,name,discord_id").eq("id", session.selected_personnel_id).maybeSingle<PersonnelRow>().then((result) => result.data || null),
+    getActiveLinkBySteamId(session.steam_id),
+    getActiveLinkByPersonnelId(session.selected_personnel_id),
+    getMemberLinkBackend() === "postgres"
+      ? getPostgresPool().query<ChallengeRow>("select id,last_sent_at,created_at from public.personnel_discord_verification_challenges where steam_link_session_id=$1 and status=any($2::text[]) order by created_at desc limit 1", [session.id,["PENDING","SENT"]]).then((result) => result.rows[0] || null)
+      : supabaseAdmin.from("personnel_discord_verification_challenges").select("id,last_sent_at,created_at").eq("steam_link_session_id", session.id).in("status", ["PENDING", "SENT"]).order("created_at", { ascending: false }).limit(1).maybeSingle<ChallengeRow>().then((result) => result.data || null),
+  ]);
 
   if (!person) {
     return NextResponse.json(
@@ -107,12 +101,6 @@ export async function POST() {
     }
   }
 
-  await supabaseAdmin
-    .from("personnel_discord_verification_challenges")
-    .update({ status: "EXPIRED" })
-    .eq("steam_link_session_id", session.id)
-    .in("status", ["PENDING", "SENT"]);
-
   const code = generateDiscordVerificationCode();
   let codeHash: string;
 
@@ -129,21 +117,21 @@ export async function POST() {
     Date.now() + DISCORD_CODE_EXPIRY_SECONDS * 1000,
   ).toISOString();
 
-  const { data: challenge, error: challengeError } = await supabaseAdmin
-    .from("personnel_discord_verification_challenges")
-    .insert({
-      steam_link_session_id: session.id,
-      personnel_id: person.id,
-      discord_user_id: person.discord_id,
-      code_hash: codeHash,
-      status: "PENDING",
-      max_attempts: DISCORD_MAX_ATTEMPTS,
-      expires_at: expiresAt,
-    })
-    .select("id")
-    .single<{ id: string }>();
-
-  if (challengeError || !challenge) {
+  let challenge: { id: string } | null = null;
+  try {
+    if (getMemberLinkBackend() === "postgres") {
+      challenge = await withPostgresTransaction(async (client) => {
+        await client.query("update public.personnel_discord_verification_challenges set status='EXPIRED' where steam_link_session_id=$1 and status=any($2::text[])", [session.id,["PENDING","SENT"]]);
+        const result = await client.query<{id:string}>(`insert into public.personnel_discord_verification_challenges(steam_link_session_id,personnel_id,discord_user_id,code_hash,status,max_attempts,expires_at) values($1,$2,$3,$4,'PENDING',$5,$6) returning id`, [session.id,person.id,person.discord_id,codeHash,DISCORD_MAX_ATTEMPTS,expiresAt]);
+        return result.rows[0];
+      });
+    } else {
+      await supabaseAdmin.from("personnel_discord_verification_challenges").update({ status: "EXPIRED" }).eq("steam_link_session_id", session.id).in("status", ["PENDING", "SENT"]);
+      const result = await supabaseAdmin.from("personnel_discord_verification_challenges").insert({ steam_link_session_id:session.id,personnel_id:person.id,discord_user_id:person.discord_id,code_hash:codeHash,status:"PENDING",max_attempts:DISCORD_MAX_ATTEMPTS,expires_at:expiresAt }).select("id").single<{id:string}>();
+      if (result.error) throw result.error;
+      challenge = result.data;
+    }
+  } catch {
     return NextResponse.json(
       { error: "CODE_CREATE_FAILED" },
       { status: 500, headers: noStoreHeaders },
@@ -166,13 +154,8 @@ export async function POST() {
   });
 
   if (!delivery.accepted) {
-    await supabaseAdmin
-      .from("personnel_discord_verification_challenges")
-      .update({
-        status: "FAILED",
-        delivery_error: delivery.message,
-      })
-      .eq("id", challenge.id);
+    if (getMemberLinkBackend() === "postgres") await getPostgresPool().query("update public.personnel_discord_verification_challenges set status='FAILED',delivery_error=$2 where id=$1", [challenge.id,delivery.message]);
+    else await supabaseAdmin.from("personnel_discord_verification_challenges").update({ status: "FAILED", delivery_error: delivery.message }).eq("id", challenge.id);
 
     await addSteamLinkAudit("DISCORD_CODE_SEND_FAILED", {
       personnelId: person.id,
@@ -194,14 +177,8 @@ export async function POST() {
     sentAt.getTime() + DISCORD_RESEND_COOLDOWN_SECONDS * 1000,
   ).toISOString();
 
-  await supabaseAdmin
-    .from("personnel_discord_verification_challenges")
-    .update({
-      status: "SENT",
-      last_sent_at: sentAt.toISOString(),
-      delivered_at: sentAt.toISOString(),
-    })
-    .eq("id", challenge.id);
+  if (getMemberLinkBackend() === "postgres") await getPostgresPool().query("update public.personnel_discord_verification_challenges set status='SENT',last_sent_at=$2,delivered_at=$2 where id=$1", [challenge.id,sentAt.toISOString()]);
+  else await supabaseAdmin.from("personnel_discord_verification_challenges").update({ status: "SENT", last_sent_at: sentAt.toISOString(), delivered_at: sentAt.toISOString() }).eq("id", challenge.id);
 
   await addSteamLinkAudit("DISCORD_CODE_SENT", {
     personnelId: person.id,

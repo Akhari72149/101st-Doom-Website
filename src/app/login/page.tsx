@@ -1,27 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import LegalAcknowledgement from "@/components/legal/LegalAcknowledgement";
+import { signInToApp, usesNativeAuth } from "@/lib/client-auth";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
+  const nativeAuth = usesNativeAuth();
 
   const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      alert(error.message);
+    if (!identifier.trim() || !password) return;
+    setSubmitting(true);
+    setErrorMessage("");
+    const result = await signInToApp(identifier, password);
+    setSubmitting(false);
+    if (result.error) {
+      setErrorMessage(result.error);
       return;
     }
-
     router.push("/");
+    router.refresh();
   };
 
   return (
@@ -64,16 +67,16 @@ export default function Login() {
           ADMIN ACCESS
         </h1>
 
-        {/* EMAIL */}
         <div className="mb-6">
           <label className="text-xs text-gray-400 tracking-widest">
-            EMAIL
+            {nativeAuth ? "USERNAME" : "EMAIL"}
           </label>
 
           <input
-            placeholder="Enter email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoComplete={nativeAuth ? "username" : "email"}
+            placeholder={nativeAuth ? "Enter username" : "Enter email"}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
             className="
               w-full mt-2 p-3 rounded-xl
               bg-black/40 backdrop-blur-md
@@ -95,9 +98,13 @@ export default function Login() {
 
           <input
             type="password"
+            autoComplete="current-password"
             placeholder="Enter password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !submitting) void handleLogin();
+            }}
             className="
               w-full mt-2 p-3 rounded-xl
               bg-black/40 backdrop-blur-md
@@ -111,9 +118,15 @@ export default function Login() {
           />
         </div>
 
-        {/* LOGIN BUTTON */}
+        {errorMessage && (
+          <div className="mb-5 rounded-xl border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {errorMessage}
+          </div>
+        )}
+
         <button
           onClick={handleLogin}
+          disabled={submitting || !identifier.trim() || !password}
           className="
             w-full py-3 rounded-xl
             bg-gradient-to-r from-[#00ff66] to-[#00cc44]
@@ -121,10 +134,10 @@ export default function Login() {
             shadow-lg
             hover:scale-105
             hover:shadow-[0_0_25px_rgba(0,255,100,0.6)]
-            transition-all duration-200
+            transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50
           "
         >
-          LOGIN
+          {submitting ? "AUTHENTICATING" : "LOGIN"}
         </button>
 
         <div className="mt-6">

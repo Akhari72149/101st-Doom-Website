@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppSession } from "@/lib/client-auth";
 
 export const useUserRoles = () => {
   const [roles, setRoles] = useState<string[]>([]);
@@ -7,21 +7,12 @@ export const useUserRoles = () => {
 
   useEffect(() => {
     const fetchRoles = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         setLoading(false);
         return;
       }
-
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      setRoles(data?.map((r) => r.role) || []);
+      setRoles(session.roles);
       setLoading(false);
     };
 

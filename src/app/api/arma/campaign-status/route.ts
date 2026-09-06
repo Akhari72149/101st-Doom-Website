@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyArmaXpSignature } from "@/lib/arma-xp";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,7 +113,29 @@ function sanitizeError(error: unknown) {
   return "CAMPAIGN_STATUS_FAILED";
 }
 
+function isPostgresBackend() {
+  const value = process.env.ARMA_DATABASE_BACKEND || "supabase";
+  if (value !== "postgres" && value !== "supabase") throw new Error("Unknown ARMA_DATABASE_BACKEND");
+  return value === "postgres";
+}
+
 export async function GET() {
+  if (isPostgresBackend()) {
+    try {
+      const pool = getPostgresPool();
+      const [current, history, episode] = await Promise.all([
+        pool.query(`select * from public.arma_campaign_status_current where campaign_id='operation-last-stand' order by received_at desc limit 1`),
+        pool.query(`select id,server_id,mission_id,campaign_id,occurred_at,received_at,world,player_count,global_infection,research_data,safehouse_count,unlocked_safehouse_count,active_horde_count,safehouse_siege_active,story_week,story_active_count,story_complete_count,story_evidence_count,payload from public.arma_campaign_status_history where campaign_id='operation-last-stand' order by received_at desc limit 1`),
+        pool.query(`select id,campaign_id,week_number,title,summary,status,starts_at,created_at,updated_at from public.arma_campaign_story_episodes where campaign_id='operation-last-stand' and status='active' order by week_number desc limit 1`),
+      ]);
+      const activeEpisode = episode.rows[0] || null;
+      const objectives = activeEpisode ? await pool.query(`select id,campaign_id,week_number,size,title,description,marker,implementation_note,action,sort_order,status,created_at,updated_at from public.arma_campaign_story_objectives where campaign_id='operation-last-stand' and week_number=$1 order by sort_order`, [activeEpisode.week_number]) : { rows: [] };
+      return jsonResponse({ ok:true,snapshot:current.rows[0]||null,history:history.rows,storyEpisode:activeEpisode,storyObjectives:objectives.rows });
+    } catch (error) {
+      console.error("[arma-campaign] Native read failed", error);
+      return jsonResponse({ ok:false,error:"CAMPAIGN_STATUS_READ_FAILED" },500);
+    }
+  }
   const [currentResult, historyResult, storyEpisodeResult, storyObjectivesResult] = await Promise.all([
     supabaseAdmin
       .from("arma_campaign_status_current")
@@ -238,6 +261,21 @@ export async function POST(request: Request) {
     story_evidence_count: snapshot.story_evidence_count,
     payload: snapshot.payload,
   };
+
+  if (isPostgresBackend()) {
+    try {
+      await withPostgresTransaction(async (client) => {
+        const columns = ["server_id","mission_id","campaign_id","occurred_at","received_at","world","player_count","global_infection","research_data","safehouse_count","unlocked_safehouse_count","active_horde_count","safehouse_siege_active","story_week","story_active_count","story_complete_count","story_evidence_count","payload"];
+        const values = columns.map((key) => historySnapshot[key as keyof typeof historySnapshot]);
+        await client.query(`insert into public.arma_campaign_status_history(${columns.join(",")}) values(${columns.map((_,index)=>`$${index+1}`).join(",")}) on conflict(server_id,mission_id,campaign_id) do update set occurred_at=excluded.occurred_at,received_at=excluded.received_at,world=excluded.world,player_count=excluded.player_count,global_infection=excluded.global_infection,research_data=excluded.research_data,safehouse_count=excluded.safehouse_count,unlocked_safehouse_count=excluded.unlocked_safehouse_count,active_horde_count=excluded.active_horde_count,safehouse_siege_active=excluded.safehouse_siege_active,story_week=excluded.story_week,story_active_count=excluded.story_active_count,story_complete_count=excluded.story_complete_count,story_evidence_count=excluded.story_evidence_count,payload=excluded.payload`, values.map((value,index)=>columns[index]==="payload"?JSON.stringify(value):value));
+        await client.query(`insert into public.arma_campaign_status_current(${columns.join(",")},updated_at) values(${columns.map((_,index)=>`$${index+1}`).join(",")},$${columns.length+1}) on conflict(server_id,mission_id,campaign_id) do update set occurred_at=excluded.occurred_at,received_at=excluded.received_at,world=excluded.world,player_count=excluded.player_count,global_infection=excluded.global_infection,research_data=excluded.research_data,safehouse_count=excluded.safehouse_count,unlocked_safehouse_count=excluded.unlocked_safehouse_count,active_horde_count=excluded.active_horde_count,safehouse_siege_active=excluded.safehouse_siege_active,story_week=excluded.story_week,story_active_count=excluded.story_active_count,story_complete_count=excluded.story_complete_count,story_evidence_count=excluded.story_evidence_count,payload=excluded.payload,updated_at=excluded.updated_at`, [...values.map((value,index)=>columns[index]==="payload"?JSON.stringify(value):value),snapshot.updated_at]);
+      });
+      return jsonResponse({ accepted:true,eventType:"CAMPAIGN_STATUS",serverId:snapshot.server_id,missionId:snapshot.mission_id,occurredAt:snapshot.occurred_at,receivedAt:snapshot.received_at,playerCount:snapshot.player_count,globalInfection:snapshot.global_infection });
+    } catch (error) {
+      console.error("[arma-campaign] Native upsert failed", error);
+      return jsonResponse({ accepted:false,error:"CAMPAIGN_STATUS_FAILED",message:sanitizeError(error) },500);
+    }
+  }
 
   const { error: historyError } = await supabaseAdmin
     .from("arma_campaign_status_history")

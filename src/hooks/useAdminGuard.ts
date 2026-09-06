@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getAppSession } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
 
 export function useAdminGuard() {
@@ -10,22 +10,12 @@ export function useAdminGuard() {
 
   useEffect(() => {
     const check = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
-
-      const { data: role } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!role || role.role !== "admin") {
+      if (!session.roles.some((role) => role.toLowerCase() === "admin")) {
         router.replace("/");
         return;
       }

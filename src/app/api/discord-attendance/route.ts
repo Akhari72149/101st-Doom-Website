@@ -5,6 +5,12 @@ import {
   attendancePingRoles,
 } from "@/data/discordAttendanceRoles";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
+import { getDiscordDatabaseBackend } from "@/lib/discord-database";
+import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const VALID_REPEAT_TYPES = new Set(["none", "weekly"]);
 
@@ -60,41 +66,41 @@ function cleanOption(option: unknown, index: number): AttendanceOptionInput {
   };
 }
 
-async function getUserAndRoles(request: Request) {
-  const authHeader = request.headers.get("authorization") || "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-
-  if (!token) {
-    return { userId: null, email: null, roles: [] as string[] };
+export async function GET(request: Request) {
+  if (!(await requirePageAccess(request, "admin.discord-attendance", "read"))) return jsonError("Unauthorized", 401);
+  if (getDiscordDatabaseBackend() === "postgres") {
+    try {
+      const result = await getPostgresPool().query(`
+        select e.id,e.title,e.description,e.channel_id,e.channel_name,e.event_starts_at,
+          e.duration_minutes,e.scheduled_send_at,e.repeat_scheduled_send_at,e.repeat_enabled,
+          e.repeat_type,e.footer_text,e.status,e.discord_message_id,e.ping_role_id,
+          e.reminder_enabled,e.reminder_scheduled_at,e.reminder_sent_at,e.reminder_message,
+          e.reminder_role_id,coalesce(jsonb_agg(jsonb_build_object(
+            'id',o.id,'emoji',o.emoji,'label',o.label,'assign_role_id',o.assign_role_id,
+            'sort_order',o.sort_order) order by o.sort_order) filter (where o.id is not null),'[]'::jsonb) options
+        from public.discord_attendance_events e
+        left join public.discord_attendance_options o on o.event_id=e.id
+        group by e.id order by e.scheduled_send_at limit 40`);
+      return NextResponse.json({ events: result.rows }, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      console.error("[discord-attendance] Native read failed", error);
+      return jsonError("Failed to load attendance events", 500);
+    }
   }
-
-  const { data: userData } = await supabaseAdmin.auth.getUser(token);
-  const userId = userData.user?.id || null;
-
-  if (!userId) {
-    return { userId: null, email: null, roles: [] as string[] };
-  }
-
-  const { data: roleData } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
-
-  return {
-    userId,
-    email: userData.user?.email || null,
-    roles: (roleData || []).map((row) => String(row.role).toLowerCase()),
-  };
-}
-
-function canManageAttendance(roles: string[]) {
-  return roles.some((role) => ["admin", "nco", "akhari"].includes(role));
+  const { data, error } = await supabaseAdmin.from("discord_attendance_events").select(`
+    id,title,description,channel_id,channel_name,event_starts_at,duration_minutes,scheduled_send_at,
+    repeat_scheduled_send_at,repeat_enabled,repeat_type,footer_text,status,discord_message_id,ping_role_id,
+    reminder_enabled,reminder_scheduled_at,reminder_sent_at,reminder_message,reminder_role_id,
+    options:discord_attendance_options(id,emoji,label,assign_role_id,sort_order)
+  `).order("scheduled_send_at").limit(40);
+  if (error) return jsonError("Failed to load attendance events", 500);
+  return NextResponse.json({ events: data || [] }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
-  const { userId, email, roles } = await getUserAndRoles(request);
-
-  if (!userId || !canManageAttendance(roles)) {
+  if (!requestHasSameOrigin(request)) return jsonError("Invalid request origin", 403);
+  const auth = await requirePageAccess(request, "admin.discord-attendance", "edit");
+  if (!auth) {
     return jsonError("Unauthorized", 401);
   }
 
@@ -190,10 +196,37 @@ export async function POST(request: Request) {
       reminderEnabled && reminderDate ? reminderDate.toISOString() : null,
     reminder_message: reminderEnabled ? reminderMessage : null,
     reminder_role_id: reminderEnabled && reminderRoleId ? reminderRoleId : null,
-    created_by: userId,
-    created_by_name: email,
+    created_by: auth.userId,
+    created_by_name: auth.email,
     status: "scheduled",
   };
+
+  if (getDiscordDatabaseBackend() === "postgres") {
+    try {
+      const id = await withPostgresTransaction(async (client) => {
+        const event = await client.query<{ id: string }>(`insert into public.discord_attendance_events(
+          title,description,channel_id,channel_name,event_starts_at,scheduled_send_at,duration_minutes,
+          repeat_enabled,repeat_type,repeat_timezone,repeat_scheduled_send_at,footer_text,ping_role_id,
+          reminder_enabled,reminder_scheduled_at,reminder_message,reminder_role_id,created_by,
+          created_by_name,status) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'scheduled') returning id`,
+          [baseEventPayload.title,baseEventPayload.description,baseEventPayload.channel_id,
+            baseEventPayload.channel_name,baseEventPayload.event_starts_at,baseEventPayload.scheduled_send_at,
+            baseEventPayload.duration_minutes,baseEventPayload.repeat_enabled,baseEventPayload.repeat_type,
+            baseEventPayload.repeat_timezone,baseEventPayload.repeat_scheduled_send_at,
+            baseEventPayload.footer_text,baseEventPayload.ping_role_id,baseEventPayload.reminder_enabled,
+            baseEventPayload.reminder_scheduled_at,baseEventPayload.reminder_message,
+            baseEventPayload.reminder_role_id,baseEventPayload.created_by,baseEventPayload.created_by_name]);
+        for (const option of options) {
+          await client.query(`insert into public.discord_attendance_options(event_id,emoji,label,assign_role_id,sort_order) values($1,$2,$3,$4,$5)`, [event.rows[0].id,option.emoji,option.label,option.assign_role_id,option.sort_order]);
+        }
+        return event.rows[0].id;
+      });
+      return NextResponse.json({ success: true, id, scheduled_id: null, send_now: true, repeat_enabled: repeatEnabled });
+    } catch (error) {
+      console.error("[discord-attendance] Native create failed", error);
+      return jsonError("Failed to create attendance event", 500);
+    }
+  }
 
   const { data: event, error } = await supabaseAdmin
     .from("discord_attendance_events")

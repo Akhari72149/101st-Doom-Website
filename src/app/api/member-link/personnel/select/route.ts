@@ -10,7 +10,9 @@ import {
   isUuid,
   noStoreHeaders,
   toPersonnelSummary,
+  getMemberLinkBackend,
 } from "@/lib/member-link";
+import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,13 +51,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: person, error } = await supabaseAdmin
-    .from("personnel")
-    .select("id,rank_id,name,slotted_position,status,mos,created_at,discord_id")
-    .eq("id", personnelId)
-    .maybeSingle<PersonnelRow>();
+  let person: PersonnelRow | null;
+  if (getMemberLinkBackend() === "postgres") {
+    const result = await getPostgresPool().query<PersonnelRow>("select id,rank_id,name,slotted_position,status,mos,created_at,discord_id from public.personnel where id=$1", [personnelId]);
+    person = result.rows[0] || null;
+  } else {
+    const result = await supabaseAdmin.from("personnel").select("id,rank_id,name,slotted_position,status,mos,created_at,discord_id").eq("id", personnelId).maybeSingle<PersonnelRow>();
+    person = result.data || null;
+  }
 
-  if (error || !person) {
+  if (!person) {
     return NextResponse.json(
       { error: "INVALID_PERSONNEL" },
       { status: 404, headers: noStoreHeaders },
@@ -82,16 +87,15 @@ export async function POST(request: Request) {
     );
   }
 
-  await supabaseAdmin
-    .from("steam_link_sessions")
-    .update({ selected_personnel_id: personnelId })
-    .eq("id", session.id);
-
-  await supabaseAdmin
-    .from("personnel_discord_verification_challenges")
-    .update({ status: "EXPIRED" })
-    .eq("steam_link_session_id", session.id)
-    .in("status", ["PENDING", "SENT"]);
+  if (getMemberLinkBackend() === "postgres") {
+    await withPostgresTransaction(async (client) => {
+      await client.query("update public.steam_link_sessions set selected_personnel_id=$2 where id=$1", [session.id,personnelId]);
+      await client.query("update public.personnel_discord_verification_challenges set status='EXPIRED' where steam_link_session_id=$1 and status=any($2::text[])", [session.id,["PENDING","SENT"]]);
+    });
+  } else {
+    await supabaseAdmin.from("steam_link_sessions").update({ selected_personnel_id: personnelId }).eq("id", session.id);
+    await supabaseAdmin.from("personnel_discord_verification_challenges").update({ status: "EXPIRED" }).eq("steam_link_session_id", session.id).in("status", ["PENDING", "SENT"]);
+  }
 
   await addSteamLinkAudit("PROFILE_SELECTED", {
     personnelId,

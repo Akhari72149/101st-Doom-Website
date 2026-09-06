@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 type Platoon = {
   id: string;
@@ -71,117 +70,49 @@ export default function GCLogisticsHub() {
   const unlockShop = async () => {
     if (!shopPassword.trim()) return;
 
-    const { data, error } = await supabase.rpc("check_shop_password", {
-      password_input: shopPassword,
-    });
-
-    if (error) {
-      console.error(error);
-      alert("Error verifying password");
-      return;
-    }
-
-    if (data === true) {
+    const response=await fetch("/api/gc-platoon-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"unlock",password:shopPassword})});
+    if (response.ok) {
       setShopUnlocked(true);
       setShopPassword("");
     } else {
-      alert("Incorrect password");
+      const body=await response.json().catch(()=>null) as {error?:string}|null;alert(body?.error||"Error verifying password");
     }
   };
 
   /* ================= FETCH DATA ================= */
 
   const fetchPlatoons = async () => {
-    const { data, error } = await supabase
-      .from("platoons")
-      .select("*")
-      .order("sort_order", { ascending: true });
-
-    if (error) {
-      console.error("Failed to fetch platoons:", error);
+    const response=await fetch("/api/gc-platoon-logistics",{cache:"no-store",credentials:"same-origin"});
+    if(!response.ok){
       return;
     }
-
-    setPlatoons((data || []) as Platoon[]);
+    const data=await response.json() as {platoons?:Platoon[];unlocked?:boolean};setPlatoons(data.platoons||[]);setShopUnlocked(Boolean(data.unlocked));
   };
 
   const fetchAssets = async (platoonId: string) => {
     if (!platoonId) return;
 
-    const { data: platoonData, error: platoonError } = await supabase
-      .from("platoons")
-      .select("name")
-      .eq("id", platoonId)
-      .single();
-
-    if (platoonError) {
-      console.error("Failed to fetch platoon access:", platoonError);
+    const response=await fetch(`/api/gc-platoon-logistics?platoonId=${encodeURIComponent(platoonId)}`,{cache:"no-store",credentials:"same-origin"});
+    if(!response.ok){
       return;
     }
-
-    const platoonName = platoonData?.name?.toLowerCase();
-
-    const isFullAccess =
-      platoonName?.includes("company") ||
-      platoonName?.includes("blinds basket");
-
-    let query = supabase.from("hq_assets").select("*");
-
-    if (!isFullAccess) {
-      query = query.eq("category", "platoon");
-    }
-
-    const { data, error } = await query.order("name", { ascending: true });
-
-    if (error) {
-      console.error("Failed to fetch assets:", error);
-      return;
-    }
-
-    setAssets((data || []) as Asset[]);
+    const data=await response.json() as {assets?:Asset[]};setAssets(data.assets||[]);
   };
 
   const fetchTransactions = async (platoonId: string) => {
-    const { data, error } = await supabase
-      .from("token_transactions")
-      .select("*")
-      .eq("platoon_id", platoonId)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Failed to fetch transactions:", error);
+    const response=await fetch(`/api/gc-platoon-logistics?platoonId=${encodeURIComponent(platoonId)}`,{cache:"no-store",credentials:"same-origin"});
+    if(!response.ok){
       return;
     }
-
-    setTransactions((data || []) as Transaction[]);
+    const data=await response.json() as {transactions?:Transaction[]};setTransactions(data.transactions||[]);
   };
 
   const fetchOwnedAssets = async (platoonId: string) => {
-    const { data, error } = await supabase
-      .from("platoon_assets")
-      .select(`
-        id,
-        quantity,
-        asset:asset_id (
-          id,
-          name,
-          token_cost
-        )
-      `)
-      .eq("platoon_id", platoonId);
-
-    if (error) {
-      console.error("Failed to fetch owned assets:", error);
+    const response=await fetch(`/api/gc-platoon-logistics?platoonId=${encodeURIComponent(platoonId)}`,{cache:"no-store",credentials:"same-origin"});
+    if(!response.ok){
       return;
     }
-
-    const normalized: OwnedAsset[] = (data || []).map((row: any) => ({
-      id: row.id,
-      quantity: row.quantity,
-      asset: Array.isArray(row.asset) ? row.asset[0] || null : row.asset || null,
-    }));
-
-    setOwnedAssets(normalized);
+    const data=await response.json() as {ownedAssets?:OwnedAsset[]};setOwnedAssets(data.ownedAssets||[]);
   };
 
   useEffect(() => {
@@ -261,66 +192,11 @@ export default function GCLogisticsHub() {
 
     setLoading(true);
 
-    const { error: tokenError } = await supabase
-      .from("platoons")
-      .update({ tokens: selected.tokens - totalCost })
-      .eq("id", selected.id);
-
-    if (tokenError) {
-      console.error("Failed to update platoon tokens:", tokenError);
+    const response=await fetch("/api/gc-platoon-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"checkout",platoonId:selected.id,items:Object.entries(cart).map(([assetId,quantity])=>({assetId,quantity}))})});
+    if(!response.ok){
       alert("Failed to complete purchase.");
       setLoading(false);
       return;
-    }
-
-    for (const [assetId, qty] of Object.entries(cart)) {
-      const asset = assets.find((a) => a.id === assetId);
-      if (!asset) continue;
-
-      const existing = ownedAssets.find((o) => o.asset?.id === assetId);
-
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from("platoon_assets")
-          .update({ quantity: existing.quantity + qty })
-          .eq("id", existing.id);
-
-        if (updateError) {
-          console.error("Failed to update owned asset:", updateError);
-          alert(`Failed while updating ${asset.name}.`);
-          setLoading(false);
-          return;
-        }
-      } else {
-        const { error: insertError } = await supabase.from("platoon_assets").insert([
-          {
-            platoon_id: selected.id,
-            asset_id: assetId,
-            quantity: qty,
-          },
-        ]);
-
-        if (insertError) {
-          console.error("Failed to add owned asset:", insertError);
-          alert(`Failed while adding ${asset.name}.`);
-          setLoading(false);
-          return;
-        }
-      }
-    }
-
-    const { error: logError } = await supabase.from("token_transactions").insert([
-      {
-        platoon_id: selected.id,
-        action: "BUY_ASSET",
-        amount: totalCost,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-
-    if (logError) {
-      console.error("Failed to log transaction:", logError);
-      alert("Purchase completed, but transaction logging failed.");
     }
 
     setCart({});

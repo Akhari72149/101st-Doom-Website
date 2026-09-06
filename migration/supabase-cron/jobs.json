@@ -1,0 +1,38 @@
+[
+  {
+    "name": "arma-weekly-xp-reset",
+    "cronUtc": "59 23 * * 0",
+    "sql": "select public.reset_arma_xp_weekly_data();",
+    "active": true
+  },
+  {
+    "name": "attendance-mainop-monday",
+    "cronUtc": "0 0 * * 1",
+    "sql": "select generate_attendance_records_training(trim(to_char(current_date, 'Month')), ceil(extract(day from current_date) / 7.0)::int, 'MainOp'::text);",
+    "active": true
+  },
+  {
+    "name": "attendance-training-monday",
+    "cronUtc": "0 0 * * 1",
+    "sql": "select generate_attendance_records_training(trim(to_char(current_date, 'Month')), ceil(extract(day from current_date) / 7.0)::int, 'Training'::text);",
+    "active": true
+  },
+  {
+    "name": "reset_server_bookings_weekly",
+    "cronUtc": "30 4 * * 1",
+    "sql": "select reset_server_bookings_weekly();",
+    "active": true
+  },
+  {
+    "name": "shift_recurring_server_blocks_weekly",
+    "cronUtc": "31 4 * * 1",
+    "sql": "select shift_recurring_server_blocks_week();",
+    "active": true
+  },
+  {
+    "name": "weekly-attendance-current-week",
+    "cronUtc": "0 4 * * 1",
+    "sql": "select public.ensure_current_attendance_week();",
+    "active": true
+  }
+]

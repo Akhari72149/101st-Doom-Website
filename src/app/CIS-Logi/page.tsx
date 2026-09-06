@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type Commander = {
   id: string;
@@ -46,21 +46,14 @@ export default function CISLogisticsHub() {
 
   useEffect(() => {
     const checkAccess = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session=await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
 
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roles = data?.map((r) => r.role) || [];
-
-      if (!roles.includes("Akhari") && !roles.includes("logistics")) {
+      const allowed=session.roles.some(role=>["akhari","logistics"].includes(role.toLowerCase()))||hasAppPermission(session,"cis.logistics","read");
+      if (!allowed) {
         router.replace("/Galactic-Campaign");
         return;
       }
@@ -74,45 +67,19 @@ export default function CISLogisticsHub() {
   /* ================= FETCH DATA ================= */
 
   const fetchCommander = async () => {
-    const { data } = await supabase
-      .from("cis_commander")
-      .select("*")
-      .single();
-
-    setCommander(data);
+    const response=await fetch("/api/cis-logistics",{cache:"no-store",headers:await getAppAuthHeaders()});if(!response.ok)return;const data=await response.json();setCommander(data.commander);
   };
 
   const fetchAssets = async () => {
-    const { data } = await supabase
-      .from("cis_assets")
-      .select("*");
-
-    setAssets(data || []);
+    const response=await fetch("/api/cis-logistics",{cache:"no-store",headers:await getAppAuthHeaders()});if(!response.ok)return;const data=await response.json();setAssets(data.assets||[]);
   };
 
   const fetchOwnedAssets = async () => {
-    const { data } = await supabase
-      .from("cis_commander_assets")
-      .select(`
-        id,
-        quantity,
-        asset:asset_id (
-          id,
-          name,
-          token_cost
-        )
-      `);
-
-    setOwnedAssets(data || []);
+    const response=await fetch("/api/cis-logistics",{cache:"no-store",headers:await getAppAuthHeaders()});if(!response.ok)return;const data=await response.json();setOwnedAssets(data.ownedAssets||[]);
   };
 
   const fetchTransactions = async () => {
-    const { data } = await supabase
-      .from("cis_transactions")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    setTransactions(data || []);
+    const response=await fetch("/api/cis-logistics",{cache:"no-store",headers:await getAppAuthHeaders()});if(!response.ok)return;const data=await response.json();setTransactions(data.transactions||[]);
   };
 
   useEffect(() => {
@@ -149,18 +116,7 @@ export default function CISLogisticsHub() {
   const addTokens = async () => {
     if (!commander || amount <= 0) return;
 
-    await supabase
-      .from("cis_commander")
-      .update({ tokens: commander.tokens + amount })
-      .eq("id", commander.id);
-
-    await supabase.from("cis_transactions").insert([
-      {
-        action: "ADD_TOKENS",
-        amount,
-        created_at: new Date().toISOString(),
-      },
-    ]);
+    const response=await fetch("/api/cis-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({action:"addTokens",commanderId:commander.id,amount})});if(!response.ok)return;
 
     setAmount(0);
 
@@ -183,36 +139,7 @@ export default function CISLogisticsHub() {
       return;
     }
 
-    await supabase
-      .from("cis_commander")
-      .update({ tokens: commander.tokens - totalCost })
-      .eq("id", commander.id);
-
-    for (const [assetId, qty] of Object.entries(cart)) {
-      const existing = ownedAssets.find((o) => o.asset?.id === assetId);
-
-      if (existing) {
-        await supabase
-          .from("cis_commander_assets")
-          .update({ quantity: existing.quantity + qty })
-          .eq("id", existing.id);
-      } else {
-        await supabase.from("cis_commander_assets").insert([
-          {
-            asset_id: assetId,
-            quantity: qty,
-          },
-        ]);
-      }
-    }
-
-    await supabase.from("cis_transactions").insert([
-      {
-        action: "BUY_ASSET",
-        amount: totalCost,
-        created_at: new Date().toISOString(),
-      },
-    ]);
+    const response=await fetch("/api/cis-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({action:"checkout",commanderId:commander.id,items:Object.entries(cart).map(([assetId,quantity])=>({assetId,quantity}))})});if(!response.ok){const body=await response.json().catch(()=>null) as {error?:string}|null;alert(body?.error||"Purchase failed.");return;}
 
     setCart({});
     fetchCommander();
@@ -225,19 +152,7 @@ export default function CISLogisticsHub() {
   const removeAsset = async (owned: any) => {
     const qty = removeQuantities[owned.id] || 1;
 
-    const newQty = owned.quantity - qty;
-
-    if (newQty > 0) {
-      await supabase
-        .from("cis_commander_assets")
-        .update({ quantity: newQty })
-        .eq("id", owned.id);
-    } else {
-      await supabase
-        .from("cis_commander_assets")
-        .delete()
-        .eq("id", owned.id);
-    }
+    const response=await fetch("/api/cis-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({action:"removeAsset",commanderId:commander?.id,ownedId:owned.id,quantity:qty})});if(!response.ok)return;
 
     fetchOwnedAssets();
   };

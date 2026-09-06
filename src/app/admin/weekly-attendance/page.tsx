@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabase";
+import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
 import {
@@ -23,10 +23,6 @@ type Member = {
   rank: string;
   slot: string;
   status: string;
-};
-
-type UserRoleRow = {
-  role: string;
 };
 
 type AttendanceRecordRow = {
@@ -305,24 +301,14 @@ export default function AttendancePage() {
 
   useEffect(() => {
     const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const session = await getAppSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
-
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roleList = ((roles || []) as UserRoleRow[]).map((row) => row.role);
-      const allowedRoles = ["admin", "nco"];
-
-      if (!roleList.some((role) => allowedRoles.includes(role))) {
+      const canAccess = session.roles.some((role) => ["admin", "nco"].includes(role.toLowerCase())) ||
+        hasAppPermission(session, "admin.weekly-attendance", "read");
+      if (!canAccess) {
         router.replace("/");
         return;
       }
@@ -339,29 +325,18 @@ export default function AttendancePage() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("attendance_records")
-        .select(`
-          id,
-          status,
-          personnel (
-            id,
-            name,
-            slotted_position,
-            ranks ( name )
-          )
-        `)
-        .eq("attendance_month", selectedMonth)
-        .eq("week_number", selectedWeek)
-        .eq("type", selectedType);
-
-      if (error || !data) {
-        console.error(error);
+      const response = await fetch(
+        `/api/attendance?mode=roster&month=${encodeURIComponent(selectedMonth)}&week=${selectedWeek}&type=${encodeURIComponent(selectedType)}`,
+        { cache: "no-store", headers: await getAppAuthHeaders() },
+      );
+      const payload = await response.json().catch(() => null) as { records?: AttendanceRecordRow[]; error?: string } | null;
+      if (!response.ok || !payload?.records) {
+        console.error(payload?.error || "Failed to load attendance");
         setRoster([]);
         return;
       }
 
-      const attendanceRows = data as AttendanceRecordRow[];
+      const attendanceRows = payload.records;
       const filtered = attendanceRows.filter((row) => {
         const person = Array.isArray(row.personnel) ? row.personnel[0] : row.personnel;
         const slot = person?.slotted_position;
@@ -428,13 +403,14 @@ export default function AttendancePage() {
   const updateAssignment = async (recordId: string, value: string) => {
     setUpdatingMemberId(recordId);
 
-    const { error } = await supabase
-      .from("attendance_records")
-      .update({ status: value })
-      .eq("id", recordId);
-
-    if (error) {
-      console.error(error);
+    const response = await fetch("/api/attendance", {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+      body: JSON.stringify({ ids: [recordId], status: value }),
+    });
+    if (!response.ok) {
+      console.error(await response.text());
       setUpdatingMemberId(null);
       return;
     }
@@ -455,13 +431,14 @@ export default function AttendancePage() {
 
     const ids = roster.map((member) => member.recordId);
 
-    const { error } = await supabase
-      .from("attendance_records")
-      .update({ status: value })
-      .in("id", ids);
-
-    if (error) {
-      console.error(error);
+    const response = await fetch("/api/attendance", {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+      body: JSON.stringify({ ids, status: value }),
+    });
+    if (!response.ok) {
+      console.error(await response.text());
       setUpdatingAll(false);
       return;
     }

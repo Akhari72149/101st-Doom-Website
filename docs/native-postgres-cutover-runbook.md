@@ -37,6 +37,7 @@ Run these before the maintenance window with a recent export:
 npm run db:create-cutover
 npm run db:check-cutover
 npm run db:restore-cutover
+npm run db:auth-schema-cutover
 npm run db:provision-cutover
 npm run db:migrate-cutover
 npm run db:provision-scheduler-cutover
@@ -74,8 +75,8 @@ The restored snapshot already contains the source Auth records, so the account
 import does not need the hosted database password on the application server:
 
 ```powershell
-npm run db:import-auth-restored -- --mapping C:\Migration\101st-Roster\private\native-usernames.json
-npm run db:import-auth-restored -- --mapping C:\Migration\101st-Roster\private\native-usernames.json --apply
+npm run db:import-auth-cutover-restored -- --mapping C:\Migration\101st-Roster\private\native-usernames.json
+npm run db:import-auth-cutover-restored -- --mapping C:\Migration\101st-Roster\private\native-usernames.json --apply
 ```
 
 Always run the preview first. The apply command is transactional and refuses to

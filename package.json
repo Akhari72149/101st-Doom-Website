@@ -16,6 +16,8 @@
     "db:verify-scheduler": "node --env-file=.env.postgres-scheduler.local scripts/postgres/verify-scheduler-role.mjs",
     "db:create-cutover": "node --env-file=.env.postgres-cutover.local scripts/postgres/create-rehearsal.mjs --cutover",
     "db:restore-cutover": "node --env-file=.env.postgres-cutover.local scripts/postgres/restore-rehearsal.mjs --cutover",
+    "db:auth-schema-cutover": "node --env-file=.env.postgres-cutover.local scripts/postgres/auth-schema.mjs --apply",
+    "db:import-auth-cutover-restored": "node --env-file=.env.postgres-cutover.local scripts/postgres/import-auth.mjs --source-restored",
     "db:migrate-cutover": "node --env-file=.env.postgres-cutover.local scripts/postgres/apply-native-migrations.mjs --cutover",
     "db:provision-cutover": "node --env-file=.env.postgres-cutover.local scripts/postgres/provision-runtime-role.mjs --cutover",
     "db:verify-cutover": "node --env-file=.env.postgres-runtime-cutover.local scripts/postgres/verify-runtime-role.mjs",

@@ -25,9 +25,11 @@ export function nativeAuthConfig(env = process.env) {
   if (!env.APP_ORIGIN) throw new Error('APP_ORIGIN is required');
   const url = new URL(env.APP_ORIGIN);
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  const insecureLoopbackAllowed = local && url.protocol === 'http:' &&
+    (env.NODE_ENV !== 'production' || env.NATIVE_AUTH_ALLOW_INSECURE_LOOPBACK === 'true');
   if (url.username || url.password || url.pathname !== '/' || url.search || url.hash ||
-      (url.protocol !== 'https:' && !(url.protocol === 'http:' && local && env.NODE_ENV !== 'production'))) {
-    throw new Error('APP_ORIGIN must be an HTTPS origin (HTTP localhost is allowed in development)');
+      (url.protocol !== 'https:' && !insecureLoopbackAllowed)) {
+    throw new Error('APP_ORIGIN must be HTTPS (HTTP loopback requires an explicit rehearsal setting)');
   }
   return { secret: env.NATIVE_AUTH_SECRET, origin: url.origin };
 }

@@ -73,9 +73,18 @@ test('cutover targets require two matching database declarations', () => {
 test('production requires HTTPS and an explicit origin and secret', () => {
   const env = { NATIVE_AUTH_SECRET: 'a'.repeat(32), APP_ORIGIN: 'http://localhost:3000', NODE_ENV: 'production' };
   assert.throws(() => nativeAuthConfig(env), /HTTPS/);
-  assert.throws(() => nativeAuthConfig({ ...env, APP_ORIGIN: 'https://example.com/path' }), /origin/);
+  assert.throws(() => nativeAuthConfig({ ...env, APP_ORIGIN: 'https://example.com/path' }), /APP_ORIGIN/);
   assert.throws(() => nativeAuthConfig({ ...env, APP_ORIGIN: 'https://example.com', NATIVE_AUTH_SECRET: '' }), /SECRET/);
   assert.equal(nativeAuthConfig({ ...env, NODE_ENV: 'development' }).origin, 'http://localhost:3000');
+  assert.equal(nativeAuthConfig({
+    ...env,
+    NATIVE_AUTH_ALLOW_INSECURE_LOOPBACK: 'true',
+  }).origin, 'http://localhost:3000');
+  assert.throws(() => nativeAuthConfig({
+    ...env,
+    APP_ORIGIN: 'http://example.com',
+    NATIVE_AUTH_ALLOW_INSECURE_LOOPBACK: 'true',
+  }), /HTTPS/);
 });
 
 test('legacy bcrypt and new scrypt passwords reject incorrect credentials', async () => {

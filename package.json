@@ -32,6 +32,7 @@
     "test:postgres-integration": "node scripts/postgres/integration-test.mjs",
     "dev": "next dev",
     "dev:native-rehearsal": "node --env-file=.env.postgres-runtime.local scripts/postgres/start-native-rehearsal.mjs",
+    "start:native-rehearsal": "node --env-file=.env.postgres-runtime.local scripts/postgres/start-native-production-rehearsal.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

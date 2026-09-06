@@ -18,6 +18,9 @@ const backendSwitches = [
 ];
 
 const errors = [];
+if (process.env.NATIVE_AUTH_ALLOW_INSECURE_LOOPBACK === 'true') {
+  errors.push('NATIVE_AUTH_ALLOW_INSECURE_LOOPBACK must not be enabled in production');
+}
 for (const name of backendSwitches) {
   if (process.env[name] !== 'postgres') errors.push(`${name} must be postgres`);
 }

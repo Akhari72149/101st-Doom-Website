@@ -34,16 +34,33 @@ function append(stage, text) {
 }
 
 async function command(stage, file, args, options = {}) {
-  const result = await exec(file, args, {
-    cwd: root,
-    windowsHide: true,
-    timeout: options.timeout || 10 * 60_000,
-    maxBuffer: 8 * 1024 * 1024,
-    env: options.env || process.env,
-  });
-  append(stage, result.stdout);
-  append(stage, result.stderr);
-  return result;
+  const startedAt = Date.now();
+  const heartbeat = options.progressMessage
+    ? setInterval(() => {
+        const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+        void updateJob(
+          'running',
+          stage,
+          `${options.progressMessage} (${elapsedSeconds}s elapsed)`,
+        ).catch((error) => append('heartbeat', error));
+      }, 10_000)
+    : null;
+  heartbeat?.unref();
+
+  try {
+    const result = await exec(file, args, {
+      cwd: root,
+      windowsHide: true,
+      timeout: options.timeout || 10 * 60_000,
+      maxBuffer: 8 * 1024 * 1024,
+      env: options.env || process.env,
+    });
+    append(stage, result.stdout);
+    append(stage, result.stderr);
+    return result;
+  } finally {
+    if (heartbeat) clearInterval(heartbeat);
+  }
 }
 
 async function updateJob(status, stage, message, completed = false) {
@@ -102,11 +119,13 @@ try {
     }
     await command('preflight', 'git', ['merge-base', '--is-ancestor', job.from_commit, job.target_commit]);
 
-    await updateJob('running', 'stopping', 'Stopping the website before backup');
-    await command('stop', 'schtasks.exe', ['/End', '/TN', websiteTask], { timeout: 30_000 });
-    websiteStopped = true;
+    const { stdout: dependencyChanges } = await command('preflight', 'git', [
+      'diff', '--name-only', job.from_commit, job.target_commit, '--',
+      'package.json', 'package-lock.json', 'npm-shrinkwrap.json',
+    ]);
+    const dependenciesChanged = dependencyChanges.trim().length > 0;
 
-    await updateJob('running', 'backup', 'Creating and verifying the pre-update database backup');
+    await updateJob('running', 'backup', 'Creating and verifying the pre-update database backup while the website remains online');
     const backupChildEnv = { ...process.env };
     for (const name of ['DATABASE_URL', 'NATIVE_MIGRATION_DATABASE', 'CUTOVER_CONFIRM_DATABASE']) {
       delete backupChildEnv[name];
@@ -114,17 +133,33 @@ try {
     await command('backup', process.execPath, [
       `--env-file=${backupEnv}`,
       path.join(root, 'scripts/postgres/backup-native.mjs'),
-    ], { env: backupChildEnv });
+    ], {
+      env: backupChildEnv,
+      progressMessage: 'Creating and verifying the pre-update database backup while the website remains online',
+    });
 
-    await updateJob('running', 'installing', 'Installing the approved source and dependencies');
+    await updateJob('running', 'stopping', 'Backup verified; stopping the website for installation');
+    await command('stop', 'schtasks.exe', ['/End', '/TN', websiteTask], { timeout: 30_000 });
+    websiteStopped = true;
+
+    await updateJob('running', 'installing', dependenciesChanged
+      ? 'Installing the approved source and updated dependencies'
+      : 'Installing the approved source; dependencies are unchanged');
     await command('git', 'git', ['merge', '--ff-only', job.target_commit]);
-    await command('dependencies', process.execPath, [npmCli, 'ci'], { timeout: 15 * 60_000 });
+    if (dependenciesChanged) {
+      await command('dependencies', process.execPath, [npmCli, 'ci'], {
+        timeout: 15 * 60_000,
+        progressMessage: 'Installing updated dependencies',
+      });
+    } else {
+      append('dependencies', 'Skipped npm ci because package manifests are unchanged.');
+    }
 
     await updateJob('running', 'migrating', 'Applying checksum-locked database migrations');
     await command('migrations', process.execPath, [
       path.join(root, 'scripts/postgres/apply-native-migrations.mjs'),
       '--cutover',
-    ]);
+    ], { progressMessage: 'Applying checksum-locked database migrations' });
 
     await updateJob('running', 'building', 'Creating the production website build');
     const buildEnv = { ...process.env };
@@ -137,6 +172,7 @@ try {
     await command('build', process.execPath, [npmCli, 'run', 'build'], {
       env: buildEnv,
       timeout: 20 * 60_000,
+      progressMessage: 'Creating the production website build',
     });
 
     await updateJob('running', 'restarting', 'Starting the updated website');

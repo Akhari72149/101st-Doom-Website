@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { getPostgresPool } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { getAvailableRelease, getInstalledRelease } from "@/lib/website-updater";
@@ -6,6 +8,8 @@ import { getAvailableRelease, getInstalledRelease } from "@/lib/website-updater"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const run = promisify(execFile);
 
 type UpdateJob = {
   id: string;
@@ -26,6 +30,21 @@ async function latestJob() {
       from_commit,target_commit,status,stage,message,requested_at,started_at,completed_at,updated_at
     from public.website_update_jobs order by requested_at desc limit 1`);
   return result.rows[0] || null;
+}
+
+async function wakeUpdaterWorker() {
+  if (process.platform !== "win32") return false;
+  const taskName = process.env.WEBSITE_UPDATER_TASK_NAME || "101st Doom Website Updater";
+  try {
+    await run("schtasks.exe", ["/Run", "/TN", taskName], {
+      windowsHide: true,
+      timeout: 15_000,
+    });
+    return true;
+  } catch (error) {
+    console.warn("[updater] Update was queued but the worker task could not be started immediately", error);
+    return false;
+  }
 }
 
 export async function GET(request: Request) {
@@ -95,7 +114,8 @@ export async function POST(request: Request) {
       installed.sha,
       available.sha,
     ]);
-    return NextResponse.json({ queued: true, job: result.rows[0] }, { status: 202 });
+    const workerTriggered = await wakeUpdaterWorker();
+    return NextResponse.json({ queued: true, workerTriggered, job: result.rows[0] }, { status: 202 });
   } catch (error) {
     if ((error as { code?: string }).code === "23505") {
       return NextResponse.json({ error: "Another website update is already queued or running" }, { status: 409 });

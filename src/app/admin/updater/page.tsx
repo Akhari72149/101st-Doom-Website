@@ -90,10 +90,11 @@ export default function UpdaterPage() {
   }, [loadStatus, router]);
 
   useEffect(() => {
-    if (!status?.job || !["pending", "running"].includes(status.job.status)) return;
+    const jobActive = Boolean(status?.job && ["pending", "running"].includes(status.job.status));
+    if (!installing && !jobActive) return;
     const timer = window.setInterval(() => void loadStatus(), 5_000);
     return () => window.clearInterval(timer);
-  }, [loadStatus, status?.job]);
+  }, [installing, loadStatus, status?.job]);
 
   async function installUpdate() {
     if (!status?.canInstall || installing) return;
@@ -151,11 +152,24 @@ export default function UpdaterPage() {
         <div className="p-6 lg:p-8">
           {error && <div className="mb-6 flex items-start gap-3 border border-red-400/35 bg-red-500/10 p-4 text-sm text-red-200"><TriangleAlert size={19} />{error}</div>}
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
-            <ReleasePanel label="Installed Release" release={status?.installed} />
-            <div className="hidden items-center text-[#00ff66]/60 lg:flex"><ArrowRight size={26} /></div>
-            <ReleasePanel label="Available Release" release={status?.available} />
-          </div>
+          {status?.updateAvailable ? (
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
+              <ReleasePanel label="Installed Release" release={status.installed} />
+              <div className="hidden items-center text-[#00ff66]/60 lg:flex"><ArrowRight size={26} /></div>
+              <ReleasePanel label="Available Release" release={status.available} />
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+              <ReleasePanel label="Current Installed Release" release={status?.installed} />
+              <div className="flex items-center gap-3 border border-[#00ff66]/25 bg-[#00ff66]/8 p-5 text-[#00ff66]">
+                <CheckCircle2 size={24} />
+                <div>
+                  <div className="font-black uppercase tracking-[0.12em]">Repository Matched</div>
+                  <div className="mt-1 text-sm text-gray-300">The installed commit matches origin/main.</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 grid gap-4 border border-[#00ff66]/15 bg-[#03110b]/75 p-5 sm:grid-cols-2 lg:grid-cols-4">
             <Detail icon={<Code2 size={17} />} label="Database" value="PostgreSQL 16" />

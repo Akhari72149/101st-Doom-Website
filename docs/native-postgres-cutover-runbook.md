@@ -61,6 +61,17 @@ At the agreed maintenance-window start:
 6. Import/synchronise the reviewed native-auth account mapping if the final export
    changed the account set.
 
+The restored snapshot already contains the source Auth records, so the account
+import does not need the hosted database password on the application server:
+
+```powershell
+npm run db:import-auth-restored -- --mapping C:\Migration\101st-Roster\private\native-usernames.json
+npm run db:import-auth-restored -- --mapping C:\Migration\101st-Roster\private\native-usernames.json --apply
+```
+
+Always run the preview first. The apply command is transactional and refuses to
+overwrite an account already present in the native authentication tables.
+
 ## 4. Deploy configuration
 
 Use the generated `.env.postgres-runtime-cutover.local` values in the website's

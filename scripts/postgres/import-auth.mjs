@@ -6,11 +6,19 @@ import { hostedSourceConfig } from './hosted-source.mjs';
 
 // Run only after reviewing the explicit UUID -> username map. No cloud writes.
 const mappingPath = process.argv[process.argv.indexOf('--mapping') + 1];
-if (!process.argv.includes('--mapping') || !mappingPath || !process.env.SOURCE_DATABASE_URL) {
-  throw new Error('Supply --mapping <private-json-file> and SOURCE_DATABASE_URL');
+const restoredSource = process.argv.includes('--source-restored');
+if (!process.argv.includes('--mapping') || !mappingPath) {
+  throw new Error('Supply --mapping <private-json-file>');
 }
-if (process.env.SOURCE_DATABASE_URL === process.env.DATABASE_URL) throw new Error('Source and target must differ');
-const source = new Pool(await hostedSourceConfig());
+if (!restoredSource && !process.env.SOURCE_DATABASE_URL) {
+  throw new Error('Set SOURCE_DATABASE_URL or pass --source-restored');
+}
+if (!restoredSource && process.env.SOURCE_DATABASE_URL === process.env.DATABASE_URL) {
+  throw new Error('Hosted source and target must differ');
+}
+const source = restoredSource
+  ? new Pool(postgresConfig())
+  : new Pool(await hostedSourceConfig());
 const target = new Pool(postgresConfig());
 try {
   const mapping = JSON.parse(await readFile(mappingPath, 'utf8'));
@@ -34,7 +42,7 @@ try {
       throw new Error('A source account needs a separately reviewed email/password migration; no accounts imported');
     }
   }
-  console.log(`Validated ${selectedRows.length} selected account(s) from ${rows.length} active source account(s). UUIDs, password hashes and disabled status will be preserved.`);
+  console.log(`Validated ${selectedRows.length} selected account(s) from ${rows.length} active ${restoredSource ? 'restored' : 'hosted'} source account(s). UUIDs, password hashes and disabled status will be preserved.`);
   if (process.argv.includes('--apply')) {
     if (process.env.NATIVE_MIGRATION_DATABASE !== new URL(process.env.DATABASE_URL).pathname.slice(1)) {
       throw new Error('NATIVE_MIGRATION_DATABASE must match the destination database name');

@@ -24,6 +24,7 @@
     "db:import-auth": "node --env-file=.env.postgres.local scripts/postgres/import-auth.mjs",
     "db:auth-schema-rehearsal": "node --env-file=.env.postgres-target.local scripts/postgres/auth-schema.mjs",
     "db:import-auth-rehearsal": "node --env-file=.env.postgres-export.local --env-file=.env.postgres-target.local scripts/postgres/import-auth.mjs",
+    "db:import-auth-restored": "node --env-file=.env.postgres-target.local scripts/postgres/import-auth.mjs --source-restored",
     "db:prepare-auth-env": "node scripts/postgres/prepare-native-auth-env.mjs",
     "db:prepare-auth-mapping": "node --env-file=.env.postgres-export.local scripts/postgres/prepare-auth-mapping.mjs",
     "db:sync-auth-selection": "node --env-file=.env.postgres-target.local scripts/postgres/sync-auth-selection.mjs",

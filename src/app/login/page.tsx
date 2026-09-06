@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LegalAcknowledgement from "@/components/legal/LegalAcknowledgement";
-import { signInToApp, usesNativeAuth } from "@/lib/client-auth";
+import { getAppSession, signInToApp, usesNativeAuth } from "@/lib/client-auth";
 
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
@@ -23,7 +23,8 @@ export default function Login() {
       setErrorMessage(result.error);
       return;
     }
-    router.push("/");
+    const session = await getAppSession();
+    router.push(session?.mustChangePassword ? "/change-password" : "/");
     router.refresh();
   };
 

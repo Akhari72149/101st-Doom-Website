@@ -12,8 +12,12 @@ export function getNativeAuth() {
   return auth;
 }
 
-export async function getNativeSession(headers: Headers) {
+export async function getNativeSession(
+  headers: Headers,
+  options: { allowPasswordChangeRequired?: boolean } = {},
+) {
   const session = await getNativeAuth().api.getSession({ headers });
   if (!session || session.user.disabled) return null;
+  if (session.user.mustChangePassword && !options.allowPasswordChangeRequired) return null;
   return session;
 }

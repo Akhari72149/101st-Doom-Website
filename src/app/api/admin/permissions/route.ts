@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { randomBytes, randomUUID } from "node:crypto";
+import { hashPassword } from "better-auth/crypto";
 import {
   type PagePermissionAccess,
   pagePermissionDefinitions,
@@ -86,7 +88,9 @@ async function getNativeAccounts() {
       username: string | null;
       created_at: Date;
       disabled: boolean;
-    }>(`select id, name, username, "createdAt" as created_at, disabled
+      must_change_password: boolean;
+    }>(`select id, name, username, "createdAt" as created_at, disabled,
+            "mustChangePassword" as must_change_password
           from public.app_auth_users order by lower(coalesce(name, username))`),
     pool.query<UserRoleRow>("select user_id, role from public.user_roles"),
     pool.query<ProfileRow>("select id, display_name from public.profiles"),
@@ -114,12 +118,63 @@ async function getNativeAccounts() {
     displayName: profilesByUser.get(user.id)?.display_name || user.name || user.username || "",
     username: user.username || "",
     protected: String(user.username || "").trim().toLowerCase() === "akhari",
+    mustChangePassword: user.must_change_password,
     createdAt: user.created_at,
     lastSignInAt: null,
     disabled: user.disabled,
     roles: rolesByUser.get(user.id) || [],
     permissions: permissionsByUser.get(user.id) || {},
   }));
+}
+
+export async function POST(request: Request) {
+  if (!hasValidOrigin(request)) return jsonError("Invalid request origin", 403);
+  const { auth, allowed } = await requirePermissionManager(request);
+  if (!allowed || !auth.userId) return jsonError("Unauthorized", 401);
+  if (process.env.NATIVE_AUTH_ENABLED !== "true") {
+    return jsonError("Account creation is available with native authentication only", 409);
+  }
+
+  const body = await request.json().catch(() => null) as { username?: unknown } | null;
+  const username = String(body?.username || "").trim().toLowerCase();
+  if (!/^[a-z0-9_.]{3,40}$/.test(username)) {
+    return jsonError("Username must be 3-40 lowercase letters, numbers, underscores, or dots");
+  }
+  if (username === "akhari") return jsonError("The protected super-user name is reserved", 409);
+
+  const userId = randomUUID();
+  const temporaryPassword = randomBytes(18).toString("base64url");
+  const passwordHash = await hashPassword(temporaryPassword);
+  const email = `${username}@accounts.101stdoombattalion.invalid`;
+
+  try {
+    await withPostgresTransaction(async (client) => {
+      await client.query(
+        `insert into public.app_auth_users
+          (id,name,email,"emailVerified","createdAt","updatedAt",username,
+           "displayUsername",disabled,"mustChangePassword")
+         values ($1,$2,$3,true,now(),now(),$2,$2,false,true)`,
+        [userId, username, email],
+      );
+      await client.query(
+        `insert into public.app_auth_accounts
+          (id,"userId","accountId","providerId",issuer,password,"createdAt","updatedAt")
+         values ($1,$2::uuid,$2::text,'credential','local:credential',$3,now(),now())`,
+        [randomUUID(), userId, passwordHash],
+      );
+    });
+    return NextResponse.json({
+      success: true,
+      account: { id: userId, username },
+      temporaryPassword,
+    }, { status: 201, headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") {
+      return jsonError("That username already exists", 409);
+    }
+    console.error("[permissions] Account creation failed", error);
+    return jsonError("Unable to create account", 500);
+  }
 }
 
 export async function GET(request: Request) {

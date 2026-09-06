@@ -29,6 +29,7 @@ export function makeAuthOptions(database, env = process.env) {
       modelName: 'app_auth_users',
       additionalFields: {
         disabled: { type: /** @type {const} */ ('boolean'), defaultValue: false, input: false },
+        mustChangePassword: { type: /** @type {const} */ ('boolean'), defaultValue: false, input: false },
       },
     },
     account: { modelName: 'app_auth_accounts', identityStrategy: /** @type {const} */ ('provider-id') },

@@ -12,8 +12,8 @@ export default function LayoutWrapper({
   const pathname = usePathname();
 
   const hideNavbar =
-    pathname === "/login" || pathname.startsWith("/planops");
-  const hideFooter = pathname.startsWith("/planops");
+    pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/planops");
+  const hideFooter = pathname === "/change-password" || pathname.startsWith("/planops");
 
   return (
     <>

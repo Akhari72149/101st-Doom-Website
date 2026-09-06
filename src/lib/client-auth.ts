@@ -14,6 +14,7 @@ export type AppSession = {
   roles: string[];
   permissions: Record<string, "read" | "edit" | "full">;
   mode: "native" | "supabase";
+  mustChangePassword: boolean;
 };
 
 const accessWeight = { none: 0, read: 1, edit: 2, full: 3 } as const;

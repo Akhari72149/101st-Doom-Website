@@ -68,13 +68,17 @@ export default function NavbarClient() {
   useEffect(() => {
     const getUser = async () => {
       const session = await getAppSession();
+      if (session?.mustChangePassword) {
+        router.replace("/change-password");
+        return;
+      }
       setUser(session?.user || null);
       setRoles(session?.roles || []);
       setPermissions(session?.permissions || {});
     };
 
     getUser();
-  }, []);
+  }, [router]);
 
   const handleLogout = async () => {
     await signOutOfApp();

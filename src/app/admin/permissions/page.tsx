@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   Ban,
   CheckCircle2,
+  Copy,
   KeyRound,
   Loader2,
   Search,
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
+  UserPlus,
   UserCog,
   X,
 } from "lucide-react";
@@ -33,6 +35,7 @@ type Account = {
   permissions: Record<string, PagePermissionAccess>;
   username?: string;
   protected?: boolean;
+  mustChangePassword?: boolean;
 };
 
 type PermissionResponse = {
@@ -87,6 +90,11 @@ export default function AdminPermissionsPage() {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [draftPermissions, setDraftPermissions] = useState<Record<string, PagePermissionAccess>>({});
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [createdCredentials, setCreatedCredentials] = useState<{ username: string; password: string } | null>(null);
+  const [credentialsCopied, setCredentialsCopied] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const groupedDefinitions = useMemo(() => {
     const groups = new Map<string, PagePermissionDefinition[]>();
@@ -114,6 +122,7 @@ export default function AdminPermissionsPage() {
         return [
           account.email || "",
           account.displayName || "",
+          account.username || "",
           account.roles.join(" "),
           account.id,
         ]
@@ -263,6 +272,55 @@ export default function AdminPermissionsPage() {
     setStatus("Permissions updated.");
   }
 
+  async function createAccount() {
+    setSaving(true);
+    setStatus(null);
+    setCreateError("");
+    const response = await fetch("/api/admin/permissions", {
+      method: "POST",
+      headers: {
+        ...(await getAppAuthHeaders()),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username: newUsername }),
+    });
+    const body = await response.json().catch(() => null) as {
+      error?: string;
+      account?: { username: string };
+      temporaryPassword?: string;
+    } | null;
+    if (!response.ok || !body?.account || !body.temporaryPassword) {
+      setCreateError(body?.error || "Unable to create account");
+      setSaving(false);
+      return;
+    }
+    setCreatedCredentials({ username: body.account.username, password: body.temporaryPassword });
+    setCredentialsCopied(false);
+    setCreateError("");
+    await loadPermissions();
+    setSaving(false);
+  }
+
+  function closeCreateAccount() {
+    setShowCreateAccount(false);
+    setNewUsername("");
+    setCreatedCredentials(null);
+    setCredentialsCopied(false);
+    setCreateError("");
+  }
+
+  async function copyCredentials() {
+    if (!createdCredentials) return;
+    try {
+      await navigator.clipboard.writeText(
+        `Username: ${createdCredentials.username}\nTemporary password: ${createdCredentials.password}`,
+      );
+      setCredentialsCopied(true);
+    } catch {
+      setCreateError("Clipboard access was blocked. Select the credentials and copy them manually.");
+    }
+  }
+
   if (loadingAuth) {
     return (
       <main className="min-h-screen bg-[#020806] px-6 py-24 text-white">
@@ -327,6 +385,16 @@ export default function AdminPermissionsPage() {
                 className="w-full border border-[#00ff66]/20 bg-black/70 py-3 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-[#00ff66]/60"
               />
             </label>
+
+            <button
+              type="button"
+              onClick={() => setShowCreateAccount(true)}
+              disabled={saving}
+              className="inline-flex items-center justify-center gap-2 border border-cyan-400/35 bg-cyan-400/10 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300 transition hover:bg-cyan-400/20 disabled:opacity-50"
+            >
+              <UserPlus size={16} />
+              Create Account
+            </button>
 
             <button
               type="button"
@@ -403,6 +471,11 @@ export default function AdminPermissionsPage() {
                         {account.protected && (
                           <span className="border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">
                             Super User
+                          </span>
+                        )}
+                        {account.mustChangePassword && (
+                          <span className="border border-cyan-400/35 bg-cyan-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300">
+                            Password Change Required
                           </span>
                         )}
                       </div>
@@ -582,6 +655,55 @@ export default function AdminPermissionsPage() {
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
                 Save Permissions
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showCreateAccount && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-lg border border-[#00ff66]/25 bg-[#020806] shadow-[0_0_60px_rgba(0,255,102,0.12)]">
+            <div className="flex items-start justify-between gap-4 border-b border-[#00ff66]/15 p-5">
+              <div>
+                <div className="flex items-center gap-3 text-[#00ff66]"><UserPlus size={20} /><span className="text-xs font-bold uppercase tracking-[0.22em]">Create Login Account</span></div>
+                <p className="mt-3 text-sm leading-6 text-gray-400">Create a username with a one-time temporary password.</p>
+              </div>
+              <button type="button" onClick={closeCreateAccount} className="grid h-10 w-10 place-items-center border border-white/10 text-gray-400 transition hover:border-red-400/40 hover:text-red-300"><X size={18} /></button>
+            </div>
+
+            <div className="p-5">
+              {createError && <div className="mb-4 border border-red-400/35 bg-red-500/10 p-3 text-sm text-red-200">{createError}</div>}
+              {createdCredentials ? (
+                <div>
+                  <div className="border border-amber-300/30 bg-amber-300/8 p-4 text-sm leading-6 text-amber-100">
+                    This temporary password is shown only once. Send it to the account holder through a secure channel.
+                  </div>
+                  <div className="mt-4 border border-[#00ff66]/15 bg-black/60 p-4">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Username</div>
+                    <div className="mt-2 break-all font-mono text-base text-white">{createdCredentials.username}</div>
+                    <div className="mt-5 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Temporary Password</div>
+                    <div className="mt-2 break-all font-mono text-base text-[#00ff66]">{createdCredentials.password}</div>
+                  </div>
+                  <button type="button" onClick={() => void copyCredentials()} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/10 px-4 text-sm font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20">
+                    {credentialsCopied ? <CheckCircle2 size={17} /> : <Copy size={17} />}
+                    {credentialsCopied ? "Credentials Copied" : "Copy Credentials"}
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <label className="block">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Username</span>
+                    <input value={newUsername} onChange={(event) => setNewUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""))} autoComplete="off" maxLength={40} placeholder="username"
+                      className="mt-2 min-h-12 w-full border border-[#00ff66]/20 bg-black/70 px-4 text-white outline-none transition placeholder:text-gray-600 focus:border-[#00ff66]/60" />
+                  </label>
+                  <p className="mt-2 text-xs leading-5 text-gray-500">Use 3-40 lowercase letters, numbers, underscores, or dots.</p>
+                  <button type="button" onClick={() => void createAccount()} disabled={saving || !/^[a-z0-9_.]{3,40}$/.test(newUsername)}
+                    className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/15 px-5 font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/25 disabled:cursor-not-allowed disabled:opacity-45">
+                    {saving ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
+                    Generate Account
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         </div>

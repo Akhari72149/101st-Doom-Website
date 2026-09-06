@@ -20,6 +20,7 @@ POSTGRES_SOURCE_ARCHIVE=C:\PrivateBackups\Roster\roster-source-TIMESTAMP\source.
 PG16_BIN=C:\Program Files\PostgreSQL\16\bin
 PG17_BIN=C:\PrivateTools\postgresql-17\pgsql\bin
 POSTGRES_RUNTIME_ENV_FILE=.env.postgres-runtime-cutover.local
+POSTGRES_SCHEDULER_ENV_FILE=.env.postgres-scheduler-cutover.local
 DATABASE_POOL_MAX=10
 APP_ORIGIN=https://101stdoombattalion.com
 NATIVE_AUTH_SECRET=REPLACE_WITH_A_RANDOM_SECRET_OF_AT_LEAST_32_CHARACTERS
@@ -38,8 +39,16 @@ npm run db:check-cutover
 npm run db:restore-cutover
 npm run db:provision-cutover
 npm run db:migrate-cutover
+npm run db:provision-scheduler-cutover
 npm run db:check-cutover
 npm run db:verify-cutover
+npm run db:verify-scheduler-cutover
+
+# Exercise each scheduler path without retaining changes.
+npm run db:run-scheduled-job-cutover -- --job arma-weekly-xp-reset --rollback
+npm run db:run-scheduled-job-cutover -- --job attendance-current-week --rollback
+npm run db:run-scheduled-job-cutover -- --job reset-server-bookings-weekly --rollback
+npm run db:run-scheduled-job-cutover -- --job shift-recurring-server-blocks-weekly --rollback
 ```
 
 Each cutover command requires `CUTOVER_CONFIRM_DATABASE` to exactly match the
@@ -56,8 +65,8 @@ At the agreed maintenance-window start:
 3. Run `npm run db:export-source` to produce a new archive and manifest.
 4. Restore that archive into a newly created empty cutover database. Do not restore
    over the earlier rehearsal copy.
-5. Provision the runtime role, then run the native migrations, readiness check,
-   and runtime privilege verification again.
+5. Provision the runtime role, run the native migrations, provision the scheduler
+   role, and repeat the readiness and privilege checks.
 6. Import/synchronise the reviewed native-auth account mapping if the final export
    changed the account set.
 

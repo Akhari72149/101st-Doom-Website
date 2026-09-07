@@ -57,6 +57,7 @@ export function makeAuthOptions(database, env = process.env) {
       minUsernameLength: 2,
       maxUsernameLength: 40,
       usernameValidator: (value) => /^[a-zA-Z0-9_.-]+$/.test(value),
+      usernameNormalization: (value) => value.toLowerCase(),
     })],
     databaseHooks: {
       session: {
@@ -64,6 +65,10 @@ export function makeAuthOptions(database, env = process.env) {
           before: async (session) => {
             const result = await database.query('select disabled from app_auth_users where id = $1', [session.userId]);
             if (!result.rows[0] || result.rows[0].disabled) return false;
+            await database.query(
+              'update app_auth_users set "lastSignInAt" = now(), "updatedAt" = now() where id = $1',
+              [session.userId],
+            );
             return { data: session };
           },
         },

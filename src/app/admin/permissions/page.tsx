@@ -8,6 +8,7 @@ import {
   Copy,
   KeyRound,
   Loader2,
+  Pencil,
   RotateCcw,
   Search,
   ShieldCheck,
@@ -120,6 +121,8 @@ export default function AdminPermissionsPage() {
   const [createdCredentials, setCreatedCredentials] = useState<TemporaryCredential[]>([]);
   const [skippedAccounts, setSkippedAccounts] = useState<Array<{ username: string; reason: string }>>([]);
   const [resetCredentials, setResetCredentials] = useState<TemporaryCredential | null>(null);
+  const [renameAccount, setRenameAccount] = useState<Account | null>(null);
+  const [renameUsername, setRenameUsername] = useState("");
   const [credentialsCopied, setCredentialsCopied] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -407,6 +410,37 @@ export default function AdminPermissionsPage() {
     setSaving(false);
   }
 
+  function openRenameAccount(account: Account) {
+    setRenameAccount(account);
+    setRenameUsername(account.username || account.displayName || "");
+    setStatus(null);
+  }
+
+  async function updateUsername() {
+    if (!renameAccount || !renameUsername.trim()) return;
+    setSaving(true);
+    setStatus(null);
+    const response = await fetch("/api/admin/permissions", {
+      method: "PATCH",
+      headers: { ...(await getAppAuthHeaders()), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update-username",
+        userId: renameAccount.id,
+        username: renameUsername.trim(),
+      }),
+    });
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    if (!response.ok) {
+      setStatus(body?.error || "Username update failed");
+      setSaving(false);
+      return;
+    }
+    setRenameAccount(null);
+    await loadPermissions();
+    setSaving(false);
+    setStatus("Username updated.");
+  }
+
   async function copyResetCredentials() {
     if (!resetCredentials) return;
     try {
@@ -616,6 +650,16 @@ export default function AdminPermissionsPage() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => openRenameAccount(account)}
+                        disabled={saving || !capabilities.canManageAccounts || !canManageProtected}
+                        title={!capabilities.canManageAccounts ? "Full Account Management permission is required" : !canManageProtected ? "Only Akhari can rename this account" : undefined}
+                        className="inline-flex items-center gap-2 border border-white/15 bg-white/[0.04] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-gray-300 transition hover:border-cyan-400/35 hover:text-cyan-300 disabled:opacity-50"
+                      >
+                        <Pencil size={15} />
+                        Username
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => void resetPassword(account)}
                         disabled={saving || !capabilities.canResetPasswords || !canManageProtected}
                         title={!capabilities.canResetPasswords ? "Full Password Reset permission is required" : !canManageProtected ? "Only Akhari can reset this account" : undefined}
@@ -793,6 +837,42 @@ export default function AdminPermissionsPage() {
               <button type="button" onClick={() => void copyResetCredentials()} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-cyan-400/35 bg-cyan-400/10 px-4 text-sm font-bold uppercase tracking-[0.14em] text-cyan-300 transition hover:bg-cyan-400/20">
                 {credentialsCopied ? <CheckCircle2 size={17} /> : <Copy size={17} />}
                 {credentialsCopied ? "Credentials Copied" : "Copy Credentials"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {renameAccount && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-lg border border-[#00ff66]/25 bg-[#020806] shadow-[0_0_60px_rgba(0,255,102,0.12)]">
+            <div className="flex items-start justify-between gap-4 border-b border-[#00ff66]/15 p-5">
+              <div>
+                <div className="flex items-center gap-3 text-[#00ff66]"><Pencil size={20} /><span className="text-xs font-bold uppercase tracking-[0.22em]">Update Username</span></div>
+                <p className="mt-3 text-sm leading-6 text-gray-400">Capitalisation is preserved for display. Login remains case-insensitive.</p>
+              </div>
+              <button type="button" onClick={() => setRenameAccount(null)} className="grid h-10 w-10 place-items-center border border-white/10 text-gray-400 transition hover:border-red-400/40 hover:text-red-300"><X size={18} /></button>
+            </div>
+            <div className="p-5">
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Username</span>
+                <input
+                  value={renameUsername}
+                  onChange={(event) => setRenameUsername(event.target.value.replace(/[^a-zA-Z0-9_.-]/g, ""))}
+                  autoComplete="off"
+                  maxLength={40}
+                  className="mt-2 min-h-12 w-full border border-[#00ff66]/20 bg-black/70 px-4 text-white outline-none transition focus:border-[#00ff66]/60"
+                />
+              </label>
+              <p className="mt-2 text-xs leading-5 text-gray-500">Use 2-40 letters, numbers, hyphens, underscores, or dots.</p>
+              <button
+                type="button"
+                onClick={() => void updateUsername()}
+                disabled={saving || !/^[a-zA-Z0-9_.-]{2,40}$/.test(renameUsername)}
+                className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/15 px-5 font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/25 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {saving ? <Loader2 className="animate-spin" size={18} /> : <Pencil size={18} />}
+                Save Username
               </button>
             </div>
           </section>

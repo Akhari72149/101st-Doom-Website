@@ -122,10 +122,13 @@ async function getNativeAccounts() {
       id: string;
       name: string;
       username: string | null;
+      display_username: string | null;
       created_at: Date;
+      last_sign_in_at: Date | null;
       disabled: boolean;
       must_change_password: boolean;
-    }>(`select id, name, username, "createdAt" as created_at, disabled,
+    }>(`select id, name, username, "displayUsername" as display_username,
+            "createdAt" as created_at, "lastSignInAt" as last_sign_in_at, disabled,
             "mustChangePassword" as must_change_password
           from public.app_auth_users order by lower(coalesce(name, username))`),
     pool.query<UserRoleRow>("select user_id, role from public.user_roles"),
@@ -152,11 +155,11 @@ async function getNativeAccounts() {
   return users.rows.map((user) => ({
     id: user.id,
     displayName: profilesByUser.get(user.id)?.display_name || user.name || user.username || "",
-    username: user.username || "",
+    username: user.display_username || user.username || "",
     protected: String(user.username || "").trim().toLowerCase() === "akhari",
     mustChangePassword: user.must_change_password,
     createdAt: user.created_at,
-    lastSignInAt: null,
+    lastSignInAt: user.last_sign_in_at,
     disabled: user.disabled,
     roles: rolesByUser.get(user.id) || [],
     permissions: permissionsByUser.get(user.id) || {},
@@ -268,7 +271,7 @@ export async function POST(request: Request) {
       success: true,
       created: prepared.map((entry) => ({
         id: entry.userId,
-        username: entry.username,
+        username: entry.displayName,
         displayName: entry.displayName,
         temporaryPassword: entry.temporaryPassword,
       })),
@@ -377,6 +380,7 @@ export async function PATCH(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: string;
     userId?: string;
+    username?: unknown;
     permissions?: Array<{ permissionKey?: string; accessLevel?: string | null }>;
   } | null;
 
@@ -421,6 +425,43 @@ export async function PATCH(request: Request) {
     return jsonError("You cannot disable or delete your own account", 409);
   }
 
+  if (action === "update-username") {
+    if (process.env.NATIVE_AUTH_ENABLED !== "true") {
+      return jsonError("Username updates are available with native authentication only", 409);
+    }
+    const displayUsername = String(body?.username || "").trim();
+    const username = normalizeUsername(displayUsername);
+    if (!isValidUsername(username)) {
+      return jsonError("Username must use 2-40 letters, numbers, hyphens, underscores, or dots");
+    }
+    if (protectedAccount && username !== "akhari") {
+      return jsonError("The protected Akhari username cannot be changed", 409);
+    }
+    if (!protectedAccount && username === "akhari") {
+      return jsonError("The protected Akhari username is reserved", 409);
+    }
+    try {
+      const result = await getPostgresPool().query(
+        `update public.app_auth_users
+         set username = $2,
+             "displayUsername" = $3,
+             name = $3,
+             "updatedAt" = now()
+         where id = $1
+         returning id`,
+        [userId, username, displayUsername],
+      );
+      if (!result.rowCount) return jsonError("Account not found", 404);
+      return NextResponse.json({ success: true, username: displayUsername });
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") {
+        return jsonError("That username already exists", 409);
+      }
+      console.error("[permissions] Username update failed", error);
+      return jsonError("Unable to update username", 500);
+    }
+  }
+
   if (action === "reset-password") {
     if (process.env.NATIVE_AUTH_ENABLED !== "true") {
       return jsonError("Password reset is available with native authentication only", 409);
@@ -435,7 +476,7 @@ export async function PATCH(request: Request) {
          where accounts."userId" = users.id
            and accounts."providerId" = 'credential'
            and users.id = $1
-         returning users.username`,
+         returning coalesce(users."displayUsername", users.username) as username`,
         [userId, passwordHash],
       );
       if (!account.rowCount) return null;

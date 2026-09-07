@@ -36,12 +36,12 @@ export async function GET(request: Request) {
           [nativeUser.id],
         ),
     ]);
-    const username = nativeUser.username || nativeUser.displayUsername || "";
+    const username = nativeUser.displayUsername || nativeUser.username || "";
 
     return NextResponse.json({
       user: {
         id: nativeUser.id,
-        displayName: nativeUser.name || username,
+        displayName: nativeUser.displayUsername || nativeUser.name || username,
         username,
         email: nativeUser.email || null,
       },

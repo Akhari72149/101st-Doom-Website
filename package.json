@@ -53,6 +53,8 @@
     "test:arma-xp-bridge": "node tools/arma-xp-bridge/test-parser.js"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.98.0",
     "animejs": "^4.3.6",
@@ -71,7 +73,8 @@
     "react-pageflip": "^2.0.3",
     "react-zoom-pan-pinch": "^3.7.0",
     "reactflow": "^11.11.4",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -79,6 +82,7 @@
     "@types/pg": "8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.185.4",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

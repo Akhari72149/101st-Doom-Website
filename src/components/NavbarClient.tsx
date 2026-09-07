@@ -229,6 +229,11 @@ export default function NavbarClient() {
       columns: 1,
       items: [
         {
+          href: "/model-customiser",
+          label: "Model Customiser",
+          description: "Paint approved armour and vehicle reference models",
+        },
+        {
           href: "/Workbench",
           label: "Animation Workbench",
           description: "Workbench and development utility page",

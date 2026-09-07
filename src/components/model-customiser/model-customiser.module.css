@@ -1,0 +1,66 @@
+.page { min-height: 100vh; padding: 2rem clamp(1rem, 3vw, 3rem) 4rem; color: #e9f6f1; background: linear-gradient(rgba(0,8,5,.82),rgba(0,8,5,.96)), url('/art/Sigma/Dagger 1-1 HALO v3.png') center 20%/cover fixed; }
+.header { max-width: 1600px; margin: 0 auto 1.25rem; display: flex; align-items: end; justify-content: space-between; gap: 2rem; border-bottom: 1px solid rgba(0,255,102,.24); padding: 1rem 0 1.35rem; }
+.header h1 { margin: .2rem 0 .45rem; color: #f4fffb; font-size: clamp(2rem, 4vw, 3.75rem); line-height: 1; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }
+.eyebrow, .smallLabel { margin: 0; color: #00e985; font-size: .72rem; text-transform: uppercase; letter-spacing: .16em; }
+.intro { margin: 0; max-width: 760px; color: #9bb7ac; line-height: 1.6; letter-spacing: 0; }
+.headerStatus { flex: none; display: flex; align-items: center; gap: .65rem; color: #9bb7ac; font-size: .76rem; text-transform: uppercase; }
+.headerStatus span { width: 8px; height: 8px; border-radius: 50%; background: #00e985; box-shadow: 0 0 12px #00e985; }
+.workspace { max-width: 1600px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 410px); gap: 1rem; align-items: start; }
+.viewerPanel, .controls { border: 1px solid rgba(0,255,102,.22); background: rgba(0,10,6,.93); box-shadow: 0 20px 70px rgba(0,0,0,.35); }
+.viewerPanel { position: sticky; top: 5.5rem; min-width: 0; }
+.viewerTopbar { min-height: 68px; padding: .9rem 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(0,255,102,.18); }
+.viewerTopbar > div { display: grid; gap: .2rem; }
+.viewerTopbar strong { letter-spacing: 0; font-size: 1rem; }
+.iconButton, .dangerIcon { width: 42px; height: 42px; display: inline-grid; place-items: center; border: 1px solid rgba(0,255,102,.3); color: #00e985; background: #020a07; cursor: pointer; }
+.viewer { position: relative; height: clamp(520px, 68vh, 860px); min-height: 480px; overflow: hidden; background: #020706; }
+.mode-paint canvas { cursor: crosshair; }
+.mode-logo canvas { cursor: copy; }
+.viewerBadge { position: absolute; left: 1rem; bottom: 1rem; max-width: calc(100% - 2rem); padding: .6rem .8rem; border-left: 2px solid #00e985; background: rgba(0,8,5,.86); color: #a9c2b8; font-size: .72rem; letter-spacing: 0; pointer-events: none; }
+.modeBar { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid rgba(0,255,102,.2); }
+.modeBar button { min-height: 54px; display: flex; align-items: center; justify-content: center; gap: .5rem; border: 0; border-right: 1px solid rgba(0,255,102,.15); background: #020a07; color: #8da69d; cursor: pointer; }
+.modeBar button:last-child { border-right: 0; }
+.modeBar .activeMode { color: #001108; background: #00e985; font-weight: 700; }
+.notice { min-height: 45px; display: flex; align-items: center; padding: .7rem 1rem; color: #a9c2b8; border-top: 1px solid rgba(0,255,102,.14); font-size: .78rem; letter-spacing: 0; }
+.controls { display: grid; }
+.controlSection { padding: 1.1rem; border-bottom: 1px solid rgba(0,255,102,.17); }
+.controlSection:last-child { border-bottom: 0; }
+.controlSection h2 { margin: 0 0 .9rem; font-size: .9rem; color: #00e985; text-transform: uppercase; letter-spacing: .12em; }
+.controlSection label { display: grid; gap: .4rem; margin-top: .85rem; color: #789389; font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; }
+.controlSection select { width: 100%; height: 44px; padding: 0 .75rem; border: 1px solid rgba(0,255,102,.28); border-radius: 0; background: #010805; color: #e9f6f1; font: inherit; letter-spacing: 0; }
+.controlSection input[type='range'] { width: 100%; accent-color: #00e985; }
+.sectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.sectionHeading h2 { margin-bottom: .8rem; }
+.sectionHeading > span { color: #829c92; font-size: .72rem; }
+.calibration { margin: .9rem 0 0; display: flex; align-items: flex-start; gap: .55rem; padding: .75rem; border: 1px solid rgba(212,176,43,.3); background: rgba(131,123,15,.09); color: #d6ca65; font-size: .72rem; line-height: 1.45; letter-spacing: 0; }
+.calibration svg { flex: none; margin-top: .1rem; }
+.swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: .55rem; }
+.swatches button { height: 42px; border: 2px solid rgba(255,255,255,.1); background: var(--swatch); cursor: pointer; }
+.swatches .selectedSwatch { border-color: #fff; outline: 2px solid #00e985; outline-offset: 2px; }
+.zoneGrid { margin-top: 1rem; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
+.zoneGrid span { min-width: 0; padding: .5rem .55rem; display: grid; gap: .15rem; border-left: 2px solid; font-size: .57rem; text-transform: uppercase; }
+.zoneGrid strong { min-width: 0; color: #d9e8e2; font-size: .68rem; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
+.zoneAllowed { border-color: #00e985; color: #00e985; background: rgba(0,233,133,.05); }
+.zoneRestricted { border-color: #804240; color: #bb7772; background: rgba(121,0,0,.08); }
+.coverageList { display: grid; gap: .75rem; }
+.coverageRow > div { display: grid; grid-template-columns: 10px 1fr auto; gap: .5rem; align-items: center; color: #a9c2b8; font-size: .72rem; letter-spacing: 0; }
+.coverageRow i { width: 9px; height: 9px; }
+.coverageRow b { color: #dceae5; font-weight: 500; }
+.coverageRow progress { width: 100%; height: 5px; margin-top: .35rem; border: 0; background: #102019; }
+.coverageRow progress::-webkit-progress-bar { background: #102019; }
+.coverageRow progress::-webkit-progress-value { background: #00c875; }
+.logoGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+.logoGrid button { min-width: 0; padding: .4rem; display: grid; gap: .4rem; border: 1px solid rgba(0,255,102,.2); background: #010805; color: #a9c2b8; cursor: pointer; }
+.logoGrid img { width: 100%; aspect-ratio: 1; object-fit: cover; filter: saturate(.8); }
+.logoGrid span { font-size: .58rem; letter-spacing: 0; overflow-wrap: anywhere; }
+.logoGrid .selectedLogo { border-color: #00e985; color: #00e985; }
+.logoEditor { margin-top: .8rem; padding: .75rem; border: 1px solid rgba(0,255,102,.2); }
+.logoEditor strong { font-size: .72rem; }
+.dangerIcon { border-color: rgba(255,83,83,.35); color: #ff7777; }
+.actionGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
+.actionGrid button { min-height: 42px; display: flex; align-items: center; justify-content: center; gap: .45rem; border: 1px solid rgba(0,255,102,.26); background: #020a07; color: #b8cdc5; cursor: pointer; }
+.actionGrid button:disabled { opacity: .35; cursor: not-allowed; }
+.actionGrid .exportButton { color: #001108; background: #00e985; font-weight: 700; }
+.hiddenInput { display: none; }
+@media (max-width: 1050px) { .workspace { grid-template-columns: 1fr; } .viewerPanel { position: static; } .controls { grid-template-columns: repeat(2, minmax(0,1fr)); } .controlSection { border-right: 1px solid rgba(0,255,102,.17); } }
+@media (max-width: 700px) { .page { padding: .8rem .65rem 2rem; } .header { align-items: start; margin-bottom: .75rem; } .headerStatus { display: none; } .header h1 { font-size: 2rem; } .intro { font-size: .8rem; } .viewer { height: min(62vh, 620px); min-height: 420px; } .viewerTopbar { min-height: 58px; } .controls { grid-template-columns: 1fr; } .controlSection { border-right: 0; } .modeBar button { font-size: .72rem; } }
+

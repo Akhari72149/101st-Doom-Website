@@ -62,6 +62,7 @@ export default function UpdaterPage() {
   const [error, setError] = useState("");
 
   const loadStatus = useCallback(async () => {
+    setLoading(true);
     try {
       const response = await fetch("/api/admin/updater", {
         cache: "no-store",
@@ -144,8 +145,8 @@ export default function UpdaterPage() {
           </div>
           <button type="button" onClick={() => void loadStatus()} disabled={loading || Boolean(active)}
             className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/30 bg-[#00ff66]/8 px-5 text-sm font-bold uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/15 disabled:cursor-not-allowed disabled:opacity-50">
-            {loading ? <Loader2 className="animate-spin" size={17} /> : <RefreshCw size={17} />}
-            Check Again
+            <RefreshCw className={loading ? "animate-spin" : undefined} size={17} />
+            {loading ? "Checking..." : "Check Again"}
           </button>
         </header>
 

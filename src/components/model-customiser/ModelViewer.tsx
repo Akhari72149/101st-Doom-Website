@@ -76,7 +76,7 @@ function useZoneTextures(model: ModelDefinition, actions: EditorAction[], draft:
 
 function uvPoint(event: ThreeEvent<PointerEvent>): UvPoint | null {
   if (!event.uv) return null;
-  return { x: THREE.MathUtils.clamp(event.uv.x, 0, 1), y: THREE.MathUtils.clamp(1 - event.uv.y, 0, 1) };
+  return { x: THREE.MathUtils.clamp(event.uv.x, 0, 1), y: THREE.MathUtils.clamp(event.uv.y, 0, 1) };
 }
 
 function zoneForObject(model: ModelDefinition, object: THREE.Object3D) {

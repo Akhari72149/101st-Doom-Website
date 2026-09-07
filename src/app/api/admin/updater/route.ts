@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getPostgresPool } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
-import { getAvailableRelease, getInstalledRelease } from "@/lib/website-updater";
+import { getAvailableRelease, getInstalledRelease, getPendingCommits } from "@/lib/website-updater";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,15 +51,18 @@ export async function GET(request: Request) {
   const read = await requirePageAccess(request, "admin.updater", "read");
   if (!read) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
-    const [installed, available, job, full] = await Promise.all([
-      getInstalledRelease(),
-      getAvailableRelease(),
+    const installed = await getInstalledRelease();
+    const force = new URL(request.url).searchParams.get("refresh") === "1";
+    const [available, pendingCommits, job, full] = await Promise.all([
+      getAvailableRelease(force),
+      getPendingCommits(installed.sha, force),
       latestJob(),
       requirePageAccess(request, "admin.updater", "full"),
     ]);
     return NextResponse.json({
       installed,
       available,
+      pendingCommits,
       updateAvailable: installed.sha !== available.sha,
       canInstall: Boolean(full),
       updaterEnabled: process.env.WEBSITE_UPDATER_ENABLED === "true",

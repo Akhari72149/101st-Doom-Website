@@ -8,6 +8,7 @@ const OWNER = "Akhari72149";
 const REPOSITORY = "101st-Doom-Website";
 const SHA = /^[0-9a-f]{40}$/;
 let availableCache: { expiresAt: number; release: CommitDetails } | null = null;
+let pendingCache: { baseSha: string; expiresAt: number; commits: CommitSummary[] } | null = null;
 
 type CommitDetails = {
   sha: string;
@@ -15,6 +16,13 @@ type CommitDetails = {
   message: string;
   committedAt: string | null;
   version: string;
+};
+
+export type CommitSummary = {
+  sha: string;
+  shortSha: string;
+  message: string;
+  committedAt: string | null;
 };
 
 function githubHeaders(): HeadersInit {
@@ -88,4 +96,34 @@ export async function getAvailableRelease(force = false): Promise<CommitDetails>
   };
   availableCache = { expiresAt: Date.now() + 60_000, release };
   return release;
+}
+
+export async function getPendingCommits(baseSha: string, force = false): Promise<CommitSummary[]> {
+  if (!SHA.test(baseSha)) throw new Error("Installed Git commit could not be determined");
+  if (!force && pendingCache?.baseSha === baseSha && pendingCache.expiresAt > Date.now()) {
+    return pendingCache.commits;
+  }
+  const response = await fetch(
+    `https://api.github.com/repos/${OWNER}/${REPOSITORY}/compare/${baseSha}...main`,
+    { headers: githubHeaders(), cache: "no-store", signal: AbortSignal.timeout(10_000) },
+  );
+  if (!response.ok) throw new Error(`GitHub comparison returned HTTP ${response.status}`);
+  const body = await response.json() as {
+    commits?: Array<{
+      sha?: string;
+      commit?: { message?: string; committer?: { date?: string } };
+    }>;
+  };
+  const commits = (body.commits || []).flatMap((entry) => {
+    const sha = String(entry.sha || "").toLowerCase();
+    if (!SHA.test(sha)) return [];
+    return [{
+      sha,
+      shortSha: sha.slice(0, 7),
+      message: entry.commit?.message?.split("\n")[0] || "No commit message",
+      committedAt: entry.commit?.committer?.date || null,
+    }];
+  });
+  pendingCache = { baseSha, expiresAt: Date.now() + 60_000, commits };
+  return commits;
 }

@@ -39,9 +39,17 @@ type UpdateJob = {
   updated_at: string;
 };
 
+type CommitSummary = {
+  sha: string;
+  shortSha: string;
+  message: string;
+  committedAt: string | null;
+};
+
 type UpdaterStatus = {
   installed: Release;
   available: Release;
+  pendingCommits: CommitSummary[];
   updateAvailable: boolean;
   canInstall: boolean;
   updaterEnabled: boolean;
@@ -61,10 +69,10 @@ export default function UpdaterPage() {
   const [status, setStatus] = useState<UpdaterStatus | null>(null);
   const [error, setError] = useState("");
 
-  const loadStatus = useCallback(async () => {
+  const loadStatus = useCallback(async (force = false) => {
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/updater", {
+      const response = await fetch(`/api/admin/updater${force ? "?refresh=1" : ""}`, {
         cache: "no-store",
         headers: await getAppAuthHeaders(),
       });
@@ -143,7 +151,7 @@ export default function UpdaterPage() {
               </p>
             </div>
           </div>
-          <button type="button" onClick={() => void loadStatus()} disabled={loading || Boolean(active)}
+          <button type="button" onClick={() => void loadStatus(true)} disabled={loading || Boolean(active)}
             className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/30 bg-[#00ff66]/8 px-5 text-sm font-bold uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/15 disabled:cursor-not-allowed disabled:opacity-50">
             <RefreshCw className={loading ? "animate-spin" : undefined} size={17} />
             {loading ? "Checking..." : "Check Again"}
@@ -170,6 +178,34 @@ export default function UpdaterPage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {status && (status.pendingCommits?.length || 0) > 0 && (
+            <section className="mt-6 border border-cyan-400/20 bg-cyan-400/[0.035]">
+              <div className="flex flex-col gap-2 border-b border-cyan-400/15 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="font-black uppercase tracking-[0.14em] text-cyan-300">Pending Commits</h2>
+                  <p className="mt-1 text-xs text-gray-400">These changes will be installed together, in this order.</p>
+                </div>
+                <span className="border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-cyan-300">
+                  {status.pendingCommits.length} {status.pendingCommits.length === 1 ? "commit" : "commits"}
+                </span>
+              </div>
+              <div className="divide-y divide-cyan-400/10">
+                {status.pendingCommits.map((commit, index) => (
+                  <div key={commit.sha} className="grid gap-3 px-5 py-4 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                    <div className="grid h-8 w-8 place-items-center border border-cyan-400/20 bg-black/35 font-mono text-xs text-cyan-300">
+                      {index + 1}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-white">{commit.message}</div>
+                      <div className="mt-1 font-mono text-xs text-cyan-300">{commit.shortSha}</div>
+                    </div>
+                    <div className="text-xs text-gray-500">{dateTime(commit.committedAt)}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           <div className="mt-6 grid gap-4 border border-[#00ff66]/15 bg-[#03110b]/75 p-5 sm:grid-cols-2 lg:grid-cols-4">

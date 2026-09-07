@@ -117,9 +117,9 @@ export default function AdminPermissionsPage() {
   });
   const [draftPermissions, setDraftPermissions] = useState<Record<string, PagePermissionAccess>>({});
   const [showCreateAccount, setShowCreateAccount] = useState(false);
-  const [newUsernames, setNewUsernames] = useState("");
-  const [createdCredentials, setCreatedCredentials] = useState<TemporaryCredential[]>([]);
-  const [skippedAccounts, setSkippedAccounts] = useState<Array<{ username: string; reason: string }>>([]);
+  const [newUsername, setNewUsername] = useState("");
+  const [newDiscordId, setNewDiscordId] = useState("");
+  const [createdAccount, setCreatedAccount] = useState<{ username: string; discordId: string } | null>(null);
   const [resetCredentials, setResetCredentials] = useState<TemporaryCredential | null>(null);
   const [renameAccount, setRenameAccount] = useState<Account | null>(null);
   const [renameUsername, setRenameUsername] = useState("");
@@ -338,25 +338,21 @@ export default function AdminPermissionsPage() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        usernames: newUsernames.split(/\r?\n|,/).map((value) => value.trim()).filter(Boolean),
+        username: newUsername.trim(),
+        discordId: newDiscordId.trim(),
       }),
     });
     const body = await response.json().catch(() => null) as {
       error?: string;
-      created?: Array<{ username: string; temporaryPassword: string }>;
-      skipped?: Array<{ username: string; reason: string }>;
+      account?: { username: string; discordId: string };
+      deliveryQueued?: boolean;
     } | null;
-    if (!response.ok || !body?.created) {
+    if (!response.ok || !body?.account || !body.deliveryQueued) {
       setCreateError(body?.error || "Unable to create account");
       setSaving(false);
       return;
     }
-    setCreatedCredentials(body.created.map((entry) => ({
-      username: entry.username,
-      password: entry.temporaryPassword,
-    })));
-    setSkippedAccounts(body.skipped || []);
-    setCredentialsCopied(false);
+    setCreatedAccount(body.account);
     setCreateError("");
     await loadPermissions();
     setSaving(false);
@@ -364,25 +360,11 @@ export default function AdminPermissionsPage() {
 
   function closeCreateAccount() {
     setShowCreateAccount(false);
-    setNewUsernames("");
-    setCreatedCredentials([]);
-    setSkippedAccounts([]);
+    setNewUsername("");
+    setNewDiscordId("");
+    setCreatedAccount(null);
     setCredentialsCopied(false);
     setCreateError("");
-  }
-
-  async function copyCredentials() {
-    if (createdCredentials.length === 0) return;
-    try {
-      await navigator.clipboard.writeText(
-        createdCredentials
-          .map((entry) => `Username: ${entry.username}\nTemporary password: ${entry.password}`)
-          .join("\n\n"),
-      );
-      setCredentialsCopied(true);
-    } catch {
-      setCreateError("Clipboard access was blocked. Select the credentials and copy them manually.");
-    }
   }
 
   async function resetPassword(account: Account) {
@@ -885,57 +867,46 @@ export default function AdminPermissionsPage() {
             <div className="flex items-start justify-between gap-4 border-b border-[#00ff66]/15 p-5">
               <div>
                 <div className="flex items-center gap-3 text-[#00ff66]"><UserPlus size={20} /><span className="text-xs font-bold uppercase tracking-[0.22em]">Create Login Account</span></div>
-                <p className="mt-3 text-sm leading-6 text-gray-400">Create a username with a one-time temporary password.</p>
+                <p className="mt-3 text-sm leading-6 text-gray-400">Create one login and send its temporary credentials through the linked Discord bot.</p>
               </div>
               <button type="button" onClick={closeCreateAccount} className="grid h-10 w-10 place-items-center border border-white/10 text-gray-400 transition hover:border-red-400/40 hover:text-red-300"><X size={18} /></button>
             </div>
 
             <div className="p-5">
               {createError && <div className="mb-4 border border-red-400/35 bg-red-500/10 p-3 text-sm text-red-200">{createError}</div>}
-              {createdCredentials.length > 0 || skippedAccounts.length > 0 ? (
+              {createdAccount ? (
                 <div>
-                  {createdCredentials.length > 0 && (
-                    <>
-                      <div className="border border-amber-300/30 bg-amber-300/8 p-4 text-sm leading-6 text-amber-100">
-                        These temporary passwords are shown only once. Send each one through a secure channel.
-                      </div>
-                      <div className="mt-4 max-h-80 overflow-y-auto border border-[#00ff66]/15 bg-black/60">
-                        {createdCredentials.map((credential) => (
-                          <div key={credential.username} className="grid gap-2 border-b border-[#00ff66]/10 p-4 last:border-b-0 sm:grid-cols-[1fr_1.4fr]">
-                            <div className="break-all font-mono text-sm text-white">{credential.username}</div>
-                            <div className="break-all font-mono text-sm text-[#00ff66]">{credential.password}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <button type="button" onClick={() => void copyCredentials()} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/10 px-4 text-sm font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20">
-                        {credentialsCopied ? <CheckCircle2 size={17} /> : <Copy size={17} />}
-                        {credentialsCopied ? "Credentials Copied" : "Copy All Credentials"}
-                      </button>
-                    </>
-                  )}
-                  {skippedAccounts.length > 0 && (
-                    <div className="mt-4 border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Skipped</div>
-                      <div className="mt-3 space-y-2 text-sm text-gray-400">
-                        {skippedAccounts.map((entry, index) => (
-                          <div key={`${entry.username}-${index}`}><span className="text-white">{entry.username}</span>: {entry.reason}</div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <div className="border border-[#00ff66]/30 bg-[#00ff66]/8 p-4 text-sm leading-6 text-[#b8ffd3]">
+                    Account created. The Discord bot has queued a direct message containing the login link, username, and temporary password.
+                  </div>
+                  <div className="mt-4 border border-[#00ff66]/15 bg-black/60 p-4">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Username</div>
+                    <div className="mt-2 text-base text-white">{createdAccount.username}</div>
+                    <div className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Discord ID</div>
+                    <div className="mt-2 font-mono text-sm text-cyan-300">{createdAccount.discordId}</div>
+                  </div>
+                  <button type="button" onClick={closeCreateAccount} className="mt-4 inline-flex min-h-11 w-full items-center justify-center border border-[#00ff66]/35 bg-[#00ff66]/10 px-4 text-sm font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20">
+                    Done
+                  </button>
                 </div>
               ) : (
                 <div>
                   <label className="block">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Usernames</span>
-                    <textarea value={newUsernames} onChange={(event) => setNewUsernames(event.target.value)} autoComplete="off" rows={12} placeholder={"Advisor\nAkhari\nArcher\nSix-Ten"}
-                      className="mt-2 w-full resize-y border border-[#00ff66]/20 bg-black/70 px-4 py-3 text-white outline-none transition placeholder:text-gray-600 focus:border-[#00ff66]/60" />
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Username</span>
+                    <input value={newUsername} onChange={(event) => setNewUsername(event.target.value.replace(/[^a-zA-Z0-9_.-]/g, ""))} autoComplete="off" maxLength={40} placeholder="Username"
+                      className="mt-2 min-h-12 w-full border border-[#00ff66]/20 bg-black/70 px-4 text-white outline-none transition placeholder:text-gray-600 focus:border-[#00ff66]/60" />
                   </label>
-                  <p className="mt-2 text-xs leading-5 text-gray-500">Enter one per line. Existing accounts are skipped. Usernames use 2-40 letters, numbers, hyphens, underscores, or dots.</p>
-                  <button type="button" onClick={() => void createAccount()} disabled={saving || !newUsernames.trim()}
+                  <p className="mt-2 text-xs leading-5 text-gray-500">Use 2-40 letters, numbers, hyphens, underscores, or dots.</p>
+                  <label className="mt-5 block">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Discord User ID</span>
+                    <input value={newDiscordId} onChange={(event) => setNewDiscordId(event.target.value.replace(/\D/g, ""))} inputMode="numeric" autoComplete="off" maxLength={20} placeholder="123456789012345678"
+                      className="mt-2 min-h-12 w-full border border-cyan-400/20 bg-black/70 px-4 font-mono text-white outline-none transition placeholder:text-gray-600 focus:border-cyan-400/60" />
+                  </label>
+                  <p className="mt-2 text-xs leading-5 text-gray-500">The bot sends the credentials directly to this Discord account.</p>
+                  <button type="button" onClick={() => void createAccount()} disabled={saving || !/^[a-zA-Z0-9_.-]{2,40}$/.test(newUsername) || !/^\d{17,20}$/.test(newDiscordId)}
                     className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/15 px-5 font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/25 disabled:cursor-not-allowed disabled:opacity-45">
                     {saving ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
-                    Generate Accounts
+                    Create and Send Login
                   </button>
                 </div>
               )}

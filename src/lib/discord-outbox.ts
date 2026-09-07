@@ -82,7 +82,11 @@ export async function completeDiscordOutbox(workerValue: unknown, eventIdValue: 
   const result = await withPostgresTransaction((client) => client.query(`
     update public.discord_role_outbox
     set status = 'succeeded', processed_at = now(), locked_at = null,
-        locked_by = null, last_error = null, updated_at = now()
+        locked_by = null, last_error = null, updated_at = now(),
+        payload = case
+            when event_type = 'ACCOUNT_CREDENTIALS_DM' then '{}'::jsonb
+            else payload
+          end
     where id = $1 and status = 'processing' and locked_by = $2
     returning id
   `, [eventId, worker]));

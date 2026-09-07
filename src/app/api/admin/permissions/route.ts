@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createCipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import {
   type PagePermissionAccess,
@@ -104,6 +104,23 @@ function isValidUsername(username: string) {
   return /^[a-z0-9_.-]{2,40}$/.test(username);
 }
 
+function sealAccountCredentials(value: Record<string, string>) {
+  const secret = process.env.WEBSITE_BOT_SECRET?.trim();
+  if (!secret || secret.length < 32) throw new Error("WEBSITE_BOT_SECRET is not configured securely");
+  const iv = randomBytes(12);
+  const key = createHash("sha256").update(secret).digest();
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(value), "utf8"),
+    cipher.final(),
+  ]);
+  return {
+    iv: iv.toString("base64url"),
+    tag: cipher.getAuthTag().toString("base64url"),
+    ciphertext: ciphertext.toString("base64url"),
+  };
+}
+
 function hasValidOrigin(request: Request) {
   if (process.env.NATIVE_AUTH_ENABLED !== "true") return true;
   const origin = request.headers.get("origin");
@@ -180,102 +197,54 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null) as {
     username?: unknown;
-    usernames?: unknown;
+    discordId?: unknown;
   } | null;
-  const requestedValues = Array.isArray(body?.usernames)
-    ? body.usernames
-    : body?.username
-      ? [body.username]
-      : [];
-  if (requestedValues.length === 0 || requestedValues.length > 250) {
-    return jsonError("Provide between 1 and 250 usernames");
+  const displayName = String(body?.username || "").trim();
+  const username = normalizeUsername(displayName);
+  const discordId = String(body?.discordId || "").trim();
+  if (!isValidUsername(username)) {
+    return jsonError("Username must use 2-40 letters, numbers, hyphens, underscores, or dots");
   }
+  if (username === "akhari") return jsonError("The protected super-user account is managed separately", 409);
+  if (!/^\d{17,20}$/.test(discordId)) return jsonError("Discord ID must be 17-20 digits");
 
-  const requested = requestedValues.map((value) => ({
-    displayName: String(value || "").trim(),
-    username: normalizeUsername(value),
-  }));
-  const invalid = requested.find((entry) => !isValidUsername(entry.username));
-  if (invalid) {
-    return jsonError(
-      `Invalid username: ${invalid.displayName || "blank"}. Use 2-40 letters, numbers, hyphens, underscores, or dots.`,
-    );
-  }
-
-  const unique = new Map<string, { displayName: string; username: string }>();
-  const skipped: Array<{ username: string; reason: string }> = [];
-  for (const entry of requested) {
-    if (unique.has(entry.username)) {
-      skipped.push({ username: entry.displayName, reason: "Duplicate in this request" });
-      continue;
-    }
-    unique.set(entry.username, entry);
-  }
-
-  const entries = Array.from(unique.values()).filter((entry) => {
-    if (entry.username !== "akhari") return true;
-    skipped.push({ username: entry.displayName, reason: "Protected super-user account is managed separately" });
-    return false;
-  });
-  const existing = await getPostgresPool().query<{ username: string }>(
-    "select lower(username) as username from public.app_auth_users where lower(username) = any($1::text[])",
-    [entries.map((entry) => entry.username)],
-  );
-  const existingNames = new Set(existing.rows.map((entry) => entry.username));
-  const toCreate = entries.filter((entry) => {
-    if (!existingNames.has(entry.username)) return true;
-    skipped.push({ username: entry.displayName, reason: "Account already exists" });
-    return false;
-  });
-
-  const prepared: Array<{
-    displayName: string;
-    username: string;
-    userId: string;
-    temporaryPassword: string;
-    passwordHash: string;
-  }> = [];
-  for (let index = 0; index < toCreate.length; index += 4) {
-    const batch = await Promise.all(toCreate.slice(index, index + 4).map(async (entry) => {
-      const temporaryPassword = randomBytes(18).toString("base64url");
-      return {
-        ...entry,
-        userId: randomUUID(),
-        temporaryPassword,
-        passwordHash: await hashPassword(temporaryPassword),
-      };
-    }));
-    prepared.push(...batch);
+  const userId = randomUUID();
+  const temporaryPassword = randomBytes(18).toString("base64url");
+  const passwordHash = await hashPassword(temporaryPassword);
+  let sealed: ReturnType<typeof sealAccountCredentials>;
+  try {
+    const loginUrl = new URL("/login", process.env.APP_ORIGIN || request.url).toString();
+    sealed = sealAccountCredentials({ username: displayName, temporaryPassword, loginUrl });
+  } catch (error) {
+    console.error("[permissions] Credential delivery configuration failed", error);
+    return jsonError("Discord credential delivery is not configured", 500);
   }
 
   try {
     await withPostgresTransaction(async (client) => {
-      for (const entry of prepared) {
-        const email = `${entry.username}@accounts.101stdoombattalion.invalid`;
-        await client.query(
-          `insert into public.app_auth_users
-            (id,name,email,"emailVerified","createdAt","updatedAt",username,
-             "displayUsername",disabled,"mustChangePassword")
-           values ($1,$2,$3,true,now(),now(),$4,$2,false,true)`,
-          [entry.userId, entry.displayName, email, entry.username],
-        );
-        await client.query(
-          `insert into public.app_auth_accounts
-            (id,"userId","accountId","providerId",issuer,password,"createdAt","updatedAt")
-           values ($1,$2::uuid,$2::text,'credential','local:credential',$3,now(),now())`,
-          [randomUUID(), entry.userId, entry.passwordHash],
-        );
-      }
+      const email = `${username}@accounts.101stdoombattalion.invalid`;
+      await client.query(
+        `insert into public.app_auth_users
+          (id,name,email,"emailVerified","createdAt","updatedAt",username,
+           "displayUsername",disabled,"mustChangePassword")
+         values ($1,$2,$3,true,now(),now(),$4,$2,false,true)`,
+        [userId, displayName, email, username],
+      );
+      await client.query(
+        `insert into public.app_auth_accounts
+          (id,"userId","accountId","providerId",issuer,password,"createdAt","updatedAt")
+         values ($1,$2::uuid,$2::text,'credential','local:credential',$3,now(),now())`,
+        [randomUUID(), userId, passwordHash],
+      );
+      await client.query(
+        "select public.enqueue_account_credentials_dm($1::jsonb)",
+        [JSON.stringify({ discordId, sealed })],
+      );
     });
     return NextResponse.json({
       success: true,
-      created: prepared.map((entry) => ({
-        id: entry.userId,
-        username: entry.displayName,
-        displayName: entry.displayName,
-        temporaryPassword: entry.temporaryPassword,
-      })),
-      skipped,
+      account: { id: userId, username: displayName, discordId },
+      deliveryQueued: true,
     }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if ((error as { code?: string }).code === "23505") {

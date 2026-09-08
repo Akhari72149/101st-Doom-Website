@@ -29,7 +29,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center
+    <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-24
       bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)]
       text-[#eafff2]
     ">
@@ -53,7 +53,7 @@ export default function Login() {
 
       {/* LOGIN BOX */}
       <div className="
-        w-96 p-10 rounded-3xl
+        w-full max-w-md p-6 sm:p-8
         bg-black/50 backdrop-blur-xl
         border border-[#00ff66]/30
         shadow-[0_0_60px_rgba(0,255,100,0.2)]

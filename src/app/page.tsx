@@ -109,7 +109,7 @@ export default function HomePage() {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
 
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
   const [weeklyOpen, setWeeklyOpen] = useState(false);
   const [previousStatus, setPreviousStatus] = useState<Record<number, boolean>>(
     {},
@@ -144,6 +144,8 @@ export default function HomePage() {
   ];
 
   useEffect(() => {
+    setTime(new Date());
+
     const interval = setInterval(() => {
       setTime(new Date());
     }, 1000);
@@ -763,7 +765,7 @@ export default function HomePage() {
                       key={index}
                       type="button"
                       onClick={() => setCurrentSlide(index)}
-                      className={`h-1.5 rounded-full transition-all ${
+                      className={`h-1.5 min-h-0 rounded-full transition-all ${
                         index === currentSlide
                           ? "w-8 bg-[#00ff66]"
                           : "w-3 bg-white/35 hover:bg-white/70"
@@ -782,11 +784,13 @@ export default function HomePage() {
                         Current Time
                       </p>
                       <p className="mt-2 text-3xl font-bold text-white">
-                        {time.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
+                        {time
+                          ? time.toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            })
+                          : "--:--:--"}
                       </p>
                     </div>
                     <Clock3 className="h-8 w-8 text-[#00ff66]/70" />

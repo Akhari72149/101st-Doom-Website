@@ -14,6 +14,14 @@ html {
 
 /* Tailwind Theme Tokens */
 @theme inline {
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
@@ -33,15 +41,10 @@ html {
 /* ================= GLOBAL BODY STYLE ================= */
 
 body {
-  background: radial-gradient(
-      circle at center,
-      #001f11 0%,
-      #000a06 60%,
-      #000000 100%
-    );
+  background: linear-gradient(180deg, #000a06 0%, #000503 100%);
   color: #e6fff0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   min-height: 100vh;
   overflow-x: hidden;
 }
@@ -66,15 +69,16 @@ table {
   max-width: 100%;
 }
 
-/* ================= GREEN HOLOGRAM OVERLAY ================= */
+/* ================= COMMAND GRID OVERLAY ================= */
 
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background:
-    radial-gradient(circle at 25% 25%, rgba(0, 255, 102, 0.08), transparent 70%),
-    radial-gradient(circle at 75% 75%, rgba(0, 255, 102, 0.05), transparent 70%);
+  background-image:
+    linear-gradient(rgba(0, 255, 102, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 102, 0.025) 1px, transparent 1px);
+  background-size: 64px 64px;
   pointer-events: none;
   z-index: -1;
 }
@@ -179,7 +183,7 @@ body::after {
 
 @media (max-width: 767px) {
   body {
-    letter-spacing: 0.035em;
+    letter-spacing: 0;
   }
 
   main,
@@ -278,7 +282,7 @@ body::after {
   .text-7xl,
   .text-8xl,
   .text-9xl {
-    font-size: clamp(1.75rem, 9vw, 2.5rem);
+    font-size: 2rem;
     line-height: 1.08;
   }
 
@@ -287,6 +291,91 @@ body::after {
   .tracking-\[0\.35em\],
   .tracking-\[0\.4em\] {
     letter-spacing: 0.14em;
+  }
+}
+
+/* Shared command-interface surfaces; keep circular loaders and diagram ports. */
+.site-theme [class*="rounded-"]:not(.animate-spin):not(img):not(svg):not(.react-flow__handle),
+.site-theme .rounded {
+  border-radius: 0;
+}
+
+.site-theme :where(h1, h2, h3, h4, p, label, button, input, select, textarea, th, td, a, span, div) {
+  letter-spacing: 0;
+}
+
+.site-theme :where(h1, h2, h3, h4) {
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.site-theme :where(p, label, td, dd) {
+  overflow-wrap: anywhere;
+}
+
+.site-theme :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #6effb0;
+  outline-offset: 3px;
+}
+
+.site-theme :where(button, select, summary):not(:disabled) {
+  cursor: pointer;
+}
+
+.site-theme :where(input, select, textarea) {
+  accent-color: #00e985;
+  color-scheme: dark;
+}
+
+.site-theme :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]), select) {
+  min-height: 2.5rem;
+}
+
+.site-theme :where(select option) {
+  background: #06100b;
+  color: #e6fff0;
+}
+
+.site-theme :where(th) {
+  text-align: left;
+  font-weight: 600;
+}
+
+.site-theme :where(td) {
+  vertical-align: middle;
+}
+
+.site-theme :where(button, input, select, textarea):disabled {
+  cursor: not-allowed;
+}
+
+.site-theme {
+  scrollbar-color: #28503c #040b07;
+  scrollbar-width: thin;
+}
+
+.site-theme ::selection {
+  background: #00e985;
+  color: #001108;
+}
+
+.site-theme button[aria-label^="Go to slide"] {
+  min-height: 0 !important;
+}
+
+[data-page-surface="operational"] h1 {
+  font-size: 2rem;
+  line-height: 1.2;
+}
+
+[data-page-surface="operational"] h2 {
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 767px) {
+  [data-page-surface="operational"] h1 {
+    font-size: 1.5rem;
   }
 }
 

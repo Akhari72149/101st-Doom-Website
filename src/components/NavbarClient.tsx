@@ -468,14 +468,18 @@ export default function NavbarClient() {
                 </button>
 
                 <div
-                  className={`absolute left-0 top-full pt-2 transition-all duration-200 ${
+                  className={`absolute top-full pt-2 transition-all duration-200 ${
+                    ["Admin", "Tools", "Campaign"].includes(group.label)
+                      ? "right-0"
+                      : "left-0"
+                  } ${
                     isOpen
                       ? "visible translate-y-0 opacity-100"
                       : "invisible -translate-y-1 opacity-0"
                   }`}
                 >
                   <div
-                    className={`border border-[#00ff66]/30 border-t-[#00ff66]/70 bg-black/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.7)] backdrop-blur-xl ${
+                    className={`max-h-[calc(100dvh-100px)] overflow-y-auto border border-[#00ff66]/30 border-t-[#00ff66]/70 bg-black/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.7)] backdrop-blur-xl ${
                       group.columns === 2 ? "w-[700px]" : "w-[360px]"
                     }`}
                   >

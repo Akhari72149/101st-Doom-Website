@@ -20,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${orbitron.className} antialiased`}>
+    <html lang="en" data-scroll-behavior="smooth">
+      <body className={`${orbitron.className} antialiased site-theme`}>
         <LayoutWrapper>
           {children}
         </LayoutWrapper>

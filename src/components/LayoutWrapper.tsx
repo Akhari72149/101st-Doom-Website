@@ -15,11 +15,25 @@ export default function LayoutWrapper({
   const hideNavbar =
     pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/planops");
   const hideFooter = pathname === "/change-password" || pathname.startsWith("/planops");
+  const editorialPage = [
+    "/",
+    "/Who-We-Are",
+    "/Join",
+    "/News",
+    "/Art-of-War",
+    "/documents",
+    "/faq",
+  ].includes(pathname);
 
   return (
     <>
       {!hideNavbar && <NavbarClient />}
-      {children}
+      <div
+        className="contents"
+        data-page-surface={editorialPage ? "editorial" : "operational"}
+      >
+        {children}
+      </div>
       {!hideFooter && <LegalFooter />}
       <WebsiteUpdateNotice />
     </>

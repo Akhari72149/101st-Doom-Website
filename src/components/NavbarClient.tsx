@@ -410,8 +410,8 @@ export default function NavbarClient() {
       .filter((section) => section.items.length > 0);
 
   return (
-    <nav className="relative z-50 w-full border-b border-[#00ff66]/15 bg-black/70 shadow-[0_10px_40px_rgba(0,255,102,0.06)] backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-3 px-4 py-4 sm:px-6 xl:gap-6">
+    <nav className="relative z-50 w-full border-b border-[#00ff66]/25 bg-black/90 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl before:absolute before:inset-x-0 before:bottom-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-[#00ff66]/45 before:to-transparent">
+      <div className="mx-auto flex min-h-16 w-full max-w-[1800px] items-center justify-between gap-3 px-4 py-2 sm:px-6 xl:gap-5">
         {/* ================= LEFT ================= */}
         <div className="flex items-center gap-3">
           <Link
@@ -420,7 +420,7 @@ export default function NavbarClient() {
               setOpenMobileGroup(null);
               setMobileMenuOpen(false);
             }}
-            className="flex min-h-11 items-center gap-2 rounded-xl border border-[#00ff66]/20 bg-[#00ff66]/5 px-3 py-2 text-[#00ff66] transition hover:border-[#00ff66]/40 hover:bg-[#00ff66]/10 sm:px-4"
+            className="flex min-h-10 items-center gap-2 border border-[#00ff66]/30 bg-[#00ff66]/5 px-3 py-2 text-[#00ff66] transition hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10 sm:px-4"
           >
             <Home size={16} />
             <span className="text-sm font-medium uppercase tracking-[0.18em]">
@@ -430,7 +430,7 @@ export default function NavbarClient() {
         </div>
 
         {/* ================= CENTER NAV ================= */}
-        <div className="hidden items-center gap-3 xl:flex">
+        <div className="hidden items-center gap-1 xl:flex">
           {filteredGroups.map((group) => {
             const Icon = group.icon;
             const isOpen = openDropdown === group.label;
@@ -449,7 +449,11 @@ export default function NavbarClient() {
                       prev === group.label ? null : group.label
                     )
                   }
-                  className="flex items-center gap-2 rounded-xl border border-transparent px-4 py-2 text-[#00ff66] transition hover:border-[#00ff66]/20 hover:bg-[#00ff66]/8"
+                  className={`flex min-h-10 items-center gap-2 border px-4 py-2 text-[#00ff66] transition ${
+                    isOpen
+                      ? "border-[#00ff66]/40 bg-[#00ff66]/10"
+                      : "border-transparent hover:border-[#00ff66]/25 hover:bg-[#00ff66]/5"
+                  }`}
                 >
                   <Icon size={16} />
                   <span className="text-sm font-medium uppercase tracking-[0.12em]">
@@ -464,14 +468,14 @@ export default function NavbarClient() {
                 </button>
 
                 <div
-                  className={`absolute left-0 top-full pt-3 transition-all duration-200 ${
+                  className={`absolute left-0 top-full pt-2 transition-all duration-200 ${
                     isOpen
                       ? "visible translate-y-0 opacity-100"
                       : "invisible -translate-y-1 opacity-0"
                   }`}
                 >
                   <div
-                    className={`rounded-2xl border border-[#00ff66]/20 bg-black/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl ${
+                    className={`border border-[#00ff66]/30 border-t-[#00ff66]/70 bg-black/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.7)] backdrop-blur-xl ${
                       group.columns === 2 ? "w-[700px]" : "w-[360px]"
                     }`}
                   >
@@ -500,10 +504,10 @@ export default function NavbarClient() {
                                   key={item.href}
                                   href={item.href}
                                   onClick={() => setOpenDropdown(null)}
-                                  className="group/item block rounded-xl border border-transparent bg-white/[0.015] p-3 transition hover:border-[#00ff66]/15 hover:bg-[#00ff66]/8"
+                                  className="group/item block border border-transparent border-l-[#00ff66]/20 bg-white/[0.015] p-3 transition hover:border-[#00ff66]/25 hover:border-l-[#00ff66]/70 hover:bg-[#00ff66]/8"
                                 >
                                   <div className="flex items-start gap-3">
-                                    <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/8 p-2 text-[#00ff66]">
+                                    <div className="mt-0.5 border border-[#00ff66]/20 bg-[#00ff66]/8 p-2 text-[#00ff66]">
                                       {getItemIcon(group.label)}
                                     </div>
 
@@ -535,10 +539,10 @@ export default function NavbarClient() {
                             key={item.href}
                             href={item.href}
                             onClick={() => setOpenDropdown(null)}
-                            className="group/item rounded-xl border border-transparent bg-white/[0.015] p-3 transition hover:border-[#00ff66]/15 hover:bg-[#00ff66]/8"
+                            className="group/item border border-transparent border-l-[#00ff66]/20 bg-white/[0.015] p-3 transition hover:border-[#00ff66]/25 hover:border-l-[#00ff66]/70 hover:bg-[#00ff66]/8"
                           >
                             <div className="flex items-start gap-3">
-                              <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/8 p-2 text-[#00ff66]">
+                              <div className="mt-0.5 border border-[#00ff66]/20 bg-[#00ff66]/8 p-2 text-[#00ff66]">
                                 {getItemIcon(group.label)}
                               </div>
 
@@ -572,7 +576,7 @@ export default function NavbarClient() {
             aria-controls="mobile-navigation"
             aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
             onClick={() => setMobileMenuOpen((open) => !open)}
-            className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-[#00ff66]/30 bg-[#00ff66]/5 text-[#00ff66] transition hover:bg-[#00ff66]/10 xl:hidden"
+            className="grid min-h-10 min-w-10 place-items-center border border-[#00ff66]/35 bg-[#00ff66]/5 text-[#00ff66] transition hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10 xl:hidden"
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -588,7 +592,7 @@ export default function NavbarClient() {
                     {roles.map((role) => (
                       <span
                         key={role}
-                        className="rounded-full border border-[#00ff66]/20 bg-[#00ff66]/8 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[#00ff66]"
+                        className="border border-[#00ff66]/25 bg-[#00ff66]/8 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[#00ff66]"
                       >
                         {role}
                       </span>
@@ -599,7 +603,7 @@ export default function NavbarClient() {
 
               <button
                 onClick={handleLogout}
-                className="rounded-xl border border-red-500/60 px-3 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/10 sm:px-4"
+                className="min-h-10 border border-red-500/60 px-3 py-2 text-sm font-medium uppercase tracking-[0.08em] text-red-400 transition hover:bg-red-500/10 sm:px-4"
               >
                 Logout
               </button>
@@ -608,7 +612,7 @@ export default function NavbarClient() {
             <Link
               href="/login"
               onClick={() => setOpenMobileGroup(null)}
-              className="rounded-xl border border-[#00ff66]/40 bg-[#00ff66]/5 px-4 py-2 text-sm font-medium text-[#00ff66] transition hover:bg-[#00ff66]/10"
+              className="min-h-10 border border-[#00ff66]/40 bg-[#00ff66]/5 px-4 py-2 text-sm font-medium uppercase tracking-[0.08em] text-[#00ff66] transition hover:border-[#00ff66]/65 hover:bg-[#00ff66]/10"
             >
               Login
             </Link>
@@ -619,7 +623,7 @@ export default function NavbarClient() {
       {/* ================= MOBILE NAV ================= */}
       <div
         id="mobile-navigation"
-        className={`border-t border-[#00ff66]/10 px-4 py-3 xl:hidden ${
+        className={`border-t border-[#00ff66]/15 bg-black/95 px-4 py-3 xl:hidden ${
           mobileMenuOpen ? "block" : "hidden"
         }`}
       >
@@ -640,7 +644,7 @@ export default function NavbarClient() {
             return (
               <div
                 key={group.label}
-                className="overflow-hidden rounded-xl border border-[#00ff66]/15 bg-black/60"
+                className="overflow-hidden border border-[#00ff66]/20 bg-black/60"
               >
                 <button
                   type="button"
@@ -652,7 +656,7 @@ export default function NavbarClient() {
                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[#00ff66] transition hover:bg-[#00ff66]/5"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="rounded-lg border border-[#00ff66]/15 bg-[#00ff66]/8 p-2">
+                    <div className="border border-[#00ff66]/20 bg-[#00ff66]/8 p-2">
                       <Icon size={16} />
                     </div>
 
@@ -691,10 +695,10 @@ export default function NavbarClient() {
                                     setOpenMobileGroup(null);
                                     setMobileMenuOpen(false);
                                   }}
-                                  className="group/mobile block rounded-lg border border-[#00ff66]/10 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/25 hover:bg-[#00ff66]/10"
+                                  className="group/mobile block border border-[#00ff66]/10 border-l-[#00ff66]/35 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/30 hover:border-l-[#00ff66]/75 hover:bg-[#00ff66]/10"
                                 >
                                   <div className="flex items-start gap-3">
-                                    <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-black/40 p-2 text-[#00ff66]">
+                                    <div className="mt-0.5 border border-[#00ff66]/15 bg-black/40 p-2 text-[#00ff66]">
                                       {getItemIcon(group.label)}
                                     </div>
 
@@ -723,10 +727,10 @@ export default function NavbarClient() {
                               setOpenMobileGroup(null);
                               setMobileMenuOpen(false);
                             }}
-                            className="group/mobile block rounded-lg border border-[#00ff66]/10 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/25 hover:bg-[#00ff66]/10"
+                            className="group/mobile block border border-[#00ff66]/10 border-l-[#00ff66]/35 bg-[#00ff66]/5 p-3 transition hover:border-[#00ff66]/30 hover:border-l-[#00ff66]/75 hover:bg-[#00ff66]/10"
                           >
                             <div className="flex items-start gap-3">
-                              <div className="mt-0.5 rounded-lg border border-[#00ff66]/15 bg-black/40 p-2 text-[#00ff66]">
+                              <div className="mt-0.5 border border-[#00ff66]/15 bg-black/40 p-2 text-[#00ff66]">
                                 {getItemIcon(group.label)}
                               </div>
 

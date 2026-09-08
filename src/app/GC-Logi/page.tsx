@@ -51,6 +51,7 @@ export default function GCLogisticsHub() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [processingAction, setProcessingAction] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -106,13 +107,13 @@ export default function GCLogisticsHub() {
         router.replace("/login");
         return;
       }
-      const hasAccess = session.roles.some((role) => ["akhari", "logistics"].includes(role.toLowerCase())) ||
-        hasAppPermission(session, "gc.logistics", "read");
+      const hasAccess = hasAppPermission(session, "gc.logistics", "read");
 
       if (!hasAccess) {
         router.replace("/GC-Platoon-Logi");
         return;
       }
+      setCanEdit(hasAppPermission(session, "gc.logistics", "edit"));
 
       setLoadingAuth(false);
     };
@@ -224,6 +225,7 @@ const fetchOwnedAssets = async (platoonId: string) => {
   /* ================= ADD TOKENS ================= */
 
   const addTokens = async () => {
+    if (!canEdit) return;
     if (!selected || processingAction) return;
 
     const validAmount = clampPositiveInt(amount, 0);
@@ -326,6 +328,7 @@ const fetchOwnedAssets = async (platoonId: string) => {
   }, [cart, assets]);
 
   const checkoutCart = async () => {
+    if (!canEdit) return;
     if (!selected || processingAction) return;
 
     if (Object.keys(cart).length === 0) {
@@ -372,6 +375,7 @@ const fetchOwnedAssets = async (platoonId: string) => {
   /* ================= REMOVE ASSET ================= */
 
   const removeAsset = async (owned: OwnedAsset) => {
+    if (!canEdit) return;
     if (!selected || processingAction) return;
 
     const qtyToRemove = clampPositiveInt(removeQuantities[owned.id] || 1, 1);
@@ -509,7 +513,7 @@ const fetchOwnedAssets = async (platoonId: string) => {
                           />
                           <button
                             onClick={addTokens}
-                            disabled={processingAction}
+                            disabled={!canEdit || processingAction}
                             className="px-5 py-2 border border-[#00ff66] rounded-xl hover:bg-[#00ff66] hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {processingAction ? "Working..." : "Add"}
@@ -694,7 +698,7 @@ const fetchOwnedAssets = async (platoonId: string) => {
 
                                 <button
                                   onClick={() => addToCart(asset)}
-                                  disabled={processingAction || asset.inventory <= 0 || stockExceeded}
+                                  disabled={!canEdit || processingAction || asset.inventory <= 0 || stockExceeded}
                                   className="w-full px-4 py-2 border border-[#00ff66] rounded-lg hover:bg-[#00ff66] hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   {asset.inventory <= 0
@@ -797,7 +801,7 @@ const fetchOwnedAssets = async (platoonId: string) => {
 
                             <button
                               onClick={checkoutCart}
-                              disabled={processingAction || cartTotal > selected.tokens}
+                              disabled={!canEdit || processingAction || cartTotal > selected.tokens}
                               className="px-6 py-3 border border-[#00ff66] rounded-xl hover:bg-[#00ff66] hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {processingAction ? "Processing..." : "Checkout"}
@@ -867,7 +871,7 @@ const fetchOwnedAssets = async (platoonId: string) => {
 
                                 <button
                                   onClick={() => removeAsset(item)}
-                                  disabled={processingAction}
+                                  disabled={!canEdit || processingAction}
                                   className="w-full px-4 py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   {processingAction ? "Working..." : "Remove"}

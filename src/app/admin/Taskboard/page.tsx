@@ -65,6 +65,7 @@ export default function TaskboardPage() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -163,11 +164,11 @@ export default function TaskboardPage() {
         return;
       }
       setUserId(session.user.id);
-      const legacyAccess = session.roles.some((role) => ["akhari", "admin"].includes(role.toLowerCase()));
-      if (!legacyAccess && !hasAppPermission(session, "admin.taskboard", "read")) {
+      if (!hasAppPermission(session, "admin.taskboard", "read")) {
         router.replace("/");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.taskboard", "edit"));
       await Promise.all([fetchProfiles(), fetchTasks()]);
       setLoadingAuth(false);
     };
@@ -191,6 +192,7 @@ export default function TaskboardPage() {
   };
 
   const createTask = async () => {
+    if (!canEdit) return;
     if (!title.trim() || !userId) return;
 
     setSaving(true);
@@ -240,6 +242,7 @@ export default function TaskboardPage() {
   };
 
   const saveEdit = async () => {
+    if (!canEdit) return;
     if (!editingTaskId || !editTitle.trim()) return;
 
     const originalTask = tasks.find((task) => task.id === editingTaskId);
@@ -281,6 +284,7 @@ export default function TaskboardPage() {
   };
 
   const deleteTask = async (taskId: string) => {
+    if (!canEdit) return;
     const confirmed = window.confirm("Delete this task?");
     if (!confirmed) return;
 
@@ -297,6 +301,7 @@ export default function TaskboardPage() {
   };
 
   const moveTaskToStatus = async (taskId: string, newStatus: ColumnKey) => {
+    if (!canEdit) return;
     const currentTask = tasks.find((task) => task.id === taskId);
     if (!currentTask) return;
 
@@ -323,6 +328,7 @@ export default function TaskboardPage() {
   };
 
   const addComment = async (taskId: string) => {
+    if (!canEdit) return;
     const content = newComment[taskId]?.trim();
     if (!content || !userId) return;
 
@@ -542,7 +548,7 @@ const renderTaskCard = (task: Task) => {
     return (
       <div
         key={task.id}
-        draggable={viewMode === "kanban"}
+        draggable={canEdit && viewMode === "kanban"}
         onDragStart={() => setDraggedTaskId(task.id)}
         className="group rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/35 via-black/80 to-black/70 p-3 transition hover:border-emerald-400/40 hover:bg-emerald-950/20 hover:shadow-[0_0_20px_rgba(16,185,129,0.12)] cursor-grab active:cursor-grabbing"
       >
@@ -568,7 +574,7 @@ const renderTaskCard = (task: Task) => {
   return (
     <div
       key={task.id}
-      draggable={viewMode === "kanban"}
+      draggable={canEdit && viewMode === "kanban"}
       onDragStart={() => setDraggedTaskId(task.id)}
       className={`rounded-2xl border p-4 transition shadow-[0_0_20px_rgba(0,0,0,0.25)] ${
         viewMode === "kanban" ? "cursor-grab active:cursor-grabbing" : ""
@@ -644,6 +650,7 @@ const renderTaskCard = (task: Task) => {
         {task.status !== "todo" && (
           <button
             onClick={() => moveTaskToStatus(task.id, "todo")}
+            disabled={!canEdit}
             className="px-3 py-1 rounded-lg border border-cyan-500/30 text-xs text-cyan-300 hover:bg-cyan-500/10"
           >
             To Do
@@ -653,6 +660,7 @@ const renderTaskCard = (task: Task) => {
         {task.status !== "in_progress" && (
           <button
             onClick={() => moveTaskToStatus(task.id, "in_progress")}
+            disabled={!canEdit}
             className="px-3 py-1 rounded-lg border border-blue-500/30 text-xs text-blue-300 hover:bg-blue-500/10"
           >
             In Progress
@@ -662,6 +670,7 @@ const renderTaskCard = (task: Task) => {
         {task.status !== "review" && (
           <button
             onClick={() => moveTaskToStatus(task.id, "review")}
+            disabled={!canEdit}
             className="px-3 py-1 rounded-lg border border-amber-500/30 text-xs text-amber-300 hover:bg-amber-500/10"
           >
             Review
@@ -671,6 +680,7 @@ const renderTaskCard = (task: Task) => {
         {task.status !== "done" && (
           <button
             onClick={() => moveTaskToStatus(task.id, "done")}
+            disabled={!canEdit}
             className="px-3 py-1 rounded-lg border border-emerald-500/30 text-xs text-emerald-300 hover:bg-emerald-500/10"
           >
             Done
@@ -681,6 +691,7 @@ const renderTaskCard = (task: Task) => {
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => openEdit(task)}
+          disabled={!canEdit}
           className="px-3 py-1 rounded-lg border border-fuchsia-500/30 text-xs text-fuchsia-300 hover:bg-fuchsia-500/10"
         >
           Edit
@@ -695,6 +706,7 @@ const renderTaskCard = (task: Task) => {
 
         <button
           onClick={() => deleteTask(task.id)}
+          disabled={!canEdit}
           className="px-3 py-1 rounded-lg border border-red-500/30 text-xs text-red-400 hover:bg-red-500/10"
         >
           Delete
@@ -743,6 +755,7 @@ const renderTaskCard = (task: Task) => {
             />
             <button
               onClick={() => addComment(task.id)}
+              disabled={!canEdit}
               className="px-3 py-2 rounded-lg border border-[#00ff66]/30 text-sm text-[#00ff66] hover:bg-[#00ff66]/10"
             >
               Add Comment
@@ -1005,7 +1018,7 @@ const renderTaskCard = (task: Task) => {
 
             <button
               onClick={createTask}
-              disabled={saving || !title.trim()}
+              disabled={!canEdit || saving || !title.trim()}
               className="px-4 py-3 rounded-xl border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 disabled:opacity-50"
             >
               {saving ? "Creating..." : "Create Task"}
@@ -1091,7 +1104,7 @@ const renderTaskCard = (task: Task) => {
 
               <button
                 onClick={saveEdit}
-                disabled={!editTitle.trim()}
+                disabled={!canEdit || !editTitle.trim()}
                 className="px-4 py-3 rounded-xl border border-cyan-500/50 text-cyan-300 font-semibold hover:bg-cyan-500/10 disabled:opacity-50"
               >
                 Save Changes
@@ -1244,6 +1257,7 @@ const renderTaskCard = (task: Task) => {
                             <div className="flex flex-wrap gap-2">
                               <button
                                 onClick={() => openEdit(task)}
+                                disabled={!canEdit}
                                 className="px-3 py-1 rounded-lg border border-fuchsia-500/30 text-xs text-fuchsia-300 hover:bg-fuchsia-500/10"
                               >
                                 Edit
@@ -1364,6 +1378,7 @@ const renderTaskCard = (task: Task) => {
                                   <div className="flex flex-wrap gap-2">
                                     <button
                                       onClick={() => addComment(task.id)}
+                                      disabled={!canEdit}
                                       className="px-3 py-2 rounded-lg border border-[#00ff66]/30 text-sm text-[#00ff66] hover:bg-[#00ff66]/10"
                                     >
                                       Add Comment
@@ -1372,6 +1387,7 @@ const renderTaskCard = (task: Task) => {
                                     {task.status !== "todo" && (
                                       <button
                                         onClick={() => moveTaskToStatus(task.id, "todo")}
+                                        disabled={!canEdit}
                                         className="px-3 py-2 rounded-lg border border-cyan-500/30 text-sm text-cyan-300 hover:bg-cyan-500/10"
                                       >
                                         To Do
@@ -1381,6 +1397,7 @@ const renderTaskCard = (task: Task) => {
                                     {task.status !== "in_progress" && (
                                       <button
                                         onClick={() => moveTaskToStatus(task.id, "in_progress")}
+                                        disabled={!canEdit}
                                         className="px-3 py-2 rounded-lg border border-blue-500/30 text-sm text-blue-300 hover:bg-blue-500/10"
                                       >
                                         In Progress
@@ -1390,6 +1407,7 @@ const renderTaskCard = (task: Task) => {
                                     {task.status !== "review" && (
                                       <button
                                         onClick={() => moveTaskToStatus(task.id, "review")}
+                                        disabled={!canEdit}
                                         className="px-3 py-2 rounded-lg border border-amber-500/30 text-sm text-amber-300 hover:bg-amber-500/10"
                                       >
                                         Review
@@ -1399,6 +1417,7 @@ const renderTaskCard = (task: Task) => {
                                     {task.status !== "done" && (
                                       <button
                                         onClick={() => moveTaskToStatus(task.id, "done")}
+                                        disabled={!canEdit}
                                         className="px-3 py-2 rounded-lg border border-emerald-500/30 text-sm text-emerald-300 hover:bg-emerald-500/10"
                                       >
                                         Done
@@ -1407,6 +1426,7 @@ const renderTaskCard = (task: Task) => {
 
                                     <button
                                       onClick={() => deleteTask(task.id)}
+                                      disabled={!canEdit}
                                       className="px-3 py-2 rounded-lg border border-red-500/30 text-sm text-red-400 hover:bg-red-500/10"
                                     >
                                       Delete

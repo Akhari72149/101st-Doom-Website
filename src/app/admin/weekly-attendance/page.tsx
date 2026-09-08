@@ -269,6 +269,7 @@ export default function AttendancePage() {
   const defaultPeriod = getDefaultAttendancePeriod();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [roster, setRoster] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -306,12 +307,12 @@ export default function AttendancePage() {
         router.replace("/login");
         return;
       }
-      const canAccess = session.roles.some((role) => ["admin", "nco"].includes(role.toLowerCase())) ||
-        hasAppPermission(session, "admin.weekly-attendance", "read");
+      const canAccess = hasAppPermission(session, "admin.weekly-attendance", "read");
       if (!canAccess) {
         router.replace("/");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.weekly-attendance", "edit"));
 
       setLoadingAuth(false);
     };
@@ -401,6 +402,7 @@ export default function AttendancePage() {
   }, [fetchRoster, loadingAuth]);
 
   const updateAssignment = async (recordId: string, value: string) => {
+    if (!canEdit) return;
     setUpdatingMemberId(recordId);
 
     const response = await fetch("/api/attendance", {
@@ -425,6 +427,7 @@ export default function AttendancePage() {
   };
 
   const bulkUpdateAssignment = async (value: string) => {
+    if (!canEdit) return;
     if (!roster.length) return;
 
     setUpdatingAll(true);
@@ -710,28 +713,28 @@ export default function AttendancePage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => bulkUpdateAssignment("Y")}
-                  disabled={!roster.length || updatingAll}
+                  disabled={!canEdit || !roster.length || updatingAll}
                   className="px-3 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 transition"
                 >
                   Mark All Y
                 </button>
                 <button
                   onClick={() => bulkUpdateAssignment("N")}
-                  disabled={!roster.length || updatingAll}
+                  disabled={!canEdit || !roster.length || updatingAll}
                   className="px-3 py-2 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-50 transition"
                 >
                   Mark All N
                 </button>
                 <button
                   onClick={() => bulkUpdateAssignment("Excused")}
-                  disabled={!roster.length || updatingAll}
+                  disabled={!canEdit || !roster.length || updatingAll}
                   className="px-3 py-2 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50 transition"
                 >
                   Mark All Excused
                 </button>
                 <button
                   onClick={() => bulkUpdateAssignment("LOA")}
-                  disabled={!roster.length || updatingAll}
+                  disabled={!canEdit || !roster.length || updatingAll}
                   className="px-3 py-2 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 transition"
                 >
                   Mark All LOA
@@ -784,7 +787,7 @@ export default function AttendancePage() {
                           <td className="px-5 py-4">
                             <select
                               value={member.status}
-                              disabled={updatingMemberId === member.recordId}
+                              disabled={!canEdit || updatingMemberId === member.recordId}
                               onChange={(e) => updateAssignment(member.recordId, e.target.value)}
                               className={`w-full rounded-xl border px-3 py-2 text-sm outline-none transition ${getStatusStyles(member.status)}`}
                             >
@@ -828,7 +831,7 @@ export default function AttendancePage() {
 
                       <select
                         value={member.status}
-                        disabled={updatingMemberId === member.recordId}
+                        disabled={!canEdit || updatingMemberId === member.recordId}
                         onChange={(e) => updateAssignment(member.recordId, e.target.value)}
                         className={`mt-4 w-full rounded-xl border px-3 py-3 text-sm outline-none transition ${getStatusStyles(member.status)}`}
                       >

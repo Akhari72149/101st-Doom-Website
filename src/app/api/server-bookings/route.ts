@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { pagePermissionDefinitions, type PagePermissionAccess } from "@/data/pagePermissions";
-import { getAdminRouteAuth } from "@/lib/admin-route-auth";
-import { getNativeSession } from "@/lib/postgres/auth";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -10,7 +7,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const PERMISSION_KEY = "operations.server-bookings";
 const SERVER_IDS = new Set([1, 2, 3, 4, 5, 6]);
 const DURATION_MS = new Set([60, 120, 240].map((minutes) => minutes * 60_000));
 const ELIGIBLE_CERTIFICATION_IDS = [
@@ -19,12 +15,6 @@ const ELIGIBLE_CERTIFICATION_IDS = [
   "d6555eb7-3eac-4019-81cb-e11291437156",
   "a4316aa4-f69d-4265-aff0-0760614ff987",
 ];
-const ACCESS_LEVELS: Record<PagePermissionAccess, number> = {
-  none: 0,
-  read: 1,
-  edit: 2,
-  full: 3,
-};
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BOOKING_PASSWORD_HEADER = "x-server-booking-password";
 const DEFAULT_BOOKING_PASSWORD_SHA256 = "dafc24b3b5c9210e014a5baed44814306ab1be263bfe0093b548c9cefa6783dd";
@@ -125,57 +115,11 @@ function databaseBackend() {
   return backend;
 }
 
-function hasRequiredAccess(level: string | null | undefined, required: "read" | "edit") {
-  return (ACCESS_LEVELS[level as PagePermissionAccess] || 0) >= ACCESS_LEVELS[required];
-}
-
-async function getBookingAccess(request: Request) {
-  const passwordAccess = checkBookingPassword(request).valid;
-  if (process.env.NATIVE_AUTH_ENABLED === "true") {
-    const session = await getNativeSession(request.headers).catch(() => null);
-    if (!session) return { userId: null, canRead: true, canEdit: passwordAccess };
-
-    const [permission, roles] = await Promise.all([
-      getPostgresPool().query<{ access_level: string }>(
-        "select access_level from public.user_page_permissions where user_id = $1 and permission_key = $2",
-        [session.user.id, PERMISSION_KEY],
-      ),
-      getPostgresPool().query<{ role: string }>(
-        "select role from public.user_roles where user_id = $1",
-        [session.user.id],
-      ),
-    ]);
-    const level = permission.rows[0]?.access_level;
-    const legacyRoles = new Set(
-      pagePermissionDefinitions.find((entry) => entry.key === PERMISSION_KEY)?.legacyRoles || [],
-    );
-    const hasLegacyAccess = roles.rows.some((row) => legacyRoles.has(row.role.toLowerCase()));
-    return {
-      userId: session.user.id,
-      canRead: true,
-      canEdit: hasRequiredAccess(level, "edit") || hasLegacyAccess || passwordAccess,
-    };
-  }
-
-  const auth = await getAdminRouteAuth(request);
-  if (!auth.userId) return { userId: null, canRead: true, canEdit: passwordAccess };
-
-  const { data } = await supabaseAdmin
-    .from("user_page_permissions")
-    .select("access_level")
-    .eq("user_id", auth.userId)
-    .eq("permission_key", PERMISSION_KEY)
-    .maybeSingle();
-  const legacyRoles = new Set(
-    pagePermissionDefinitions.find((entry) => entry.key === PERMISSION_KEY)?.legacyRoles || [],
-  );
+function getBookingAccess(request: Request) {
   return {
-    userId: auth.userId,
+    userId: null,
     canRead: true,
-    canEdit:
-      hasRequiredAccess(data?.access_level, "edit") ||
-      auth.roles.some((role) => legacyRoles.has(role.toLowerCase())) ||
-      passwordAccess,
+    canEdit: checkBookingPassword(request).valid,
   };
 }
 
@@ -338,7 +282,7 @@ export async function GET(request: Request) {
   const window = parseWindow(request);
   if (!window) return jsonError("Invalid booking window", 400);
   try {
-    const access = await getBookingAccess(request);
+    const access = getBookingAccess(request);
     const data =
       databaseBackend() === "postgres"
         ? await readFromPostgres(window.serverId, window.start, window.end, access.canEdit)
@@ -463,8 +407,8 @@ async function createInSupabase(input: NonNullable<ReturnType<typeof parseCreate
 
 export async function POST(request: Request) {
   if (!requireSameOrigin(request)) return jsonError("Invalid request origin", 403);
-  const access = await getBookingAccess(request).catch(() => null);
-  if (!access?.canEdit) {
+  const access = getBookingAccess(request);
+  if (!access.canEdit) {
     const password = checkBookingPassword(request, true);
     if (password.rateLimited) return jsonError("Too many password attempts. Try again later.", 429);
     return jsonError("Incorrect booking password", 403);
@@ -490,8 +434,8 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   if (!requireSameOrigin(request)) return jsonError("Invalid request origin", 403);
-  const access = await getBookingAccess(request).catch(() => null);
-  if (!access?.canEdit) {
+  const access = getBookingAccess(request);
+  if (!access.canEdit) {
     const password = checkBookingPassword(request, true);
     if (password.rateLimited) return jsonError("Too many password attempts. Try again later.", 429);
     return jsonError("Incorrect booking password", 403);

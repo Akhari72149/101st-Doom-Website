@@ -22,6 +22,7 @@ export default function CreatePersonnel() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [ranks, setRanks] = useState<RankRow[]>([]);
@@ -87,7 +88,7 @@ export default function CreatePersonnel() {
         return;
       }
 
-      if (!session.roles.some(role=>["recruiter","di","nco"].includes(role.toLowerCase()))&&!hasAppPermission(session,"admin.create","read")) {
+      if (!hasAppPermission(session,"admin.create","read")) {
         router.replace("/");
         return;
       }
@@ -98,6 +99,7 @@ export default function CreatePersonnel() {
         setLoadingAuth(false);
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.create", "edit"));
       const data=await response.json() as {ranks?:RankRow[];processors?:ProcessorRow[]};setRanks(data.ranks||[]);setProcessors(data.processors||[]);
 
       setLoadingAuth(false);
@@ -238,6 +240,7 @@ export default function CreatePersonnel() {
   };
 
   const createUser = async () => {
+    if (!canEdit) return;
     setSuccessMessage("");
     setFormError("");
 
@@ -403,7 +406,7 @@ export default function CreatePersonnel() {
                   setDiscordError("");
                    }}
                    onBlur={() => validateDiscordId()}
-                   disabled={submitting}
+                   disabled={!canEdit || submitting}
                    className={fieldClass(!!discordError, submitting)}
                    placeholder="Discord user ID"
                                  />
@@ -421,7 +424,7 @@ export default function CreatePersonnel() {
                   type="text"
                   value={teamspeakId}
                   onChange={(e) => setTeamspeakId(cleanTeamspeakValue(e.target.value))}
-                  disabled={submitting}
+                  disabled={!canEdit || submitting}
                   className={fieldClass(false, submitting)}
                   placeholder="TS ID"
                 />
@@ -467,7 +470,7 @@ export default function CreatePersonnel() {
                     if (birthStatus !== "idle") setBirthStatus("idle");
                   }}
                   onBlur={() => checkBirthDuplicate()}
-                  disabled={submitting}
+                  disabled={!canEdit || submitting}
                   className={fieldClass(!!birthError, submitting)}
                   placeholder="Unique birth number"
                 />
@@ -493,7 +496,7 @@ export default function CreatePersonnel() {
                     if (nameStatus !== "idle") setNameStatus("idle");
                   }}
                   onBlur={() => checkNameDuplicate()}
-                  disabled={submitting}
+                  disabled={!canEdit || submitting}
                   className={fieldClass(!!nameError, submitting)}
                   placeholder="Full personnel name"
                 />
@@ -527,7 +530,7 @@ export default function CreatePersonnel() {
                       type="checkbox"
                       checked={importFromDiscord}
                       onChange={(e) => setImportFromDiscord(e.target.checked)}
-                      disabled={submitting}
+                      disabled={!canEdit || submitting}
                       className="sr-only"
                     />
 
@@ -570,13 +573,13 @@ export default function CreatePersonnel() {
                     type="datetime-local"
                     value={createdAt}
                     onChange={(e) => setCreatedAt(e.target.value)}
-                    disabled={submitting}
+                    disabled={!canEdit || submitting}
                     className={`flex-1 ${fieldClass(false, submitting)}`}
                   />
 
                   <button
                     type="button"
-                    disabled={submitting}
+                    disabled={!canEdit || submitting}
                     onClick={() => {
                       const now = new Date();
                       const local = new Date(
@@ -594,7 +597,7 @@ export default function CreatePersonnel() {
 
                   <button
                     type="button"
-                    disabled={submitting}
+                    disabled={!canEdit || submitting}
                     onClick={() => setCreatedAt("")}
                     className="px-4 rounded-xl border border-red-500 text-red-400 hover:bg-red-500 hover:text-black transition disabled:opacity-50"
                   >
@@ -624,7 +627,7 @@ export default function CreatePersonnel() {
                     setSelectedProcessor(e.target.value);
                     setProcessorError("");
                   }}
-                  disabled={submitting}
+                  disabled={!canEdit || submitting}
                   className={fieldClass(!!processorError, submitting)}
                 >
                   <option value="">-- Select Processor --</option>
@@ -696,7 +699,7 @@ export default function CreatePersonnel() {
               <div className="mt-6 space-y-3">
                 <button
                   onClick={createUser}
-                  disabled={submitting}
+                  disabled={!canEdit || submitting}
                   className={`w-full py-4 rounded-xl font-bold transition-all duration-200 ${
                     submitting
                       ? "bg-gray-700 border border-gray-600 text-gray-300 cursor-wait"
@@ -708,7 +711,7 @@ export default function CreatePersonnel() {
 
                 <button
                   type="button"
-                  disabled={submitting}
+                  disabled={!canEdit || submitting}
                   onClick={() => router.push("/pcs")}
                   className="w-full py-3 rounded-xl border border-[#00ff66]/30 text-[#00ff66]/80 hover:bg-[#00ff66]/10 transition disabled:opacity-50"
                 >

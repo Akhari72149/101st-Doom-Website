@@ -6,16 +6,15 @@ import {
   pagePermissionDefinitions,
   pagePermissionLevels,
 } from "@/data/pagePermissions";
-import { getAdminRouteAuth, hasAnyAdminRole } from "@/lib/admin-route-auth";
 import { requireNativePermission } from "@/lib/postgres/permissions";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
+import { requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const ACCESS_MANAGER_ROLES = ["admin", "akhari"];
 const LEVEL_WEIGHT: Record<PagePermissionAccess, number> = { none: 0, read: 1, edit: 2, full: 3 };
 const PROTECTED_DELEGATION_PERMISSIONS = new Set([
   "admin.permissions",
@@ -59,24 +58,11 @@ async function requirePermissionManager(
   permission = "admin.permissions",
   required: Exclude<PagePermissionAccess, "none"> = "full",
 ) {
-  if (process.env.NATIVE_AUTH_ENABLED === "true") {
-    const session = await requireNativePermission(request, permission, required).catch(() => null);
-    return {
-      auth: {
-        userId: session?.user.id || null,
-        email: session?.user.email || null,
-        roles: [] as string[],
-      },
-      allowed: Boolean(session),
-    };
-  }
-  const auth = await getAdminRouteAuth(request);
-
-  if (!auth.userId || !hasAnyAdminRole(auth.roles, ACCESS_MANAGER_ROLES)) {
-    return { auth, allowed: false };
-  }
-
-  return { auth, allowed: true };
+  const auth = await requirePageAccess(request, permission, required).catch(() => null);
+  return {
+    auth: auth || { userId: null, email: null, roles: [] as string[] },
+    allowed: Boolean(auth),
+  };
 }
 
 async function getNativeUsername(userId: string | null) {

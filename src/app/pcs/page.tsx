@@ -166,7 +166,7 @@ export default function Home() {
 
   const canAccessItem = (item: DashboardItem) => {
     const permissionKey = pagePermissionDefinitions.find((entry) => entry.pagePath === item.href)?.key;
-    if (permissionKey && permissions[permissionKey]) return true;
+    if (permissionKey) return Boolean(permissions[permissionKey]);
     if (!item.allowedRoles) return true;
     return item.allowedRoles.some((role) =>
       normalizedRoles.includes(role.toLowerCase())

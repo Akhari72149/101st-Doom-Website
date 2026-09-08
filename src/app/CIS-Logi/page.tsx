@@ -22,6 +22,7 @@ export default function CISLogisticsHub() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [commander, setCommander] = useState<Commander | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [ownedAssets, setOwnedAssets] = useState<any[]>([]);
@@ -52,11 +53,12 @@ export default function CISLogisticsHub() {
         return;
       }
 
-      const allowed=session.roles.some(role=>["akhari","logistics"].includes(role.toLowerCase()))||hasAppPermission(session,"cis.logistics","read");
+      const allowed=hasAppPermission(session,"cis.logistics","read");
       if (!allowed) {
         router.replace("/Galactic-Campaign");
         return;
       }
+      setCanEdit(hasAppPermission(session, "cis.logistics", "edit"));
 
       setLoadingAuth(false);
     };
@@ -114,6 +116,7 @@ export default function CISLogisticsHub() {
   /* ================= TOKENS ================= */
 
   const addTokens = async () => {
+    if (!canEdit) return;
     if (!commander || amount <= 0) return;
 
     const response=await fetch("/api/cis-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({action:"addTokens",commanderId:commander.id,amount})});if(!response.ok)return;
@@ -127,6 +130,7 @@ export default function CISLogisticsHub() {
   /* ================= CART CHECKOUT ================= */
 
   const checkoutCart = async () => {
+    if (!canEdit) return;
     if (!commander) return;
 
     const totalCost = Object.entries(cart).reduce((sum, [assetId, qty]) => {
@@ -150,6 +154,7 @@ export default function CISLogisticsHub() {
   /* ================= REMOVE ASSET ================= */
 
   const removeAsset = async (owned: any) => {
+    if (!canEdit) return;
     const qty = removeQuantities[owned.id] || 1;
 
     const response=await fetch("/api/cis-logistics",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({action:"removeAsset",commanderId:commander?.id,ownedId:owned.id,quantity:qty})});if(!response.ok)return;
@@ -204,6 +209,7 @@ export default function CISLogisticsHub() {
 
             <button
               onClick={addTokens}
+              disabled={!canEdit}
               className="px-5 py-2 border border-red-500 hover:bg-red-500 hover:text-black transition"
             >
               Add Tokens
@@ -303,6 +309,7 @@ export default function CISLogisticsHub() {
                       [asset.id]: (cart[asset.id] || 0) + qty,
                     })
                   }
+                  disabled={!canEdit}
                   className="w-full mt-3 border border-red-500 py-2 hover:bg-red-500 hover:text-black"
                 >
                   Add to Cart
@@ -365,6 +372,7 @@ export default function CISLogisticsHub() {
     {Object.entries(cart).length > 0 && (
       <button
         onClick={checkoutCart}
+        disabled={!canEdit}
         className="mt-4 px-6 py-3 border border-red-500 hover:bg-red-500 hover:text-black rounded"
       >
         Checkout
@@ -410,6 +418,7 @@ export default function CISLogisticsHub() {
             />
             <button
               onClick={() => removeAsset(owned)}
+              disabled={!canEdit}
               className="px-3 py-1 border border-red-500 hover:bg-red-500 hover:text-black rounded"
             >
               Remove

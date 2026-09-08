@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { pagePermissionDefinitions, type PagePermissionAccess } from "@/data/pagePermissions";
-import { getAdminRouteAuth } from "@/lib/admin-route-auth";
-import { getNativeSession } from "@/lib/postgres/auth";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
+import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -16,7 +14,6 @@ const VALID_MONTHS = new Set([
 const VALID_TYPES = new Set(["Training", "MainOp"]);
 const VALID_STATUSES = new Set(["Y", "N", "Excused", "LOA"]);
 const RECORD_ID_PATTERN = /^\d{1,19}$/;
-const levels: Record<PagePermissionAccess, number> = { none: 0, read: 1, edit: 2, full: 3 };
 
 function backend() {
   const value = process.env.ATTENDANCE_DATABASE_BACKEND || "supabase";
@@ -26,42 +23,6 @@ function backend() {
 
 function errorResponse(error: string, status: number) {
   return NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
-}
-
-function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).origin === new URL(process.env.APP_ORIGIN || request.url).origin;
-  } catch {
-    return false;
-  }
-}
-
-async function canEdit(request: Request) {
-  const legacyRoles = new Set(
-    pagePermissionDefinitions.find((entry) => entry.key === PERMISSION_KEY)?.legacyRoles || [],
-  );
-  if (process.env.NATIVE_AUTH_ENABLED === "true") {
-    const session = await getNativeSession(request.headers).catch(() => null);
-    if (!session) return false;
-    const [permission, roles] = await Promise.all([
-      getPostgresPool().query<{ access_level: PagePermissionAccess }>(
-        "select access_level from public.user_page_permissions where user_id = $1 and permission_key = $2",
-        [session.user.id, PERMISSION_KEY],
-      ),
-      getPostgresPool().query<{ role: string }>("select role from public.user_roles where user_id = $1", [session.user.id]),
-    ]);
-    return levels[permission.rows[0]?.access_level || "none"] >= levels.edit ||
-      roles.rows.some((row) => legacyRoles.has(row.role.toLowerCase()));
-  }
-
-  const auth = await getAdminRouteAuth(request);
-  if (!auth.userId) return false;
-  const { data } = await supabaseAdmin.from("user_page_permissions")
-    .select("access_level").eq("user_id", auth.userId).eq("permission_key", PERMISSION_KEY).maybeSingle();
-  return levels[(data?.access_level as PagePermissionAccess) || "none"] >= levels.edit ||
-    auth.roles.some((role) => legacyRoles.has(role));
 }
 
 function parseRead(request: Request) {
@@ -144,8 +105,10 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  if (!sameOrigin(request)) return errorResponse("Invalid request origin", 403);
-  if (!(await canEdit(request).catch(() => false))) return errorResponse("Forbidden", 403);
+  if (!requestHasSameOrigin(request)) return errorResponse("Invalid request origin", 403);
+  if (!(await requirePageAccess(request, PERMISSION_KEY, "edit").catch(() => null))) {
+    return errorResponse("Forbidden", 403);
+  }
   const body = await request.json().catch(() => null) as { ids?: unknown; status?: unknown } | null;
   const ids = Array.isArray(body?.ids) ? [...new Set(body.ids.map(String))] : [];
   const status = String(body?.status || "");

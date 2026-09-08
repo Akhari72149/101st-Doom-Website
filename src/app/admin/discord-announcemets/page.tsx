@@ -76,6 +76,7 @@ export default function DiscordAnnouncementsPage() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [loadingPage, setLoadingPage] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -151,14 +152,14 @@ export default function DiscordAnnouncementsPage() {
         return;
       }
       setUser(session.user);
-      const roleList = session.roles.map((role) => role.toLowerCase());
       const permissionAccess = hasAppPermission(session, "admin.discord-announcements", "read");
-      setRoles(permissionAccess ? [...roleList, "__permission"] : roleList);
+      setRoles(permissionAccess ? ["__permission"] : []);
 
-      if (!roleList.includes("admin") && !roleList.includes("logistics") && !permissionAccess) {
+      if (!permissionAccess) {
         router.replace("/");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.discord-announcements", "edit"));
 
       setLoadingAuth(false);
     };
@@ -334,6 +335,7 @@ export default function DiscordAnnouncementsPage() {
   };
 
   const handleCreate = async () => {
+    if (!canEdit) return;
     setStatusMessage(null);
 
     if (!title.trim()) {
@@ -475,6 +477,7 @@ export default function DiscordAnnouncementsPage() {
   };
 
   const toggleActive = async (item: Announcement) => {
+    if (!canEdit) return;
     const res = await fetch(`/api/discord-announcements/${item.id}`, {
       method: "PATCH",
       headers: {
@@ -494,6 +497,7 @@ export default function DiscordAnnouncementsPage() {
   };
 
   const deleteAnnouncement = async (id: string) => {
+    if (!canEdit) return;
     const confirmed = window.confirm("Delete this announcement?");
     if (!confirmed) return;
 
@@ -926,7 +930,7 @@ export default function DiscordAnnouncementsPage() {
 
               <button
                 onClick={handleCreate}
-                disabled={saving}
+                disabled={!canEdit || saving}
                 className="w-full px-6 py-3 rounded-xl border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all disabled:opacity-50"
               >
                 {saving
@@ -1068,6 +1072,7 @@ export default function DiscordAnnouncementsPage() {
                       <div className="mt-4 flex flex-wrap gap-3">
                         <button
                           onClick={() => loadIntoEditor(item)}
+                          disabled={!canEdit}
                           className="px-4 py-2 rounded-lg border border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/15 transition-all text-sm"
                         >
                           Edit
@@ -1075,6 +1080,7 @@ export default function DiscordAnnouncementsPage() {
 
                         <button
                           onClick={() => toggleActive(item)}
+                          disabled={!canEdit}
                           className="px-4 py-2 rounded-lg border border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all text-sm"
                         >
                           {item.active ? "Disable" : "Enable"}
@@ -1082,6 +1088,7 @@ export default function DiscordAnnouncementsPage() {
 
                         <button
                           onClick={() => deleteAnnouncement(item.id)}
+                          disabled={!canEdit}
                           className="px-4 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white transition-all text-sm"
                         >
                           Delete

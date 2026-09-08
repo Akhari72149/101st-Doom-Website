@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { pagePermissionDefinitions, type PagePermissionAccess } from "@/data/pagePermissions";
-import { getAdminRouteAuth } from "@/lib/admin-route-auth";
-import { getNativeSession } from "@/lib/postgres/auth";
 import { getPostgresPool } from "@/lib/postgres/pool";
+import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -12,7 +10,6 @@ const KEY = "admin.taskboard";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUSES = new Set(["todo", "in_progress", "review", "done"]);
 const PRIORITIES = new Set(["low", "medium", "high"]);
-const weights: Record<PagePermissionAccess, number> = { none: 0, read: 1, edit: 2, full: 3 };
 
 function backend() {
   const value = process.env.TASKBOARD_DATABASE_BACKEND || "supabase";
@@ -20,31 +17,9 @@ function backend() {
   return value;
 }
 
-function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try { return new URL(origin).origin === new URL(process.env.APP_ORIGIN || request.url).origin; } catch { return false; }
-}
-
 async function editor(request: Request) {
-  const legacy = new Set(pagePermissionDefinitions.find((entry) => entry.key === KEY)?.legacyRoles || []);
-  if (process.env.NATIVE_AUTH_ENABLED === "true") {
-    const session = await getNativeSession(request.headers).catch(() => null);
-    if (!session) return null;
-    const [permission, roles] = await Promise.all([
-      getPostgresPool().query<{ access_level: PagePermissionAccess }>(
-        "select access_level from public.user_page_permissions where user_id=$1 and permission_key=$2", [session.user.id, KEY]),
-      getPostgresPool().query<{ role: string }>("select role from public.user_roles where user_id=$1", [session.user.id]),
-    ]);
-    const allowed = weights[permission.rows[0]?.access_level || "none"] >= weights.edit || roles.rows.some((r) => legacy.has(r.role.toLowerCase()));
-    return allowed ? session.user.id : null;
-  }
-  const auth = await getAdminRouteAuth(request);
-  if (!auth.userId) return null;
-  const { data } = await supabaseAdmin.from("user_page_permissions").select("access_level")
-    .eq("user_id", auth.userId).eq("permission_key", KEY).maybeSingle();
-  return weights[(data?.access_level as PagePermissionAccess) || "none"] >= weights.edit || auth.roles.some((r) => legacy.has(r))
-    ? auth.userId : null;
+  const auth = await requirePageAccess(request, KEY, "edit").catch(() => null);
+  return auth?.userId || null;
 }
 
 async function readPostgres() {
@@ -90,7 +65,7 @@ function taskInput(value: unknown) {
 }
 
 export async function POST(request: Request) {
-  if(!sameOrigin(request)) return NextResponse.json({error:"Invalid request origin"},{status:403});
+  if(!requestHasSameOrigin(request)) return NextResponse.json({error:"Invalid request origin"},{status:403});
   const userId=await editor(request); if(!userId) return NextResponse.json({error:"Forbidden"},{status:403});
   const body=await request.json().catch(()=>null) as Record<string,unknown>|null;
   try {
@@ -111,7 +86,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  if(!sameOrigin(request)) return NextResponse.json({error:"Invalid request origin"},{status:403});
+  if(!requestHasSameOrigin(request)) return NextResponse.json({error:"Invalid request origin"},{status:403});
   if(!(await editor(request))) return NextResponse.json({error:"Forbidden"},{status:403});
   const body=await request.json().catch(()=>null) as Record<string,unknown>|null; const id=String(body?.id||"");
   if(!UUID.test(id))return NextResponse.json({error:"Invalid task"},{status:400});
@@ -134,7 +109,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request){
-  if(!sameOrigin(request))return NextResponse.json({error:"Invalid request origin"},{status:403});
+  if(!requestHasSameOrigin(request))return NextResponse.json({error:"Invalid request origin"},{status:403});
   if(!(await editor(request)))return NextResponse.json({error:"Forbidden"},{status:403});
   const id=new URL(request.url).searchParams.get("id")||"";if(!UUID.test(id))return NextResponse.json({error:"Invalid task"},{status:400});
   try{if(backend()==="postgres"){const r=await getPostgresPool().query("delete from public.taskboard_tasks where id=$1 returning id",[id]);if(!r.rowCount)return NextResponse.json({error:"Task not found"},{status:404});}

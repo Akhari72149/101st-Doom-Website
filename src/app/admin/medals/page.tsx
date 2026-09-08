@@ -108,6 +108,7 @@ export default function MedalAwardingPage() {
   const router = useRouter();
 
   const [loadingPage, setLoadingPage] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [loadingMedals, setLoadingMedals] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [removingMedalId, setRemovingMedalId] = useState<string | null>(null);
@@ -139,18 +140,11 @@ export default function MedalAwardingPage() {
       }
 
       setCurrentUserId(session.user.id);
-      const roles = session.roles.map((role) => role.toLowerCase());
-
-      if (
-        !roles.includes("admin") &&
-        !roles.includes("nco") &&
-        !roles.includes("di") &&
-        !roles.includes("recruiter") &&
-        !roles.includes("akhari") && !hasAppPermission(session, "admin.medals", "read")
-      ) {
+      if (!hasAppPermission(session, "admin.medals", "read")) {
         router.replace("/pcs");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.medals", "edit"));
 
       const response = await fetch("/api/admin/medals", { cache: "no-store", headers: await getAppAuthHeaders() });
       const data = await response.json().catch(() => null) as { personnel?: Person[]; ranks?: Rank[]; medals?: MedalRecord[]; error?: string } | null;
@@ -238,6 +232,7 @@ export default function MedalAwardingPage() {
   }
 
   async function awardMedal() {
+    if (!canEdit) return;
     if (!selectedPerson || !selectedMedal || !currentUserId || submitting) return;
 
     if (assignedMedalIds.has(selectedMedal.id)) {
@@ -267,6 +262,7 @@ export default function MedalAwardingPage() {
   }
 
   async function removeMedal(rowId: string) {
+    if (!canEdit) return;
     if (!selectedPerson) return;
 
     setRemovingMedalId(rowId);
@@ -534,7 +530,7 @@ export default function MedalAwardingPage() {
                               <button
                                 type="button"
                                 onClick={() => removeMedal(entry.id)}
-                                disabled={removingMedalId === entry.id}
+                                disabled={!canEdit || removingMedalId === entry.id}
                                 className="grid h-9 w-9 shrink-0 place-items-center border border-red-500/35 text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
                                 aria-label="Remove medal"
                               >
@@ -708,6 +704,7 @@ export default function MedalAwardingPage() {
                 type="button"
                 onClick={awardMedal}
                 disabled={
+                  !canEdit ||
                   !selectedPerson ||
                   !selectedMedal ||
                   selectedMedalAlreadyAssigned ||

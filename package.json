@@ -41,6 +41,7 @@
     "db:prepare-auth-mapping": "node --env-file=.env.postgres-export.local scripts/postgres/prepare-auth-mapping.mjs",
     "db:sync-auth-selection": "node --env-file=.env.postgres-target.local scripts/postgres/sync-auth-selection.mjs",
     "test:postgres": "node --test --test-isolation=none scripts/postgres/config.test.mjs",
+    "test:permissions": "node --env-file-if-exists=.env.postgres-runtime.local scripts/permissions/audit-permissions.mjs",
     "test:postgres-integration": "node scripts/postgres/integration-test.mjs",
     "dev": "node --env-file=.env.postgres-runtime.local scripts/postgres/start-native-rehearsal.mjs",
     "dev:native-rehearsal": "node --env-file=.env.postgres-runtime.local scripts/postgres/start-native-rehearsal.mjs",

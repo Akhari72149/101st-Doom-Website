@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getAppAuthHeaders } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
 
 type Booking = {
@@ -109,10 +108,9 @@ export default function ServersPage() {
       start: start.toISOString(),
       end: end.toISOString(),
     });
-    const authHeaders = await getAppAuthHeaders();
     const bookingHeaders = bookingPassword
-      ? { ...authHeaders, "x-server-booking-password": bookingPassword }
-      : authHeaders;
+      ? { "x-server-booking-password": bookingPassword }
+      : undefined;
 
     try {
       const response = await fetch(`/api/server-bookings?${params}`, {
@@ -194,12 +192,11 @@ export default function ServersPage() {
 
     const old = bookings;
     setBookings((prev) => prev.filter((b) => b.id !== id));
-    const authHeaders = await getAppAuthHeaders();
     const response = await fetch(`/api/server-bookings?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: password
-        ? { ...authHeaders, "x-server-booking-password": password }
-        : authHeaders,
+        ? { "x-server-booking-password": password }
+        : undefined,
     });
     const result = (await response.json().catch(() => null)) as { error?: string } | null;
     if (!response.ok) {
@@ -227,12 +224,10 @@ export default function ServersPage() {
     const start = slots[selectedStartIndex];
     const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
 
-    const authHeaders = await getAppAuthHeaders();
     const response = await fetch("/api/server-bookings", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...authHeaders,
         ...(bookingPassword ? { "x-server-booking-password": bookingPassword } : {}),
       },
       body: JSON.stringify({
@@ -287,11 +282,9 @@ export default function ServersPage() {
     setIsUnlocking(true);
     setPasswordError("");
 
-    const authHeaders = await getAppAuthHeaders();
     const response = await fetch("/api/server-bookings", {
       method: "PUT",
       headers: {
-        ...authHeaders,
         "x-server-booking-password": passwordInput,
       },
     });
@@ -432,7 +425,7 @@ export default function ServersPage() {
                 ? "border-[#00ff66]/40 bg-[#00ff66]/10 text-[#00ff66]"
                 : "border-white/15 bg-white/[0.03] text-gray-400"
             }`}>
-              {canBook ? "Booking Access" : "View Only"}
+              {canBook ? "Booking Access" : "Password Required"}
             </span>
           </div>
           {loadError && <p className="mt-3 text-sm text-red-300">{loadError}</p>}

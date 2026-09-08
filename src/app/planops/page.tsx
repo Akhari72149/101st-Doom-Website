@@ -202,9 +202,11 @@ export default function PlanOpsPage() {
       }
 
       setUserId(session.user.id);
-      const allowed = session.roles.some((role) =>
-        ["admin", "logistics", "nco", "trainer"].includes(role)
-      )||hasAppPermission(session,"operations.planops","edit");
+      if (!hasAppPermission(session, "operations.planops", "read")) {
+        router.replace("/");
+        return;
+      }
+      const allowed = hasAppPermission(session,"operations.planops","edit");
 
       setCanEdit(allowed);
       setLoadingAuth(false);

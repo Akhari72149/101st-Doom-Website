@@ -61,6 +61,7 @@ export default function PositionEditor() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [processing, setProcessing] = useState(false);
 
@@ -95,11 +96,12 @@ export default function PositionEditor() {
         return;
       }
 
-      const allowed=session.roles.some(role=>["admin","nco","di"].includes(role.toLowerCase()))||hasAppPermission(session,"admin.positions","read");
+      const allowed=hasAppPermission(session,"admin.positions","read");
       if (!allowed) {
         router.replace("/");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.positions", "edit"));
 
       setProcessedByName(session.user.displayName||session.user.username||"Unknown");
       setLoadingAuth(false);
@@ -340,6 +342,7 @@ export default function PositionEditor() {
   const postOperation=async(payload:Record<string,unknown>)=>fetch("/api/admin/personnel-operations",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({scope:"positions",...payload})});
 
   const updatePosition = async () => {
+    if (!canEdit) return;
     if (!selectedPerson || !selectedSlotId) {
       setErrorMessage("Select a position first.");
       return;
@@ -368,6 +371,7 @@ export default function PositionEditor() {
   };
 
   const updateRank = async () => {
+    if (!canEdit) return;
     if (!selectedPerson) {
       setErrorMessage("Select a person first.");
       return;
@@ -395,6 +399,7 @@ export default function PositionEditor() {
   };
 
   const updateMos = async () => {
+    if (!canEdit) return;
     if (!selectedPerson) {
       setErrorMessage("Select a person first.");
       return;
@@ -429,6 +434,7 @@ export default function PositionEditor() {
   };
 
   const unassignPosition = async () => {
+    if (!canEdit) return;
     if (!selectedPerson) return;
 
     setProcessing(true);
@@ -733,7 +739,7 @@ export default function PositionEditor() {
 
                     <button
                       onClick={updateRank}
-                      disabled={!hasRankChange || processing}
+                      disabled={!canEdit || !hasRankChange || processing}
                       className={`px-6 py-3 rounded-xl font-semibold transition ${
                         !hasRankChange || processing
                           ? "border border-[#00ff66]/15 text-gray-500 cursor-not-allowed"
@@ -826,7 +832,7 @@ export default function PositionEditor() {
                     <button
                       onClick={updateMos}
                       disabled={
-                        processing ||
+                        !canEdit || processing ||
                         !hasMosChange ||
                         (!!selectedMosType && !selectedMosValue)
                       }
@@ -1010,7 +1016,7 @@ export default function PositionEditor() {
                   <div className="flex flex-wrap gap-4">
                     <button
                       onClick={updatePosition}
-                      disabled={!selectedSlotId || !hasPositionChange || processing}
+                      disabled={!canEdit || !selectedSlotId || !hasPositionChange || processing}
                       className={`px-6 py-3 rounded-xl font-semibold transition ${
                         !selectedSlotId || !hasPositionChange || processing
                           ? "border border-[#00ff66]/15 text-gray-500 cursor-not-allowed"
@@ -1029,7 +1035,7 @@ export default function PositionEditor() {
                     {selectedPerson.slotted_position && (
                       <button
                         onClick={unassignPosition}
-                        disabled={processing}
+                        disabled={!canEdit || processing}
                         className={`px-6 py-3 rounded-xl border transition ${
                           processing
                             ? "border-red-500/20 text-red-400/40 cursor-not-allowed"

@@ -60,7 +60,6 @@ const defaultOptions: AttendanceOption[] = [
   { emoji: "❌", label: "Not Attending" },
 ];
 
-const allowedAttendanceAdminRoles = ["admin", "nco", "akhari"];
 const weekDays = [
   { value: "1", label: "Monday" },
   { value: "2", label: "Tuesday" },
@@ -189,6 +188,7 @@ function EmojiPreview({
 export default function DiscordAttendancePage() {
   const router = useRouter();
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -297,13 +297,11 @@ export default function DiscordAttendancePage() {
         router.replace("/login");
         return;
       }
-      const roles = session.roles.map((role) => role.toLowerCase());
-      const allowed = roles.some((role) => allowedAttendanceAdminRoles.includes(role));
-
-      if (!allowed && !hasAppPermission(session, "admin.discord-attendance", "read")) {
+      if (!hasAppPermission(session, "admin.discord-attendance", "read")) {
         router.replace("/");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.discord-attendance", "edit"));
 
       setLoadingAuth(false);
       await Promise.all([loadEvents(), loadEmojiOptions()]);
@@ -375,6 +373,7 @@ export default function DiscordAttendancePage() {
   }
 
   async function submitEvent() {
+    if (!canEdit) return;
     setSaving(true);
     setStatusMessage("");
 
@@ -451,6 +450,7 @@ export default function DiscordAttendancePage() {
   }
 
   async function deleteEvent(event: AttendanceEvent) {
+    if (!canEdit) return;
     const confirmed = window.confirm(
       `Delete "${event.title}"? This will also delete the Discord embed message if it has been sent.`,
     );
@@ -847,7 +847,7 @@ export default function DiscordAttendancePage() {
             <button
               type="button"
               onClick={submitEvent}
-              disabled={saving}
+              disabled={!canEdit || saving}
               className="mt-6 w-full border border-[#00ff66]/40 bg-[#00ff66]/10 px-4 py-3 text-sm font-bold uppercase tracking-[0.16em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:opacity-50"
             >
               {saving
@@ -931,6 +931,7 @@ export default function DiscordAttendancePage() {
                       <button
                         type="button"
                         onClick={() => loadEventForEdit(event)}
+                        disabled={!canEdit}
                         className="border border-[#00ff66]/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/10"
                       >
                         Edit
@@ -938,7 +939,7 @@ export default function DiscordAttendancePage() {
                       <button
                         type="button"
                         onClick={() => void deleteEvent(event)}
-                        disabled={deletingEventId === event.id}
+                        disabled={!canEdit || deletingEventId === event.id}
                         className="inline-flex items-center gap-2 border border-red-500/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

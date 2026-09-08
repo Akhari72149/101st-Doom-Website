@@ -8,6 +8,7 @@ export default function ManageCertifications() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [personnel, setPersonnel] = useState<any[]>([]);
   const [ranks, setRanks] = useState<any[]>([]);
   const [certifications, setCertifications] = useState<any[]>([]);
@@ -32,15 +33,13 @@ export default function ManageCertifications() {
         return;
       }
 
-      const roleList = session.roles.map((role) => role.toLowerCase());
-      const allowedRoles = ["admin", "trainer"];
-
-      const hasAccess = roleList.some((role) => allowedRoles.includes(role)) || hasAppPermission(session,"admin.certifications","read");
+      const hasAccess = hasAppPermission(session,"admin.certifications","read");
 
       if (!hasAccess) {
         router.replace("/");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.certifications", "edit"));
 
       setProcessedByName(session.user.displayName || session.user.email || "Unknown");
       setLoadingAuth(false);
@@ -89,6 +88,7 @@ export default function ManageCertifications() {
   };
 
   const assignCertification = async () => {
+    if (!canEdit) return;
     if (
       selectedPeople.length === 0 ||
       selectedCerts.length === 0 ||
@@ -128,6 +128,7 @@ export default function ManageCertifications() {
   };
 
   const revokeCertification = async (recordId: string) => {
+    if (!canEdit) return;
     if (!confirm("Revoke this certification?")) return;
 
     const certRecord = personCerts.find((pc) => pc.id === recordId);
@@ -364,6 +365,7 @@ export default function ManageCertifications() {
 
                         <button
                           onClick={() => revokeCertification(pc.id)}
+                          disabled={!canEdit}
                           className="px-3 py-1 rounded-lg border border-red-600 text-red-500 text-sm hover:bg-red-600 hover:text-black transition"
                         >
                           Revoke
@@ -472,7 +474,7 @@ export default function ManageCertifications() {
 
                 <button
                   onClick={assignCertification}
-                  disabled={loading || selectedCerts.length === 0}
+                  disabled={!canEdit || loading || selectedCerts.length === 0}
                   className="px-6 py-3 rounded-xl border border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10 disabled:opacity-50 transition"
                 >
                   {loading

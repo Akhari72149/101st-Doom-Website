@@ -73,12 +73,11 @@ export default function AuditLogsPage() {
   useEffect(() => {
     const init = async () => {
       const session = await getAppSession();
-      const legacyAccess = session?.roles.some((role) => ["admin", "nco", "trainer", "di"].includes(role.toLowerCase()));
       if (!session) {
         router.replace("/login");
         return;
       }
-      if (!legacyAccess && !hasAppPermission(session, "records.audit")) {
+      if (!hasAppPermission(session, "records.audit")) {
         router.replace("/");
         return;
       }

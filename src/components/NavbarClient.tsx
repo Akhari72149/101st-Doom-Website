@@ -378,7 +378,7 @@ export default function NavbarClient() {
     const permissionByPath = new Map(pagePermissionDefinitions.map((entry) => [entry.pagePath, entry.key]));
     const canSeeItem = (item: NavItem) => {
       const permissionKey = permissionByPath.get(item.href);
-      if (permissionKey && permissions[permissionKey]) return true;
+      if (permissionKey) return Boolean(permissions[permissionKey]);
       return !item.allowedRoles || item.allowedRoles.some((role) => normalizedRoles.has(role.toLowerCase()));
     };
     return navGroups

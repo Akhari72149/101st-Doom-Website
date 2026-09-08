@@ -15,8 +15,6 @@ export async function requirePageAccess(
   if (!definition) throw new Error(`Unknown page permission: ${permissionKey}`);
   const auth = await getAdminRouteAuth(request);
   if (!auth.userId) return null;
-  if (auth.roles.some((role) => definition.legacyRoles.includes(role.toLowerCase()))) return auth;
-
   let access: PagePermissionAccess = "none";
   if (process.env.NATIVE_AUTH_ENABLED === "true") {
     const result = await getPostgresPool().query<{ access_level: PagePermissionAccess }>(

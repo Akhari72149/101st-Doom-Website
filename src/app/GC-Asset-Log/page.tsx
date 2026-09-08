@@ -54,8 +54,7 @@ export default function GCLogisticsTransactionsPage() {
         return;
       }
 
-      const hasAccess = session.roles.some((role) => ["akhari", "logistics", "admin"].includes(role.toLowerCase())) ||
-        hasAppPermission(session, "gc.asset-log", "read");
+      const hasAccess = hasAppPermission(session, "gc.asset-log", "read");
 
       if (!hasAccess) {
         router.replace("/GC-Platoon-Logi");

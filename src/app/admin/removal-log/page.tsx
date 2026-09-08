@@ -126,10 +126,7 @@ export default function RemovalLogsPage() {
         router.replace("/login");
         return;
       }
-      const hasAllowedRole = session.roles.some((role) =>
-        ["recruiter", "nco", "admin", "akhari"].includes(role.toLowerCase()),
-      );
-      if (!hasAllowedRole && !hasAppPermission(session, "admin.removal-log")) {
+      if (!hasAppPermission(session, "admin.removal-log")) {
         router.replace("/");
         return;
       }

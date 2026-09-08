@@ -61,7 +61,7 @@ export default function SideOperationPage() {
       setUser(session ? { id: session.user.id } : null);
       if (!session) return;
       const customAccess = hasAppPermission(session, "operations.randomiser", "edit");
-      setRoles(customAccess ? [...session.roles, "logistics"] : session.roles);
+      setRoles(customAccess ? ["logistics"] : []);
     };
 
     loadUser();

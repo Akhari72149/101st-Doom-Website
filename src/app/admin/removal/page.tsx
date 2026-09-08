@@ -41,6 +41,7 @@ export default function RemovePersonnelPage() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [loadingPersonnel, setLoadingPersonnel] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -65,10 +66,11 @@ export default function RemovePersonnelPage() {
         return;
       }
 
-      if (!session.roles.some(role=>["nco","admin"].includes(role.toLowerCase()))&&!hasAppPermission(session,"admin.removal","read")) {
+      if (!hasAppPermission(session,"admin.removal","read")) {
         router.replace("/");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.removal", "edit"));
 
       setLoadingAuth(false);
     };
@@ -185,6 +187,7 @@ export default function RemovePersonnelPage() {
   };
 
   const handleStatusUpdate = async () => {
+    if (!canEdit) return;
     if (!selectedPersonnelId) {
       alert("Please select a person.");
       return;
@@ -585,7 +588,7 @@ export default function RemovePersonnelPage() {
               <div className="mt-8">
                 <button
                   onClick={handleStatusUpdate}
-                  disabled={submitDisabled}
+                  disabled={!canEdit || submitDisabled}
                   className={`w-full rounded-xl py-4 font-bold transition-all duration-200 ${
                     submitDisabled
                       ? "cursor-not-allowed border border-gray-600 bg-gray-700 text-gray-400"

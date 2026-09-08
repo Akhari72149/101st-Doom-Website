@@ -194,14 +194,6 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["admin", "logistics", "nco", "trainer"],
   },
   {
-    key: "operations.server-bookings",
-    pagePath: "/servers",
-    label: "Server Booking",
-    category: "Operations",
-    description: "Create and cancel Arma server bookings.",
-    legacyRoles: ["admin", "nco", "trainer", "akhari"],
-  },
-  {
     key: "operations.randomiser",
     pagePath: "/Randomiser",
     label: "Side Operation Randomiser",

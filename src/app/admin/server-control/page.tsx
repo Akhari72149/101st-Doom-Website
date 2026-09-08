@@ -31,6 +31,7 @@ export default function ServerControl() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const [serverStatus, setServerStatus] = useState<ServerType[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -79,11 +80,11 @@ export default function ServerControl() {
         return;
       }
       const roleList = session.roles;
-      const legacyAccess = roleList.some((role) => ["servermaintenance", "akhari"].includes(role.toLowerCase()));
-      if (!legacyAccess && !hasAppPermission(session, "admin.server-control", "read")) {
+      if (!hasAppPermission(session, "admin.server-control", "read")) {
         router.replace("/");
         return;
       }
+      setCanEdit(hasAppPermission(session, "admin.server-control", "edit"));
 
       setRoles(roleList);
       setLoadingAuth(false);
@@ -190,6 +191,7 @@ export default function ServerControl() {
     serverId: number,
     action: "start" | "stop"
   ) => {
+    if (!canEdit) return;
     try {
       setActionLoading((prev) => ({
         ...prev,
@@ -420,7 +422,7 @@ export default function ServerControl() {
                             onClick={() =>
                               sendCommand(`start server ${server.id}`, server.id, "start")
                             }
-                            disabled={!!loadingAction}
+                            disabled={!canEdit || !!loadingAction}
                             className="inline-flex items-center gap-2 rounded-xl border border-green-500 px-4 py-3 font-semibold text-green-400 transition hover:bg-green-600 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {loadingAction === "start" ? (
@@ -440,7 +442,7 @@ export default function ServerControl() {
                             onClick={() =>
                               sendCommand(`stop server ${server.id}`, server.id, "stop")
                             }
-                            disabled={!!loadingAction}
+                            disabled={!canEdit || !!loadingAction}
                             className="inline-flex items-center gap-2 rounded-xl border border-red-500 px-4 py-3 font-semibold text-red-400 transition hover:bg-red-600 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {loadingAction === "stop" ? (

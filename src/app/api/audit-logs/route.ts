@@ -1,45 +1,17 @@
 import { NextResponse } from "next/server";
-import { pagePermissionDefinitions, type PagePermissionAccess } from "@/data/pagePermissions";
-import { getAdminRouteAuth } from "@/lib/admin-route-auth";
-import { getNativeSession } from "@/lib/postgres/auth";
 import { getPostgresPool } from "@/lib/postgres/pool";
+import { requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const levels: Record<PagePermissionAccess, number> = { none: 0, read: 1, edit: 2, full: 3 };
 const REMOVAL_ACTIONS = ["PERSONNEL_REMOVED", "PERSONNEL_RETIRED", "PERSONNEL_TRANSFERRED"];
 
 function backend() {
   const value = process.env.AUDIT_DATABASE_BACKEND || "supabase";
   if (value !== "postgres" && value !== "supabase") throw new Error("Unknown AUDIT_DATABASE_BACKEND");
   return value;
-}
-
-async function hasAccess(request: Request, permissionKey: string) {
-  const legacyRoles = new Set(
-    pagePermissionDefinitions.find((entry) => entry.key === permissionKey)?.legacyRoles || [],
-  );
-  if (process.env.NATIVE_AUTH_ENABLED === "true") {
-    const session = await getNativeSession(request.headers).catch(() => null);
-    if (!session) return false;
-    const [permission, roles] = await Promise.all([
-      getPostgresPool().query<{ access_level: PagePermissionAccess }>(
-        "select access_level from public.user_page_permissions where user_id = $1 and permission_key = $2",
-        [session.user.id, permissionKey],
-      ),
-      getPostgresPool().query<{ role: string }>("select role from public.user_roles where user_id = $1", [session.user.id]),
-    ]);
-    return levels[permission.rows[0]?.access_level || "none"] >= levels.read ||
-      roles.rows.some((row) => legacyRoles.has(row.role.toLowerCase()));
-  }
-  const auth = await getAdminRouteAuth(request);
-  if (!auth.userId) return false;
-  const { data } = await supabaseAdmin.from("user_page_permissions")
-    .select("access_level").eq("user_id", auth.userId).eq("permission_key", permissionKey).maybeSingle();
-  return levels[(data?.access_level as PagePermissionAccess) || "none"] >= levels.read ||
-    auth.roles.some((role) => legacyRoles.has(role));
 }
 
 function serialize(row: Record<string, unknown>) {
@@ -150,7 +122,7 @@ async function supabaseLogs(input: ReturnType<typeof filters>) {
 export async function GET(request: Request) {
   const input = filters(request);
   const permission = input.scope === "removals" ? "admin.removal-log" : "records.audit";
-  if (!(await hasAccess(request, permission).catch(() => false))) {
+  if (!(await requirePageAccess(request, permission, "read").catch(() => null))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   try {

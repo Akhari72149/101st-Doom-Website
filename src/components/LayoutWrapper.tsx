@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import NavbarClient from "@/components/NavbarClient";
 import LegalFooter from "@/components/legal/LegalFooter";
+import WebsiteUpdateNotice from "@/components/WebsiteUpdateNotice";
 
 export default function LayoutWrapper({
   children,
@@ -20,6 +21,7 @@ export default function LayoutWrapper({
       {!hideNavbar && <NavbarClient />}
       {children}
       {!hideFooter && <LegalFooter />}
+      <WebsiteUpdateNotice />
     </>
   );
 }

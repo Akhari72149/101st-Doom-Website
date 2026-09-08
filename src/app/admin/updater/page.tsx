@@ -15,6 +15,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
+import type { PublicUpdateStatus } from "@/lib/website-update-status";
 
 type Release = {
   sha: string;
@@ -88,6 +89,37 @@ export default function UpdaterPage() {
     }
   }, []);
 
+  const loadLiveStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/website-update-status", { cache: "no-store" });
+      if (!response.ok) return;
+      const body = (await response.json()) as PublicUpdateStatus;
+      if (!body.job) return;
+      const job = body.job;
+      setStatus((current) => current
+        ? {
+            ...current,
+            job: {
+              id: job.id,
+              requested_by_name: current.job?.requested_by_name || "Updater",
+              from_commit: current.job?.from_commit || current.installed.sha,
+              target_commit: current.job?.target_commit || current.available.sha,
+              status: job.status,
+              stage: job.stage,
+              message: job.message,
+              requested_at: job.requestedAt,
+              completed_at: job.completedAt,
+              updated_at: job.updatedAt,
+            },
+          }
+        : current);
+      if (!body.active) setInstalling(false);
+    } catch {
+      // The external updater serves this endpoint while Next.js changes over.
+      // Keep the last known stage visible during the brief port handoff.
+    }
+  }, []);
+
   useEffect(() => {
     void (async () => {
       const session = await getAppSession();
@@ -98,12 +130,14 @@ export default function UpdaterPage() {
     })();
   }, [loadStatus, router]);
 
+  const jobStatus = status?.job?.status;
   useEffect(() => {
-    const jobActive = Boolean(status?.job && ["pending", "running"].includes(status.job.status));
+    const jobActive = Boolean(jobStatus && ["pending", "running"].includes(jobStatus));
     if (!installing && !jobActive) return;
-    const timer = window.setInterval(() => void loadStatus(), 5_000);
+    void loadLiveStatus();
+    const timer = window.setInterval(() => void loadLiveStatus(), 2_000);
     return () => window.clearInterval(timer);
-  }, [installing, loadStatus, status?.job]);
+  }, [installing, jobStatus, loadLiveStatus]);
 
   async function installUpdate() {
     if (!status?.canInstall || installing) return;

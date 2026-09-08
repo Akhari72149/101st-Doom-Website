@@ -25,6 +25,11 @@ type DurationHours = 1 | 2 | 4;
 
 type ServerDayCounts = Record<number, number>;
 
+type PendingAction =
+  | { type: "book"; slotIndex: number }
+  | { type: "delete"; bookingId: string }
+  | null;
+
 type BookingApiResponse = {
   bookings: Booking[];
   counts: Record<string, number>;
@@ -58,6 +63,12 @@ export default function ServersPage() {
   const [bookingTitle, setBookingTitle] = useState("");
 
   const [canBook, setCanBook] = useState(false);
+  const [bookingPassword, setBookingPassword] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [isUnlocking, setIsUnlocking] = useState(false);
 
   const [isLoadingBookings, setIsLoadingBookings] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -99,11 +110,14 @@ export default function ServersPage() {
       end: end.toISOString(),
     });
     const authHeaders = await getAppAuthHeaders();
+    const bookingHeaders = bookingPassword
+      ? { ...authHeaders, "x-server-booking-password": bookingPassword }
+      : authHeaders;
 
     try {
       const response = await fetch(`/api/server-bookings?${params}`, {
         cache: "no-store",
-        headers: authHeaders,
+        headers: bookingHeaders,
       });
       const data = (await response.json().catch(() => null)) as BookingApiResponse | null;
       if (!response.ok || !data) {
@@ -127,7 +141,7 @@ export default function ServersPage() {
     } finally {
       if (fetchToken === fetchTokenRef.current) setIsLoadingBookings(false);
     }
-  }, [activeServer, selectedDate]);
+  }, [activeServer, bookingPassword, selectedDate]);
 
   useEffect(() => {
     void Promise.resolve().then(() => {
@@ -169,16 +183,23 @@ export default function ServersPage() {
     });
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: string, password = bookingPassword) {
     if (id.startsWith("recurring-")) return;
-    if (!canBook) return;
+    if (!canBook && !password) {
+      setPendingAction({ type: "delete", bookingId: id });
+      setPasswordError("");
+      setShowPasswordPrompt(true);
+      return;
+    }
 
     const old = bookings;
     setBookings((prev) => prev.filter((b) => b.id !== id));
     const authHeaders = await getAppAuthHeaders();
     const response = await fetch(`/api/server-bookings?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
-      headers: authHeaders,
+      headers: password
+        ? { ...authHeaders, "x-server-booking-password": password }
+        : authHeaders,
     });
     const result = (await response.json().catch(() => null)) as { error?: string } | null;
     if (!response.ok) {
@@ -212,6 +233,7 @@ export default function ServersPage() {
       headers: {
         "Content-Type": "application/json",
         ...authHeaders,
+        ...(bookingPassword ? { "x-server-booking-password": bookingPassword } : {}),
       },
       body: JSON.stringify({
         serverId: activeServer,
@@ -244,11 +266,56 @@ export default function ServersPage() {
     if (blocked) return;
 
     if (!canBook) {
-      alert("Your account has view-only access to server bookings.");
+      setPendingAction({ type: "book", slotIndex: index });
+      setPasswordError("");
+      setShowPasswordPrompt(true);
       return;
     }
 
     setSelectedStartIndex(index);
+  }
+
+  function closePasswordPrompt() {
+    setShowPasswordPrompt(false);
+    setPendingAction(null);
+    setPasswordInput("");
+    setPasswordError("");
+  }
+
+  async function handleUnlock() {
+    if (!passwordInput || isUnlocking) return;
+    setIsUnlocking(true);
+    setPasswordError("");
+
+    const authHeaders = await getAppAuthHeaders();
+    const response = await fetch("/api/server-bookings", {
+      method: "PUT",
+      headers: {
+        ...authHeaders,
+        "x-server-booking-password": passwordInput,
+      },
+    });
+    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    setIsUnlocking(false);
+
+    if (!response.ok) {
+      setPasswordError(result?.error || "Unable to verify booking password");
+      return;
+    }
+
+    const password = passwordInput;
+    const action = pendingAction;
+    setBookingPassword(password);
+    setCanBook(true);
+    setShowPasswordPrompt(false);
+    setPendingAction(null);
+    setPasswordInput("");
+
+    if (action?.type === "book") {
+      setSelectedStartIndex(action.slotIndex);
+    } else if (action?.type === "delete") {
+      await handleDelete(action.bookingId, password);
+    }
   }
 
   function shiftDate(days: number) {
@@ -282,6 +349,67 @@ export default function ServersPage() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] px-3 py-5 text-white sm:px-6 sm:py-8 lg:px-10">
+      {showPasswordPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 px-4 backdrop-blur-sm">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleUnlock();
+            }}
+            className="w-full max-w-md rounded-2xl border border-[#00ff66]/45 bg-[#000a06] p-6 shadow-[0_0_45px_rgba(0,255,100,0.22)]"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.24em] text-[#7f9f8f]">
+                  Restricted Control
+                </div>
+                <h2 className="mt-2 text-xl font-bold text-[#00ff66]">
+                  Booking Password Required
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closePasswordPrompt}
+                aria-label="Close password prompt"
+                className="h-10 w-10 shrink-0 rounded-lg border border-red-500/35 text-xl text-red-300 transition hover:bg-red-500/10"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm leading-6 text-gray-400">
+              Enter the shared server booking password to continue. Access remains unlocked until this page is closed or refreshed.
+            </p>
+
+            <label className="mb-2 block text-xs uppercase tracking-[0.18em] text-[#7fa08e]">
+              Password
+            </label>
+            <input
+              autoFocus
+              type="password"
+              autoComplete="current-password"
+              value={passwordInput}
+              onChange={(event) => setPasswordInput(event.target.value)}
+              className="w-full rounded-xl border border-[#00ff66]/35 bg-black px-4 py-3 text-white outline-none transition focus:border-[#00ff66]"
+            />
+
+            {passwordError && (
+              <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {passwordError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!passwordInput || isUnlocking}
+              className="mt-5 w-full rounded-xl bg-[#00ff66] px-4 py-3 font-semibold text-black transition hover:bg-[#41ff8a] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {isUnlocking ? "Verifying..." : "Unlock Booking Controls"}
+            </button>
+          </form>
+        </div>
+      )}
+
       <div className="mx-auto max-w-[1800px]">
         <button
           onClick={() => router.push("/pcs")}
@@ -544,7 +672,7 @@ export default function ServersPage() {
                                   {formatTimeRange(b.start_time, b.end_time)}
                                 </div>
 
-                                {canBook && !recurring && (
+                                {!recurring && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { pagePermissionDefinitions, type PagePermissionAccess } from "@/data/pagePermissions";
 import { getAdminRouteAuth } from "@/lib/admin-route-auth";
 import { getNativeSession } from "@/lib/postgres/auth";
@@ -25,6 +26,11 @@ const ACCESS_LEVELS: Record<PagePermissionAccess, number> = {
   full: 3,
 };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const BOOKING_PASSWORD_HEADER = "x-server-booking-password";
+const DEFAULT_BOOKING_PASSWORD_SHA256 = "dafc24b3b5c9210e014a5baed44814306ab1be263bfe0093b548c9cefa6783dd";
+const PASSWORD_ATTEMPT_WINDOW_MS = 15 * 60_000;
+const MAX_PASSWORD_ATTEMPTS = 10;
+const passwordAttempts = new Map<string, { count: number; resetAt: number }>();
 
 type BookingRow = {
   id: string;
@@ -50,6 +56,67 @@ function jsonError(error: string, status: number) {
   return NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
 }
 
+function requestAddress(request: Request) {
+  return (
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  );
+}
+
+function passwordAttemptState(request: Request) {
+  const key = requestAddress(request);
+  const now = Date.now();
+  const current = passwordAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    const next = { count: 0, resetAt: now + PASSWORD_ATTEMPT_WINDOW_MS };
+    passwordAttempts.set(key, next);
+    return { key, state: next };
+  }
+  return { key, state: current };
+}
+
+function configuredPasswordHash() {
+  const configuredHash = process.env.SERVER_BOOKING_PASSWORD_SHA256?.trim().toLowerCase();
+  if (configuredHash && /^[0-9a-f]{64}$/.test(configuredHash)) return configuredHash;
+
+  const configuredPassword = process.env.SERVER_BOOKING_PASSWORD;
+  if (configuredPassword) {
+    return createHash("sha256").update(configuredPassword, "utf8").digest("hex");
+  }
+
+  return DEFAULT_BOOKING_PASSWORD_SHA256;
+}
+
+function bookingPasswordMatches(request: Request) {
+  const supplied = request.headers.get(BOOKING_PASSWORD_HEADER) || "";
+  if (!supplied || supplied.length > 256) return false;
+
+  const suppliedHash = createHash("sha256").update(supplied, "utf8").digest();
+  const expectedHash = Buffer.from(configuredPasswordHash(), "hex");
+  return suppliedHash.length === expectedHash.length && timingSafeEqual(suppliedHash, expectedHash);
+}
+
+function checkBookingPassword(request: Request, trackFailure = false) {
+  if (!trackFailure) {
+    return { valid: bookingPasswordMatches(request), rateLimited: false };
+  }
+
+  const attempt = passwordAttemptState(request);
+  if (attempt.state.count >= MAX_PASSWORD_ATTEMPTS) {
+    return { valid: false, rateLimited: true };
+  }
+
+  const valid = bookingPasswordMatches(request);
+  if (valid) {
+    passwordAttempts.delete(attempt.key);
+  } else if (trackFailure) {
+    attempt.state.count += 1;
+    passwordAttempts.set(attempt.key, attempt.state);
+  }
+  return { valid, rateLimited: false };
+}
+
 function databaseBackend() {
   const backend = process.env.SERVER_BOOKINGS_BACKEND || "supabase";
   if (backend !== "supabase" && backend !== "postgres") {
@@ -63,9 +130,10 @@ function hasRequiredAccess(level: string | null | undefined, required: "read" | 
 }
 
 async function getBookingAccess(request: Request) {
+  const passwordAccess = checkBookingPassword(request).valid;
   if (process.env.NATIVE_AUTH_ENABLED === "true") {
     const session = await getNativeSession(request.headers).catch(() => null);
-    if (!session) return { userId: null, canRead: true, canEdit: false };
+    if (!session) return { userId: null, canRead: true, canEdit: passwordAccess };
 
     const [permission, roles] = await Promise.all([
       getPostgresPool().query<{ access_level: string }>(
@@ -85,12 +153,12 @@ async function getBookingAccess(request: Request) {
     return {
       userId: session.user.id,
       canRead: true,
-      canEdit: hasRequiredAccess(level, "edit") || hasLegacyAccess,
+      canEdit: hasRequiredAccess(level, "edit") || hasLegacyAccess || passwordAccess,
     };
   }
 
   const auth = await getAdminRouteAuth(request);
-  if (!auth.userId) return { userId: null, canRead: true, canEdit: false };
+  if (!auth.userId) return { userId: null, canRead: true, canEdit: passwordAccess };
 
   const { data } = await supabaseAdmin
     .from("user_page_permissions")
@@ -106,7 +174,8 @@ async function getBookingAccess(request: Request) {
     canRead: true,
     canEdit:
       hasRequiredAccess(data?.access_level, "edit") ||
-      auth.roles.some((role) => legacyRoles.has(role.toLowerCase())),
+      auth.roles.some((role) => legacyRoles.has(role.toLowerCase())) ||
+      passwordAccess,
   };
 }
 
@@ -313,7 +382,7 @@ function parseCreateBody(value: unknown) {
 
 async function createInPostgres(
   input: NonNullable<ReturnType<typeof parseCreateBody>>,
-  userId: string,
+  userId: string | null,
 ) {
   return withPostgresTransaction(async (client) => {
     await client.query("select pg_advisory_xact_lock($1)", [72150000 + input.serverId]);
@@ -348,7 +417,7 @@ async function createInPostgres(
   });
 }
 
-async function createInSupabase(input: NonNullable<ReturnType<typeof parseCreateBody>>, userId: string) {
+async function createInSupabase(input: NonNullable<ReturnType<typeof parseCreateBody>>, userId: string | null) {
   const [eligible, bookingConflict, recurringConflict] = await Promise.all([
     supabaseAdmin
       .from("personnel_certifications")
@@ -395,8 +464,11 @@ async function createInSupabase(input: NonNullable<ReturnType<typeof parseCreate
 export async function POST(request: Request) {
   if (!requireSameOrigin(request)) return jsonError("Invalid request origin", 403);
   const access = await getBookingAccess(request).catch(() => null);
-  if (!access?.userId) return jsonError("Unauthorized", 401);
-  if (!access.canEdit) return jsonError("Forbidden", 403);
+  if (!access?.canEdit) {
+    const password = checkBookingPassword(request, true);
+    if (password.rateLimited) return jsonError("Too many password attempts. Try again later.", 429);
+    return jsonError("Incorrect booking password", 403);
+  }
   const input = parseCreateBody(await request.json().catch(() => null));
   if (!input) return jsonError("Invalid booking details", 400);
   try {
@@ -419,8 +491,11 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   if (!requireSameOrigin(request)) return jsonError("Invalid request origin", 403);
   const access = await getBookingAccess(request).catch(() => null);
-  if (!access?.userId) return jsonError("Unauthorized", 401);
-  if (!access.canEdit) return jsonError("Forbidden", 403);
+  if (!access?.canEdit) {
+    const password = checkBookingPassword(request, true);
+    if (password.rateLimited) return jsonError("Too many password attempts. Try again later.", 429);
+    return jsonError("Incorrect booking password", 403);
+  }
   const id = new URL(request.url).searchParams.get("id") || "";
   if (!UUID_PATTERN.test(id)) return jsonError("Invalid booking id", 400);
   try {
@@ -437,4 +512,12 @@ export async function DELETE(request: Request) {
     console.error("[server-bookings] Delete failed", error);
     return jsonError("Failed to cancel booking", 500);
   }
+}
+
+export async function PUT(request: Request) {
+  if (!requireSameOrigin(request)) return jsonError("Invalid request origin", 403);
+  const password = checkBookingPassword(request, true);
+  if (password.rateLimited) return jsonError("Too many password attempts. Try again later.", 429);
+  if (!password.valid) return jsonError("Incorrect booking password", 403);
+  return NextResponse.json({ success: true }, { headers: { "Cache-Control": "no-store" } });
 }

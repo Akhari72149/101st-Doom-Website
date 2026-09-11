@@ -61,6 +61,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ updated: result.rowCount === 1 }, OPTIONS);
     }
 
+    if (action === "claim-resend") {
+      const result = await getPostgresPool().query(
+        `update public.discord_attendance_events
+         set status='sending',failure_reason=null,updated_at=now()
+         where id=$1 and status in ('scheduled','sent','failed')
+         returning id`,
+        [id(body?.eventId)],
+      );
+      return NextResponse.json(
+        { claimed: result.rowCount === 1 },
+        { status: result.rowCount ? 200 : 409, ...OPTIONS },
+      );
+    }
+
     if (action === "claim-reminders") {
       const result = await getPostgresPool().query(`with due as (select id from public.discord_attendance_events where status='sent' and reminder_enabled=true and reminder_sent_at is null and reminder_scheduled_at<=now() and (reminder_claimed_at is null or reminder_claimed_at<now()-interval '5 minutes') order by reminder_scheduled_at for update skip locked limit 10) update public.discord_attendance_events e set reminder_claimed_at=now(),updated_at=now() from due where e.id=due.id returning e.id,e.channel_id,e.discord_message_id,e.reminder_message,e.reminder_role_id`);
       return NextResponse.json({ reminders: result.rows }, OPTIONS);

@@ -193,6 +193,7 @@ export default function DiscordAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [sendingEventId, setSendingEventId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
@@ -480,6 +481,44 @@ export default function DiscordAttendancePage() {
     setStatusMessage("Attendance event deleted.");
     setDeletingEventId(null);
     await loadEvents();
+  }
+
+  async function sendCurrentEvent(event: AttendanceEvent) {
+    if (!canEdit || sendingEventId) return;
+
+    const confirmed = window.confirm(
+      event.discord_message_id
+        ? `Refresh the current Discord attendance message for "${event.title}"?`
+        : `Send the current attendance message for "${event.title}" now?`,
+    );
+    if (!confirmed) return;
+
+    setSendingEventId(event.id);
+    setStatusMessage("");
+
+    try {
+      const response = await fetch(`/api/discord-attendance/${event.id}`, {
+        method: "POST",
+        headers: await getAppAuthHeaders(),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setStatusMessage(result.error || "Failed to send attendance message.");
+        return;
+      }
+
+      setStatusMessage(
+        result.action === "sent"
+          ? `Attendance message sent for "${event.title}".`
+          : `Attendance message refreshed for "${event.title}".`,
+      );
+      await loadEvents();
+    } catch {
+      setStatusMessage("Could not reach the attendance service. Check that the Discord bot is running.");
+    } finally {
+      setSendingEventId(null);
+    }
   }
 
   if (loadingAuth) {
@@ -928,6 +967,24 @@ export default function DiscordAttendancePage() {
                     )}
 
                     <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void sendCurrentEvent(event)}
+                        disabled={!canEdit || Boolean(sendingEventId)}
+                        title={
+                          event.discord_message_id
+                            ? "Refresh the existing Discord embed without creating a duplicate"
+                            : "Send this occurrence without creating another event"
+                        }
+                        className="inline-flex items-center gap-2 border border-cyan-400/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-300 transition hover:bg-cyan-400/10 disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`h-3.5 w-3.5 ${sendingEventId === event.id ? "animate-spin" : ""}`}
+                        />
+                        {sendingEventId === event.id
+                          ? "Resending..."
+                          : "Resend This Week"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => loadEventForEdit(event)}

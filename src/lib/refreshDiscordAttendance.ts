@@ -16,7 +16,10 @@ function getAttendanceRefreshUrl() {
   }
 }
 
-export async function refreshDiscordAttendanceMessage(eventId: string) {
+export async function refreshDiscordAttendanceMessage(
+  eventId: string,
+  mode: "refresh" | "ensure-sent" = "refresh",
+) {
   try {
     const url = getAttendanceRefreshUrl();
     const secret = process.env.WEBSITE_BOT_SECRET;
@@ -32,7 +35,7 @@ export async function refreshDiscordAttendanceMessage(eventId: string) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${secret}`,
       },
-      body: JSON.stringify({ event_id: eventId }),
+      body: JSON.stringify({ event_id: eventId, mode }),
     });
 
     if (!response.ok) {
@@ -44,7 +47,14 @@ export async function refreshDiscordAttendanceMessage(eventId: string) {
       return { refreshed: false, reason: "BOT_REFRESH_FAILED" };
     }
 
-    return { refreshed: true, reason: "REFRESHED" };
+    const result = await response.json().catch(() => ({})) as {
+      action?: "refreshed" | "sent";
+    };
+
+    return {
+      refreshed: true,
+      reason: result.action === "sent" ? "SENT" : "REFRESHED",
+    };
   } catch (error) {
     console.error("Failed to refresh attendance message:", error);
     return { refreshed: false, reason: "BOT_REFRESH_FAILED" };

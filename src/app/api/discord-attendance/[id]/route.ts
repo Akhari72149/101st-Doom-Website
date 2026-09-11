@@ -92,6 +92,52 @@ async function deleteDiscordAttendanceMessage(channelId: string | null, messageI
   throw new Error(responseText || `Discord returned HTTP ${response.status}`);
 }
 
+export async function POST(
+  request: Request,
+  context: { params: { id: string } | Promise<{ id: string }> },
+) {
+  if (!requestHasSameOrigin(request)) return jsonError("Invalid request origin", 403);
+  const attendanceAccess = await requirePageAccess(request, "admin.discord-attendance", "edit");
+
+  if (!attendanceAccess) return jsonError("Unauthorized", 401);
+
+  const params = await context.params;
+  const eventId = cleanUuid(params.id);
+
+  if (!eventId) return jsonError("Invalid attendance event id");
+
+  if (getDiscordDatabaseBackend() === "postgres") {
+    const existing = await getPostgresPool().query<{ status: string }>(
+      "select status from public.discord_attendance_events where id=$1",
+      [eventId],
+    );
+    if (!existing.rowCount) return jsonError("Attendance event not found", 404);
+    if (existing.rows[0].status === "closed") {
+      return jsonError("Closed attendance events cannot be sent again", 409);
+    }
+  } else {
+    const existing = await supabaseAdmin
+      .from("discord_attendance_events")
+      .select("status")
+      .eq("id", eventId)
+      .maybeSingle();
+    if (existing.error || !existing.data) return jsonError("Attendance event not found", 404);
+    if (existing.data.status === "closed") {
+      return jsonError("Closed attendance events cannot be sent again", 409);
+    }
+  }
+
+  const result = await refreshDiscordAttendanceMessage(eventId, "ensure-sent");
+  if (!result.refreshed) {
+    return jsonError("The Discord bot could not send the attendance message", 502);
+  }
+
+  return NextResponse.json({
+    success: true,
+    action: result.reason === "SENT" ? "sent" : "refreshed",
+  });
+}
+
 export async function PATCH(
   request: Request,
   context: { params: { id: string } | Promise<{ id: string }> },

@@ -25,6 +25,7 @@ assert(
 assert(!serverPermissionSource.includes("legacyRoles"), "Legacy roles must not bypass server page permissions");
 
 const contracts = [
+  ["src/app/api/admin/personnel-profiles/route.ts", 'requirePageAccess(request,PERMISSION,"read")', 'validActions.includes(action)', 'action==="reactivate"?"full":"edit"', 'requirePageAccess(request,PERMISSION,requiredAccess)'],
   ["src/app/api/admin/certifications/route.ts", 'requirePageAccess(req,"admin.certifications","read")', 'requirePageAccess(req,"admin.certifications","edit")'],
   ["src/app/api/admin/medals/route.ts", 'requirePageAccess(request,"admin.medals","read")', 'requirePageAccess(request,"admin.medals","edit")'],
   ["src/app/api/admin/personnel-operations/route.ts", 'requirePageAccess(request,permission,"read")', 'requirePageAccess(request,permission,"edit")'],

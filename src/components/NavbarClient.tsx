@@ -284,6 +284,13 @@ export default function NavbarClient() {
           category: "Personnel Admin",
         },
         {
+          href: "/admin/personnel-profiles",
+          label: "Personnel Profiles",
+          description: "Manage join dates, Discord links and reactivations",
+          allowedRoles: [],
+          category: "Personnel Admin",
+        },
+        {
           href: "/admin/certifications",
           label: "Certifications",
           description: "Award and manage certifications",

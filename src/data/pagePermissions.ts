@@ -58,6 +58,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["admin", "nco", "di"],
   },
   {
+    key: "admin.personnel-profiles",
+    pagePath: "/admin/personnel-profiles",
+    label: "Personnel Profiles",
+    category: "Personnel Admin",
+    description: "Manage join dates, Discord links, and reactivate personnel profiles.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.certifications",
     pagePath: "/admin/certifications",
     label: "Certifications",

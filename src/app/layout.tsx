@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   title: "101st Doom Battalion | Official Military Operations Hub",
   description:
     "The official operational command system for personnel management.",
+  icons: {
+    icon: [{ url: "/icons/DBLogo-favicon.png", type: "image/png" }],
+    shortcut: "/icons/DBLogo-favicon.png",
+    apple: "/icons/DBLogo-favicon.png",
+  },
 };
 
 export default function RootLayout({

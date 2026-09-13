@@ -69,6 +69,8 @@ const protectedFunctions = [
   'record_arma_medical_event',
   'reset_arma_xp_weekly_data',
   'finalize_steam_link_from_discord',
+  'enqueue_slot_role_sync',
+  'enqueue_rank_role_sync',
 ];
 const trustedTriggerFunctions = [
   'notify_cert_change',

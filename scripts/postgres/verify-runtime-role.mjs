@@ -71,6 +71,7 @@ const protectedFunctions = [
   'finalize_steam_link_from_discord',
   'enqueue_slot_role_sync',
   'enqueue_rank_role_sync',
+  'enqueue_personnel_discord_import',
 ];
 const trustedTriggerFunctions = [
   'notify_cert_change',

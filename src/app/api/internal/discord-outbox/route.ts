@@ -17,6 +17,7 @@ type RequestBody = {
   worker?: unknown;
   eventId?: unknown;
   error?: unknown;
+  result?: unknown;
   limit?: unknown;
 };
 
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ events }, responseOptions);
     }
     if (body.action === "complete") {
-      const completed = await completeDiscordOutbox(body.worker, body.eventId);
+      const completed = await completeDiscordOutbox(body.worker, body.eventId, body.result);
       return NextResponse.json(
         { completed },
         { status: completed ? 200 : 409, ...responseOptions },
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     const code = error instanceof Error ? error.message : "OUTBOX_REQUEST_FAILED";
-    if (code === "INVALID_WORKER" || code === "INVALID_EVENT_ID") {
+    if (["INVALID_WORKER", "INVALID_EVENT_ID", "INVALID_IMPORT_EVENT", "INVALID_IMPORT_RESULT"].includes(code)) {
       return NextResponse.json(
         { error: code },
         { status: 400, ...responseOptions },

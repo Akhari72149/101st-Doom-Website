@@ -76,21 +76,72 @@ export async function claimDiscordOutbox(workerValue: unknown, limitValue: unkno
   });
 }
 
-export async function completeDiscordOutbox(workerValue: unknown, eventIdValue: unknown) {
+function requireDiscordRoleIds(value: unknown) {
+  if (!Array.isArray(value) || value.length > 250) throw new Error("INVALID_IMPORT_RESULT");
+  const roleIds = [...new Set(value.map((roleId) => String(roleId)))];
+  if (roleIds.some((roleId) => !/^\d{17,20}$/.test(roleId))) {
+    throw new Error("INVALID_IMPORT_RESULT");
+  }
+  return roleIds;
+}
+
+export async function completeDiscordOutbox(
+  workerValue: unknown,
+  eventIdValue: unknown,
+  resultValue?: unknown,
+) {
   const worker = requireWorker(workerValue);
   const eventId = requireEventId(eventIdValue);
-  const result = await withPostgresTransaction((client) => client.query(`
-    update public.discord_role_outbox
-    set status = 'succeeded', processed_at = now(), locked_at = null,
-        locked_by = null, last_error = null, updated_at = now(),
-        payload = case
-            when event_type = 'ACCOUNT_CREDENTIALS_DM' then '{}'::jsonb
-            else payload
-          end
-    where id = $1 and status = 'processing' and locked_by = $2
-    returning id
-  `, [eventId, worker]));
-  return result.rowCount === 1;
+  return withPostgresTransaction(async (client) => {
+    const claimed = await client.query<{event_type:string;payload:Record<string,unknown>}>(`
+      select event_type, payload
+      from public.discord_role_outbox
+      where id = $1 and status = 'processing' and locked_by = $2
+      for update
+    `, [eventId, worker]);
+    if (!claimed.rows[0]) return false;
+
+    if (claimed.rows[0].event_type === "USER_FULL_IMPORT") {
+      const personnelId = claimed.rows[0].payload.personnelId;
+      if (typeof personnelId !== "string" || !UUID_PATTERN.test(personnelId)) {
+        throw new Error("INVALID_IMPORT_EVENT");
+      }
+      const result = resultValue && typeof resultValue === "object"
+        ? resultValue as Record<string, unknown>
+        : null;
+      const roleIds = requireDiscordRoleIds(result?.discordRoleIds);
+      const rank = await client.query<{id:string}>(`
+        select id from public.ranks
+        where discord_role_id = any($1::text[])
+        order by rank_level desc
+        limit 1
+      `, [roleIds]);
+      await client.query("update public.personnel set rank_id=$2 where id=$1", [
+        personnelId,
+        rank.rows[0]?.id || null,
+      ]);
+      await client.query(`
+        insert into public.personnel_certifications(personnel_id, certification_id, awarded_at)
+        select $1, id, now()
+        from public.certifications
+        where cert_id = any($2::text[])
+        on conflict (personnel_id, certification_id) do nothing
+      `, [personnelId, roleIds]);
+    }
+
+    const completed = await client.query(`
+      update public.discord_role_outbox
+      set status = 'succeeded', processed_at = now(), locked_at = null,
+          locked_by = null, last_error = null, updated_at = now(),
+          payload = case
+              when event_type = 'ACCOUNT_CREDENTIALS_DM' then '{}'::jsonb
+              else payload
+            end
+      where id = $1 and status = 'processing' and locked_by = $2
+      returning id
+    `, [eventId, worker]);
+    return completed.rowCount === 1;
+  });
 }
 
 export async function failDiscordOutbox(

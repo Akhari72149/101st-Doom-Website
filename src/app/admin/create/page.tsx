@@ -2,33 +2,38 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  Hash,
+  Link2,
+  Loader2,
+  Search,
+  ShieldCheck,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
-type RankRow = {
-  id: string;
-  name: string;
-  rank_level: number;
-};
-
-type ProcessorRow = {
-  id: string;
-  name: string | null;
-  status: string | null;
-};
-
+type RankRow = { id: string; name: string; rank_level: number };
+type ProcessorRow = { id: string; name: string | null; status: string | null };
 type DuplicateState = "idle" | "checking" | "available" | "duplicate" | "error";
+
+const fieldBase =
+  "h-11 w-full border bg-black/50 px-3 text-sm text-white outline-none transition placeholder:text-[#668075] disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/35";
 
 export default function CreatePersonnel() {
   const router = useRouter();
-
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [canEdit, setCanEdit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
   const [ranks, setRanks] = useState<RankRow[]>([]);
   const [processors, setProcessors] = useState<ProcessorRow[]>([]);
   const [processorSearch, setProcessorSearch] = useState("");
-
   const [rankId, setRankId] = useState("");
   const [birthNumber, setBirthNumber] = useState("");
   const [name, setName] = useState("");
@@ -37,697 +42,545 @@ export default function CreatePersonnel() {
   const [importFromDiscord, setImportFromDiscord] = useState(false);
   const [createdAt, setCreatedAt] = useState("");
   const [selectedProcessor, setSelectedProcessor] = useState("");
-
   const [nameStatus, setNameStatus] = useState<DuplicateState>("idle");
   const [birthStatus, setBirthStatus] = useState<DuplicateState>("idle");
   const [discordError, setDiscordError] = useState("");
-
   const [nameError, setNameError] = useState("");
   const [birthError, setBirthError] = useState("");
   const [processorError, setProcessorError] = useState("");
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const cleanNameValue = (value: string) =>
-    value.replace(/\s+/g, " ").trim();
-
-  const cleanBirthValue = (value: string) =>
-    value.replace(/\s+/g, "").trim();
-
-  const cleanDiscordValue = (value: string) => value.trim();
-
-  const validateDiscordId = (value?: string) => {
-  const clean = cleanDiscordValue(value ?? discordId);
-
-  setDiscordError("");
-
-  if (!clean) return true;
-
-  if (!/^\d+$/.test(clean)) {
-    setDiscordError("Discord ID must contain numbers only.");
-    return false;
-  }
-
-  return true;
-};
-
-  const cleanTeamspeakValue = (value: string) =>
-    value.trim();
+  const cleanName = (value: string) => value.replace(/\s+/g, " ").trim();
+  const cleanBirth = (value: string) => value.replace(/\s+/g, "").trim();
+  const selectedRank = useMemo(() => ranks.find((rank) => rank.id === rankId), [rankId, ranks]);
+  const selectedProcessorName = useMemo(
+    () => processors.find((processor) => processor.id === selectedProcessor)?.name || "",
+    [processors, selectedProcessor],
+  );
+  const filteredProcessors = useMemo(() => {
+    const query = processorSearch.trim().toLowerCase();
+    return query
+      ? processors.filter((processor) => (processor.name || "").toLowerCase().includes(query))
+      : processors;
+  }, [processorSearch, processors]);
 
   useEffect(() => {
-    if (importFromDiscord) {
-      setRankId("");
-    }
-  }, [importFromDiscord]);
-
-  useEffect(() => {
-    const checkAccess = async () => {
-      const session=await getAppSession();
+    let cancelled = false;
+    (async () => {
+      const session = await getAppSession();
       if (!session) {
         router.replace("/login");
         return;
       }
-
-      if (!hasAppPermission(session,"admin.create","read")) {
+      if (!hasAppPermission(session, "admin.create", "read")) {
         router.replace("/");
         return;
       }
-
-      const response=await fetch("/api/admin/personnel-operations?scope=create",{cache:"no-store",headers:await getAppAuthHeaders()});
-      if(!response.ok){
-        setProcessors([]);
+      const response = await fetch("/api/admin/personnel-operations?scope=create", {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: await getAppAuthHeaders(),
+      });
+      if (cancelled) return;
+      if (!response.ok) {
+        setLoadError("Personnel setup data could not be loaded. Refresh the page to try again.");
         setLoadingAuth(false);
         return;
       }
+      const data = await response.json() as { ranks?: RankRow[]; processors?: ProcessorRow[] };
       setCanEdit(hasAppPermission(session, "admin.create", "edit"));
-      const data=await response.json() as {ranks?:RankRow[];processors?:ProcessorRow[]};setRanks(data.ranks||[]);setProcessors(data.processors||[]);
-
+      setRanks(data.ranks || []);
+      setProcessors(data.processors || []);
       setLoadingAuth(false);
-    };
-
-    checkAccess();
+    })();
+    return () => { cancelled = true; };
   }, [router]);
 
-  const selectedRank = useMemo(
-    () => ranks.find((rank) => rank.id === rankId),
-    [ranks, rankId]
-  );
+  function selectMode(importMode: boolean) {
+    if (!canEdit || submitting) return;
+    setImportFromDiscord(importMode);
+    setDiscordError("");
+    if (importMode) setRankId("");
+  }
 
-  const filteredProcessors = useMemo(() => {
-    const query = processorSearch.trim().toLowerCase();
-
-    if (!query) return processors;
-
-    return processors.filter((processor) =>
-      (processor.name || "").toLowerCase().includes(query)
-    );
-  }, [processors, processorSearch]);
-
-  const selectedProcessorName = useMemo(() => {
-    return processors.find((p) => p.id === selectedProcessor)?.name || "";
-  }, [processors, selectedProcessor]);
-
-  const createdAtLabel = useMemo(() => {
-    if (!createdAt) return "Default";
-    return "Custom";
-  }, [createdAt]);
-
-  const roleSyncLabel = useMemo(() => {
-    return importFromDiscord ? "Disabled (Discord Import)" : "Enabled";
-  }, [importFromDiscord]);
-
-  const rankSourceLabel = useMemo(() => {
-    return importFromDiscord ? "Discord Import" : "Manual";
-  }, [importFromDiscord]);
-
-  const auditStatusLabel = useMemo(() => {
-    return selectedProcessor ? "Selected" : "Missing";
-  }, [selectedProcessor]);
-
-  const statusPillClass = (active: boolean) =>
-    active
-      ? "border border-[#00ff66]/40 bg-[#00ff66]/10 text-[#00ff66]"
-      : "border border-red-500/40 bg-red-500/10 text-red-300";
-
-  const checkNameDuplicate = async (value?: string) => {
-    const clean = cleanNameValue(value ?? name);
-
-    setNameError("");
-
+  function validateDiscord(value = discordId) {
+    const clean = value.trim();
+    setDiscordError("");
     if (!clean) {
-      setNameStatus("idle");
+      setDiscordError("Discord ID is required.");
       return false;
     }
-
-    setNameStatus("checking");
-
-    const response=await fetch(`/api/admin/personnel-operations?scope=create&duplicate=name&value=${encodeURIComponent(clean)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
-    if(!response.ok){
-      setNameStatus("error");
-      setNameError("Failed to check existing names.");
+    if (!/^\d{17,20}$/.test(clean)) {
+      setDiscordError("Enter a valid 17-20 digit Discord user ID.");
       return false;
     }
+    return true;
+  }
 
-    const data=await response.json() as {duplicate?:boolean};
-    if (data.duplicate) {
-      setNameStatus("duplicate");
-      setNameError("Name already exists on an active personnel record.");
-      return true;
-    }
-
-    setNameStatus("available");
-    return false;
-  };
-
-  const checkBirthDuplicate = async (value?: string) => {
-    const clean = cleanBirthValue(value ?? birthNumber);
-
-    setBirthError("");
-
-    if (!clean) {
-      setBirthStatus("idle");
+  async function checkDuplicate(field: "name" | "birth_number", rawValue: string) {
+    const value = field === "name" ? cleanName(rawValue) : cleanBirth(rawValue);
+    const setState = field === "name" ? setNameStatus : setBirthStatus;
+    const setError = field === "name" ? setNameError : setBirthError;
+    setError("");
+    if (!value) {
+      setState("idle");
       return false;
     }
-
-    setBirthStatus("checking");
-
-    const response=await fetch(`/api/admin/personnel-operations?scope=create&duplicate=birth_number&value=${encodeURIComponent(clean)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
-    if(!response.ok){
-      setBirthStatus("error");
-      setBirthError("Failed to check existing birth numbers.");
+    setState("checking");
+    try {
+      const response = await fetch(
+        `/api/admin/personnel-operations?scope=create&duplicate=${field}&value=${encodeURIComponent(value)}`,
+        { cache: "no-store", credentials: "same-origin", headers: await getAppAuthHeaders() },
+      );
+      if (!response.ok) throw new Error("Duplicate check failed");
+      const data = await response.json() as { duplicate?: boolean };
+      if (data.duplicate) {
+        setState("duplicate");
+        setError(field === "name"
+          ? "An active record already uses this name."
+          : "An active record already uses this service number.");
+        return true;
+      }
+      setState("available");
+      return false;
+    } catch {
+      setState("error");
+      setError("Could not check existing records. The server will check again on submission.");
       return false;
     }
+  }
 
-    const data=await response.json() as {duplicate?:boolean};
-    if (data.duplicate) {
-      setBirthStatus("duplicate");
-      setBirthError("Birth number already exists on an active personnel record.");
-      return true;
-    }
-
-    setBirthStatus("available");
-    return false;
-  };
-
-  const validateRequiredFields = () => {
+  function validateForm() {
     let valid = true;
-
     setFormError("");
+    setNameError("");
+    setBirthError("");
     setProcessorError("");
-
-    if (!selectedProcessor) {
-      setProcessorError("You must select who processed this form.");
-      valid = false;
-    }
-
-    if (!cleanBirthValue(birthNumber)) {
-      setBirthError("Birth Number is required.");
-      setBirthStatus("idle");
-      valid = false;
-    }
-
-    if (!cleanNameValue(name)) {
+    if (!cleanName(name)) {
       setNameError("Name is required.");
-      setNameStatus("idle");
       valid = false;
     }
-
-    if (!validateDiscordId()) {
-        valid = false;
+    if (!cleanBirth(birthNumber)) {
+      setBirthError("Service number is required.");
+      valid = false;
     }
-
+    if (!selectedProcessor) {
+      setProcessorError("Select who processed this intake.");
+      valid = false;
+    }
+    if (!validateDiscord()) valid = false;
     return valid;
-  };
+  }
 
-  const createUser = async () => {
-    if (!canEdit) return;
-    setSuccessMessage("");
+  function resetForm() {
+    setRankId("");
+    setBirthNumber("");
+    setName("");
+    setDiscordId("");
+    setTeamspeakId("");
+    setImportFromDiscord(false);
+    setCreatedAt("");
+    setProcessorSearch("");
+    setSelectedProcessor("");
+    setNameStatus("idle");
+    setBirthStatus("idle");
+    setNameError("");
+    setBirthError("");
+    setDiscordError("");
+    setProcessorError("");
     setFormError("");
+  }
 
-    if (!validateRequiredFields()) return;
-
-    const cleanName = cleanNameValue(name);
-    const cleanBirthNumber = cleanBirthValue(birthNumber);
-    const cleanDiscordId = cleanDiscordValue(discordId);
-    const cleanTeamspeakId = cleanTeamspeakValue(teamspeakId);
-
-    const [nameDuplicate, birthDuplicate] = await Promise.all([
-      checkNameDuplicate(cleanName),
-      checkBirthDuplicate(cleanBirthNumber),
+  async function createPersonnel() {
+    if (!canEdit || submitting || !validateForm()) return;
+    setSuccessMessage("");
+    const normalizedName = cleanName(name);
+    const normalizedBirth = cleanBirth(birthNumber);
+    const [duplicateName, duplicateBirth] = await Promise.all([
+      checkDuplicate("name", normalizedName),
+      checkDuplicate("birth_number", normalizedBirth),
     ]);
-
-    if (nameDuplicate || birthDuplicate) {
-      setFormError("Please resolve the duplicate checks before creating personnel.");
+    if (duplicateName || duplicateBirth) {
+      setFormError("Resolve the duplicate record before continuing.");
       return;
     }
-
     setSubmitting(true);
-
     try {
-      const response=await fetch("/api/admin/personnel-operations",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({scope:"create",action:"create",rankId:rankId||null,birthNumber:cleanBirthNumber,name:cleanName,discordId:cleanDiscordId,teamspeakId:cleanTeamspeakId,importFromDiscord,createdAt:createdAt?new Date(createdAt).toISOString():null,processorId:selectedProcessor})});
-      if(!response.ok){const body=await response.json().catch(()=>null) as {error?:string}|null;setFormError(body?.error||"Failed to create personnel");return;}
-
-      setSuccessMessage("✅ Personnel created successfully.");
-      setRankId("");
-      setBirthNumber("");
-      setName("");
-      setDiscordId("");
-      setTeamspeakId("");
-      setImportFromDiscord(false);
-      setCreatedAt("");
-      setProcessorSearch("");
-      setNameStatus("idle");
-      setBirthStatus("idle");
-      setNameError("");
-      setBirthError("");
-      setFormError("");
+      const response = await fetch("/api/admin/personnel-operations", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+        body: JSON.stringify({
+          scope: "create",
+          action: "create",
+          rankId: rankId || null,
+          birthNumber: normalizedBirth,
+          name: normalizedName,
+          discordId: discordId.trim(),
+          teamspeakId: teamspeakId.trim(),
+          importFromDiscord,
+          createdAt: createdAt ? new Date(createdAt).toISOString() : null,
+          processorId: selectedProcessor,
+        }),
+      });
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setFormError(body?.error || "Failed to create personnel.");
+        return;
+      }
+      setSuccessMessage(importFromDiscord
+        ? `${normalizedName} was created. Discord rank and certification import is queued.`
+        : `${normalizedName} was created successfully.`);
+      resetForm();
     } catch (error) {
-      setFormError("Something went wrong while creating personnel.");
       console.error(error);
+      setFormError("The request could not reach the server. No confirmed record was created.");
     } finally {
       setSubmitting(false);
     }
-  };
+  }
 
-  const fieldClass = (hasError?: boolean, disabled?: boolean) =>
-    `w-full p-4 rounded-xl transition-all duration-200 ${
-      disabled
-        ? "bg-black/40 border border-gray-700 text-gray-500 cursor-not-allowed opacity-60"
-        : hasError
-        ? "bg-black/60 border border-red-500/60 text-[#00ff66] focus:outline-none focus:border-red-400"
-        : "bg-black/60 border border-[#00ff66]/30 text-[#00ff66] focus:outline-none focus:border-[#00ff66] focus:shadow-[0_0_10px_#00ff66]"
-    }`;
-
-  const helperText = (
-    status: DuplicateState,
-    error: string,
-    successText: string
-  ) => {
-    if (error) {
-      return <p className="mt-2 text-sm text-red-400">{error}</p>;
-    }
-
-    if (status === "checking") {
-      return <p className="mt-2 text-sm text-[#00ff66]/70">Checking...</p>;
-    }
-
-    if (status === "available") {
-      return <p className="mt-2 text-sm text-[#00ff66]/80">{successText}</p>;
-    }
-
-    if (status === "error") {
-      return <p className="mt-2 text-sm text-red-400">Check failed.</p>;
-    }
-
+  function statusIcon(status: DuplicateState) {
+    if (status === "checking") return <Loader2 size={14} className="animate-spin text-cyan-300" />;
+    if (status === "available") return <CheckCircle2 size={14} className="text-[#00ff66]" />;
     return null;
-  };
+  }
+
+  function inputClass(hasError = false) {
+    return `${fieldBase} ${hasError
+      ? "border-red-500/70 focus:border-red-400"
+      : "border-[#00ff66]/25 focus:border-[#00ff66] focus:shadow-[0_0_0_1px_rgba(0,255,102,0.16)]"}`;
+  }
 
   if (loadingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black text-[#00ff66]">
-        Checking permissions...
-      </div>
+      <main className="flex min-h-screen items-center justify-center bg-[#000805] text-[#00ff66]">
+        <div className="flex items-center gap-3 text-sm uppercase tracking-[0.16em]">
+          <Loader2 size={18} className="animate-spin" /> Checking access
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#eafff2] p-6 md:p-10">
-      <div className="max-w-5xl mx-auto">
-        <button
-          onClick={() => router.push("/pcs")}
-          className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
-        >
-          ← Return to Dashboard
-        </button>
-
-        <div className="rounded-3xl border border-[#00ff66]/20 bg-black/40 backdrop-blur-xl p-6 md:p-8 mb-6">
-          <h1 className="text-3xl md:text-4xl font-bold text-[#00ff66] tracking-widest">
-            Create New Personnel
-          </h1>
-          <p className="mt-2 text-sm md:text-base text-[#00ff66]/65">
-            Intake form for creating a new personnel record, attaching audit ownership, and optionally importing Discord data.
-          </p>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">
-            <div className={`rounded-2xl px-4 py-3 ${statusPillClass(true)}`}>
-              <div className="text-[10px] uppercase tracking-[0.2em] opacity-70">Rank Source</div>
-              <div className="mt-1 font-semibold">{rankSourceLabel}</div>
-            </div>
-
-            <div
-              className={`rounded-2xl px-4 py-3 ${
-                selectedProcessor ? statusPillClass(true) : statusPillClass(false)
-              }`}
+    <main className="min-h-screen bg-[#000805] px-4 py-6 text-[#e8f5ee] sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-5 flex flex-col gap-4 border-b border-[#00ff66]/25 pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <button
+              type="button"
+              onClick={() => router.push("/pcs")}
+              className="mb-3 inline-flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-[#8da99a] transition hover:text-[#00ff66]"
             >
-              <div className="text-[10px] uppercase tracking-[0.2em] opacity-70">Audit Processor</div>
-              <div className="mt-1 font-semibold">{auditStatusLabel}</div>
-            </div>
-
-
-            <div className={`rounded-2xl px-4 py-3 ${statusPillClass(true)}`}>
-              <div className="text-[10px] uppercase tracking-[0.2em] opacity-70">Created At</div>
-              <div className="mt-1 font-semibold">{createdAtLabel}</div>
-            </div>
-          </div>
-        </div>
-
-        {successMessage && (
-          <div className="mb-6 rounded-2xl border border-[#00ff66]/40 bg-[#00ff66]/10 px-5 py-4 text-[#00ff66]">
-            <div className="font-semibold">{successMessage}</div>
-            <div className="text-sm text-[#00ff66]/75 mt-1">
-              The form has been cleared and is ready for another entry.
-            </div>
-          </div>
-        )}
-
-        {formError && (
-          <div className="mb-6 rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-red-300">
-            <div className="font-semibold">Creation failed</div>
-            <div className="text-sm mt-1">{formError}</div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_0.7fr] gap-6">
-          <div className="space-y-6">
-            <div className="rounded-3xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30 p-6 md:p-8">
-              <h2 className="text-sm uppercase tracking-widest text-[#00ff66]/70 mb-4 border-b border-[#00ff66]/20 pb-2">
-                Account Links
-              </h2>
-
-         <div className="mb-6">
-         <label className="block mb-2 text-sm text-gray-300">
-           Discord ID
-           </label>
-              <input
-                type="text"
-                 value={discordId}
-                 onChange={(e) => {
-                 setDiscordId(cleanDiscordValue(e.target.value));
-                  setDiscordError("");
-                   }}
-                   onBlur={() => validateDiscordId()}
-                   disabled={!canEdit || submitting}
-                   className={fieldClass(!!discordError, submitting)}
-                   placeholder="Discord user ID"
-                                 />
-
-                   {discordError && (
-                  <p className="mt-2 text-sm text-red-400">{discordError}</p>
-                )}
+              <ArrowLeft size={15} /> Personnel control
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 place-items-center border border-[#00ff66]/40 bg-[#00ff66]/8 text-[#00ff66]">
+                <UserPlus size={20} />
               </div>
-
               <div>
-                <label className="block mb-2 text-sm text-gray-300">
-                  Teamspeak ID
-                </label>
-                <input
-                  type="text"
-                  value={teamspeakId}
-                  onChange={(e) => setTeamspeakId(cleanTeamspeakValue(e.target.value))}
-                  disabled={!canEdit || submitting}
-                  className={fieldClass(false, submitting)}
-                  placeholder="TS ID"
-                />
+                <p className="text-[11px] uppercase tracking-[0.2em] text-[#00ff66]/65">Personnel administration</p>
+                <h1 className="text-2xl font-semibold text-white sm:text-3xl">Personnel Intake</h1>
               </div>
             </div>
+          </div>
+          <div className={`inline-flex h-9 items-center gap-2 border px-3 text-xs uppercase tracking-[0.12em] ${canEdit
+            ? "border-[#00ff66]/35 bg-[#00ff66]/8 text-[#00ff66]"
+            : "border-amber-400/35 bg-amber-400/8 text-amber-200"}`}>
+            <ShieldCheck size={15} /> {canEdit ? "Edit access" : "View only"}
+          </div>
+        </header>
 
-            <div className="rounded-3xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30 p-6 md:p-8">
-              <h2 className="text-sm uppercase tracking-widest text-[#00ff66]/70 mb-4 border-b border-[#00ff66]/20 pb-2">
-                Personnel Details
-              </h2>
+        {loadError && <Alert tone="error" icon={<X size={18} />}>{loadError}</Alert>}
+        {successMessage && <Alert tone="success" icon={<CheckCircle2 size={18} />}>{successMessage}</Alert>}
+        {formError && <Alert tone="error" icon={<X size={18} />}>{formError}</Alert>}
 
-              <div className="mb-6">
-                <label className="block mb-2 text-sm text-gray-300">
-                  Rank {importFromDiscord && "(Disabled - importing from Discord)"}
-                </label>
-
-                <select
-                  value={rankId}
-                  onChange={(e) => setRankId(e.target.value)}
-                  disabled={importFromDiscord || submitting}
-                  className={fieldClass(false, importFromDiscord || submitting)}
-                >
-                  <option value="">-- Select Rank --</option>
-                  {ranks.map((rank) => (
-                    <option key={rank.id} value={rank.id}>
-                      {rank.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-6">
-                <label className="block mb-2 text-sm text-gray-300">
-                  Birth Number
-                </label>
-
-                <input
-                  type="text"
-                  value={birthNumber}
-                  onChange={(e) => {
-                    setBirthNumber(cleanBirthValue(e.target.value));
-                    setBirthError("");
-                    if (birthStatus !== "idle") setBirthStatus("idle");
-                  }}
-                  onBlur={() => checkBirthDuplicate()}
-                  disabled={!canEdit || submitting}
-                  className={fieldClass(!!birthError, submitting)}
-                  placeholder="Unique birth number"
-                />
-
-                {helperText(
-                  birthStatus,
-                  birthError,
-                  "Birth number is available."
-                )}
-              </div>
-
-              <div>
-                <label className="block mb-2 text-sm text-gray-300">
-                  Name
-                </label>
-
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => {
-                    setName(cleanNameValue(e.target.value));
-                    setNameError("");
-                    if (nameStatus !== "idle") setNameStatus("idle");
-                  }}
-                  onBlur={() => checkNameDuplicate()}
-                  disabled={!canEdit || submitting}
-                  className={fieldClass(!!nameError, submitting)}
-                  placeholder="Full personnel name"
-                />
-
-                {helperText(
-                  nameStatus,
-                  nameError,
-                  "Name is available."
-                )}
-              </div>
+        <div className="border border-[#00ff66]/25 bg-[#020b07]/90">
+          <div className="flex flex-col gap-3 border-b border-[#00ff66]/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">Creation mode</h2>
+              <p className="mt-0.5 text-xs text-[#759184]">Choose where the initial rank and certifications come from.</p>
             </div>
+            <div className="grid grid-cols-2 border border-[#00ff66]/30 bg-black/40 p-1">
+              <ModeButton active={!importFromDiscord} disabled={!canEdit || submitting} onClick={() => selectMode(false)}>
+                Manual rank
+              </ModeButton>
+              <ModeButton active={importFromDiscord} accent="cyan" disabled={!canEdit || submitting} onClick={() => selectMode(true)}>
+                Discord import
+              </ModeButton>
+            </div>
+          </div>
 
-            <div className="rounded-3xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30 p-6 md:p-8">
-              <h2 className="text-sm uppercase tracking-widest text-[#00ff66]/70 mb-4 border-b border-[#00ff66]/20 pb-2">
-                Record Controls
-              </h2>
-
-              <div className="space-y-4 mb-6">
-                <label className="flex items-center justify-between cursor-pointer gap-4">
-                  <div>
-                    <div className={`font-medium ${importFromDiscord ? "text-[#00ff66]" : "text-white"}`}>
-                      Import Rank + Certifications From Discord
-                    </div>
-                    <div className="text-xs text-[#00ff66]/60 mt-1">
-                      Pull rank and certifications from Discord instead of setting rank manually.
-                    </div>
-                  </div>
-
-                  <div className="relative shrink-0">
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="divide-y divide-[#00ff66]/15">
+              <section className="p-4 sm:p-5">
+                <SectionTitle icon={<Users size={17} />}>Personnel details</SectionTitle>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Name" required error={nameError} status={statusIcon(nameStatus)}>
                     <input
-                      type="checkbox"
-                      checked={importFromDiscord}
-                      onChange={(e) => setImportFromDiscord(e.target.checked)}
+                      aria-label="Name"
+                      value={name}
+                      maxLength={100}
                       disabled={!canEdit || submitting}
-                      className="sr-only"
+                      onChange={(event) => { setName(event.target.value); setNameError(""); setNameStatus("idle"); }}
+                      onBlur={() => void checkDuplicate("name", name)}
+                      className={inputClass(Boolean(nameError))}
+                      placeholder="Personnel name"
                     />
-
-                    <div
-                      className={`w-12 h-6 rounded-full p-1 transition-all duration-200 ${
-                        importFromDiscord
-                          ? "bg-[#00ff66]"
-                          : "bg-black border border-[#00ff66]"
-                      } ${submitting ? "opacity-50" : ""}`}
-                    >
-                      <div
-                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-all duration-200 ${
-                          importFromDiscord ? "translate-x-6" : ""
-                        }`}
+                  </Field>
+                  <Field label="Service number" required error={birthError} status={statusIcon(birthStatus)}>
+                    <div className="relative">
+                      <Hash size={15} className="absolute left-3 top-3.5 text-[#648075]" />
+                      <input
+                        aria-label="Service number"
+                        value={birthNumber}
+                        maxLength={50}
+                        disabled={!canEdit || submitting}
+                        onChange={(event) => { setBirthNumber(event.target.value.replace(/\s+/g, "")); setBirthError(""); setBirthStatus("idle"); }}
+                        onBlur={() => void checkDuplicate("birth_number", birthNumber)}
+                        className={`${inputClass(Boolean(birthError))} pl-9`}
+                        placeholder="72149"
                       />
                     </div>
-                  </div>
-                </label>
-              </div>
-
-              {importFromDiscord && (
-                <div className="mb-4 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 text-cyan-200">
-                  Rank will be pulled from Discord. Manual rank selection is disabled.
+                  </Field>
+                  <Field label="Initial rank" hint={importFromDiscord ? "Selected automatically from Discord" : "Optional"}>
+                    <select
+                      aria-label="Initial rank"
+                      value={rankId}
+                      disabled={!canEdit || submitting || importFromDiscord}
+                      onChange={(event) => setRankId(event.target.value)}
+                      className={inputClass()}
+                    >
+                      <option value="">No rank selected</option>
+                      {ranks.map((rank) => <option key={rank.id} value={rank.id}>{rank.name}</option>)}
+                    </select>
+                  </Field>
                 </div>
-              )}
+              </section>
 
-              {createdAt && (
-                <div className="mb-4 rounded-2xl border border-yellow-400/30 bg-yellow-500/10 px-4 py-3 text-yellow-200">
-                  This will override the default creation timestamp.
-                </div>
-              )}
-
-              <div>
-                <label className="block mb-2 text-sm text-gray-300">
-                  Created At
-                </label>
-
-                <div className="flex flex-col md:flex-row gap-3">
-                  <input
-                    type="datetime-local"
-                    value={createdAt}
-                    onChange={(e) => setCreatedAt(e.target.value)}
-                    disabled={!canEdit || submitting}
-                    className={`flex-1 ${fieldClass(false, submitting)}`}
-                  />
-
-                  <button
-                    type="button"
-                    disabled={!canEdit || submitting}
-                    onClick={() => {
-                      const now = new Date();
-                      const local = new Date(
-                        now.getTime() - now.getTimezoneOffset() * 60000
-                      )
-                        .toISOString()
-                        .slice(0, 16);
-
-                      setCreatedAt(local);
-                    }}
-                    className="px-6 rounded-xl bg-[#00ff66]/10 border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition disabled:opacity-50"
+              <section className="p-4 sm:p-5">
+                <SectionTitle icon={<Link2 size={17} />}>Connected identities</SectionTitle>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field
+                    label="Discord user ID"
+                    required
+                    hint={importFromDiscord ? "Used to read rank and certification roles" : "Used to assign initial server roles"}
+                    error={discordError}
                   >
-                    Set Now
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={!canEdit || submitting}
-                    onClick={() => setCreatedAt("")}
-                    className="px-4 rounded-xl border border-red-500 text-red-400 hover:bg-red-500 hover:text-black transition disabled:opacity-50"
-                  >
-                    Clear
-                  </button>
+                    <input
+                      aria-label="Discord user ID"
+                      inputMode="numeric"
+                      value={discordId}
+                      maxLength={20}
+                      disabled={!canEdit || submitting}
+                      onChange={(event) => { setDiscordId(event.target.value.replace(/\D/g, "")); setDiscordError(""); }}
+                      onBlur={() => validateDiscord()}
+                      className={inputClass(Boolean(discordError))}
+                      placeholder="17-20 digit Discord ID"
+                    />
+                  </Field>
+                  <Field label="TeamSpeak ID" hint="Optional">
+                    <input
+                      aria-label="TeamSpeak ID"
+                      value={teamspeakId}
+                      maxLength={200}
+                      disabled={!canEdit || submitting}
+                      onChange={(event) => setTeamspeakId(event.target.value)}
+                      className={inputClass()}
+                      placeholder="TeamSpeak unique ID"
+                    />
+                  </Field>
                 </div>
-              </div>
+              </section>
+
+              <section className="p-4 sm:p-5">
+                <SectionTitle icon={<ShieldCheck size={17} />}>Processing and audit</SectionTitle>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+                  <Field label="Processed by" required error={processorError} hint="Only certified processors are listed">
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                      <div className="relative">
+                        <Search size={15} className="absolute left-3 top-3.5 text-[#648075]" />
+                        <input
+                          aria-label="Filter processors"
+                          value={processorSearch}
+                          disabled={!canEdit || submitting}
+                          onChange={(event) => setProcessorSearch(event.target.value)}
+                          className={`${inputClass()} pl-9`}
+                          placeholder="Filter processors"
+                        />
+                      </div>
+                      <select
+                        aria-label="Processed by"
+                        value={selectedProcessor}
+                        disabled={!canEdit || submitting}
+                        onChange={(event) => { setSelectedProcessor(event.target.value); setProcessorError(""); }}
+                        className={inputClass(Boolean(processorError))}
+                      >
+                        <option value="">Select processor</option>
+                        {filteredProcessors.map((processor) => (
+                          <option key={processor.id} value={processor.id}>{processor.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </Field>
+                  <Field label="Record date and time" hint="Leave blank to use the current database time">
+                    <div className="grid grid-cols-[minmax(0,1fr)_44px_44px] gap-2">
+                      <input
+                        aria-label="Record date and time"
+                        type="datetime-local"
+                        value={createdAt}
+                        disabled={!canEdit || submitting}
+                        onChange={(event) => setCreatedAt(event.target.value)}
+                        className={inputClass()}
+                      />
+                      <IconButton title="Set current time" disabled={!canEdit || submitting} onClick={() => {
+                        const now = new Date();
+                        setCreatedAt(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+                      }}>
+                        <Clock3 size={17} />
+                      </IconButton>
+                      <IconButton title="Use database default" muted disabled={!canEdit || submitting || !createdAt} onClick={() => setCreatedAt("")}>
+                        <X size={17} />
+                      </IconButton>
+                    </div>
+                  </Field>
+                </div>
+              </section>
             </div>
 
-            <div className="rounded-3xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30 p-6 md:p-8">
-              <h2 className="text-sm uppercase tracking-widest text-[#00ff66]/70 mb-4 border-b border-[#00ff66]/20 pb-2">
-                Audit Details
-              </h2>
+            <aside className="border-t border-[#00ff66]/20 bg-black/25 p-4 lg:border-l lg:border-t-0 lg:p-5">
+              <div className="lg:sticky lg:top-5">
+                <SectionTitle icon={<CalendarClock size={17} />}>Intake summary</SectionTitle>
+                <dl className="divide-y divide-white/8 border-y border-white/10 text-sm">
+                  <Summary label="Personnel" value={cleanName(name) || "Not entered"} />
+                  <Summary label="Service no." value={cleanBirth(birthNumber) || "Not entered"} />
+                  <Summary label="Rank source" value={importFromDiscord ? "Discord import" : selectedRank?.name || "No rank"} />
+                  <Summary label="Discord" value={discordId || "Not linked"} mono />
+                  <Summary label="TeamSpeak" value={teamspeakId.trim() || "Not linked"} />
+                  <Summary label="Processed by" value={selectedProcessorName || "Not selected"} />
+                  <Summary label="Record time" value={createdAt ? createdAt.replace("T", " ") : "Current time"} />
+                </dl>
 
-              <div>
-                <label className="block mb-2 text-sm text-gray-300">
-                  Who Processed This Form?
-                </label>
-
-                <p className="text-xs text-[#00ff66]/60 mb-2">
-                  Required for audit tracking
-                </p>
-
-                <select
-                  value={selectedProcessor}
-                  onChange={(e) => {
-                    setSelectedProcessor(e.target.value);
-                    setProcessorError("");
-                  }}
-                  disabled={!canEdit || submitting}
-                  className={fieldClass(!!processorError, submitting)}
-                >
-                  <option value="">-- Select Processor --</option>
-
-                  {filteredProcessors.map((processor) => (
-                    <option key={processor.id} value={processor.id}>
-                      {processor.name}
-                    </option>
-                  ))}
-                </select>
-
-                {processorError && (
-                  <p className="mt-2 text-sm text-red-400">{processorError}</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="rounded-3xl bg-black/50 backdrop-blur-xl border border-[#00ff66]/30 p-6 sticky top-6">
-              <h2 className="text-sm uppercase tracking-widest text-[#00ff66]/70 mb-4 border-b border-[#00ff66]/20 pb-2">
-                New Personnel Preview
-              </h2>
-
-              <div className="space-y-4 text-sm">
-                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
-                  <div className="text-[#00ff66]/60 text-xs uppercase tracking-[0.2em] mb-2">Name</div>
-                  <div className="text-white font-medium">{cleanNameValue(name) || "—"}</div>
+                <div className="mt-4 border border-[#00ff66]/20 bg-[#00ff66]/5 p-3 text-xs leading-5 text-[#9ab5a7]">
+                  {importFromDiscord
+                    ? "The record is created immediately. The bot then imports the highest matching rank and all matching certifications."
+                    : "The record and audit entry are created together, then initial Discord server roles are queued."}
                 </div>
-
-                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
-                  <div className="text-[#00ff66]/60 text-xs uppercase tracking-[0.2em] mb-2">Birth Number</div>
-                  <div className="text-white font-medium">{cleanBirthValue(birthNumber) || "—"}</div>
-                </div>
-
-                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
-                  <div className="text-[#00ff66]/60 text-xs uppercase tracking-[0.2em] mb-2">Rank</div>
-                  <div className="text-white font-medium">
-                    {importFromDiscord ? "From Discord" : selectedRank?.name || "—"}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
-                  <div className="text-[#00ff66]/60 text-xs uppercase tracking-[0.2em] mb-2">Discord ID</div>
-                  <div className="text-white font-medium break-all">{discordId || "—"}</div>
-                </div>
-
-                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
-                  <div className="text-[#00ff66]/60 text-xs uppercase tracking-[0.2em] mb-2">Teamspeak ID</div>
-                  <div className="text-white font-medium break-all">{teamspeakId || "—"}</div>
-                </div>
-
-                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
-                  <div className="text-[#00ff66]/60 text-xs uppercase tracking-[0.2em] mb-2">Processed By</div>
-                  <div className="text-white font-medium">{selectedProcessorName || "—"}</div>
-                </div>
-
-                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
-                  <div className="text-[#00ff66]/60 text-xs uppercase tracking-[0.2em] mb-2">Created At</div>
-                  <div className="text-white font-medium">{createdAt || "Database Default"}</div>
-                </div>
-
-                <div className="rounded-2xl border border-[#00ff66]/15 bg-black/40 p-4">
-                  <div className="text-[#00ff66]/60 text-xs uppercase tracking-[0.2em] mb-2">Role Sync</div>
-                  <div className="text-white font-medium">{roleSyncLabel}</div>
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <button
-                  onClick={createUser}
-                  disabled={!canEdit || submitting}
-                  className={`w-full py-4 rounded-xl font-bold transition-all duration-200 ${
-                    submitting
-                      ? "bg-gray-700 border border-gray-600 text-gray-300 cursor-wait"
-                      : "bg-[#00ff66]/10 border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black hover:shadow-[0_0_25px_#00ff66]"
-                  }`}
-                >
-                  {submitting ? "Creating Personnel..." : "Create Personnel"}
-                </button>
 
                 <button
                   type="button"
-                  disabled={!canEdit || submitting}
-                  onClick={() => router.push("/pcs")}
-                  className="w-full py-3 rounded-xl border border-[#00ff66]/30 text-[#00ff66]/80 hover:bg-[#00ff66]/10 transition disabled:opacity-50"
+                  onClick={() => void createPersonnel()}
+                  disabled={!canEdit || submitting || Boolean(loadError)}
+                  className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 bg-[#00ff66] px-4 text-sm font-bold uppercase tracking-[0.1em] text-black transition hover:bg-[#5bff98] disabled:cursor-not-allowed disabled:bg-[#193326] disabled:text-white/35"
                 >
-                  Cancel
+                  {submitting ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
+                  {submitting ? "Creating record" : "Create personnel"}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  disabled={!canEdit || submitting}
+                  className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 border border-white/15 text-xs font-semibold uppercase tracking-[0.1em] text-[#9ab5a7] transition hover:border-white/30 hover:text-white disabled:opacity-40"
+                >
+                  <X size={15} /> Clear form
                 </button>
               </div>
-
-              {(!selectedProcessor || !cleanNameValue(name) || !cleanBirthValue(birthNumber)) && (
-                <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                  Required before submit: processor, birth number, and name.
-                </div>
-              )}
-            </div>
+            </aside>
           </div>
         </div>
       </div>
+    </main>
+  );
+}
+
+function Alert({ tone, icon, children }: { tone: "success" | "error"; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className={`mb-4 flex items-start gap-3 border px-4 py-3 text-sm ${tone === "success"
+      ? "border-[#00ff66]/40 bg-[#00ff66]/8 text-[#caffdf]"
+      : "border-red-500/45 bg-red-950/30 text-red-200"}`}>
+      <span className="mt-0.5 shrink-0">{icon}</span>{children}
+    </div>
+  );
+}
+
+function ModeButton({ active, accent = "green", disabled, onClick, children }: {
+  active: boolean;
+  accent?: "green" | "cyan";
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`h-9 px-4 text-xs font-semibold uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-50 ${active
+        ? accent === "cyan" ? "bg-cyan-300 text-black" : "bg-[#00ff66] text-black"
+        : "text-[#8da99a] hover:text-white"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="mb-4 flex items-center gap-2 text-[#00ff66]">
+      {icon}<h2 className="text-sm font-semibold uppercase tracking-[0.14em]">{children}</h2>
+    </div>
+  );
+}
+
+function Field({ label, required, hint, error, status, children }: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  error?: string;
+  status?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="block min-w-0">
+      <span className="mb-1.5 flex min-h-5 items-center gap-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#b3c8bd]">
+        {label} {required && <span className="text-[#00ff66]">Required</span>} {status}
+      </span>
+      {children}
+      <span className={`mt-1.5 block min-h-4 text-[11px] ${error ? "text-red-300" : "text-[#648075]"}`}>
+        {error || hint || " "}
+      </span>
+    </div>
+  );
+}
+
+function IconButton({ title, muted = false, disabled, onClick, children }: {
+  title: string;
+  muted?: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`grid h-11 place-items-center border transition disabled:opacity-30 ${muted
+        ? "border-white/15 text-[#8da99a] hover:border-red-400/50 hover:text-red-300"
+        : "border-[#00ff66]/30 text-[#00ff66] hover:bg-[#00ff66]/10"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Summary({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 py-2.5">
+      <dt className="text-[11px] uppercase tracking-[0.1em] text-[#648075]">{label}</dt>
+      <dd className={`truncate text-right text-[#dcebe3] ${mono ? "font-mono text-xs" : ""}`} title={value}>{value}</dd>
     </div>
   );
 }

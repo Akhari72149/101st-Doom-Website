@@ -67,6 +67,51 @@ const protectedDelegationPermissions = new Set([
   "admin.updater",
 ]);
 
+type PermissionPreset = {
+  name: string;
+  description: string;
+  permissions: Partial<Record<string, PagePermissionAccess>>;
+};
+
+const permissionPresets: PermissionPreset[] = [
+  {
+    name: "NCO",
+    description: "Personnel, attendance, and operational administration",
+    permissions: {
+      "records.audit": "read",
+      "admin.create": "edit",
+      "admin.positions": "edit",
+      "admin.certifications": "edit",
+      "admin.medals": "edit",
+      "admin.weekly-attendance": "edit",
+      "admin.discord-attendance": "edit",
+      "admin.removal": "edit",
+      "admin.removal-log": "read",
+      "personnel.command-dashboard": "read",
+      "operations.planops": "edit",
+    },
+  },
+  {
+    name: "Trainer",
+    description: "Certification management and operation planning",
+    permissions: {
+      "records.audit": "read",
+      "admin.certifications": "edit",
+      "personnel.command-dashboard": "read",
+      "operations.planops": "edit",
+    },
+  },
+  {
+    name: "GC",
+    description: "Galactic Campaign asset and logistics management",
+    permissions: {
+      "gc.asset-log": "read",
+      "gc.logistics": "edit",
+      "cis.logistics": "edit",
+    },
+  },
+];
+
 function formatDate(value: string | undefined) {
   if (!value) return "Never";
 
@@ -177,6 +222,15 @@ export default function AdminPermissionsPage() {
     [accounts, currentUserId],
   );
 
+  const permissionChangeCount = useMemo(() => {
+    if (!selectedAccount) return 0;
+    return definitions.filter(
+      (definition) =>
+        (draftPermissions[definition.key] || "none") !==
+        (selectedAccount.permissions[definition.key] || "none"),
+    ).length;
+  }, [definitions, draftPermissions, selectedAccount]);
+
   function canSetPermission(
     definition: PagePermissionDefinition,
     option: PagePermissionAccess,
@@ -241,6 +295,21 @@ export default function AdminPermissionsPage() {
     setSelectedAccount(account);
     setDraftPermissions({ ...(account.permissions || {}) });
     setStatus(null);
+  }
+
+  function applyPermissionPreset(preset: PermissionPreset) {
+    setDraftPermissions((current) => {
+      const nextPermissions = { ...current };
+
+      for (const definition of definitions) {
+        const desiredLevel = preset.permissions[definition.key] || "none";
+        if (canSetPermission(definition, desiredLevel)) {
+          nextPermissions[definition.key] = desiredLevel;
+        }
+      }
+
+      return nextPermissions;
+    });
   }
 
   async function runAccountAction(action: "disable" | "enable" | "delete", account: Account) {
@@ -680,21 +749,27 @@ export default function AdminPermissionsPage() {
       </section>
 
       {selectedAccount && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <section className="max-h-[90vh] w-full max-w-6xl overflow-hidden border border-[#00ff66]/25 bg-[#020806] shadow-[0_0_60px_rgba(0,255,102,0.12)]">
-            <div className="flex items-start justify-between gap-4 border-b border-[#00ff66]/15 p-5">
+        <div className="fixed inset-0 z-[80] flex items-stretch justify-center bg-black/85 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="account-permissions-title"
+            className="flex h-[100dvh] max-h-[100dvh] w-full max-w-6xl flex-col overflow-hidden border-[#00ff66]/25 bg-[#020806] shadow-[0_0_60px_rgba(0,255,102,0.12)] sm:h-auto sm:max-h-[90dvh] sm:border"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[#00ff66]/15 bg-[#04100b] px-4 py-3 sm:px-5 sm:py-4">
               <div>
                 <div className="flex items-center gap-3 text-[#00ff66]">
                   <UserCog size={20} />
                   <span className="text-xs font-bold uppercase tracking-[0.22em]">Account Permissions</span>
                 </div>
-                <h2 className="mt-3 text-2xl font-black text-white">
+                <h2 id="account-permissions-title" className="mt-1.5 text-xl font-black text-white sm:text-2xl">
                   {selectedAccount.displayName || selectedAccount.email || "Unnamed account"}
                 </h2>
               </div>
 
               <button
                 type="button"
+                aria-label="Close permission editor"
                 onClick={() => setSelectedAccount(null)}
                 className="grid h-10 w-10 place-items-center border border-white/10 text-gray-400 transition hover:border-red-400/40 hover:text-red-300"
               >
@@ -702,9 +777,40 @@ export default function AdminPermissionsPage() {
               </button>
             </div>
 
-            <div className="max-h-[64vh] overflow-y-auto p-5">
+            <div className="shrink-0 border-b border-[#00ff66]/15 bg-black/25 px-4 py-3 sm:px-5 sm:py-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-gray-300">
+                    <SlidersHorizontal size={15} className="text-[#00ff66]" /> Permission presets
+                  </div>
+                  <p className="mt-1 hidden text-xs text-gray-500 sm:block">
+                    Apply a baseline, review the grid, then save. Protected permissions are preserved.
+                  </p>
+                </div>
+                <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2">
+                  {permissionPresets.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      onClick={() => applyPermissionPreset(preset)}
+                      disabled={saving || !capabilities.canManagePermissions}
+                      title={preset.description}
+                      className="min-h-10 border border-[#00ff66]/25 bg-[#00ff66]/5 px-3 text-xs font-bold uppercase tracking-[0.12em] text-[#00ff66] transition hover:border-[#00ff66]/55 hover:bg-[#00ff66]/12 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-24 sm:px-4"
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div
+              tabIndex={0}
+              aria-label="Screen permission list"
+              className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-3 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#00ff66]/60 sm:p-5"
+            >
               <div className="overflow-hidden border border-[#00ff66]/15 bg-black/45">
-                <div className="sticky top-0 z-10 grid grid-cols-[minmax(220px,1fr)_auto] items-center gap-4 border-b border-[#00ff66]/15 bg-[#06110d] px-4 py-3">
+                <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-[#00ff66]/15 bg-[#06110d] px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto] sm:px-4">
                   <div className="text-xs font-bold uppercase tracking-[0.22em] text-gray-300">
                     Screen Permissions
                   </div>
@@ -732,7 +838,7 @@ export default function AdminPermissionsPage() {
                       return (
                         <div
                           key={definition.key}
-                          className="grid gap-3 border-b border-[#00ff66]/10 px-4 py-3 transition last:border-b-0 hover:bg-[#00ff66]/[0.03] sm:grid-cols-[minmax(220px,1fr)_auto] sm:items-center"
+                          className="grid gap-3 border-b border-[#00ff66]/10 px-3 py-3 transition last:border-b-0 hover:bg-[#00ff66]/[0.03] sm:grid-cols-[minmax(220px,1fr)_auto] sm:items-center sm:px-4"
                         >
                           <div className="min-w-0">
                             <div className="font-semibold text-white">{definition.label}</div>
@@ -755,7 +861,7 @@ export default function AdminPermissionsPage() {
                                     }))
                                   }
                                   disabled={!canSetPermission(definition, option)}
-                                  className={`min-w-24 border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition ${
+                                  className={`min-w-0 border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.08em] transition sm:min-w-24 sm:px-3 sm:text-xs sm:tracking-[0.12em] ${
                                     selected
                                       ? `${accessClass(option)} shadow-[0_0_18px_rgba(0,255,102,0.08)]`
                                       : "border-white/10 bg-white/[0.02] text-gray-600 hover:border-[#00ff66]/30 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-35"
@@ -774,23 +880,32 @@ export default function AdminPermissionsPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-[#00ff66]/15 p-5 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedAccount(null)}
-                className="border border-white/10 px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-gray-400 transition hover:border-white/20 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={savePermissions}
-                disabled={saving || !capabilities.canManagePermissions}
-                className="inline-flex items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/10 px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
-                Save Permissions
-              </button>
+            <div className="shrink-0 border-t border-[#00ff66]/20 bg-[#04100b] px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 sm:px-5 sm:pb-4 sm:pt-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs uppercase tracking-[0.12em] text-gray-500">
+                  {permissionChangeCount === 0 ? "No unsaved changes" : (
+                    <><span className="font-bold text-amber-200">{permissionChangeCount}</span> unsaved {permissionChangeCount === 1 ? "change" : "changes"}</>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAccount(null)}
+                    className="min-h-11 border border-white/10 px-4 text-xs font-semibold uppercase tracking-[0.12em] text-gray-400 transition hover:border-white/20 hover:text-white sm:px-5 sm:text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={savePermissions}
+                    disabled={saving || !capabilities.canManagePermissions || permissionChangeCount === 0}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/10 px-4 text-xs font-bold uppercase tracking-[0.1em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-not-allowed disabled:opacity-40 sm:px-5 sm:text-sm sm:tracking-[0.14em]"
+                  >
+                    {saving ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
+                    Save Permissions
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
         </div>

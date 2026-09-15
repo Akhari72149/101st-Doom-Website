@@ -8,11 +8,9 @@ if (process.env.NATIVE_MIGRATION_DATABASE !== 'roster_native_rehearsal') {
 
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
 
-async function createPersonnel({ importFromDiscord, includeDiscord }) {
+async function createPersonnel({ importFromDiscord }) {
   const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
-  const discordId = includeDiscord
-    ? `90000000${String(randomInt(0, 1_000_000_000)).padStart(9, '0')}`
-    : null;
+  const discordId = `90000000${String(randomInt(0, 1_000_000_000)).padStart(9, '0')}`;
   const processor = await client.query(`
     select pc.personnel_id
     from public.personnel_certifications pc
@@ -70,18 +68,17 @@ async function createPersonnel({ importFromDiscord, includeDiscord }) {
   `, [personnelId, discordId]);
   const expectedEvent = importFromDiscord
     ? 'USER_FULL_IMPORT'
-    : includeDiscord ? 'USER_ROLE_INIT' : undefined;
+    : 'USER_ROLE_INIT';
   assert.equal(event.rows[0]?.event_type, expectedEvent);
 }
 
 try {
   await client.connect();
   await client.query('begin');
-  await createPersonnel({ importFromDiscord: false, includeDiscord: false });
-  await createPersonnel({ importFromDiscord: false, includeDiscord: true });
-  await createPersonnel({ importFromDiscord: true, includeDiscord: true });
+  await createPersonnel({ importFromDiscord: false });
+  await createPersonnel({ importFromDiscord: true });
   await client.query('rollback');
-  console.log('PASS: blank-link, linked and Discord-import personnel creation succeeded and were rolled back.');
+  console.log('PASS: linked and Discord-import personnel creation succeeded and were rolled back.');
 } catch (error) {
   await client.query('rollback').catch(() => {});
   throw error;

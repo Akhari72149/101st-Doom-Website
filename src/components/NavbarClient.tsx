@@ -500,8 +500,12 @@ export default function NavbarClient() {
                   }`}
                 >
                   <div
-                    className={`max-h-[calc(100dvh-100px)] overflow-y-auto border border-[#00ff66]/30 border-t-[#00ff66]/70 bg-black/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.7)] backdrop-blur-xl ${
-                      group.columns === 2 ? "w-[700px]" : "w-[360px]"
+                    className={`max-h-[calc(100dvh-88px)] overscroll-contain overflow-y-auto border border-[#00ff66]/30 border-t-[#00ff66]/70 bg-[#010503] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.85)] ${
+                      group.label === "Admin"
+                        ? "w-[min(980px,calc(100vw-2rem))]"
+                        : group.columns === 2
+                          ? "w-[700px]"
+                          : "w-[360px]"
                     }`}
                   >
                     <div className="mb-4 border-b border-[#00ff66]/10 pb-3">
@@ -517,22 +521,25 @@ export default function NavbarClient() {
                     </div>
 
                     {group.label === "Admin" ? (
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="columns-4 gap-4">
                         {getAdminSections(group.items).map((section) => (
-                          <div key={section.section}>
+                          <div
+                            key={section.section}
+                            className="mb-4 break-inside-avoid last:mb-0"
+                          >
                             <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#00ff66]/55">
                               {section.section}
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               {section.items.map((item) => (
                                 <Link
                                   key={item.href}
                                   href={item.href}
                                   onClick={() => setOpenDropdown(null)}
-                                  className="group/item block border border-transparent border-l-[#00ff66]/20 bg-white/[0.015] p-3 transition hover:border-[#00ff66]/25 hover:border-l-[#00ff66]/70 hover:bg-[#00ff66]/8"
+                                  className="group/item block border border-transparent border-l-[#00ff66]/20 bg-white/[0.02] p-2.5 transition hover:border-[#00ff66]/25 hover:border-l-[#00ff66]/70 hover:bg-[#00ff66]/8"
                                 >
-                                  <div className="flex items-start gap-3">
-                                    <div className="mt-0.5 border border-[#00ff66]/20 bg-[#00ff66]/8 p-2 text-[#00ff66]">
+                                  <div className="flex items-start gap-2.5">
+                                    <div className="mt-0.5 border border-[#00ff66]/20 bg-[#00ff66]/8 p-1.5 text-[#00ff66]">
                                       {getItemIcon(group.label)}
                                     </div>
 
@@ -541,7 +548,7 @@ export default function NavbarClient() {
                                         {item.label}
                                       </div>
                                       {item.description && (
-                                        <div className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
+                                        <div className="mt-0.5 line-clamp-1 text-[11px] leading-4 text-gray-400">
                                           {item.description}
                                         </div>
                                       )}
@@ -648,7 +655,7 @@ export default function NavbarClient() {
       {/* ================= MOBILE NAV ================= */}
       <div
         id="mobile-navigation"
-        className={`border-t border-[#00ff66]/15 bg-black/95 px-4 py-3 xl:hidden ${
+        className={`absolute inset-x-0 top-full max-h-[calc(100dvh-64px)] overflow-y-auto overscroll-contain border-t border-[#00ff66]/15 bg-[#010503] px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.85)] xl:hidden ${
           mobileMenuOpen ? "block" : "hidden"
         }`}
       >

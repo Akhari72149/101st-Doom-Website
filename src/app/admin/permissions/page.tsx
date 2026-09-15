@@ -76,29 +76,24 @@ type PermissionPreset = {
 const permissionPresets: PermissionPreset[] = [
   {
     name: "NCO",
-    description: "Personnel, attendance, and operational administration",
+    description: "Ranks, attendance records, removals, and personnel oversight",
     permissions: {
       "records.audit": "read",
-      "admin.create": "edit",
       "admin.positions": "edit",
-      "admin.certifications": "edit",
-      "admin.medals": "edit",
+      "admin.medals": "read",
       "admin.weekly-attendance": "edit",
-      "admin.discord-attendance": "edit",
       "admin.removal": "edit",
       "admin.removal-log": "read",
       "personnel.command-dashboard": "read",
-      "operations.planops": "edit",
     },
   },
   {
     name: "Trainer",
-    description: "Certification management and operation planning",
+    description: "Certification management and personnel oversight",
     permissions: {
       "records.audit": "read",
       "admin.certifications": "edit",
       "personnel.command-dashboard": "read",
-      "operations.planops": "edit",
     },
   },
   {

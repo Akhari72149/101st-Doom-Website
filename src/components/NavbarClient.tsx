@@ -277,6 +277,13 @@ export default function NavbarClient() {
           category: "Systems",
         },
         {
+          href: "/admin/Mod-Taskboard",
+          label: "Mod Taskboard",
+          description: "Manage the mod development pipeline",
+          allowedRoles: ["Akhari"],
+          category: "Systems",
+        },
+        {
           href: "/admin/positions",
           label: "Ranks & Slots",
           description: "Manage rank progressions and assignments",
@@ -374,6 +381,13 @@ export default function NavbarClient() {
           allowedRoles: [],
           category: "Systems",
         },
+        {
+          href: "/planops",
+          label: "Plan Ops",
+          description: "Create and manage operational planning boards",
+          allowedRoles: ["admin", "logistics", "nco", "trainer"],
+          category: "Operations",
+        },
       ],
     },
   ], []);
@@ -406,7 +420,7 @@ export default function NavbarClient() {
     return <FileText size={14} />;
   };
 
-  const adminSections = ["Personnel Admin", "Records", "Logistics", "Systems"];
+  const adminSections = ["Personnel Admin", "Records", "Operations", "Logistics", "Systems"];
 
   const getAdminSections = (items: NavItem[]) =>
     adminSections

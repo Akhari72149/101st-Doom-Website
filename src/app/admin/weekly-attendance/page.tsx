@@ -496,7 +496,7 @@ export default function AttendancePage() {
 
       <div className="relative z-10 mx-auto max-w-7xl p-6 md:p-10 xl:p-12">
         <button
-          onClick={() => router.push("/pcs")}
+          onClick={() => router.push("/")}
           className="mb-6 px-4 py-2 rounded-xl border border-[#00ff66]/40 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-[1.02] transition"
         >
           ← Return to Dashboard

@@ -36,7 +36,7 @@ export default function Login() {
 
       {/* BACK BUTTON */}
       <button
-        onClick={() => router.push("/pcs")}
+        onClick={() => router.push("/")}
         className="
           absolute top-8 left-8
           px-4 py-2 rounded-lg

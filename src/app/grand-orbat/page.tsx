@@ -355,7 +355,7 @@ export default function GrandOrbat() {
       "
     >
       <button
-        onClick={() => router.push("/pcs")}
+        onClick={() => router.push("/")}
         className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
       >
         ← Return to Dashboard

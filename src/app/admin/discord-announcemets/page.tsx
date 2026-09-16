@@ -592,7 +592,7 @@ export default function DiscordAnnouncementsPage() {
           </div>
 
           <button
-            onClick={() => router.push("/pcs")}
+            onClick={() => router.push("/")}
             className="px-6 py-3 border border-[#00ff66] rounded-xl text-[#00ff66] hover:bg-[#00ff66] hover:text-black transition-all"
           >
             Back

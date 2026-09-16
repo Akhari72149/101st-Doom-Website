@@ -270,7 +270,7 @@ export default function CreatePersonnel() {
           <div>
             <button
               type="button"
-              onClick={() => router.push("/pcs")}
+              onClick={() => router.push("/")}
               className="mb-3 inline-flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-[#8da99a] transition hover:text-[#00ff66]"
             >
               <ArrowLeft size={15} /> Personnel control

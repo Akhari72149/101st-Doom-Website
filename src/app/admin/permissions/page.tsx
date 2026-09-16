@@ -84,7 +84,6 @@ const permissionPresets: PermissionPreset[] = [
       "admin.weekly-attendance": "edit",
       "admin.removal": "edit",
       "admin.removal-log": "read",
-      "personnel.command-dashboard": "read",
     },
   },
   {
@@ -93,7 +92,6 @@ const permissionPresets: PermissionPreset[] = [
     permissions: {
       "records.audit": "read",
       "admin.certifications": "edit",
-      "personnel.command-dashboard": "read",
     },
   },
   {

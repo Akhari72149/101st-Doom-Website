@@ -134,11 +134,6 @@ export default function NavbarClient() {
           description: "View your personnel record and details",
         },
         {
-          href: "/pcs",
-          label: "Personnel Command Dashboard",
-          description: "Command and personnel overview tools",
-        },
-        {
           href: "/roster",
           label: "Slotted Roster",
           description: "View assigned positions across the unit",

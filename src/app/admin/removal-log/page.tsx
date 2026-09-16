@@ -289,7 +289,7 @@ export default function RemovalLogsPage() {
       <div className="relative z-10 p-4 sm:p-6 lg:p-10">
         <div className="max-w-7xl mx-auto">
           <button
-            onClick={() => router.push("/pcs")}
+            onClick={() => router.push("/")}
             className="mb-6 px-4 py-2 rounded-xl border border-[#00ff66]/30 bg-black/40 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-[1.02] transition"
           >
             ← Return to Dashboard

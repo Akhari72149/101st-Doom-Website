@@ -141,7 +141,7 @@ export default function MedalAwardingPage() {
 
       setCurrentUserId(session.user.id);
       if (!hasAppPermission(session, "admin.medals", "read")) {
-        router.replace("/pcs");
+        router.replace("/");
         return;
       }
       setCanEdit(hasAppPermission(session, "admin.medals", "edit"));
@@ -313,7 +313,7 @@ export default function MedalAwardingPage() {
             <div>
               <button
                 type="button"
-                onClick={() => router.push("/pcs")}
+                onClick={() => router.push("/")}
                 className="mb-5 inline-flex items-center gap-2 border border-[#00ff66]/35 bg-black/35 px-3 py-2 text-sm font-semibold text-[#00ff66] transition hover:bg-[#00ff66]/10"
               >
                 <ArrowLeft className="h-4 w-4" />

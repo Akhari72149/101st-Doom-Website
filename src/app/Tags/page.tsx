@@ -288,7 +288,7 @@ export default function CertificationLookupByTag() {
     >
       <div className="mx-auto max-w-6xl">
         <button
-          onClick={() => router.push("/pcs")}
+          onClick={() => router.push("/")}
           className="mb-6 rounded-lg border border-[#00ff66]/50 px-4 py-2 font-semibold text-[#00ff66] transition hover:scale-105 hover:bg-[#00ff66]/10"
         >
           ← Return to Dashboard

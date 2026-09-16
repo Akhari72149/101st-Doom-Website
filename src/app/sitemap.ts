@@ -8,7 +8,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/Who-Are-We",
     "/certifications",
     "/Galactic-Campaign",
-    "/pcs",
     "/Art-of-War",
     "/personnel-profile",
     "/grand-orbat",

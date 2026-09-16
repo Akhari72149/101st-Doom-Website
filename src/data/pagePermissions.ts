@@ -186,14 +186,6 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["logistics", "akhari"],
   },
   {
-    key: "personnel.command-dashboard",
-    pagePath: "/pcs",
-    label: "Personnel Command Dashboard",
-    category: "Personnel",
-    description: "Command overview and restricted personnel tools.",
-    legacyRoles: ["admin", "nco", "di", "trainer", "recruiter", "akhari"],
-  },
-  {
     key: "operations.planops",
     pagePath: "/planops",
     label: "Plan Ops",

@@ -791,7 +791,7 @@ export default function PersonnelProfile() {
       <style>{plasmaWaveStyles}</style>
       <div className="mx-auto max-w-[1800px]">
         <button
-          onClick={() => router.push("/pcs")}
+          onClick={() => router.push("/")}
           className={`mb-6 rounded-xl border px-4 py-2 font-semibold transition hover:scale-105 ${theme.buttonBorder} ${theme.buttonText} ${theme.buttonHover}`}
         >
           ← Return to Dashboard

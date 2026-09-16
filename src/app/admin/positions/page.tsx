@@ -472,7 +472,7 @@ export default function PositionEditor() {
         <div className="px-6 md:px-10 py-6 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
           <div>
             <button
-              onClick={() => router.push("/pcs")}
+              onClick={() => router.push("/")}
               className="mb-4 px-4 py-2 rounded-lg border border-[#00ff66]/40 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 transition"
             >
               ← Return to Dashboard

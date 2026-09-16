@@ -572,7 +572,7 @@ export default function Roster() {
     >
       <div className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6 lg:px-10">
         <button
-          onClick={() => router.push("/pcs")}
+          onClick={() => router.push("/")}
           className="
             mb-6 rounded-xl border border-[#00ff66]/40 px-5 py-2.5
             font-semibold text-[#00ff66]

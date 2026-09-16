@@ -178,7 +178,7 @@ export default function ManageCertifications() {
   return (
     <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
       <button
-        onClick={() => router.push("/pcs")}
+        onClick={() => router.push("/")}
         className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
       >
         ← Return to Dashboard

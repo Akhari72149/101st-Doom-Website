@@ -34,7 +34,12 @@ function serialize(row: Record<string, unknown>) {
 async function postgresOptions() {
   const pool = getPostgresPool();
   const [users, actions, personnel] = await Promise.all([
-    pool.query("select display_name from public.profiles where display_name is not null order by display_name"),
+    pool.query(`select distinct coalesce(accounts."displayUsername", accounts.name, accounts.username, profiles.display_name) as display_name
+      from public.audit_logs audit
+      left join public.app_auth_users accounts on accounts.id = audit.user_id
+      left join public.profiles profiles on profiles.id = audit.user_id
+      where coalesce(accounts."displayUsername", accounts.name, accounts.username, profiles.display_name) is not null
+      order by display_name`),
     pool.query("select distinct action from public.audit_logs where action is not null order by action"),
     pool.query("select name from public.personnel where name is not null order by name"),
   ]);
@@ -73,16 +78,18 @@ async function postgresLogs(input: ReturnType<typeof filters>) {
   const add = (sql: string, value: unknown) => { values.push(value); where.push(sql.replace("?", `$${values.length}`)); };
   if (input.scope === "removals") { values.push(REMOVAL_ACTIONS); where.push(`a.action = any($${values.length}::text[])`); }
   if (input.action) add("a.action = ?", input.action);
-  if (input.user) add("pr.display_name = ?", input.user);
+  if (input.user) add("coalesce(accounts.\"displayUsername\", accounts.name, accounts.username, pr.display_name) = ?", input.user);
   if (input.personnel) add("p.name = ?", input.personnel);
   if (input.start && !Number.isNaN(Date.parse(input.start))) add("a.created_at >= ?", new Date(input.start));
   if (input.end && !Number.isNaN(Date.parse(input.end))) add("a.created_at <= ?", new Date(input.end));
   const result = await getPostgresPool().query(
     `select a.id, a.action, a.details, a.created_at, a.user_id, a.processed_by,
             a.target_personnel_id, a.target_slot_label, a.target_slot_section, a.target_slot_subsection,
-            pr.display_name as profile_name, processor.name as processor_name, p.name as personnel_name,
+            coalesce(accounts."displayUsername", accounts.name, accounts.username, pr.display_name) as profile_name,
+            processor.name as processor_name, p.name as personnel_name,
             r.name as rank_name, oldr.name as old_rank_name, c.name as certification_name
        from public.audit_logs a
+       left join public.app_auth_users accounts on accounts.id = a.user_id
        left join public.profiles pr on pr.id = a.user_id
        left join public.personnel processor on processor.id = a.processed_by
        left join public.personnel p on p.id = a.target_personnel_id

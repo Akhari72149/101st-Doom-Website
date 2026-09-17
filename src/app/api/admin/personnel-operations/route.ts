@@ -60,15 +60,10 @@ export async function POST(request:Request){if(!requestHasSameOrigin(request))re
       if((rawRank&&!rank)||Number.isNaN(date.getTime()))throw new Error("INVALID");
       if(rank){const rr=await c.query("select 1 from public.ranks where id=$1",[rank]);if(!rr.rowCount)throw new Error("INVALID");}
       if(rank&&rank===person.rows[0].rank_id){
-        const correctedHistory=await c.query<{id:string}>(`with previous_rank as (
-            select max(changed_at) as changed_at from public.rank_history
-            where personnel_id=$1 and new_rank_id is distinct from $2
-          )
-          update public.rank_history
+        const correctedHistory=await c.query<{id:string}>(`update public.rank_history
           set changed_at=$3
           where personnel_id=$1 and new_rank_id=$2
-            and (changed_at is null or (select changed_at from previous_rank) is null
-              or changed_at>(select changed_at from previous_rank))
+            and (changed_at is null or changed_at>=$3)
           returning id`,[personId,rank,date]);
         if(!correctedHistory.rowCount)await c.query("insert into public.rank_history(personnel_id,discord_id,old_rank_id,new_rank_id,changed_at) values($1,$2,$3,$4,$5)",[personId,person.rows[0].discord_id||"",rank,rank,date]);
         await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,old_rank_id,target_rank_id,details) values($1,$2,'RANK_CHANGED',$3,$4,$5)",[auth.userId,personId,rank,rank,`TIG date corrected to ${date.toISOString().slice(0,10)} by ${processedBy}`]);
@@ -92,12 +87,8 @@ async function hostedWrite(scope:string,action:string,b:Record<string,unknown>|n
     const rawRank=String(b?.rankId||""),rank=rawRank?uuid(rawRank):null,changedAt=new Date(String(b?.changedAt||""));
     if((rawRank&&!rank)||Number.isNaN(changedAt.getTime()))throw new Error("INVALID");
     if(rank&&rank===person.data.rank_id){
-      const previousRank=await supabaseAdmin.from("rank_history").select("changed_at").eq("personnel_id",personnelId).neq("new_rank_id",rank).order("changed_at",{ascending:false}).limit(1).maybeSingle();
-      if(previousRank.error)throw previousRank.error;
-      const correctionQuery=supabaseAdmin.from("rank_history").update({changed_at:changedAt.toISOString()}).eq("personnel_id",personnelId).eq("new_rank_id",rank);
-      let correction=previousRank.data?.changed_at
-        ? await correctionQuery.gt("changed_at",previousRank.data.changed_at).select("id")
-        : await correctionQuery.select("id");
+      const correctionQuery=supabaseAdmin.from("rank_history").update({changed_at:changedAt.toISOString()}).eq("personnel_id",personnelId).eq("new_rank_id",rank).gte("changed_at",changedAt.toISOString());
+      let correction=await correctionQuery.select("id");
       if(correction.error)throw correction.error;
       if(!correction.data?.length){
         correction=await supabaseAdmin.from("rank_history").insert({personnel_id:personnelId,discord_id:person.data.discord_id||"",old_rank_id:rank,new_rank_id:rank,changed_at:changedAt.toISOString()}).select("id");

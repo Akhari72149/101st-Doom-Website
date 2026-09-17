@@ -30,12 +30,15 @@ let job = null;
 let websiteStopped = false;
 let maintenanceServer = null;
 let publicJobStatus = null;
+let sourceChanged = false;
+let dependenciesChanged = false;
 
 const stageProgress = {
   queued: 2, countdown: 5, preflight: 10, fetch: 16, backup: 28,
   stopping: 38, maintenance: 42, installing: 48, git: 52,
   dependencies: 60, migrating: 70, migrations: 74, building: 82,
   build: 88, restarting: 96, complete: 100, failed: 100,
+  rollback: 90, 'rollback-dependencies': 92, 'rollback-build': 95, 'rollback-restart': 98,
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -228,7 +231,7 @@ try {
       'diff', '--name-only', job.from_commit, job.target_commit, '--',
       'package.json', 'package-lock.json', 'npm-shrinkwrap.json',
     ]);
-    const dependenciesChanged = dependencyChanges.trim().length > 0;
+    dependenciesChanged = dependencyChanges.trim().length > 0;
 
     await updateJob('running', 'backup', 'Creating and verifying the pre-update database backup while the website remains online');
     const backupChildEnv = { ...process.env };
@@ -253,6 +256,7 @@ try {
       ? 'Installing the approved source and updated dependencies'
       : 'Installing the approved source; dependencies are unchanged');
     await command('git', 'git', ['merge', '--ff-only', job.target_commit]);
+    sourceChanged = true;
     if (dependenciesChanged) {
       await command('dependencies', process.execPath, [npmCli, 'ci'], {
         timeout: 15 * 60_000,
@@ -293,13 +297,41 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   append('failure', message);
-  await updateJob('failed', 'failed', message.slice(0, 1000), true).catch(() => {});
-  if (websiteStopped) {
+  let rollbackMessage = '';
+  if (sourceChanged && job?.from_commit) {
+    try {
+      await updateJob('running', 'rollback', 'Update failed; restoring the previously installed source');
+      await command('rollback', 'git', ['reset', '--hard', job.from_commit]);
+      if (dependenciesChanged) {
+        await updateJob('running', 'rollback-dependencies', 'Restoring the previous dependency set');
+        await command('rollback-dependencies', process.execPath, [npmCli, 'ci'], {
+          timeout: 15 * 60_000,
+          progressMessage: 'Restoring the previous dependency set',
+        });
+      }
+      await updateJob('running', 'rollback-build', 'Rebuilding the previous website release');
+      const rollbackBuildEnv = { ...process.env };
+      for (const name of ['DATABASE_URL','POSTGRES_ADMIN_URL','NATIVE_MIGRATION_DATABASE','CUTOVER_CONFIRM_DATABASE','POSTGRES_SOURCE_ARCHIVE','POSTGRES_RUNTIME_ENV_FILE','POSTGRES_SCHEDULER_ENV_FILE','POSTGRES_BACKUP_ENV_FILE','POSTGRES_BACKUP_DIRECTORY']) delete rollbackBuildEnv[name];
+      await command('rollback-build', process.execPath, [npmCli, 'run', 'build'], {
+        env: rollbackBuildEnv,
+        timeout: 20 * 60_000,
+        progressMessage: 'Rebuilding the previous website release',
+      });
+      await updateJob('running', 'rollback-restart', 'Starting the restored website release');
+      await stopMaintenanceServer().catch(() => {});
+      await startWebsite();
+      await waitForHealth();
+      websiteStopped = false;
+      rollbackMessage = ' Previous source release restored and health check passed; database migrations were retained.';
+    } catch (rollbackError) {
+      append('rollback-failure', rollbackError);
+      rollbackMessage = ` Automatic rollback also failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`;
+    }
+  } else if (websiteStopped) {
     await stopMaintenanceServer().catch(() => {});
-    await startWebsite()
-      .then(() => { websiteStopped = false; })
-      .catch((restartError) => append('restart-failure', restartError));
+    await startWebsite().then(() => { websiteStopped = false; }).catch((restartError) => append('restart-failure', restartError));
   }
+  await updateJob('failed', 'failed', `${message}${rollbackMessage}`.slice(0, 1000), true).catch(() => {});
   console.error(`Website update failed: ${message}`);
   process.exitCode = 1;
 } finally {

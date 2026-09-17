@@ -21,6 +21,9 @@ const PROTECTED_DELEGATION_PERMISSIONS = new Set([
   "admin.account-management",
   "admin.account-password-reset",
   "admin.updater",
+  "admin.ranks",
+  "admin.system-health",
+  "admin.xp",
 ]);
 const VALID_LEVELS = new Set<PagePermissionAccess>(
   pagePermissionLevels.filter((level) => level !== "none"),
@@ -40,6 +43,8 @@ type UserPermissionRow = {
   user_id: string;
   permission_key: string;
   access_level: string;
+  granted_by_name?: string | null;
+  updated_at?: Date | null;
 };
 
 function jsonError(error: string, status = 400) {
@@ -136,9 +141,10 @@ async function getNativeAccounts() {
           from public.app_auth_users order by lower(coalesce(name, username))`),
     pool.query<UserRoleRow>("select user_id, role from public.user_roles"),
     pool.query<ProfileRow>("select id, display_name from public.profiles"),
-    pool.query<UserPermissionRow>(
-      "select user_id, permission_key, access_level from public.user_page_permissions",
-    ),
+    pool.query<UserPermissionRow>(`select permissions.user_id,permissions.permission_key,permissions.access_level,
+      coalesce(grantor."displayUsername",grantor.username) granted_by_name,permissions.updated_at
+      from public.user_page_permissions permissions
+      left join public.app_auth_users grantor on grantor.id=permissions.granted_by`),
   ]);
 
   const rolesByUser = new Map<string, string[]>();
@@ -149,10 +155,14 @@ async function getNativeAccounts() {
   }
   const profilesByUser = new Map(profiles.rows.map((profile) => [profile.id, profile]));
   const permissionsByUser = new Map<string, Record<string, string>>();
+  const permissionMetaByUser = new Map<string, Record<string, { grantedBy: string; updatedAt: Date | null }>>();
   for (const row of permissions.rows) {
     const entries = permissionsByUser.get(row.user_id) || {};
     entries[row.permission_key] = row.access_level;
     permissionsByUser.set(row.user_id, entries);
+    const metadata = permissionMetaByUser.get(row.user_id) || {};
+    metadata[row.permission_key] = { grantedBy: row.granted_by_name || "Unknown", updatedAt: row.updated_at || null };
+    permissionMetaByUser.set(row.user_id, metadata);
   }
 
   return users.rows.map((user) => ({
@@ -166,6 +176,7 @@ async function getNativeAccounts() {
     disabled: user.disabled,
     roles: rolesByUser.get(user.id) || [],
     permissions: permissionsByUser.get(user.id) || {},
+    permissionMeta: permissionMetaByUser.get(user.id) || {},
   }));
 }
 

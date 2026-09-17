@@ -21,6 +21,7 @@ type PersonnelSearchRow = {
 };
 
 type DurationHours = 1 | 2 | 4;
+type CalendarView = "day" | "week";
 
 type ServerDayCounts = Record<number, number>;
 
@@ -52,6 +53,7 @@ export default function ServersPage() {
   });
 
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
+  const [calendarView, setCalendarView] = useState<CalendarView>("day");
   const [selectedStartIndex, setSelectedStartIndex] = useState<number | null>(null);
   const [durationHours, setDurationHours] = useState<DurationHours>(1);
 
@@ -60,6 +62,7 @@ export default function ServersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [bookingTitle, setBookingTitle] = useState("");
+  const [recurrenceWeeks, setRecurrenceWeeks] = useState(1);
 
   const [canBook, setCanBook] = useState(false);
   const [bookingPassword, setBookingPassword] = useState("");
@@ -102,7 +105,16 @@ export default function ServersPage() {
     setIsLoadingBookings(true);
     setLoadError("");
 
-    const [start, end] = getDayBounds(selectedDate);
+    let [start, end] = getDayBounds(selectedDate);
+    if (calendarView === "week") {
+      const monday = new Date(start);
+      const day = monday.getDay();
+      monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
+      const nextMonday = new Date(monday);
+      nextMonday.setDate(nextMonday.getDate() + 7);
+      start = monday;
+      end = nextMonday;
+    }
     const params = new URLSearchParams({
       serverId: String(activeServer),
       start: start.toISOString(),
@@ -139,7 +151,7 @@ export default function ServersPage() {
     } finally {
       if (fetchToken === fetchTokenRef.current) setIsLoadingBookings(false);
     }
-  }, [activeServer, bookingPassword, selectedDate]);
+  }, [activeServer, bookingPassword, calendarView, selectedDate]);
 
   useEffect(() => {
     void Promise.resolve().then(() => {
@@ -165,15 +177,15 @@ export default function ServersPage() {
     return getBookingsForSlot(slot).length > 0;
   }
 
-  function wouldSelectionConflict(startIndex: number | null, duration: DurationHours) {
-    if (startIndex === null) return false;
+  function selectionConflict(startIndex: number | null, duration: DurationHours) {
+    if (startIndex === null) return null;
 
     const selectionStart = slots[startIndex];
-    if (!selectionStart) return true;
+    if (!selectionStart) return null;
 
     const selectionEnd = new Date(selectionStart.getTime() + duration * 60 * 60 * 1000);
 
-    return bookings.some((booking) => {
+    return bookings.find((booking) => {
       const bookingStart = new Date(booking.start_time);
       const bookingEnd = new Date(booking.end_time);
 
@@ -216,8 +228,9 @@ export default function ServersPage() {
       return;
     }
 
-    if (wouldSelectionConflict(selectedStartIndex, durationHours)) {
-      alert("That booking overlaps an existing booking or block.");
+    const localConflict = selectionConflict(selectedStartIndex, durationHours);
+    if (localConflict) {
+      alert(`This overlaps ${localConflict.title}, booked for ${localConflict.personnel?.name || "System"}.`);
       return;
     }
 
@@ -236,11 +249,13 @@ export default function ServersPage() {
         title: bookingTitle.trim() || "Server Booking",
         startTime: start.toISOString(),
         endTime: end.toISOString(),
+        recurrenceWeeks,
       }),
     });
-    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    const result = (await response.json().catch(() => null)) as { error?: string; conflict?: { title?:string; starts_at?:string; ends_at?:string; personnel_name?:string } } | null;
     if (!response.ok) {
-      alert(result?.error || "Failed to create booking");
+      const conflict=result?.conflict;
+      alert(conflict ? `${result?.error}: ${conflict.title || "Occupied"} for ${conflict.personnel_name || "System"}, ${new Date(conflict.starts_at||"").toLocaleString()} to ${new Date(conflict.ends_at||"").toLocaleTimeString()}.` : result?.error || "Failed to create booking");
       return;
     }
 
@@ -255,6 +270,7 @@ export default function ServersPage() {
     setBookingTitle("");
     setShowResults(false);
     setDurationHours(1);
+    setRecurrenceWeeks(1);
   }
 
   function handleSlotClick(index: number, blocked: boolean) {
@@ -326,10 +342,17 @@ export default function ServersPage() {
       ? new Date(selectedBookingStart.getTime() + durationHours * 60 * 60 * 1000)
       : null;
 
-  const hasSelectionConflict = wouldSelectionConflict(selectedStartIndex, durationHours);
+  const conflictingBooking = selectionConflict(selectedStartIndex, durationHours);
+  const hasSelectionConflict = Boolean(conflictingBooking);
 
   const directBookings = bookings.filter((b) => !b.id.startsWith("recurring-"));
   const recurringBlocks = bookings.filter((b) => b.id.startsWith("recurring-"));
+  const weekDays = useMemo(() => {
+    const base = new Date(`${selectedDate}T12:00:00`);
+    const day = base.getDay();
+    base.setDate(base.getDate() - (day === 0 ? 6 : day - 1));
+    return Array.from({ length: 7 }, (_, index) => { const date = new Date(base); date.setDate(base.getDate() + index); return date; });
+  }, [selectedDate]);
 
   const totalBookedHours = directBookings.reduce((sum, booking) => {
     const start = new Date(booking.start_time).getTime();
@@ -521,6 +544,11 @@ export default function ServersPage() {
             </div>
 
             <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-[#7fa08e]">Calendar View</label>
+              <div className="grid grid-cols-2 border border-[#00ff66]/20 p-1 sm:w-64">{(["day","week"] as CalendarView[]).map(view=><button key={view} onClick={()=>{setCalendarView(view);clearBookingDraft();}} className={`px-4 py-2 text-xs font-bold uppercase tracking-[.15em] ${calendarView===view?"bg-[#00ff66]/15 text-[#00ff66]":"text-gray-500"}`}>{view}</button>)}</div>
+            </div>
+
+            <div>
               <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-[#7fa08e]">
                 Legend
               </label>
@@ -561,7 +589,7 @@ export default function ServersPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-[#00ff66]/25 bg-black/35 p-2 shadow-[0_0_30px_rgba(0,255,100,0.06)] sm:rounded-3xl sm:p-4">
+            {calendarView === "week" ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">{weekDays.map(day=>{const dayBookings=bookings.filter(booking=>new Date(booking.start_time).toDateString()===day.toDateString());return <article key={day.toISOString()} className="min-h-48 border border-[#00ff66]/20 bg-black/40 p-3"><h3 className="border-b border-[#00ff66]/15 pb-3 text-sm font-bold uppercase text-[#00ff66]">{day.toLocaleDateString([], {weekday:"short",day:"2-digit",month:"short"})}</h3><div className="mt-3 space-y-2">{dayBookings.map(booking=><div key={booking.id} className={`border p-3 text-xs ${booking.id.startsWith("recurring-")?"border-amber-400/25 bg-amber-400/5":"border-[#00ff66]/20 bg-[#00ff66]/5"}`}><strong className="block text-white">{booking.title}</strong><span className="mt-1 block text-gray-400">{formatTimeRange(booking.start_time,booking.end_time)}</span><span className="mt-1 block text-gray-500">{booking.personnel?.name}</span></div>)}{!dayBookings.length&&<p className="text-xs text-gray-600">No bookings</p>}</div></article>})}</div> : <div className="rounded-2xl border border-[#00ff66]/25 bg-black/35 p-2 shadow-[0_0_30px_rgba(0,255,100,0.06)] sm:rounded-3xl sm:p-4">
               <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
                 {slots.map((slot, index) => {
                   const slotBookings = getBookingsForSlot(slot);
@@ -685,7 +713,7 @@ export default function ServersPage() {
                   );
                 })}
               </div>
-            </div>
+            </div>}
           </section>
 
           <aside className="min-w-0 2xl:sticky 2xl:top-[360px] 2xl:self-start">
@@ -725,7 +753,7 @@ export default function ServersPage() {
 
                     {hasSelectionConflict && (
                       <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                        This duration overlaps an existing booking or block.
+                        Overlaps {conflictingBooking?.title || "an existing booking"} for {conflictingBooking?.personnel?.name || "System"}, ending {conflictingBooking ? new Date(conflictingBooking.end_time).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "later"}.
                       </div>
                     )}
                   </div>
@@ -795,6 +823,15 @@ export default function ServersPage() {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="mb-2 block text-sm text-[#00ff66]">Repeat weekly</label>
+                    <select value={recurrenceWeeks} onChange={(e)=>setRecurrenceWeeks(Number(e.target.value))} className="w-full rounded-xl border border-[#00ff66]/30 bg-black px-4 py-3 text-white outline-none">
+                      <option value={1}>One booking</option>
+                      {[2,3,4,5,6,7,8].map(weeks=><option key={weeks} value={weeks}>{weeks} weeks</option>)}
+                    </select>
+                    <p className="mt-2 text-xs text-gray-500">Every occurrence is checked before any booking is saved.</p>
                   </div>
 
                   <div className="mb-4">

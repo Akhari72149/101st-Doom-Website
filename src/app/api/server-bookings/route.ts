@@ -145,7 +145,7 @@ function parseWindow(request: Request) {
     Number.isNaN(start.getTime()) ||
     Number.isNaN(end.getTime()) ||
     length < 20 * 60 * 60 * 1000 ||
-    length > 28 * 60 * 60 * 1000
+    length > 8 * 24 * 60 * 60 * 1000
   ) {
     return null;
   }
@@ -305,6 +305,7 @@ function parseCreateBody(value: unknown) {
   const start = new Date(String(body?.startTime || ""));
   const end = new Date(String(body?.endTime || ""));
   const duration = end.getTime() - start.getTime();
+  const recurrenceWeeks = Number(body?.recurrenceWeeks || 1);
   if (
     !SERVER_IDS.has(serverId) ||
     !UUID_PATTERN.test(bookedFor) ||
@@ -317,11 +318,12 @@ function parseCreateBody(value: unknown) {
     start.getUTCMilliseconds() !== 0 ||
     ![0, 30].includes(start.getUTCMinutes()) ||
     start.getTime() < Date.now() - 5 * 60_000 ||
-    start.getTime() > Date.now() + 366 * 24 * 60 * 60_000
+    start.getTime() > Date.now() + 366 * 24 * 60 * 60_000 ||
+    !Number.isInteger(recurrenceWeeks) || recurrenceWeeks < 1 || recurrenceWeeks > 8
   ) {
     return null;
   }
-  return { serverId, bookedFor, title, start, end };
+  return { serverId, bookedFor, title, start, end, recurrenceWeeks };
 }
 
 async function createInPostgres(
@@ -336,28 +338,34 @@ async function createInPostgres(
       [input.bookedFor, ELIGIBLE_CERTIFICATION_IDS],
     );
     if (!eligible.rowCount) throw new Error("INELIGIBLE_PERSONNEL");
-    const conflict = await client.query(
-      `select 1
+    const inserted: BookingRow[] = [];
+    for (let week = 0; week < input.recurrenceWeeks; week += 1) {
+      const startsAt = new Date(input.start.getTime() + week * 7 * 86_400_000);
+      const endsAt = new Date(input.end.getTime() + week * 7 * 86_400_000);
+      const conflict = await client.query(
+      `select title,starts_at,ends_at,kind,personnel_name
          from (
-           select start_time as starts_at, end_time as ends_at
-             from public.server_bookings where server_id = $1
+           select bookings.title,start_time as starts_at,end_time as ends_at,'booking' kind,personnel.name personnel_name
+             from public.server_bookings bookings left join public.personnel personnel on personnel.id=bookings.booked_for
+             where bookings.server_id = $1
            union all
-           select start_at, end_at
+           select title,start_at,end_at,'system block' kind,'System' personnel_name
              from public.recurring_server_blocks where server_id = $1
          ) occupied
         where $2 < ends_at and $3 > starts_at
         limit 1`,
-      [input.serverId, input.start, input.end],
-    );
-    if (conflict.rowCount) throw new Error("BOOKING_CONFLICT");
-    const inserted = await client.query<BookingRow>(
+      [input.serverId, startsAt, endsAt]);
+      if (conflict.rowCount) throw new Error(`BOOKING_CONFLICT:${JSON.stringify(conflict.rows[0])}`);
+      const created = await client.query<BookingRow>(
       `insert into public.server_bookings
          (server_id, user_id, booked_for, title, start_time, end_time)
        values ($1, $2, $3, $4, $5, $6)
        returning id, server_id, start_time, end_time, title, booked_for`,
-      [input.serverId, userId, input.bookedFor, input.title, input.start, input.end],
+      [input.serverId, userId, input.bookedFor, input.title, startsAt, endsAt],
     );
-    return inserted.rows[0];
+      inserted.push(created.rows[0]);
+    }
+    return inserted;
   });
 }
 
@@ -416,15 +424,19 @@ export async function POST(request: Request) {
   const input = parseCreateBody(await request.json().catch(() => null));
   if (!input) return jsonError("Invalid booking details", 400);
   try {
+    if (databaseBackend() === "supabase" && input.recurrenceWeeks > 1) return jsonError("Recurring booking creation requires the PostgreSQL backend", 409);
     const booking =
       databaseBackend() === "postgres"
         ? await createInPostgres(input, access.userId)
         : await createInSupabase(input, access.userId);
-    return NextResponse.json({ booking }, { status: 201 });
+    return NextResponse.json({ booking: Array.isArray(booking) ? booking[0] : booking, bookings: Array.isArray(booking) ? booking : [booking] }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("BOOKING_CONFLICT") || message.includes("Booking overlaps")) {
-      return jsonError("That booking overlaps an existing booking or block", 409);
+      const detailText = message.split("BOOKING_CONFLICT:")[1];
+      let conflict = null;
+      try { conflict = detailText ? JSON.parse(detailText) : null; } catch {}
+      return NextResponse.json({ error: "That booking overlaps an existing booking or block", conflict }, { status: 409 });
     }
     if (message.includes("INELIGIBLE_PERSONNEL")) return jsonError("Selected personnel is not eligible", 400);
     console.error("[server-bookings] Create failed", error);

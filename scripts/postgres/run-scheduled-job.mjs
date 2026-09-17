@@ -17,6 +17,7 @@ if (!rollback && process.env.SCHEDULED_JOB_EXECUTION_ENABLED !== 'true') {
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
 
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const startedAt = new Date();
 await client.connect();
 try {
   const identity = await client.query('select current_user as role, current_database() as database');
@@ -27,7 +28,12 @@ try {
   try {
     const result = await client.query(jobs[name]);
     if (rollback) await client.query('rollback');
-    else await client.query('commit');
+    else {
+      await client.query(`insert into public.system_job_runs
+        (job_name,status,started_at,completed_at,rows_returned)
+        values($1,'succeeded',$2,now(),$3)`, [name, startedAt, result.rowCount ?? 0]);
+      await client.query('commit');
+    }
     console.log(JSON.stringify({
       job: name,
       database: identity.rows[0].database,
@@ -36,6 +42,11 @@ try {
     }));
   } catch (error) {
     await client.query('rollback');
+    if (!rollback) {
+      await client.query(`insert into public.system_job_runs
+        (job_name,status,started_at,completed_at,error_message)
+        values($1,'failed',$2,now(),$3)`, [name, startedAt, String(error?.message || error).slice(0, 1000)]).catch(() => {});
+    }
     throw error;
   }
 } finally {

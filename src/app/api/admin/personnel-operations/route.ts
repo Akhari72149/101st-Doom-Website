@@ -6,16 +6,8 @@ import {structure} from "@/data/structure";
 export const runtime="nodejs";export const dynamic="force-dynamic";const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,CERTS=["079827bf-8b8f-4f37-9b6c-664942689a0a","c579ef59-7010-4bcc-bcd4-9cd448ac5bf5","8eff73b9-9793-452a-b77d-c16cde5b9b4c"];
 function backend(){const v=process.env.ADMIN_PERSONNEL_DATABASE_BACKEND||"supabase";if(v!=="postgres"&&v!=="supabase")throw new Error("Unknown ADMIN_PERSONNEL_DATABASE_BACKEND");return v;}
 function key(scope:string){return scope==="create"?"admin.create":scope==="positions"?"admin.positions":scope==="removal"?"admin.removal":null;}
-async function pgRead(scope:string){const p=getPostgresPool(),ranks=scope!=="removal"?(await p.query("select id,name,rank_level from public.ranks order by rank_level")).rows:[];const processors=(await p.query(`select distinct pe.id,pe.name,pe.status from public.personnel_certifications pc join public.personnel pe on pe.id=pc.personnel_id where pc.certification_id=any($1::uuid[]) and lower(coalesce(pe.status,''))<>all($2::text[]) order by pe.name`,[CERTS,["removed","retired","transferred"]])).rows;if(scope==="create")return{ranks,processors};const personnel=(await p.query(`select personnel.id,personnel.name,personnel.birth_number,personnel.rank_id,personnel.slotted_position,personnel.status,personnel.mos,current_rank.changed_at as rank_changed_at
+async function pgRead(scope:string){const p=getPostgresPool(),ranks=scope!=="removal"?(await p.query("select id,name,rank_level from public.ranks where is_active=true order by rank_level")).rows:[];const processors=(await p.query(`select distinct pe.id,pe.name,pe.status from public.personnel_certifications pc join public.personnel pe on pe.id=pc.personnel_id where pc.certification_id=any($1::uuid[]) and lower(coalesce(pe.status,''))<>all($2::text[]) order by pe.name`,[CERTS,["removed","retired","transferred"]])).rows;if(scope==="create")return{ranks,processors};const personnel=(await p.query(`select personnel.id,personnel.name,personnel.birth_number,personnel.rank_id,personnel.slotted_position,personnel.status,personnel.mos,personnel.rank_effective_at as rank_changed_at
   from public.personnel
-  left join lateral (
-    select rank_history.changed_at
-    from public.rank_history
-    where rank_history.personnel_id=personnel.id
-      and rank_history.new_rank_id=personnel.rank_id
-    order by rank_history.changed_at desc nulls last
-    limit 1
-  ) current_rank on true
   ${scope==="removal"?"where lower(coalesce(personnel.status,''))<>all(array['removed','retired','transferred'])":""}
   order by personnel.name`)).rows;return{ranks,processors,personnel};}
 async function sbRead(scope:string){
@@ -66,10 +58,11 @@ export async function POST(request:Request){if(!requestHasSameOrigin(request))re
             and (changed_at is null or changed_at>=$3)
           returning id`,[personId,rank,date]);
         if(!correctedHistory.rowCount)await c.query("insert into public.rank_history(personnel_id,discord_id,old_rank_id,new_rank_id,changed_at) values($1,$2,$3,$4,$5)",[personId,person.rows[0].discord_id||"",rank,rank,date]);
+        await c.query("update public.personnel set rank_effective_at=$2 where id=$1",[personId,date]);
         await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,old_rank_id,target_rank_id,details) values($1,$2,'RANK_CHANGED',$3,$4,$5)",[auth.userId,personId,rank,rank,`TIG date corrected to ${date.toISOString().slice(0,10)} by ${processedBy}`]);
         return{corrected:true};
       }
-      await c.query("update public.personnel set rank_id=$2 where id=$1",[personId,rank]);
+      await c.query("update public.personnel set rank_id=$2,rank_effective_at=$3 where id=$1",[personId,rank,date]);
       if(rank)await c.query("insert into public.rank_history(personnel_id,discord_id,old_rank_id,new_rank_id,changed_at) values($1,$2,$3,$4,$5)",[personId,person.rows[0].discord_id||"",person.rows[0].rank_id,rank,date]);
       await c.query("select public.enqueue_rank_role_sync($1,$2,$3)",[personId,person.rows[0].rank_id,rank]);
       await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,old_rank_id,target_rank_id,details) values($1,$2,'RANK_CHANGED',$3,$4,$5)",[auth.userId,personId,person.rows[0].rank_id,rank,`Processed by ${processedBy}`]);

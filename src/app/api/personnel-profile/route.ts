@@ -43,7 +43,7 @@ async function readDirectoryFromPostgres() {
   const pool = getPostgresPool();
   const [ranks, personnel] = await Promise.all([
     pool.query("select id, name, rank_level from public.ranks order by rank_level, name"),
-    pool.query(`select id, rank_id, name, slotted_position, created_at, ts_id, status, mos
+    pool.query(`select id, rank_id, name, slotted_position, created_at, rank_effective_at, ts_id, status, mos
       from public.personnel order by name`),
   ]);
   return { ranks: ranks.rows, personnel: personnel.rows };
@@ -54,7 +54,7 @@ async function readDirectoryFromSupabase() {
     supabaseAdmin.from("ranks").select("id,name,rank_level").order("rank_level").order("name"),
     supabaseAdmin
       .from("personnel")
-      .select("id,rank_id,name,slotted_position,created_at,ts_id,status,mos")
+      .select("id,rank_id,name,slotted_position,created_at,rank_effective_at,ts_id,status,mos")
       .order("name"),
   ]);
   const error = ranks.error || personnel.error;
@@ -64,14 +64,18 @@ async function readDirectoryFromSupabase() {
 
 async function readDossierFromPostgres(personnelId: string) {
   const pool = getPostgresPool();
-  const [certifications, rankHistory, statusAudit, awards, linkedSteam] = await Promise.all([
+  const [certifications, rankHistory, statusAudit, awards, linkedSteam, auditTimeline] = await Promise.all([
     pool.query(`select pc.id, pc.awarded_at,
         json_build_object('id', c.id, 'name', c.name) as certification
       from public.personnel_certifications pc
       join public.certifications c on c.id = pc.certification_id
       where pc.personnel_id = $1 order by c.name`, [personnelId]),
-    pool.query(`select id, old_rank_id, new_rank_id, changed_at
-      from public.rank_history where personnel_id = $1
+    pool.query(`select history.id, history.old_rank_id, history.new_rank_id, history.changed_at,
+      old_rank.name old_rank_name, new_rank.name new_rank_name
+      from public.rank_history history
+      left join public.ranks old_rank on old_rank.id=history.old_rank_id
+      left join public.ranks new_rank on new_rank.id=history.new_rank_id
+      where history.personnel_id = $1
       order by changed_at desc nulls last`, [personnelId]),
     pool.query(`select a.id, a.action, a.created_at,
         case when p.id is null then null else json_build_object('name', p.name) end as processor
@@ -94,13 +98,22 @@ async function readDossierFromPostgres(personnelId: string) {
       from public.personnel_steam_links
       where personnel_id = $1 and revoked_at is null
       order by linked_at desc nulls last limit 1`, [personnelId]),
+    pool.query(`select action,details,created_at from public.audit_logs
+      where target_personnel_id=$1 order by created_at desc limit 100`, [personnelId]),
   ]);
+  const serviceTimeline = [
+    ...rankHistory.rows.map((row) => ({ id:`rank-${row.id}`, type:"rank", title:`Rank: ${row.old_rank_name || "Unranked"} to ${row.new_rank_name || "Unranked"}`, detail:"Rank assignment", occurredAt:row.changed_at })),
+    ...certifications.rows.map((row) => ({ id:`cert-${row.id}`, type:"certification", title:`Certification: ${row.certification?.name || "Unknown"}`, detail:"Certification awarded", occurredAt:row.awarded_at })),
+    ...awards.rows.map((row) => ({ id:`award-${row.id}`, type:"award", title:`Award: ${row.award?.name || "Unknown"}`, detail:row.notes || "Award recorded", occurredAt:row.awarded_at })),
+    ...auditTimeline.rows.map((row,index) => ({ id:`audit-${index}-${row.created_at}`, type:"audit", title:String(row.action).replaceAll("_"," "), detail:row.details || "Personnel record updated", occurredAt:row.created_at })),
+  ].filter((entry) => entry.occurredAt).sort((a,b) => new Date(b.occurredAt).getTime()-new Date(a.occurredAt).getTime());
   return {
     certifications: certifications.rows,
     rankHistory: rankHistory.rows,
     statusAudit: statusAudit.rows[0] || null,
     awards: awards.rows,
     steamLink: steamLink(linkedSteam.rows[0] || null),
+    serviceTimeline,
   };
 }
 

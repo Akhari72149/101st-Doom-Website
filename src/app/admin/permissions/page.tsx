@@ -35,6 +35,7 @@ type Account = {
   disabled: boolean;
   roles: string[];
   permissions: Record<string, PagePermissionAccess>;
+  permissionMeta?: Record<string, { grantedBy: string; updatedAt: string | null }>;
   username?: string;
   protected?: boolean;
   mustChangePassword?: boolean;
@@ -65,6 +66,9 @@ const protectedDelegationPermissions = new Set([
   "admin.account-management",
   "admin.account-password-reset",
   "admin.updater",
+  "admin.ranks",
+  "admin.system-health",
+  "admin.xp",
 ]);
 
 type PermissionPreset = {
@@ -163,6 +167,7 @@ export default function AdminPermissionsPage() {
   const [renameUsername, setRenameUsername] = useState("");
   const [credentialsCopied, setCredentialsCopied] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [showPermissionReview, setShowPermissionReview] = useState(false);
 
   const groupedDefinitions = useMemo(() => {
     const groups = new Map<string, PagePermissionDefinition[]>();
@@ -223,6 +228,11 @@ export default function AdminPermissionsPage() {
         (selectedAccount.permissions[definition.key] || "none"),
     ).length;
   }, [definitions, draftPermissions, selectedAccount]);
+  const permissionChanges = useMemo(() => selectedAccount ? definitions.flatMap((definition) => {
+    const before = selectedAccount.permissions[definition.key] || "none";
+    const after = draftPermissions[definition.key] || "none";
+    return before === after ? [] : [{ definition, before, after }];
+  }) : [], [definitions, draftPermissions, selectedAccount]);
 
   function canSetPermission(
     definition: PagePermissionDefinition,
@@ -385,6 +395,7 @@ export default function AdminPermissionsPage() {
 
     await loadPermissions();
     setSelectedAccount(null);
+    setShowPermissionReview(false);
     setSaving(false);
     setStatus("Permissions updated.");
   }
@@ -837,6 +848,11 @@ export default function AdminPermissionsPage() {
                             <div className="font-semibold text-white">{definition.label}</div>
                             <div className="mt-1 text-xs text-gray-500">{definition.pagePath}</div>
                             <p className="mt-1 text-xs leading-5 text-gray-400">{definition.description}</p>
+                            {selectedAccount.permissionMeta?.[definition.key] && (
+                              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-gray-600">
+                                Granted by {selectedAccount.permissionMeta[definition.key].grantedBy} · {formatDate(selectedAccount.permissionMeta[definition.key].updatedAt || undefined)}
+                              </p>
+                            )}
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -890,7 +906,7 @@ export default function AdminPermissionsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={savePermissions}
+                    onClick={() => setShowPermissionReview(true)}
                     disabled={saving || !capabilities.canManagePermissions || permissionChangeCount === 0}
                     className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/10 px-4 text-xs font-bold uppercase tracking-[0.1em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-not-allowed disabled:opacity-40 sm:px-5 sm:text-sm sm:tracking-[0.14em]"
                   >
@@ -900,6 +916,16 @@ export default function AdminPermissionsPage() {
                 </div>
               </div>
             </div>
+          </section>
+        </div>
+      )}
+
+      {showPermissionReview && selectedAccount && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" className="flex max-h-[88dvh] w-full max-w-2xl flex-col border border-amber-300/30 bg-[#020806]">
+            <header className="border-b border-amber-300/20 p-5"><p className="text-xs font-bold uppercase tracking-[.2em] text-amber-200">Review permission changes</p><h3 className="mt-2 text-xl font-black">{selectedAccount.displayName}</h3></header>
+            <div className="min-h-0 flex-1 divide-y divide-white/10 overflow-y-auto">{permissionChanges.map(({definition,before,after})=><div key={definition.key} className="grid grid-cols-[1fr_auto] gap-4 p-4"><div><strong>{definition.label}</strong><p className="mt-1 text-xs text-gray-500">{definition.pagePath}</p></div><div className="flex items-center gap-2 text-xs uppercase"><span className={accessClass(before)}>{accessLabel(before)}</span><span className="text-gray-600">→</span><span className={accessClass(after)}>{accessLabel(after)}</span></div></div>)}</div>
+            <footer className="grid grid-cols-2 gap-3 border-t border-white/10 p-4"><button onClick={()=>setShowPermissionReview(false)} className="min-h-11 border border-white/15 text-gray-300">Back</button><button onClick={()=>void savePermissions()} disabled={saving} className="min-h-11 border border-[#00ff66]/40 bg-[#00ff66]/10 font-bold uppercase text-[#00ff66]">{saving?"Saving...":`Confirm ${permissionChanges.length} changes`}</button></footer>
           </section>
         </div>
       )}

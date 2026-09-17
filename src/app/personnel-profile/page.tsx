@@ -37,6 +37,7 @@ type Person = {
   name: string;
   slotted_position: string | null;
   created_at: string | null;
+  rank_effective_at?: string | null;
   ts_id?: string | null;
   status?: string | null;
   mos?: string | null;
@@ -70,6 +71,14 @@ type SteamLinkRow = {
   profileUrl: string | null;
   avatarUrl: string | null;
   linkedAt: string | null;
+};
+
+type ServiceTimelineRow = {
+  id: string;
+  type: string;
+  title: string;
+  detail: string;
+  occurredAt: string;
 };
 
 type AwardRow = {
@@ -162,7 +171,7 @@ type MedicalStatsRow = {
   };
 };
 
-type ActiveTab = "qual" | "trainer" | "rank";
+type ActiveTab = "qual" | "trainer" | "rank" | "timeline";
 
 const plasmaWaveStyles = `
 @keyframes plasmaWaveDrift {
@@ -348,6 +357,7 @@ export default function PersonnelProfile() {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [certifications, setCertifications] = useState<CertificationRow[]>([]);
   const [rankHistory, setRankHistory] = useState<RankHistoryRow[]>([]);
+  const [serviceTimeline, setServiceTimeline] = useState<ServiceTimelineRow[]>([]);
   const [statusAudit, setStatusAudit] = useState<StatusAuditRow | null>(null);
   const [steamLink, setSteamLink] = useState<SteamLinkRow | null>(null);
   const [awards, setAwards] = useState<AwardRow[]>([]);
@@ -410,6 +420,7 @@ export default function PersonnelProfile() {
       const dossier = (await dossierResponse.json().catch(() => null)) as {
         certifications?: CertificationRow[];
         rankHistory?: RankHistoryRow[];
+        serviceTimeline?: ServiceTimelineRow[];
         statusAudit?: StatusAuditRow | null;
         awards?: AwardRow[];
         steamLink?: SteamLinkRow | null;
@@ -419,6 +430,7 @@ export default function PersonnelProfile() {
 
       setCertifications(dossier.certifications || []);
       setRankHistory(dossier.rankHistory || []);
+      setServiceTimeline(dossier.serviceTimeline || []);
       setStatusAudit(dossier.statusAudit || null);
       setAwards(dossier.awards || []);
       setSteamLink(dossier.steamLink || null);
@@ -587,7 +599,14 @@ export default function PersonnelProfile() {
   };
 
   const calculateTimeInGrade = () => {
-    if (!selectedPerson || rankHistory.length === 0) return 0;
+    if (!selectedPerson) return 0;
+
+    if (selectedPerson.rank_effective_at) {
+      const effective = new Date(selectedPerson.rank_effective_at);
+      if (!Number.isNaN(effective.getTime())) return Math.max(0, Math.floor((Date.now() - effective.getTime()) / 86_400_000));
+    }
+
+    if (rankHistory.length === 0) return 0;
 
     const latestPromotion = rankHistory.find(
       (h) => h.new_rank_id === selectedPerson.rank_id,
@@ -1777,6 +1796,14 @@ export default function PersonnelProfile() {
                     >
                       RANK HISTORY ({rankHistory.length})
                     </button>
+                    <button
+                      onClick={() => setActiveTab("timeline")}
+                      className={`rounded-xl border px-4 py-2 text-sm font-semibold tracking-[0.15em] transition ${
+                        activeTab === "timeline" ? theme.tabActive : theme.tabInactive
+                      }`}
+                    >
+                      SERVICE TIMELINE ({serviceTimeline.length})
+                    </button>
                   </div>
 
                   <div className="max-h-[440px] overflow-y-auto pr-1">
@@ -1818,6 +1845,9 @@ export default function PersonnelProfile() {
                           ))}
                         </div>
                       )
+                    ) : activeTab === "timeline" ? (
+                      serviceTimeline.length === 0 ? <p className="text-gray-400">No service activity recorded.</p> :
+                      <div className="space-y-3">{serviceTimeline.map((entry)=><div key={entry.id} className={`rounded-2xl border ${theme.softDivider} bg-black/30 px-4 py-4`}><div className="flex flex-wrap justify-between gap-2"><p className="text-sm font-semibold uppercase text-white">{entry.title}</p><span className="text-xs uppercase tracking-[.15em] text-gray-500">{formatDate(entry.occurredAt)}</span></div><p className="mt-2 text-sm text-gray-400">{entry.detail}</p></div>)}</div>
                     ) : rankHistory.length === 0 ? (
                       <p className="text-gray-400">No rank history recorded.</p>
                     ) : (

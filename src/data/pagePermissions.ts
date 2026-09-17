@@ -58,6 +58,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["admin", "nco", "di"],
   },
   {
+    key: "admin.ranks",
+    pagePath: "/admin/ranks",
+    label: "Rank Management",
+    category: "Personnel Admin",
+    description: "Create, edit, and retire rank definitions.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.personnel-profiles",
     pagePath: "/admin/personnel-profiles",
     label: "Personnel Profiles",
@@ -159,6 +167,22 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     label: "Updater",
     category: "Systems",
     description: "Review releases and install approved website updates.",
+    legacyRoles: [],
+  },
+  {
+    key: "admin.system-health",
+    pagePath: "/admin/system-health",
+    label: "System Health",
+    category: "Systems",
+    description: "Review database, scheduler, Discord, updater, and XP health.",
+    legacyRoles: [],
+  },
+  {
+    key: "admin.xp",
+    pagePath: "/admin/xp",
+    label: "XP Management",
+    category: "Systems",
+    description: "Review and correct personnel XP with a permanent audit trail.",
     legacyRoles: [],
   },
   {

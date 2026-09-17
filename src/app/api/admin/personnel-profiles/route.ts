@@ -246,7 +246,7 @@ export async function POST(request: Request) {
         await client.query("delete from public.personnel_certifications where personnel_id=$1", [personnelId]);
       }
       await client.query(
-        "update public.personnel set status=null, rank_id=$2, slotted_position=null where id=$1",
+        "update public.personnel set status=null, rank_id=$2, rank_effective_at=case when rank_id is distinct from $2 then now() else rank_effective_at end, slotted_position=null where id=$1",
         [personnelId, rankId],
       );
       if (current.rank_id !== rankId) {

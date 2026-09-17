@@ -12,6 +12,7 @@ type Personnel = {
   slotted_position: string;
   mos?: string | null;
   created_at?: string | null;
+  rank_effective_at?: string | null;
 };
 
 type Rank = {
@@ -144,7 +145,7 @@ export default function Roster() {
           new Date(a.changed_at as string).getTime()
       )[0];
 
-    const startDate = latestPromotion?.changed_at || person.created_at || null;
+    const startDate = person.rank_effective_at || latestPromotion?.changed_at || person.created_at || null;
     if (!startDate) return 0;
 
     const then = new Date(startDate);

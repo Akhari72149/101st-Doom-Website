@@ -38,20 +38,35 @@ function isInactiveStatus(status: string | null | undefined) {
   return clean === "retired" || clean === "removed" || clean === "transferred";
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const period = new URL(request.url).searchParams.get("period") || "lifetime";
+  const allowedPeriod = ["lifetime", "current-week", "previous-week"].includes(period) ? period : "lifetime";
   const backend = process.env.PERSONNEL_DATABASE_BACKEND || "supabase";
   if (backend === "postgres") {
     try {
-      const result = await getPostgresPool().query(`
+      const result = allowedPeriod === "lifetime" ? await getPostgresPool().query(`
         select xp.personnel_id,p.name,p.mos,r.name rank_name,xp.total_xp,xp.current_level,
           xp.lifetime_kill_count,xp.lifetime_death_count,xp.lifetime_teamkill_count,xp.last_event_at
         from public.personnel_xp_profiles xp
         join public.personnel p on p.id=xp.personnel_id
         left join public.ranks r on r.id=p.rank_id
         where xp.total_xp>0 and lower(coalesce(p.status,'')) not in ('retired','removed','transferred')
-        order by xp.total_xp desc,xp.personnel_id limit 10`);
+        order by xp.total_xp desc,xp.personnel_id limit 10`) : await getPostgresPool().query(`
+        with target_week as (
+          select distinct week_start_date from public.personnel_xp_weekly_stats
+          order by week_start_date desc offset $1 limit 1
+        )
+        select weekly.personnel_id,p.name,p.mos,r.name rank_name,weekly.week_xp total_xp,
+          profile.current_level,weekly.week_kill_count lifetime_kill_count,
+          weekly.week_death_count lifetime_death_count,weekly.week_teamkill_count lifetime_teamkill_count,
+          weekly.updated_at last_event_at
+        from public.personnel_xp_weekly_stats weekly join target_week on target_week.week_start_date=weekly.week_start_date
+        join public.personnel p on p.id=weekly.personnel_id left join public.ranks r on r.id=p.rank_id
+        left join public.personnel_xp_profiles profile on profile.personnel_id=p.id
+        where weekly.week_xp<>0 and lower(coalesce(p.status,'')) not in ('retired','removed','transferred')
+        order by weekly.week_xp desc,weekly.personnel_id limit 10`, [allowedPeriod === "previous-week" ? 1 : 0]);
       const leaderboard = result.rows.map((row,index)=>({position:index+1,personnelId:row.personnel_id,name:row.name||"Unknown Personnel",displayedRank:String(row.mos||"").trim()||row.rank_name||"Unranked",totalXp:Number(row.total_xp),currentLevel:Number(row.current_level),kills:Number(row.lifetime_kill_count),deaths:Number(row.lifetime_death_count),teamkills:Number(row.lifetime_teamkill_count),lastEventAt:row.last_event_at}));
-      return NextResponse.json({leaderboard},{headers:noStoreHeaders});
+      return NextResponse.json({leaderboard,period:allowedPeriod},{headers:noStoreHeaders});
     } catch (error) {
       console.error("[arma-xp] Native leaderboard load failed",error);
       return NextResponse.json({leaderboard:[]},{status:500,headers:noStoreHeaders});

@@ -14,6 +14,7 @@ type PersonnelRow = {
   slotted_position: string;
   mos: string | null;
   created_at: string | null;
+  rank_effective_at: string | null;
 };
 
 type RankRow = {
@@ -46,7 +47,7 @@ async function readFromPostgres() {
   const pool = getPostgresPool();
   const [ranks, personnel, rankHistory] = await Promise.all([
     pool.query<RankRow>("select id, name from public.ranks order by name"),
-    pool.query<PersonnelRow>(`select id, rank_id, birth_number, name, slotted_position, mos, created_at
+    pool.query<PersonnelRow>(`select id, rank_id, birth_number, name, slotted_position, mos, created_at, rank_effective_at
       from public.personnel order by rank_id, name`),
     pool.query<RankHistoryRow>(`select personnel_id, new_rank_id, changed_at
       from public.rank_history order by changed_at desc nulls last`),
@@ -63,7 +64,7 @@ async function readFromSupabase() {
     supabaseAdmin.from("ranks").select("id,name").order("name"),
     supabaseAdmin
       .from("personnel")
-      .select("id,rank_id,birth_number,name,slotted_position,mos,created_at")
+      .select("id,rank_id,birth_number,name,slotted_position,mos,created_at,rank_effective_at")
       .order("rank_id", { ascending: true })
       .order("name", { ascending: true }),
     supabaseAdmin

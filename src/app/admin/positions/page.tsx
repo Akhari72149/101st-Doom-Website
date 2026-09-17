@@ -12,6 +12,7 @@ type Personnel = {
   slotted_position: string | null;
   status: string | null;
   mos: string | null;
+  rank_changed_at: string | null;
 };
 
 type Rank = {
@@ -56,6 +57,8 @@ const MEDIC_MOS_RANKS = ["CM-C", "CM", "CM-V", "CM-T", "CM-P", "CM-S", "CM-SM"];
 const RTO_MOS_RANKS = ["CI-C", "CI", "CI-V", "CI-T", "CI-P", "CI-S", "CI-SM"];
 
 const todayDateInput = () => new Date().toISOString().split("T")[0];
+const rankDateInput = (value: string | null | undefined) =>
+  value?.slice(0, 10) || todayDateInput();
 
 export default function PositionEditor() {
   const router = useRouter();
@@ -149,6 +152,7 @@ export default function PositionEditor() {
 
     setSelectedPerson(updated);
     setSelectedRankId(updated.rank_id || "");
+    setRankChangedAt(rankDateInput(updated.rank_changed_at));
 
     const currentMos = updated.mos || "";
 
@@ -291,8 +295,14 @@ export default function PositionEditor() {
   const hasPositionChange =
     !!selectedPerson && selectedSlotId !== (selectedPerson.slotted_position || "");
 
-  const hasRankChange =
+  const hasRankSelectionChange =
     !!selectedPerson && selectedRankId !== (selectedPerson.rank_id || "");
+
+  const hasRankDateChange =
+    !!selectedPerson &&
+    rankChangedAt !== rankDateInput(selectedPerson.rank_changed_at);
+
+  const hasRankChange = hasRankSelectionChange || hasRankDateChange;
 
   const hasMosChange =
     !!selectedPerson && selectedMosValue !== (selectedPerson.mos || "");
@@ -321,7 +331,7 @@ export default function PositionEditor() {
     setSelectedSubHeader(currentPath?.subHeader || "");
     setPersonSearch(`${getRankName(person.rank_id)} ${person.name}`);
     setShowPersonDropdown(false);
-    setRankChangedAt(todayDateInput());
+    setRankChangedAt(rankDateInput(person.rank_changed_at));
     setErrorMessage("");
     setSuccessMessage("");
 
@@ -395,7 +405,11 @@ export default function PositionEditor() {
 
     await fetchData();
     setProcessing(false);
-    setSuccessMessage("Rank updated successfully.");
+    setSuccessMessage(
+      hasRankSelectionChange
+        ? "Rank updated successfully."
+        : "Time in grade date corrected successfully."
+    );
   };
 
   const updateMos = async () => {
@@ -746,7 +760,11 @@ export default function PositionEditor() {
                           : "bg-gradient-to-r from-[#00ff66] to-[#00cc44] text-black hover:scale-[1.02]"
                       }`}
                     >
-                      {processing ? "Saving..." : "Commit Rank Change"}
+                      {processing
+                        ? "Saving..."
+                        : hasRankSelectionChange
+                          ? "Commit Rank Change"
+                          : "Correct TIG Date"}
                     </button>
                   </div>
 

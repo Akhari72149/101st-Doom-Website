@@ -6,8 +6,44 @@ import {structure} from "@/data/structure";
 export const runtime="nodejs";export const dynamic="force-dynamic";const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,CERTS=["079827bf-8b8f-4f37-9b6c-664942689a0a","c579ef59-7010-4bcc-bcd4-9cd448ac5bf5","8eff73b9-9793-452a-b77d-c16cde5b9b4c"];
 function backend(){const v=process.env.ADMIN_PERSONNEL_DATABASE_BACKEND||"supabase";if(v!=="postgres"&&v!=="supabase")throw new Error("Unknown ADMIN_PERSONNEL_DATABASE_BACKEND");return v;}
 function key(scope:string){return scope==="create"?"admin.create":scope==="positions"?"admin.positions":scope==="removal"?"admin.removal":null;}
-async function pgRead(scope:string){const p=getPostgresPool(),ranks=scope!=="removal"?(await p.query("select id,name,rank_level from public.ranks order by rank_level")).rows:[];const processors=(await p.query(`select distinct pe.id,pe.name,pe.status from public.personnel_certifications pc join public.personnel pe on pe.id=pc.personnel_id where pc.certification_id=any($1::uuid[]) and lower(coalesce(pe.status,''))<>all($2::text[]) order by pe.name`,[CERTS,["removed","retired","transferred"]])).rows;if(scope==="create")return{ranks,processors};const personnel=(await p.query(`select id,name,birth_number,rank_id,slotted_position,status,mos from public.personnel ${scope==="removal"?"where lower(coalesce(status,''))<>all(array['removed','retired','transferred'])":""} order by name`)).rows;return{ranks,processors,personnel};}
-async function sbRead(scope:string){const ranks=scope!=="removal"?await supabaseAdmin.from("ranks").select("id,name,rank_level").order("rank_level"):null,cert=await supabaseAdmin.from("personnel_certifications").select("personnel_id").in("certification_id",CERTS);if(ranks?.error||cert.error)throw ranks?.error||cert.error;const ids=[...new Set((cert.data||[]).map(x=>x.personnel_id))];const processors=ids.length?await supabaseAdmin.from("personnel").select("id,name,status").in("id",ids).order("name"):null;if(processors?.error)throw processors.error;let personnel=null;if(scope!=="create"){personnel=await supabaseAdmin.from("personnel").select("id,name,birth_number,rank_id,slotted_position,status,mos").order("name");if(personnel.error)throw personnel.error;}const inactive=new Set(["removed","retired","transferred"]);return{ranks:ranks?.data||[],processors:(processors?.data||[]).filter(x=>!inactive.has(String(x.status||"").toLowerCase())),personnel:(personnel?.data||[]).filter(x=>scope!=="removal"||!inactive.has(String(x.status||"").toLowerCase()))};}
+async function pgRead(scope:string){const p=getPostgresPool(),ranks=scope!=="removal"?(await p.query("select id,name,rank_level from public.ranks order by rank_level")).rows:[];const processors=(await p.query(`select distinct pe.id,pe.name,pe.status from public.personnel_certifications pc join public.personnel pe on pe.id=pc.personnel_id where pc.certification_id=any($1::uuid[]) and lower(coalesce(pe.status,''))<>all($2::text[]) order by pe.name`,[CERTS,["removed","retired","transferred"]])).rows;if(scope==="create")return{ranks,processors};const personnel=(await p.query(`select personnel.id,personnel.name,personnel.birth_number,personnel.rank_id,personnel.slotted_position,personnel.status,personnel.mos,current_rank.changed_at as rank_changed_at
+  from public.personnel
+  left join lateral (
+    select rank_history.changed_at
+    from public.rank_history
+    where rank_history.personnel_id=personnel.id
+      and rank_history.new_rank_id=personnel.rank_id
+    order by rank_history.changed_at desc nulls last
+    limit 1
+  ) current_rank on true
+  ${scope==="removal"?"where lower(coalesce(personnel.status,''))<>all(array['removed','retired','transferred'])":""}
+  order by personnel.name`)).rows;return{ranks,processors,personnel};}
+async function sbRead(scope:string){
+  const ranks=scope!=="removal"?await supabaseAdmin.from("ranks").select("id,name,rank_level").order("rank_level"):null;
+  const cert=await supabaseAdmin.from("personnel_certifications").select("personnel_id").in("certification_id",CERTS);
+  if(ranks?.error||cert.error)throw ranks?.error||cert.error;
+  const ids=[...new Set((cert.data||[]).map(x=>x.personnel_id))];
+  const processors=ids.length?await supabaseAdmin.from("personnel").select("id,name,status").in("id",ids).order("name"):null;
+  if(processors?.error)throw processors.error;
+  let personnel=null;
+  if(scope!=="create"){
+    personnel=await supabaseAdmin.from("personnel").select("id,name,birth_number,rank_id,slotted_position,status,mos").order("name");
+    if(personnel.error)throw personnel.error;
+  }
+  const inactive=new Set(["removed","retired","transferred"]);
+  let personnelRows=(personnel?.data||[]) as Array<{id:string;rank_id:string|null;status:string|null;[key:string]:unknown}>;
+  if(scope==="positions"&&personnelRows.length){
+    const history=await supabaseAdmin.from("rank_history").select("personnel_id,new_rank_id,changed_at").order("changed_at",{ascending:false});
+    if(history.error)throw history.error;
+    const currentRanks=new Map(personnelRows.map(person=>[person.id,person.rank_id]));
+    const effectiveDates=new Map<string,string|null>();
+    for(const row of history.data||[]){
+      if(!effectiveDates.has(row.personnel_id)&&row.new_rank_id===currentRanks.get(row.personnel_id))effectiveDates.set(row.personnel_id,row.changed_at);
+    }
+    personnelRows=personnelRows.map(person=>({...person,rank_changed_at:effectiveDates.get(person.id)||null}));
+  }
+  return{ranks:ranks?.data||[],processors:(processors?.data||[]).filter(x=>!inactive.has(String(x.status||"").toLowerCase())),personnel:personnelRows.filter(x=>scope!=="removal"||!inactive.has(String(x.status||"").toLowerCase()))};
+}
 export async function GET(request:Request){const url=new URL(request.url),scope=url.searchParams.get("scope")||"",permission=key(scope);if(!permission||!(await requirePageAccess(request,permission,"read").catch(()=>null)))return NextResponse.json({error:"Forbidden"},{status:403});const duplicate=url.searchParams.get("duplicate"),value=String(url.searchParams.get("value")||"").trim().slice(0,100);try{if(duplicate){if(!["name","birth_number"].includes(duplicate)||!value)return NextResponse.json({error:"Invalid check"},{status:400});let rows;if(backend()==="postgres")rows=(await getPostgresPool().query(`select id,status from public.personnel where lower(${duplicate})=lower($1)`,[value])).rows;else{const r=await supabaseAdmin.from("personnel").select("id,status").ilike(duplicate,value);if(r.error)throw r.error;rows=r.data||[];}return NextResponse.json({duplicate:rows.some(x=>!["removed","retired"].includes(String(x.status||"").toLowerCase()))});}return NextResponse.json(backend()==="postgres"?await pgRead(scope):await sbRead(scope),{headers:{"Cache-Control":"no-store"}});}catch(e){console.error("[personnel-operations] Read failed",e);return NextResponse.json({error:"Failed to load personnel administration data"},{status:500});}}
 async function certifiedPg(c:import("pg").PoolClient,id:string){const r=await c.query("select 1 from public.personnel_certifications where personnel_id=$1 and certification_id=any($2::uuid[]) limit 1",[id,CERTS]);return Boolean(r.rowCount);}
 function uuid(v:unknown){const s=String(v||"");return UUID.test(s)?s:null;}
@@ -19,7 +55,31 @@ export async function POST(request:Request){if(!requestHasSameOrigin(request))re
     if(scope!=="positions")throw new Error("INVALID");const processedBy=String(b?.processedBy||"").slice(0,150);
     if(action==="position"){const slot=String(b?.slotId||"").trim().slice(0,200),label=String(b?.slotLabel||"").slice(0,200),section=String(b?.slotSection||"").slice(0,200);if(!slot)throw new Error("INVALID");const occupant=await c.query<{id:string;discord_id:string}>("select id,discord_id from public.personnel where slotted_position=$1 and id<>$2 for update",[slot,personId]);for(const old of occupant.rows){await c.query("update public.personnel set slotted_position=null where id=$1",[old.id]);await c.query("select public.enqueue_slot_role_sync($1,$2,$3,$4,$5,$6)",[old.id,null,slot,true,[],slotRoleIds(slot)]);await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,target_slot_id,target_slot_label,target_slot_section,details) values($1,$2,'POSITION_UNASSIGNED',$3,$4,$5,$6)",[auth.userId,old.id,slot,label,section,`Processed by ${processedBy}`]);}await c.query("update public.personnel set slotted_position=$2 where id=$1",[personId,slot]);await c.query("select public.enqueue_slot_role_sync($1,$2,$3,$4,$5,$6)",[personId,slot,person.rows[0].slotted_position,false,slotRoleIds(slot),slotRoleIds(person.rows[0].slotted_position)]);await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,target_slot_id,target_slot_label,target_slot_section,details) values($1,$2,'POSITION_ASSIGNED',$3,$4,$5,$6)",[auth.userId,personId,slot,label,section,`Processed by ${processedBy}`]);return{replaced:Boolean(occupant.rowCount)};}
     if(action==="unassign"){const label=String(b?.slotLabel||"").slice(0,200),section=String(b?.slotSection||"").slice(0,200);await c.query("update public.personnel set slotted_position=null where id=$1",[personId]);await c.query("select public.enqueue_slot_role_sync($1,$2,$3,$4,$5,$6)",[personId,null,person.rows[0].slotted_position,true,[],slotRoleIds(person.rows[0].slotted_position)]);await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,target_slot_id,target_slot_label,target_slot_section,details) values($1,$2,'POSITION_UNASSIGNED',$3,$4,$5,$6)",[auth.userId,personId,person.rows[0].slotted_position,label,section,`Processed by ${processedBy}`]);return{};}
-    if(action==="rank"){const rawRank=String(b?.rankId||""),rank=rawRank?uuid(rawRank):null,date=new Date(String(b?.changedAt||""));if((rawRank&&!rank)||Number.isNaN(date.getTime()))throw new Error("INVALID");if(rank){const rr=await c.query("select 1 from public.ranks where id=$1",[rank]);if(!rr.rowCount)throw new Error("INVALID");}await c.query("update public.personnel set rank_id=$2 where id=$1",[personId,rank]);if(rank)await c.query("insert into public.rank_history(personnel_id,discord_id,old_rank_id,new_rank_id,changed_at) values($1,$2,$3,$4,$5)",[personId,person.rows[0].discord_id||"",person.rows[0].rank_id,rank,date]);await c.query("select public.enqueue_rank_role_sync($1,$2,$3)",[personId,person.rows[0].rank_id,rank]);await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,old_rank_id,target_rank_id,details) values($1,$2,'RANK_CHANGED',$3,$4,$5)",[auth.userId,personId,person.rows[0].rank_id,rank,`Processed by ${processedBy}`]);return{};}
+    if(action==="rank"){
+      const rawRank=String(b?.rankId||""),rank=rawRank?uuid(rawRank):null,date=new Date(String(b?.changedAt||""));
+      if((rawRank&&!rank)||Number.isNaN(date.getTime()))throw new Error("INVALID");
+      if(rank){const rr=await c.query("select 1 from public.ranks where id=$1",[rank]);if(!rr.rowCount)throw new Error("INVALID");}
+      if(rank&&rank===person.rows[0].rank_id){
+        const correctedHistory=await c.query<{id:string}>(`with previous_rank as (
+            select max(changed_at) as changed_at from public.rank_history
+            where personnel_id=$1 and new_rank_id is distinct from $2
+          )
+          update public.rank_history
+          set changed_at=$3
+          where personnel_id=$1 and new_rank_id=$2
+            and (changed_at is null or (select changed_at from previous_rank) is null
+              or changed_at>(select changed_at from previous_rank))
+          returning id`,[personId,rank,date]);
+        if(!correctedHistory.rowCount)await c.query("insert into public.rank_history(personnel_id,discord_id,old_rank_id,new_rank_id,changed_at) values($1,$2,$3,$4,$5)",[personId,person.rows[0].discord_id||"",rank,rank,date]);
+        await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,old_rank_id,target_rank_id,details) values($1,$2,'RANK_CHANGED',$3,$4,$5)",[auth.userId,personId,rank,rank,`TIG date corrected to ${date.toISOString().slice(0,10)} by ${processedBy}`]);
+        return{corrected:true};
+      }
+      await c.query("update public.personnel set rank_id=$2 where id=$1",[personId,rank]);
+      if(rank)await c.query("insert into public.rank_history(personnel_id,discord_id,old_rank_id,new_rank_id,changed_at) values($1,$2,$3,$4,$5)",[personId,person.rows[0].discord_id||"",person.rows[0].rank_id,rank,date]);
+      await c.query("select public.enqueue_rank_role_sync($1,$2,$3)",[personId,person.rows[0].rank_id,rank]);
+      await c.query("insert into public.audit_logs(user_id,target_personnel_id,action,old_rank_id,target_rank_id,details) values($1,$2,'RANK_CHANGED',$3,$4,$5)",[auth.userId,personId,person.rows[0].rank_id,rank,`Processed by ${processedBy}`]);
+      return{};
+    }
     if(action==="mos"){const mos=String(b?.mos||"").trim().slice(0,50)||null;await c.query("update public.personnel set mos=$2 where id=$1",[personId,mos]);return{};}throw new Error("INVALID");});return NextResponse.json({ok:true,...result});}
   return await hostedWrite(scope,action,b,auth.userId!);}catch(e){const m=e instanceof Error?e.message:"",code=e&&typeof e==="object"&&"code" in e?String(e.code):"",constraint=e&&typeof e==="object"&&"constraint" in e?String(e.constraint):"",discordDuplicate=code==="23505"&&constraint==="unique_discord_id";if(!["INVALID","DUPLICATE"].includes(m)&&!discordDuplicate)console.error("[personnel-operations] Write failed",e);return NextResponse.json({error:m==="DUPLICATE"?"An active personnel record already uses that name or birth number":discordDuplicate?"That Discord account is already linked to another personnel record":m==="INVALID"?"Invalid personnel request":scope==="create"?"Failed to create personnel":"Failed to update personnel"},{status:m==="DUPLICATE"||discordDuplicate?409:m==="INVALID"?400:500});}}
 async function hostedWrite(scope:string,action:string,b:Record<string,unknown>|null,userId:string){if(scope==="create"&&action==="create"){const processor=uuid(b?.processorId);if(!processor||!(await hostedCertified(processor)))throw new Error("INVALID");const payload={rank_id:uuid(b?.rankId),birth_number:String(b?.birthNumber||"").replace(/\s+/g,""),name:String(b?.name||"").trim(),discord_id:String(b?.discordId||"").trim()||null,ts_id:String(b?.teamspeakId||"").trim()||null,auto_role_sync:b?.importFromDiscord!==true,status:null,created_at:b?.createdAt?new Date(String(b.createdAt)).toISOString():new Date().toISOString()};const r=await supabaseAdmin.from("personnel").insert(payload).select("id").single();if(r.error)throw r.error;const a=await supabaseAdmin.from("audit_logs").insert({user_id:userId,target_personnel_id:r.data.id,action:"NEW_MEMBER",details:"New member added to system",processed_by:processor});if(a.error)throw a.error;if(b?.importFromDiscord&&payload.discord_id){const f=await supabaseAdmin.functions.invoke("discord-full-import",{body:{discord_id:payload.discord_id,personnel_id:r.data.id}});if(f.error)throw f.error;}return NextResponse.json({ok:true,personnelId:r.data.id});}
@@ -28,7 +88,33 @@ async function hostedWrite(scope:string,action:string,b:Record<string,unknown>|n
   if(scope!=="positions")throw new Error("INVALID");const processedBy=String(b?.processedBy||"").slice(0,150);
   if(action==="position"){const slot=String(b?.slotId||"").trim(),label=String(b?.slotLabel||""),section=String(b?.slotSection||"");if(!slot)throw new Error("INVALID");const occupants=await supabaseAdmin.from("personnel").select("id").eq("slotted_position",slot).neq("id",personnelId);if(occupants.error)throw occupants.error;for(const occupant of occupants.data||[]){let r=await supabaseAdmin.from("personnel").update({slotted_position:null}).eq("id",occupant.id);if(r.error)throw r.error;await supabaseAdmin.functions.invoke("sync-slot-roles",{body:{personnelId:occupant.id,slotId:null,oldSlotId:slot,forceDefaultRole:true}});r=await supabaseAdmin.from("audit_logs").insert({user_id:userId,target_personnel_id:occupant.id,action:"POSITION_UNASSIGNED",target_slot_id:slot,target_slot_label:label,target_slot_section:section,details:`Processed by ${processedBy}`});if(r.error)throw r.error;}let r=await supabaseAdmin.from("personnel").update({slotted_position:slot}).eq("id",personnelId);if(r.error)throw r.error;await supabaseAdmin.functions.invoke("sync-slot-roles",{body:{personnelId,slotId:slot,oldSlotId:person.data.slotted_position,forceDefaultRole:false}});r=await supabaseAdmin.from("audit_logs").insert({user_id:userId,target_personnel_id:personnelId,action:"POSITION_ASSIGNED",target_slot_id:slot,target_slot_label:label,target_slot_section:section,details:`Processed by ${processedBy}`});if(r.error)throw r.error;await notifyWebsite({action:"POSITION_ASSIGNED",target_personnel_id:personnelId,processedBy,slotLabel:label,slotSection:section});return NextResponse.json({ok:true,replaced:Boolean(occupants.data?.length)});}
   if(action==="unassign"){const label=String(b?.slotLabel||""),section=String(b?.slotSection||"");let r=await supabaseAdmin.from("personnel").update({slotted_position:null}).eq("id",personnelId);if(r.error)throw r.error;await supabaseAdmin.functions.invoke("sync-slot-roles",{body:{personnelId,slotId:null,oldSlotId:person.data.slotted_position,forceDefaultRole:true}});r=await supabaseAdmin.from("audit_logs").insert({user_id:userId,target_personnel_id:personnelId,action:"POSITION_UNASSIGNED",target_slot_id:person.data.slotted_position,target_slot_label:label,target_slot_section:section,details:`Processed by ${processedBy}`});if(r.error)throw r.error;await notifyWebsite({action:"POSITION_UNASSIGNED",target_personnel_id:personnelId,processedBy,slotLabel:label,slotSection:section});return NextResponse.json({ok:true});}
-  if(action==="rank"){const rawRank=String(b?.rankId||""),rank=rawRank?uuid(rawRank):null,changedAt=new Date(String(b?.changedAt||""));if((rawRank&&!rank)||Number.isNaN(changedAt.getTime()))throw new Error("INVALID");let r=await supabaseAdmin.from("personnel").update({rank_id:rank}).eq("id",personnelId);if(r.error)throw r.error;if(rank){r=await supabaseAdmin.from("rank_history").insert({personnel_id:personnelId,discord_id:person.data.discord_id||"",old_rank_id:person.data.rank_id,new_rank_id:rank,changed_at:changedAt.toISOString()});if(r.error)throw r.error;}await supabaseAdmin.functions.invoke("discord-rank-sync",{body:{personnelId,oldRankId:person.data.rank_id,newRankId:rank}});r=await supabaseAdmin.from("audit_logs").insert({user_id:userId,target_personnel_id:personnelId,action:"RANK_CHANGED",old_rank_id:person.data.rank_id,target_rank_id:rank,details:`Processed by ${processedBy}`});if(r.error)throw r.error;return NextResponse.json({ok:true});}
+  if(action==="rank"){
+    const rawRank=String(b?.rankId||""),rank=rawRank?uuid(rawRank):null,changedAt=new Date(String(b?.changedAt||""));
+    if((rawRank&&!rank)||Number.isNaN(changedAt.getTime()))throw new Error("INVALID");
+    if(rank&&rank===person.data.rank_id){
+      const previousRank=await supabaseAdmin.from("rank_history").select("changed_at").eq("personnel_id",personnelId).neq("new_rank_id",rank).order("changed_at",{ascending:false}).limit(1).maybeSingle();
+      if(previousRank.error)throw previousRank.error;
+      const correctionQuery=supabaseAdmin.from("rank_history").update({changed_at:changedAt.toISOString()}).eq("personnel_id",personnelId).eq("new_rank_id",rank);
+      let correction=previousRank.data?.changed_at
+        ? await correctionQuery.gt("changed_at",previousRank.data.changed_at).select("id")
+        : await correctionQuery.select("id");
+      if(correction.error)throw correction.error;
+      if(!correction.data?.length){
+        correction=await supabaseAdmin.from("rank_history").insert({personnel_id:personnelId,discord_id:person.data.discord_id||"",old_rank_id:rank,new_rank_id:rank,changed_at:changedAt.toISOString()}).select("id");
+        if(correction.error)throw correction.error;
+      }
+      const audit=await supabaseAdmin.from("audit_logs").insert({user_id:userId,target_personnel_id:personnelId,action:"RANK_CHANGED",old_rank_id:rank,target_rank_id:rank,details:`TIG date corrected to ${changedAt.toISOString().slice(0,10)} by ${processedBy}`});
+      if(audit.error)throw audit.error;
+      return NextResponse.json({ok:true,corrected:true});
+    }
+    let r=await supabaseAdmin.from("personnel").update({rank_id:rank}).eq("id",personnelId);
+    if(r.error)throw r.error;
+    if(rank){r=await supabaseAdmin.from("rank_history").insert({personnel_id:personnelId,discord_id:person.data.discord_id||"",old_rank_id:person.data.rank_id,new_rank_id:rank,changed_at:changedAt.toISOString()});if(r.error)throw r.error;}
+    await supabaseAdmin.functions.invoke("discord-rank-sync",{body:{personnelId,oldRankId:person.data.rank_id,newRankId:rank}});
+    r=await supabaseAdmin.from("audit_logs").insert({user_id:userId,target_personnel_id:personnelId,action:"RANK_CHANGED",old_rank_id:person.data.rank_id,target_rank_id:rank,details:`Processed by ${processedBy}`});
+    if(r.error)throw r.error;
+    return NextResponse.json({ok:true});
+  }
   if(action==="mos"){const r=await supabaseAdmin.from("personnel").update({mos:String(b?.mos||"").trim()||null}).eq("id",personnelId);if(r.error)throw r.error;return NextResponse.json({ok:true});}throw new Error("INVALID");}
 async function hostedCertified(id:string){const r=await supabaseAdmin.from("personnel_certifications").select("id").eq("personnel_id",id).in("certification_id",CERTS).limit(1);if(r.error)throw r.error;return Boolean(r.data?.length);}
 async function notifyWebsite(payload:Record<string,unknown>){const url=process.env.WEBSITE_BOT_ACTION_URL,secret=process.env.WEBSITE_BOT_SECRET;if(!url||!secret)return;try{await fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${secret}`},body:JSON.stringify(payload)});}catch(e){console.error("[personnel-operations] Discord notification failed",e);}}

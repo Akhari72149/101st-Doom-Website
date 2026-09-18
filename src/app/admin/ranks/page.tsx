@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Save, Shield, ToggleLeft, ToggleRight } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Loader2, Plus, Save, Shield, ToggleLeft, ToggleRight } from "lucide-react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type Rank = { id: string; name: string; rank_level: number; discord_role_id: string | null; is_active: boolean; personnel_count: number };
@@ -14,6 +14,7 @@ export default function RankManagementPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState("");
   const [message, setMessage] = useState("");
+  const [draggedRankId, setDraggedRankId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ name: "", rankLevel: "", discordRoleId: "" });
 
   const load = useCallback(async () => {
@@ -48,6 +49,29 @@ export default function RankManagementPage() {
     setDraft({ name: "", rankLevel: "", discordRoleId: "" }); setMessage("Rank created."); await load();
   }
 
+  async function persistOrder(nextRanks: Rank[]) {
+    setRanks(nextRanks.map((rank, index) => ({ ...rank, rank_level: index })));
+    setSaving("order"); setMessage("");
+    const response = await fetch("/api/admin/ranks", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+      body: JSON.stringify({ orderedIds: nextRanks.map((rank) => rank.id) }),
+    });
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    setSaving("");
+    if (!response.ok) { setMessage(body?.error || "Failed to reorder ranks"); await load(); return; }
+    setMessage("Rank order updated.");
+  }
+
+  function moveRank(rankId: string, targetIndex: number) {
+    const sourceIndex = ranks.findIndex((rank) => rank.id === rankId);
+    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= ranks.length || sourceIndex === targetIndex) return;
+    const next = [...ranks];
+    const [moved] = next.splice(sourceIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    void persistOrder(next);
+  }
+
   if (loading) return <main className="min-h-screen bg-[#020806] p-10 text-[#00ff66]">Loading rank management...</main>;
   const canEdit = access === "edit" || access === "full";
   return <main className="min-h-screen bg-[#020806] px-4 py-10 text-white sm:px-8">
@@ -61,12 +85,13 @@ export default function RankManagementPage() {
         <button onClick={create} disabled={saving==="new"} className="flex items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/10 px-5 text-[#00ff66]"><Plus size={18}/>Create</button>
       </div>}
       <div className="divide-y divide-[#00ff66]/10">
-        {ranks.map((rank,index)=><div key={rank.id} className="grid gap-3 p-5 md:grid-cols-[1fr_120px_1fr_130px_48px] md:items-center">
+        {ranks.map((rank,index)=><div key={rank.id} onDragOver={(event)=>{if(canEdit)event.preventDefault();}} onDrop={(event)=>{event.preventDefault();if(draggedRankId)moveRank(draggedRankId,index);setDraggedRankId(null);}} className={`grid gap-3 p-5 transition md:grid-cols-[40px_1fr_90px_1fr_130px_112px] md:items-center ${draggedRankId===rank.id?"bg-[#00ff66]/10 opacity-60":""}`}>
+          <div draggable={canEdit} onDragStart={(event)=>{setDraggedRankId(rank.id);event.dataTransfer.effectAllowed="move";}} onDragEnd={()=>setDraggedRankId(null)} role="button" tabIndex={canEdit?0:-1} title="Drag to reorder" className={`hidden h-10 w-10 place-items-center border border-white/10 text-gray-500 md:grid ${canEdit?"cursor-grab hover:border-[#00ff66]/40 hover:text-[#00ff66]":"cursor-not-allowed opacity-30"}`}><GripVertical size={19}/></div>
           <input disabled={!canEdit} className="border border-white/10 bg-[#030b07] p-3 disabled:text-gray-400" value={rank.name} onChange={e=>setRanks(v=>v.map((r,i)=>i===index?{...r,name:e.target.value}:r))}/>
-          <input disabled={!canEdit} type="number" className="border border-white/10 bg-[#030b07] p-3" value={rank.rank_level} onChange={e=>setRanks(v=>v.map((r,i)=>i===index?{...r,rank_level:Number(e.target.value)}:r))}/>
+          <div className="border border-white/10 bg-[#030b07] p-3 text-center text-sm text-gray-400">{index + 1}</div>
           <input disabled={!canEdit} className="border border-white/10 bg-[#030b07] p-3" placeholder="No Discord role" value={rank.discord_role_id||""} onChange={e=>setRanks(v=>v.map((r,i)=>i===index?{...r,discord_role_id:e.target.value||null}:r))}/>
           <div className="text-sm text-gray-400">{rank.personnel_count} personnel</div>
-          {canEdit && <div className="flex gap-2"><button title={rank.is_active?"Retire rank":"Reactivate rank"} disabled={access!=="full"} onClick={()=>setRanks(v=>v.map((r,i)=>i===index?{...r,is_active:!r.is_active}:r))}>{rank.is_active?<ToggleRight className="text-[#00ff66]"/>:<ToggleLeft className="text-gray-500"/>}</button><button title="Save rank" onClick={()=>save(rank)}>{saving===rank.id?<Loader2 className="animate-spin"/>:<Save className="text-cyan-300"/>}</button></div>}
+          {canEdit && <div className="flex items-center gap-2"><button title="Move rank up" disabled={index===0||saving==="order"} onClick={()=>moveRank(rank.id,index-1)} className="md:hidden"><ChevronUp size={18}/></button><button title="Move rank down" disabled={index===ranks.length-1||saving==="order"} onClick={()=>moveRank(rank.id,index+1)} className="md:hidden"><ChevronDown size={18}/></button><button title={rank.is_active?"Retire rank":"Reactivate rank"} disabled={access!=="full"} onClick={()=>setRanks(v=>v.map((r,i)=>i===index?{...r,is_active:!r.is_active}:r))}>{rank.is_active?<ToggleRight className="text-[#00ff66]"/>:<ToggleLeft className="text-gray-500"/>}</button><button title="Save rank" onClick={()=>save(rank)}>{saving===rank.id?<Loader2 className="animate-spin"/>:<Save className="text-cyan-300"/>}</button></div>}
         </div>)}
       </div>
     </section>

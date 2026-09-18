@@ -66,6 +66,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.rank-corrections",
+    pagePath: "/admin/rank-corrections",
+    label: "Rank Corrections",
+    category: "Personnel Admin",
+    description: "Correct a personnel rank while preserving their existing TIG date.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.personnel-profiles",
     pagePath: "/admin/personnel-profiles",
     label: "Personnel Profiles",

@@ -76,3 +76,34 @@ export async function PATCH(request: Request) {
   });
   return updated ? NextResponse.json({ rank: updated }) : error("Rank not found", 404);
 }
+
+export async function PUT(request: Request) {
+  if (!requestHasSameOrigin(request)) return error("Invalid request origin", 403);
+  const auth = await requirePageAccess(request, "admin.ranks", "edit").catch(() => null);
+  if (!auth) return error("Edit Rank Management access is required", 403);
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  const orderedIds = Array.isArray(body?.orderedIds) ? body.orderedIds.map(String) : [];
+  if (!orderedIds.length || orderedIds.some((id) => !UUID.test(id)) || new Set(orderedIds).size !== orderedIds.length) {
+    return error("Invalid rank order", 400);
+  }
+  try {
+    await withPostgresTransaction(async (client) => {
+      const existing = await client.query<{ id: string }>("select id from public.ranks order by id for update");
+      const existingIds = new Set(existing.rows.map((row) => row.id));
+      if (existingIds.size !== orderedIds.length || orderedIds.some((id) => !existingIds.has(id))) {
+        throw new Error("ORDER_CHANGED");
+      }
+      await client.query(`update public.ranks ranks
+        set rank_level = ordered.position - 1
+        from unnest($1::uuid[]) with ordinality ordered(id, position)
+        where ranks.id = ordered.id`, [orderedIds]);
+      await client.query(`insert into public.audit_logs(user_id,action,details)
+        values($1,'RANK_ORDER_UPDATED',$2)`, [auth.userId, `Reordered ${orderedIds.length} rank definitions`]);
+    });
+    return NextResponse.json({ success: true });
+  } catch (caught) {
+    if ((caught as Error).message === "ORDER_CHANGED") return error("Ranks changed while reordering. Refresh and try again.", 409);
+    console.error("[ranks] Reorder failed", caught);
+    return error("Failed to reorder ranks", 500);
+  }
+}

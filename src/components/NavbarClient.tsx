@@ -293,6 +293,13 @@ export default function NavbarClient() {
           category: "Personnel Admin",
         },
         {
+          href: "/admin/rank-corrections",
+          label: "Rank Corrections",
+          description: "Correct ranks without changing TIG",
+          allowedRoles: [],
+          category: "Personnel Admin",
+        },
+        {
           href: "/admin/personnel-profiles",
           label: "Personnel Profiles",
           description: "Manage join dates, Discord links and reactivations",

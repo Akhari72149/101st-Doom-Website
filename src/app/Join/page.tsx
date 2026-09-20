@@ -681,7 +681,7 @@ export default function HowToJoinPage() {
                           </li>
                           <li>Complete all phases in the Hammer Training Academy</li>
                           <li>
-                            Complete the <span className="text-[#F7B628]">CX-C</span> test
+                            Complete the <span className="text-[#F7B628]">CXC</span> test
                           </li>
                         </ul>
 

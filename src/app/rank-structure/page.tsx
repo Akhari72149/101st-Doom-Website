@@ -81,7 +81,7 @@ const tracks: RankTrack[] = [
     ranks: [
       {
         name: "Clone Trooper (Private Third Class)",
-        abbreviation: "CT/PTC",
+        abbreviation: "PTC",
         icon: "/rank-icons/clone-trooper-private-third-class.png",
         summary:
           "The first slotted promotion, recognising time in the squad and a demonstrated commitment to the unit.",
@@ -89,7 +89,7 @@ const tracks: RankTrack[] = [
       },
       {
         name: "Clone Trooper (Private Second Class)",
-        abbreviation: "CT/PSC",
+        abbreviation: "PSC",
         icon: "/rank-icons/clone-trooper-private-second-class.png",
         summary:
           "The second slotted promotion, recognising continued commitment and growing usefulness to the squad through certifications.",
@@ -97,7 +97,7 @@ const tracks: RankTrack[] = [
       },
       {
         name: "Clone Trooper (Private First Class)",
-        abbreviation: "CT/PFC",
+        abbreviation: "PFC",
         icon: "/rank-icons/clone-trooper-private-first-class.png",
         summary:
           "The final Clone Trooper promotion, awarded for commitment and proven reliability as a team and squad member.",
@@ -320,7 +320,7 @@ const tracks: RankTrack[] = [
       },
       {
         name: "Clone Squadron Overseer",
-        abbreviation: "CX-O",
+        abbreviation: "CXO",
         icon: "/rank-icons/clone-squadron-overseer.png",
         summary:
           "The legacy Squadron Overseer designation held by Akhari.",

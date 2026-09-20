@@ -16,6 +16,7 @@ type PromotionRule = {
   minimumAttendances?: number;
   minimumMainOps?: number;
   requiresSlot?: boolean;
+  requiresAlphaPilotSlot?: boolean;
   manual?: string[];
 };
 
@@ -44,14 +45,14 @@ type SetupIssue = {
 const rules: PromotionRule[] = [
   { from: ["CR", "Clone Recruit"], target: "CR-C", minimumAttendances: 4, minimumMainOps: 1 },
   { from: ["CR-C", "Clone Cadet"], target: "CT", minimumAttendances: 4, minimumMainOps: 1, manual: ["BCT completion"] },
-  { from: ["CT", "Clone Trooper"], target: "CT/PTC", minimumTigDays: 60, minimumAttendance: 50, requiresSlot: true },
-  { from: ["CT/PTC"], target: "CT/PSC", minimumTigDays: 80, minimumAttendance: 50, minimumServiceDays: 140, requiresSlot: true },
-  { from: ["CT/PSC"], target: "CT/PFC", minimumTigDays: 100, minimumAttendance: 50, minimumServiceDays: 240, requiresSlot: true },
-  { from: ["CT/PFC"], target: "CST", minimumTigDays: 125, minimumAttendance: 50, minimumDaysFromCt: 365, requiresSlot: true },
+  { from: ["CT", "Clone Trooper"], target: "PTC", targetAliases: ["CT/PTC"], minimumTigDays: 60, minimumAttendance: 50, requiresSlot: true },
+  { from: ["PTC", "CT/PTC"], target: "PSC", targetAliases: ["CT/PSC"], minimumTigDays: 80, minimumAttendance: 50, minimumServiceDays: 140, requiresSlot: true },
+  { from: ["PSC", "CT/PSC"], target: "PFC", targetAliases: ["CT/PFC"], minimumTigDays: 100, minimumAttendance: 50, minimumServiceDays: 240, requiresSlot: true },
+  { from: ["PFC", "CT/PFC"], target: "CST", minimumTigDays: 125, minimumAttendance: 50, minimumDaysFromCt: 365, requiresSlot: true },
   { from: ["CST"], target: "CVT", targetAliases: ["VCT"], minimumTigDays: 100, minimumAttendance: 70, minimumServiceDays: 465, requiresSlot: true },
   { from: ["CVT", "VCT"], target: "CSP", minimumTigDays: 120, minimumAttendance: 80, requiresSlot: true, manual: ["Company approval"] },
-  { from: ["CSP"], target: "CTS", targetAliases: ["CX-T"], minimumTigDays: 145, minimumAttendance: 90, requiresSlot: true, manual: ["Company approval"] },
-  { from: ["CTS", "CX-T"], target: "LCP", requiresSlot: true, manual: ["Appointment to a Corporal NCO billet"] },
+  { from: ["CSP"], target: "CTS", minimumTigDays: 145, minimumAttendance: 90, requiresSlot: true, manual: ["Company approval"] },
+  { from: ["CTS"], target: "LCP", requiresSlot: true, manual: ["Appointment to a Corporal NCO billet"] },
   { from: ["LCP"], target: "CP", manual: ["Corporals Course completion"] },
   { from: ["CP"], target: "CSC", targetAliases: ["CPS"], minimumTigDays: 100, minimumAttendance: 50, requiresSlot: true },
   { from: ["CSC", "CPS"], target: "CVC", minimumTigDays: 120, minimumAttendance: 70, requiresSlot: true },
@@ -66,12 +67,35 @@ const rules: PromotionRule[] = [
   { from: ["CFS"], target: "CSM", manual: ["CSM Course completion", "Corporal and Sergeant courses when required"] },
   { from: ["CSM"], target: "SSM", minimumTigDays: 200, minimumAttendance: 80, requiresSlot: true, manual: ["Company approval"] },
   { from: ["SSM"], target: "BSM", manual: ["Battalion command selection", "Rank is not currently in active use"] },
+  { from: ["CXC", "CX-C"], target: "CX", minimumTigDays: 90, minimumAttendance: 75, requiresSlot: true, manual: ["CX Course completion"] },
+  { from: ["CX"], target: "CSX", minimumTigDays: 150, minimumAttendance: 75, requiresSlot: true, manual: ["VTOL qualification", "Platoon approval"] },
+  { from: ["CSX"], target: "CVX", minimumTigDays: 120, minimumAttendance: 80, requiresSlot: true, manual: ["Platoon approval"] },
+  { from: ["CVX"], target: "CXX", targetAliases: ["CX-X"], minimumTigDays: 125, minimumAttendance: 80, requiresSlot: true },
+  { from: ["CXX", "CX-X"], target: "CXT", targetAliases: ["CX-T"], minimumTigDays: 180, minimumAttendance: 90, requiresSlot: true },
+  { from: ["CXT", "CX-T"], target: "CXP", targetAliases: ["CX-P"], requiresAlphaPilotSlot: true, manual: ["Corporals Course completion"] },
+  { from: ["CXP", "CX-P"], target: "CXS", manual: ["Sergeants Course completion"] },
+  { from: ["CXS"], target: "CXSS", minimumTigDays: 125, minimumAttendance: 75, requiresSlot: true },
+  { from: ["CXSS"], target: "CXMS", minimumTigDays: 145, minimumAttendance: 80, requiresSlot: true, manual: ["Company approval"] },
+  { from: ["CXMS"], target: "CXM", manual: ["CSM Course completion"] },
   { from: ["CE", "Clone Ensign"], target: "Clone 2nd Lieutenant", manual: ["OCS completion", "Prior leadership courses when required"] },
   { from: ["Clone 2nd Lieutenant"], target: "Clone 1st Lieutenant", manual: ["Command review"] },
   { from: ["Clone 1st Lieutenant"], target: "Clone Captain", manual: ["Captains Course completion", "OCS when required", "Company appointment"] },
-  { from: ["Clone Captain"], target: "Clone Major", manual: ["Selection by the Unit Owner"] },
-  { from: ["Clone Major"], target: "BC", targetAliases: ["Clone Battalion Commander"], manual: ["Selection by the Unit Owner"] },
+  { from: ["Clone Captain"], target: "CMaj.", targetAliases: ["Clone Major"], manual: ["Selection by the Unit Owner"] },
 ];
+
+const terminalRanks = new Set([
+  "CXM",
+  "CXO",
+  "CX-O",
+  "CMAJ.",
+  "CLONE MAJOR",
+  "BC",
+  "BATTALION COMMANDER",
+  "CLONE BATTALION COMMANDER",
+  "CLONE COMMANDER",
+  "CWO",
+  "COMMAND WARRANT OFFICER",
+]);
 
 const normalize = (value: string | null | undefined) => (value || "").trim().toUpperCase();
 
@@ -140,6 +164,17 @@ export async function GET(request: Request) {
 
       if (!rule) {
         const rankLabel = person.current_rank || "Unranked personnel";
+        if (person.current_rank && terminalRanks.has(normalize(person.current_rank))) {
+          return {
+            ...person,
+            attendancePercentage,
+            targetRank: null,
+            targetConfigured: true,
+            status: "terminal",
+            criteria: [],
+            setupIssues: [],
+          };
+        }
         const setupIssues: SetupIssue[] = person.current_rank
           ? [{
               key: `route:${normalize(person.current_rank)}`,
@@ -186,6 +221,10 @@ export async function GET(request: Request) {
       if (rule.requiresSlot) {
         criteria.push(criterion("slot", "Slotted member", person.slotted_position || "Not slotted", "Required", person.slotted_position ? "met" : "not-met"));
       }
+      if (rule.requiresAlphaPilotSlot) {
+        const alphaPilot = /(?:^|[-_\s])(?:alpha|\d+a)(?:$|[-_\s])/i.test(person.slotted_position || "");
+        criteria.push(criterion("alpha-pilot-slot", "Alpha pilot billet", person.slotted_position || "Not slotted", "Required for the pilot NCO route", alphaPilot ? "met" : "not-met"));
+      }
       for (const [index, requirement] of (rule.manual || []).entries()) {
         criteria.push(criterion(`manual-${index}`, requirement, "Requires review", "Command confirmation", "review"));
       }
@@ -217,6 +256,7 @@ export async function GET(request: Request) {
       review: people.filter((person) => person.status === "review").length,
       inProgress: people.filter((person) => person.status === "in-progress").length,
       needsSetup: people.filter((person) => person.status === "setup-required").length,
+      terminal: people.filter((person) => person.status === "terminal").length,
     };
     const setupIssueMap = new Map<string, SetupIssue & { affected: number }>();
     for (const person of people) {

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
-type ReadinessStatus = "ready" | "review" | "in-progress" | "setup-required";
+type ReadinessStatus = "ready" | "review" | "in-progress" | "setup-required" | "terminal";
 type CriterionState = "met" | "not-met" | "review" | "unavailable";
 
 type Criterion = {
@@ -56,7 +56,7 @@ type Person = {
 
 type ResponseBody = {
   people: Person[];
-  summary: { ready: number; review: number; inProgress: number; needsSetup: number };
+  summary: { ready: number; review: number; inProgress: number; needsSetup: number; terminal: number };
   setupIssues: Array<SetupIssue & { affected: number }>;
   attendanceWindow: { first_record: string | null; last_record: string | null; periods: number };
   calculatedAt: string;
@@ -67,6 +67,7 @@ const statusDetails = {
   review: { label: "Command review", className: "border-cyan-300/35 bg-cyan-300/10 text-cyan-200", icon: ShieldCheck },
   "in-progress": { label: "In progress", className: "border-amber-300/35 bg-amber-300/10 text-amber-200", icon: Clock3 },
   "setup-required": { label: "Setup required", className: "border-red-300/35 bg-red-300/10 text-red-200", icon: TriangleAlert },
+  terminal: { label: "Final rank", className: "border-white/20 bg-white/5 text-white/70", icon: ShieldCheck },
 } as const;
 
 function formatDate(value: string | null) {
@@ -143,6 +144,7 @@ export default function PromotionReadinessPage() {
     { status: "review" as const, label: "Command review", value: data?.summary.review || 0, icon: ShieldCheck, color: "text-cyan-300" },
     { status: "in-progress" as const, label: "In progress", value: data?.summary.inProgress || 0, icon: Clock3, color: "text-amber-300" },
     { status: "setup-required" as const, label: "Setup required", value: data?.summary.needsSetup || 0, icon: TriangleAlert, color: "text-red-300" },
+    { status: "terminal" as const, label: "Final rank", value: data?.summary.terminal || 0, icon: ShieldCheck, color: "text-white/70" },
   ];
 
   return (
@@ -170,7 +172,7 @@ export default function PromotionReadinessPage() {
           This page provides recommendations only. Attendance is calculated as <strong className="text-cyan-200">Y / (Y + N)</strong>; Excused and LOA records are excluded. Course completion and command approval always require human confirmation.
         </div>
 
-        <div className="grid gap-px border-b border-[#00ff66]/15 bg-[#00ff66]/10 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-px border-b border-[#00ff66]/15 bg-[#00ff66]/10 sm:grid-cols-2 xl:grid-cols-5">
           {summaries.map((item) => (
             <button key={item.status} onClick={() => setStatus(status === item.status ? "all" : item.status)} className={`bg-[#020806] p-5 text-left transition hover:bg-white/[0.03] ${status === item.status ? "outline outline-1 outline-[#00ff66]/50" : ""}`}>
               <div className="flex items-center justify-between gap-4">
@@ -194,6 +196,7 @@ export default function PromotionReadinessPage() {
               <option value="review">Command review</option>
               <option value="in-progress">In progress</option>
               <option value="setup-required">Setup required</option>
+              <option value="terminal">Final rank</option>
             </select>
             <select value={rank} onChange={(event) => setRank(event.target.value)} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
               <option value="all">All current ranks</option>
@@ -259,7 +262,7 @@ export default function PromotionReadinessPage() {
                   <div className="flex items-center gap-3 border-l-2 border-[#00ff66]/30 pl-4">
                     <strong>{person.current_rank || "Unranked"}</strong>
                     <ArrowRight size={17} className="shrink-0 text-[#00ff66]" />
-                    <strong className="text-[#00ff66]">{person.targetRank || "No published route"}</strong>
+                    <strong className="text-[#00ff66]">{person.targetRank || (person.status === "terminal" ? "Final rank" : "No published route")}</strong>
                   </div>
 
                   <div className="grid grid-cols-3 gap-px bg-white/10">
@@ -293,7 +296,9 @@ export default function PromotionReadinessPage() {
                             <p className="mt-1 text-xs text-white/65">{item.current} · target {item.target}</p>
                           </div>
                         </div>
-                      )) : (
+                      )) : person.status === "terminal" ? (
+                        <div className="border border-white/15 bg-white/[0.03] p-3 text-sm text-white/65">This is a confirmed final rank with no further standard progression.</div>
+                      ) : (
                         <div className="border border-red-300/25 bg-red-300/5 p-3 text-sm text-red-200">No standard promotion route is configured for this rank.</div>
                       )}
                       {person.setupIssues.map((issue) => (

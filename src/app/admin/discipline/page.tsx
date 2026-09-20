@@ -24,6 +24,7 @@ type DisciplineCase = {
 };
 type Payload = { currentUserId: string; access: "read" | "edit" | "full"; personnel: Person[]; catalog: CatalogAction[]; cases: DisciplineCase[] };
 type Tab = "active" | "approval" | "appeals" | "archive" | "catalog";
+type EvidenceDraft = { id: string; label: string; url: string };
 
 const date = (value: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(value));
 const dateTime = (value: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -41,6 +42,8 @@ export default function DisciplinePage() {
   const [selected, setSelected] = useState<DisciplineCase | null>(null);
   const [caseKind, setCaseKind] = useState<"warning" | "da">("warning");
   const [personnelId, setPersonnelId] = useState("");
+  const [personnelSearch, setPersonnelSearch] = useState("");
+  const [actionSearch, setActionSearch] = useState("");
   const [incidentOn, setIncidentOn] = useState(new Date().toISOString().slice(0, 10));
   const [expiresAt, setExpiresAt] = useState("");
   const [summary, setSummary] = useState("");
@@ -49,6 +52,10 @@ export default function DisciplinePage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [evidenceLabel, setEvidenceLabel] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [issueEvidenceLabel, setIssueEvidenceLabel] = useState("");
+  const [issueEvidenceUrl, setIssueEvidenceUrl] = useState("");
+  const [issueEvidence, setIssueEvidence] = useState<EvidenceDraft[]>([]);
+  const [issueError, setIssueError] = useState("");
   const [notes, setNotes] = useState("");
   const [appealUrl, setAppealUrl] = useState("");
   const [newActionName, setNewActionName] = useState("");
@@ -76,6 +83,15 @@ export default function DisciplinePage() {
   const canFull = data?.access === "full";
   const person = data?.personnel.find((item) => item.id === personnelId);
   const stripsTags = data?.catalog.some((item) => item.slug === "strip-tags" && selectedActions.includes(item.id));
+  const personnelResults = useMemo(() => {
+    const search = personnelSearch.trim().toLowerCase();
+    if (!search || personnelId) return [];
+    return (data?.personnel || []).filter((item) => `${item.name} ${item.birth_number || ""}`.toLowerCase().includes(search)).slice(0, 12);
+  }, [data, personnelId, personnelSearch]);
+  const actionResults = useMemo(() => {
+    const search = actionSearch.trim().toLowerCase();
+    return (data?.catalog || []).filter((item) => item.active && (caseKind === "da" || item.slug !== "strip-tags") && (!search || `${item.name} ${item.category} ${item.description || ""}`.toLowerCase().includes(search)));
+  }, [actionSearch, caseKind, data]);
   const counts = useMemo(() => ({
     warnings: data?.cases.filter((item) => item.case_kind === "warning" && item.effective_status === "active").length || 0,
     das: data?.cases.filter((item) => item.case_kind === "da" && item.status === "active").length || 0,
@@ -108,16 +124,32 @@ export default function DisciplinePage() {
   }
 
   function resetIssue() {
-    setPersonnelId(""); setCaseKind("warning"); setIncidentOn(new Date().toISOString().slice(0, 10)); setExpiresAt("");
-    setSummary(""); setReason(""); setSelectedActions([]); setSelectedTags([]); setEvidenceLabel(""); setEvidenceUrl("");
+    setPersonnelId(""); setPersonnelSearch(""); setActionSearch(""); setCaseKind("warning"); setIncidentOn(new Date().toISOString().slice(0, 10)); setExpiresAt("");
+    setSummary(""); setReason(""); setSelectedActions([]); setSelectedTags([]); setIssueEvidenceLabel(""); setIssueEvidenceUrl(""); setIssueEvidence([]); setIssueError("");
   }
 
   async function createCase() {
     const actions = selectedActions.map((catalogActionId) => ({ catalogActionId, certificationIds: stripsTags ? selectedTags : [] }));
-    const evidence = evidenceUrl ? [{ label: evidenceLabel, url: evidenceUrl }] : [];
+    const evidence = issueEvidence.map(({ label, url }) => ({ label, url }));
     if (await mutate("create-case", { personnelId, caseKind, incidentOn, expiresAt, summary, reason, actions, evidence })) {
       setIssuing(false); resetIssue(); setMessage(`${caseKind === "da" ? "DA submitted for approval" : "Warning issued"}.`);
     }
+  }
+
+  function addIssueEvidence() {
+    const label = issueEvidenceLabel.trim();
+    const url = issueEvidenceUrl.trim();
+    if (issueEvidence.length >= 20) return setIssueError("A case can contain up to 20 evidence links.");
+    if (!label || !url) return setIssueError("Enter both an evidence label and link.");
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch {
+      return setIssueError("Enter a valid http or https evidence link.");
+    }
+    if (issueEvidence.some((item) => item.url.toLowerCase() === url.toLowerCase())) return setIssueError("That evidence link has already been added.");
+    setIssueEvidence((current) => [...current, { id: crypto.randomUUID(), label, url }]);
+    setIssueEvidenceLabel(""); setIssueEvidenceUrl(""); setIssueError("");
   }
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
@@ -131,7 +163,7 @@ export default function DisciplinePage() {
     <section className="mx-auto max-w-[1500px] border border-[#00ff66]/25 bg-black/80">
       <header className="flex flex-col gap-5 border-b border-[#00ff66]/20 p-5 sm:p-7 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4"><span className="border border-[#00ff66]/35 bg-[#00ff66]/10 p-3 text-[#00ff66]"><Gavel /></span><div><p className="text-xs font-bold uppercase tracking-[.22em] text-[#00ff66]">Personnel Records</p><h1 className="mt-1 text-2xl font-black uppercase sm:text-3xl">Warnings & Disciplinary Actions</h1><p className="mt-2 max-w-3xl text-sm text-[#8aa092]">Issue, approve, track, and appeal official personnel actions with a permanent history.</p></div></div>
-        {canEdit && <button onClick={() => setIssuing(true)} className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/12 px-5 text-sm font-bold uppercase tracking-[.12em] text-[#00ff66] hover:bg-[#00ff66]/20"><Plus size={17}/>Issue action</button>}
+        {canEdit && <button onClick={() => { resetIssue(); setIssuing(true); }} className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/12 px-5 text-sm font-bold uppercase tracking-[.12em] text-[#00ff66] hover:bg-[#00ff66]/20"><Plus size={17}/>Issue action</button>}
       </header>
       {message && <div className="border-b border-cyan-300/20 bg-cyan-300/5 px-5 py-3 text-sm text-cyan-100">{message}</div>}
       <div className="grid grid-cols-2 border-b border-[#00ff66]/15 sm:grid-cols-4">
@@ -153,10 +185,10 @@ export default function DisciplinePage() {
     </section>
 
     {issuing && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-2 sm:p-5" role="dialog" aria-modal="true"><section className="flex max-h-[96dvh] w-full max-w-4xl flex-col border border-[#00ff66]/35 bg-[#020806] shadow-[0_0_70px_rgba(0,255,102,.12)]"><header className="flex items-start justify-between border-b border-[#00ff66]/15 p-5"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-[#00ff66]">New personnel action</p><h2 className="mt-1 text-xl font-black uppercase">Issue warning or DA</h2></div><button onClick={()=>setIssuing(false)} aria-label="Close" className="border border-white/10 p-2 text-gray-400 hover:text-white"><X/></button></header><div className="min-h-0 flex-1 overflow-y-auto p-5">
-      <div className="grid gap-4 sm:grid-cols-2"><label><span className="field-label">Type</span><select value={caseKind} onChange={e=>{setCaseKind(e.target.value as "warning"|"da");setSelectedActions([]);setSelectedTags([]);}} className="field"><option value="warning">Warning</option><option value="da">Disciplinary Action</option></select></label><label><span className="field-label">Personnel</span><select value={personnelId} onChange={e=>{setPersonnelId(e.target.value);setSelectedTags([]);}} className="field"><option value="">Select personnel</option>{data?.personnel.map(item=><option key={item.id} value={item.id}>{item.name}{item.birth_number?` · ${item.birth_number}`:""}</option>)}</select></label><label><span className="field-label">Incident date</span><input type="date" value={incidentOn} onChange={e=>setIncidentOn(e.target.value)} className="field"/></label>{caseKind==="warning"&&<label><span className="field-label">Warning expires</span><input type="date" value={expiresAt} min={incidentOn} onChange={e=>setExpiresAt(e.target.value)} className="field"/></label>}<label className="sm:col-span-2"><span className="field-label">Summary</span><input value={summary} maxLength={180} onChange={e=>setSummary(e.target.value)} className="field" placeholder="Short description shown in case lists"/></label><label className="sm:col-span-2"><span className="field-label">Full reason</span><textarea value={reason} maxLength={5000} onChange={e=>setReason(e.target.value)} className="field min-h-32 py-3" placeholder="Record the incident and reason for this action"/></label></div>
-      <h3 className="mt-7 border-b border-[#00ff66]/15 pb-2 text-xs font-black uppercase tracking-[.17em] text-[#00ff66]">Assigned actions</h3><div className="mt-3 grid gap-2 sm:grid-cols-2">{data?.catalog.filter(item=>item.active&&(caseKind==="da"||item.slug!=="strip-tags")).map(item=><label key={item.id} className="flex cursor-pointer items-start gap-3 border border-white/10 p-3 hover:border-[#00ff66]/25"><input type="checkbox" checked={selectedActions.includes(item.id)} onChange={()=>setSelectedActions(current=>current.includes(item.id)?current.filter(id=>id!==item.id):[...current,item.id])} className="mt-1 accent-[#00ff66]"/><span><strong className="block text-sm">{item.name}</strong><span className="text-xs uppercase text-[#738279]">{item.category}</span></span></label>)}</div>
+      <div className="grid gap-4 sm:grid-cols-2"><label><span className="field-label">Type</span><select value={caseKind} onChange={e=>{setCaseKind(e.target.value as "warning"|"da");setSelectedActions([]);setSelectedTags([]);}} className="field"><option value="warning">Warning</option><option value="da">Disciplinary Action</option></select></label><div className="relative"><span className="field-label">Personnel</span>{person?<div className="flex min-h-11 items-center justify-between gap-3 border border-[#00ff66]/35 bg-[#00ff66]/[.06] px-3"><span className="min-w-0"><strong className="block truncate text-sm">{person.name}</strong><span className="block truncate text-xs text-[#779184]">{person.birth_number || "No service number"}</span></span><button type="button" onClick={()=>{setPersonnelId("");setPersonnelSearch("");setSelectedTags([]);}} className="shrink-0 border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase text-gray-300 hover:border-[#00ff66]/30">Change</button></div>:<><div className="relative"><Search className="absolute left-3 top-3.5 text-[#607066]" size={16}/><input value={personnelSearch} onChange={e=>setPersonnelSearch(e.target.value)} className="field pl-10" placeholder="Search name or service number" autoComplete="off"/></div>{personnelSearch.trim()&&<div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto border border-[#00ff66]/25 bg-[#020806] shadow-[0_18px_45px_rgba(0,0,0,.85)]">{personnelResults.length?personnelResults.map(item=><button type="button" key={item.id} onClick={()=>{setPersonnelId(item.id);setPersonnelSearch(`${item.name}${item.birth_number?` · ${item.birth_number}`:""}`);setSelectedTags([]);}} className="flex w-full items-center justify-between gap-3 border-b border-white/10 p-3 text-left last:border-b-0 hover:bg-[#00ff66]/[.07]"><span className="font-semibold">{item.name}</span><span className="font-mono text-xs text-[#71877a]">{item.birth_number || "No number"}</span></button>):<p className="p-4 text-sm text-[#78887e]">No matching personnel.</p>}</div>}</>}</div><label><span className="field-label">Incident date</span><input type="date" value={incidentOn} onChange={e=>setIncidentOn(e.target.value)} className="field"/></label>{caseKind==="warning"&&<label><span className="field-label">Warning expires</span><input type="date" value={expiresAt} min={incidentOn} onChange={e=>setExpiresAt(e.target.value)} className="field"/></label>}<label className="sm:col-span-2"><span className="field-label">Summary</span><input value={summary} maxLength={180} onChange={e=>setSummary(e.target.value)} className="field" placeholder="Short description shown in case lists"/></label><label className="sm:col-span-2"><span className="field-label">Full reason</span><textarea value={reason} maxLength={5000} onChange={e=>setReason(e.target.value)} className="field min-h-32 py-3" placeholder="Record the incident and reason for this action"/></label></div>
+      <div className="mt-7 flex flex-col gap-3 border-b border-[#00ff66]/15 pb-3 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-xs font-black uppercase tracking-[.17em] text-[#00ff66]">Assigned actions</h3><p className="mt-1 text-xs text-[#718178]">{selectedActions.length} selected</p></div><label className="relative block w-full sm:max-w-sm"><Search className="absolute left-3 top-3.5 text-[#607066]" size={16}/><input value={actionSearch} onChange={e=>setActionSearch(e.target.value)} className="field pl-10" placeholder="Search approved actions"/></label></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{actionResults.map(item=><label key={item.id} className="flex cursor-pointer items-start gap-3 border border-white/10 p-3 hover:border-[#00ff66]/25"><input type="checkbox" checked={selectedActions.includes(item.id)} onChange={()=>setSelectedActions(current=>current.includes(item.id)?current.filter(id=>id!==item.id):[...current,item.id])} className="mt-1 accent-[#00ff66]"/><span><strong className="block text-sm">{item.name}</strong><span className="text-xs uppercase text-[#738279]">{item.category}</span>{item.description&&<span className="mt-1 block text-xs leading-5 text-[#68786e]">{item.description}</span>}</span></label>)}{!actionResults.length&&<p className="border border-white/10 p-4 text-sm text-[#78887e] sm:col-span-2">No approved actions match that search.</p>}</div>
       {stripsTags&&<div className="mt-4 border border-amber-300/25 bg-amber-300/5 p-4"><h3 className="text-xs font-black uppercase tracking-[.15em] text-amber-200">Tags removed after DA approval</h3>{person?.certifications.length?<div className="mt-3 grid gap-2 sm:grid-cols-2">{person.certifications.map(cert=><label key={cert.id} className="flex items-center gap-3 border border-white/10 p-3"><input type="checkbox" checked={selectedTags.includes(cert.id)} onChange={()=>setSelectedTags(current=>current.includes(cert.id)?current.filter(id=>id!==cert.id):[...current,cert.id])} className="accent-red-400"/><span className="text-sm">{cert.name}</span></label>)}</div>:<p className="mt-2 text-sm text-amber-100/70">This person has no assigned certification or MOS tags.</p>}</div>}
-      <h3 className="mt-7 border-b border-[#00ff66]/15 pb-2 text-xs font-black uppercase tracking-[.17em] text-[#00ff66]">Evidence link</h3><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_2fr]"><input value={evidenceLabel} onChange={e=>setEvidenceLabel(e.target.value)} className="field" placeholder="Label, e.g. Incident report"/><input value={evidenceUrl} onChange={e=>setEvidenceUrl(e.target.value)} className="field" placeholder="https://..."/></div>{caseKind==="da"&&<p className="mt-5 border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm text-cyan-100">The DA will remain inactive until approved by a different editor. Selected tags are removed only after approval.</p>}
+      <h3 className="mt-7 border-b border-[#00ff66]/15 pb-2 text-xs font-black uppercase tracking-[.17em] text-[#00ff66]">Evidence links</h3><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_2fr_auto]"><input value={issueEvidenceLabel} onChange={e=>setIssueEvidenceLabel(e.target.value)} className="field" placeholder="Label, e.g. Incident report"/><input type="url" value={issueEvidenceUrl} onChange={e=>setIssueEvidenceUrl(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addIssueEvidence();}}} className="field" placeholder="https://..."/><button type="button" onClick={addIssueEvidence} disabled={!issueEvidenceLabel.trim()||!issueEvidenceUrl.trim()||issueEvidence.length>=20} className="inline-flex min-h-11 items-center justify-center gap-2 border border-cyan-300/30 px-4 text-xs font-bold uppercase text-cyan-200 disabled:opacity-40"><Plus size={15}/>Add link</button></div>{issueError&&<p className="mt-2 text-sm text-red-300">{issueError}</p>}{issueEvidence.length>0&&<div className="mt-3 divide-y divide-white/10 border border-white/10">{issueEvidence.map(item=><div key={item.id} className="flex items-center gap-3 p-3"><ExternalLink size={15} className="shrink-0 text-cyan-200"/><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{item.label}</strong><span className="block truncate text-xs text-[#718178]">{item.url}</span></span><button type="button" onClick={()=>setIssueEvidence(current=>current.filter(link=>link.id!==item.id))} aria-label={`Remove ${item.label}`} className="border border-red-400/20 p-2 text-red-300 hover:bg-red-400/10"><X size={14}/></button></div>)}</div>}{caseKind==="da"&&<p className="mt-5 border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm text-cyan-100">The DA will remain inactive until approved by a different editor. Selected tags are removed only after approval.</p>}
     </div><footer className="flex shrink-0 flex-col gap-3 border-t border-[#00ff66]/15 bg-[#020806] p-4 sm:flex-row sm:justify-end"><button onClick={()=>setIssuing(false)} className="min-h-11 border border-white/15 px-5 text-sm uppercase text-gray-300">Cancel</button><button disabled={saving||!personnelId||summary.trim().length<3||reason.trim().length<3||!incidentOn||(caseKind==="warning"&&!expiresAt)||(stripsTags&&!selectedTags.length)} onClick={createCase} className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/12 px-5 text-sm font-bold uppercase text-[#00ff66] disabled:opacity-40">{saving?<Loader2 className="animate-spin" size={17}/>:<FileWarning size={17}/>}Issue {caseKind==="da"?"DA":"warning"}</button></footer></section></div>}
 
     {selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-2 sm:p-5" role="dialog" aria-modal="true"><section className="flex max-h-[96dvh] w-full max-w-4xl flex-col border border-[#00ff66]/35 bg-[#020806]"><header className="flex items-start justify-between border-b border-[#00ff66]/15 p-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm text-[#00ff66]">{selected.reference}</span><span className="border border-white/15 px-2 py-1 text-[10px] font-bold uppercase">{labelStatus(selected.effective_status)}</span></div><h2 className="mt-2 text-xl font-black">{selected.personnel_name}: {selected.summary}</h2></div><button onClick={()=>setSelected(null)} aria-label="Close" className="border border-white/10 p-2 text-gray-400 hover:text-white"><X/></button></header><div className="min-h-0 flex-1 overflow-y-auto p-5">

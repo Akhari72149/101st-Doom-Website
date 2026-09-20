@@ -9,9 +9,12 @@ import {
   Clock3,
   Database,
   RefreshCw,
+  RotateCcw,
   Send,
+  Trash2,
   TriangleAlert,
   Wrench,
+  X,
 } from "lucide-react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
@@ -31,6 +34,9 @@ type OutboxIssue = {
   created_at: string;
   updated_at: string;
   available_at: string;
+  personnel_name: string | null;
+  personnel_status: string | null;
+  discord_id_suffix: string | null;
 };
 
 type Health = {
@@ -39,6 +45,7 @@ type Health = {
   scheduledJobs: Array<{ job_name: string; status: string; completed_at: string; error_message: string | null }>;
   discordOutbox: OutboxSummary[];
   discordOutboxIssues: OutboxIssue[];
+  discordOutboxPermissions: { canRetry: boolean; canRemove: boolean };
   updater: { status: string; stage: string; message: string; updated_at: string } | null;
   xp: { last_event_at: string | null; active_profiles: number };
 };
@@ -47,12 +54,23 @@ const fmt = (value: string | null | undefined) => value
   ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(value))
   : "No recorded activity";
 
+function outboxDiagnosis(issue: OutboxIssue) {
+  if (!issue.last_error?.toLowerCase().includes("unknown member")) return null;
+  if (issue.event_type === "PERSONNEL_STATUS_SYNC") {
+    return "This person is no longer in the configured Discord server. If they left before removal or retirement was processed, this cleanup event can be removed safely.";
+  }
+  return "The linked Discord account is not in the configured Discord server. Correct the personnel Discord link or have the member rejoin before retrying.";
+}
+
 export default function SystemHealthPage() {
   const router = useRouter();
   const [health, setHealth] = useState<Health | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [outboxOpen, setOutboxOpen] = useState(false);
+  const [workingEventId, setWorkingEventId] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<OutboxIssue | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,6 +89,28 @@ export default function SystemHealthPage() {
       setLoading(false);
     }
   }, []);
+
+  const manageOutboxEvent = useCallback(async (issue: OutboxIssue, action: "retry" | "remove") => {
+    setWorkingEventId(issue.id);
+    setActionMessage("");
+    try {
+      const response = await fetch("/api/admin/system-health", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+        body: JSON.stringify({ action, eventId: issue.id }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Queue action failed");
+      setActionMessage(action === "retry" ? "Event queued for another delivery attempt." : "Dead-lettered event removed.");
+      setRemoveTarget(null);
+      await load();
+    } catch (caught) {
+      setActionMessage(caught instanceof Error ? caught.message : "Queue action failed");
+    } finally {
+      setWorkingEventId("");
+    }
+  }, [load]);
 
   useEffect(() => {
     void (async () => {
@@ -131,6 +171,7 @@ export default function SystemHealthPage() {
         </header>
 
         {error && <div className="border-b border-red-400/30 bg-red-400/10 p-4 text-red-200">{error}</div>}
+        {actionMessage && <div className="border-b border-cyan-300/25 bg-cyan-300/[.06] p-4 text-cyan-100">{actionMessage}</div>}
 
         <div className="grid gap-px bg-[#00ff66]/10 md:grid-cols-2">
           <button
@@ -197,9 +238,51 @@ export default function SystemHealthPage() {
                     <div><span className="text-gray-500">Created</span><p className="mt-1">{fmt(issue.created_at)}</p></div>
                     <div><span className="text-gray-500">Last updated</span><p className="mt-1">{fmt(issue.updated_at)}</p></div>
                   </div>
+                  <div className="mt-4 grid gap-3 border-y border-white/10 py-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <span className="text-gray-500">Linked personnel</span>
+                      <p className="mt-1 font-bold text-white">{issue.personnel_name || "No personnel record matched"}</p>
+                      {issue.personnel_status && <p className="mt-1 text-xs uppercase tracking-[.1em] text-gray-500">{issue.personnel_status}</p>}
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Discord link</span>
+                      <p className="mt-1 font-mono text-white">{issue.discord_id_suffix ? `••••${issue.discord_id_suffix}` : "Not available"}</p>
+                    </div>
+                  </div>
                   <div className={`mt-4 border-l-2 px-3 py-2 text-sm ${issue.last_error ? "border-red-300/50 bg-red-300/[.05] text-red-100" : "border-white/15 bg-white/[.02] text-gray-400"}`}>
                     {issue.last_error || (issue.status === "pending" ? `Awaiting delivery; available ${fmt(issue.available_at)}` : "Currently being processed by the Discord worker.")}
                   </div>
+                  {outboxDiagnosis(issue) && (
+                    <p className="mt-3 border border-amber-300/20 bg-amber-300/[.05] p-3 text-sm leading-6 text-amber-100">
+                      {outboxDiagnosis(issue)}
+                    </p>
+                  )}
+                  {issue.status === "dead" && (health?.discordOutboxPermissions.canRetry || health?.discordOutboxPermissions.canRemove) && (
+                    <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      {health.discordOutboxPermissions.canRetry && (
+                        <button
+                          type="button"
+                          onClick={() => void manageOutboxEvent(issue, "retry")}
+                          disabled={Boolean(workingEventId)}
+                          className="flex items-center gap-2 border border-cyan-300/35 px-3 py-2 text-xs font-bold uppercase tracking-[.12em] text-cyan-200 transition hover:bg-cyan-300/10 disabled:opacity-40"
+                        >
+                          <RotateCcw size={15} className={workingEventId === issue.id ? "animate-spin" : ""} />
+                          Retry
+                        </button>
+                      )}
+                      {health.discordOutboxPermissions.canRemove && (
+                        <button
+                          type="button"
+                          onClick={() => setRemoveTarget(issue)}
+                          disabled={Boolean(workingEventId)}
+                          className="flex items-center gap-2 border border-red-300/35 px-3 py-2 text-xs font-bold uppercase tracking-[.12em] text-red-200 transition hover:bg-red-300/10 disabled:opacity-40"
+                        >
+                          <Trash2 size={15} />
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </article>
               ))}
               {!health?.discordOutboxIssues.length && <p className="border border-white/10 bg-[#020806] p-5 text-gray-400">No pending, processing, or dead-lettered Discord events.</p>}
@@ -222,6 +305,41 @@ export default function SystemHealthPage() {
         </section>
         <footer className="border-t border-[#00ff66]/15 px-6 py-4 text-xs uppercase tracking-wider text-gray-500">Checked {fmt(health?.checkedAt)}</footer>
       </section>
+
+      {removeTarget && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/85 p-4" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="remove-outbox-title" className="w-full max-w-lg border border-red-300/35 bg-[#020806] shadow-2xl">
+            <header className="flex items-start justify-between gap-4 border-b border-red-300/20 p-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[.18em] text-red-200">Permanent queue action</p>
+                <h2 id="remove-outbox-title" className="mt-2 text-xl font-black uppercase">Remove dead letter?</h2>
+              </div>
+              <button type="button" onClick={() => setRemoveTarget(null)} className="border border-white/15 p-2 text-gray-400 hover:text-white" aria-label="Close">
+                <X size={18} />
+              </button>
+            </header>
+            <div className="p-5 text-sm leading-6 text-gray-300">
+              <p>This removes the failed event from the active Discord queue. The administrative action will remain recorded for audit purposes.</p>
+              <dl className="mt-4 grid gap-3 border border-white/10 bg-black p-4 sm:grid-cols-2">
+                <div><dt className="text-gray-500">Event</dt><dd className="mt-1 font-bold">{removeTarget.event_type.replaceAll("_", " ")}</dd></div>
+                <div><dt className="text-gray-500">Personnel</dt><dd className="mt-1 font-bold">{removeTarget.personnel_name || "Unknown"}</dd></div>
+              </dl>
+            </div>
+            <footer className="flex justify-end gap-2 border-t border-white/10 p-5">
+              <button type="button" onClick={() => setRemoveTarget(null)} className="border border-white/15 px-4 py-2 text-sm font-bold text-gray-300 hover:bg-white/5">Cancel</button>
+              <button
+                type="button"
+                onClick={() => void manageOutboxEvent(removeTarget, "remove")}
+                disabled={Boolean(workingEventId)}
+                className="flex items-center gap-2 border border-red-300/40 bg-red-300/10 px-4 py-2 text-sm font-bold text-red-100 hover:bg-red-300/20 disabled:opacity-40"
+              >
+                <Trash2 size={16} />
+                Remove permanently
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

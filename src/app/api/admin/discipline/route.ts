@@ -11,7 +11,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 type EvidenceInput = { label?: unknown; url?: unknown };
-type ActionInput = { catalogActionId?: unknown; certificationIds?: unknown };
+type ActionInput = { catalogActionId?: unknown; certificationIds?: unknown; details?: unknown };
 
 function cleanText(value: unknown, max: number) {
   return String(value || "").trim().replace(/\s+/g, " ").slice(0, max);
@@ -24,6 +24,29 @@ function validUrl(value: unknown) {
   } catch {
     return false;
   }
+}
+
+function actionDetails(value: unknown) {
+  const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const result: Record<string, string | number> = {};
+  const textFields = [
+    "instructions", "dueDate", "startsOn", "endsOn", "detachment", "certification",
+    "certLead", "chainOfCommandApprover", "companyNcoicApprover", "scope",
+    "assignedNco", "course",
+  ];
+  for (const field of textFields) {
+    const text = cleanText(input[field], field === "instructions" ? 1000 : 180);
+    if (text) result[field] = text;
+  }
+  for (const field of ["durationMonths", "operationCount"]) {
+    const number = Number(input[field]);
+    if (Number.isInteger(number) && number > 0 && number <= 120) result[field] = number;
+  }
+  for (const field of ["dueDate", "startsOn", "endsOn"]) {
+    if (result[field] && !DATE.test(String(result[field]))) delete result[field];
+  }
+  if (result.scope && !["101st", "GARC", "Both"].includes(String(result.scope))) delete result.scope;
+  return result;
 }
 
 async function appendEvent(client: PoolClient, caseId: string, eventType: string, details: string, actorId: string) {
@@ -45,7 +68,22 @@ export async function GET(request: Request) {
 
   try {
     const pool = getPostgresPool();
-    const [personnel, catalog, cases, actions, approvals, appeals, evidence, events, edit, full] = await Promise.all([
+    if (new URL(request.url).searchParams.get("summary") === "true") {
+      const summary = await pool.query(`select
+        (select count(*)::integer from public.disciplinary_cases where status='pending_approval') pending_approval,
+        (select count(*)::integer from public.disciplinary_cases where status='appealed') open_appeals,
+        (select count(*)::integer from public.disciplinary_case_actions actions
+          join public.disciplinary_cases cases on cases.id=actions.case_id
+          where actions.status='pending' and actions.due_at<now() and cases.status in ('active','appealed')) overdue_actions`);
+      const row = summary.rows[0];
+      return NextResponse.json({
+        pendingApproval: row.pending_approval,
+        openAppeals: row.open_appeals,
+        overdueActions: row.overdue_actions,
+        total: row.pending_approval + row.open_appeals + row.overdue_actions,
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+    const [personnel, catalog, templates, cases, actions, approvals, appeals, evidence, events, edit, full] = await Promise.all([
       pool.query(`select p.id,p.name,p.status,p.birth_number,
           coalesce(jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'discordRoleId',c.cert_id)
             order by c.name) filter (where c.id is not null),'[]'::jsonb) certifications
@@ -55,6 +93,8 @@ export async function GET(request: Request) {
         group by p.id,p.name,p.status,p.birth_number order by p.name`),
       pool.query(`select id,slug,name,category,description,active,created_at,updated_at
         from public.disciplinary_action_catalog order by category,name`),
+      pool.query(`select id,name,case_kind,summary,reason,warning_expiry_days,actions,active,created_at,updated_at
+        from public.disciplinary_case_templates order by active desc,name`),
       pool.query(`select cases.*,
           personnel.name personnel_name,personnel.birth_number,
           coalesce(issuer."displayUsername",issuer.name,issuer.username,'Unknown') issuer_name,
@@ -99,6 +139,7 @@ export async function GET(request: Request) {
       access: full ? "full" : edit ? "edit" : "read",
       personnel: personnel.rows,
       catalog: catalog.rows,
+      templates: templates.rows,
       cases: cases.rows.map((row) => ({
         ...row,
         actions: actions.rows.filter((item) => item.case_id === row.id),
@@ -120,7 +161,7 @@ export async function POST(request: Request) {
   }
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const operation = cleanText(body?.operation, 40);
-  const fullOnly = ["void-case", "catalog-add", "catalog-toggle"].includes(operation);
+  const fullOnly = ["void-case", "catalog-add", "catalog-toggle", "template-save", "template-toggle"].includes(operation);
   const auth = await requirePageAccess(request, PERMISSION, fullOnly ? "full" : "edit").catch(() => null);
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const actorId = auth.userId;
@@ -162,15 +203,16 @@ export async function POST(request: Request) {
           if (!catalog.rowCount) throw new Error("INVALID_ACTION");
           if (caseKind === "warning" && catalog.rows[0].slug === "strip-tags") throw new Error("INVALID_ACTION");
           const certificationIds = [...new Set(Array.isArray(input.certificationIds) ? input.certificationIds.map(String) : [])];
+          const details = actionDetails(input.details);
           if (catalog.rows[0].slug === "strip-tags") {
             if (!certificationIds.length || certificationIds.some((id) => !UUID.test(id))) throw new Error("TAG_SELECTION_REQUIRED");
             const valid = await client.query("select certification_id from public.personnel_certifications where personnel_id=$1 and certification_id=any($2::uuid[])", [personnelId, certificationIds]);
             if (valid.rowCount !== certificationIds.length) throw new Error("INVALID_TAG_SELECTION");
           }
           await client.query(
-            `insert into public.disciplinary_case_actions(case_id,catalog_action_id,action_name,action_category,target_data)
-             values($1,$2,$3,$4,$5::jsonb)`,
-            [caseId, catalogActionId, catalog.rows[0].name, catalog.rows[0].category, JSON.stringify({ certificationIds })],
+            `insert into public.disciplinary_case_actions(case_id,catalog_action_id,action_name,action_category,target_data,due_at)
+             values($1,$2,$3,$4,$5::jsonb,case when $6='' then null else ($6::date + interval '1 day' - interval '1 second') end)`,
+            [caseId, catalogActionId, catalog.rows[0].name, catalog.rows[0].category, JSON.stringify({ certificationIds, ...details }), String(details.dueDate || "")],
           );
         }
         for (const input of inputEvidence) {
@@ -181,6 +223,41 @@ export async function POST(request: Request) {
         }
         await appendEvent(client, caseId, "CASE_CREATED", `${caseKind === "da" ? "Disciplinary action" : "Warning"} issued to ${person.rows[0].name}${caseKind === "da" ? " and submitted for secondary approval" : ""}.`, actorId);
         return { caseId, reference: reference.rows[0].reference };
+      }
+
+      if (operation === "template-save") {
+        const name = cleanText(body?.name, 120);
+        const caseKind = body?.caseKind === "warning" ? "warning" : body?.caseKind === "da" ? "da" : "";
+        const summary = cleanText(body?.summary, 180);
+        const reason = cleanText(body?.reason, 5000);
+        const warningExpiryDays = Number(body?.warningExpiryDays);
+        const inputActions = Array.isArray(body?.actions) ? body.actions as ActionInput[] : [];
+        if (name.length < 3 || !caseKind || inputActions.length > 30 || (caseKind === "warning" && (!Number.isInteger(warningExpiryDays) || warningExpiryDays < 1 || warningExpiryDays > 3650))) throw new Error("INVALID_TEMPLATE");
+        const storedActions: { catalogActionId: string; details: Record<string, string | number> }[] = [];
+        const seen = new Set<string>();
+        for (const input of inputActions) {
+          const catalogActionId = cleanText(input.catalogActionId, 40);
+          if (!UUID.test(catalogActionId) || seen.has(catalogActionId)) continue;
+          const catalog = await client.query<{ slug: string }>("select slug from public.disciplinary_action_catalog where id=$1 and active=true", [catalogActionId]);
+          if (!catalog.rowCount || (caseKind === "warning" && catalog.rows[0].slug === "strip-tags")) throw new Error("INVALID_TEMPLATE");
+          seen.add(catalogActionId);
+          storedActions.push({ catalogActionId, details: actionDetails(input.details) });
+        }
+        const created = await client.query<{ id: string }>(`insert into public.disciplinary_case_templates
+          (name,case_kind,summary,reason,warning_expiry_days,actions,created_by)
+          values($1,$2,$3,$4,$5,$6::jsonb,$7) returning id`,
+        [name, caseKind, summary, reason, caseKind === "warning" ? warningExpiryDays : null, JSON.stringify(storedActions), actorId]);
+        await client.query("insert into public.audit_logs(user_id,action,details) values($1,'DISCIPLINE_TEMPLATE_ADDED',$2)", [actorId, `Added disciplinary case template: ${name}`]);
+        return { templateId: created.rows[0].id };
+      }
+
+      if (operation === "template-toggle") {
+        const templateId = cleanText(body?.templateId, 40);
+        if (!UUID.test(templateId) || typeof body?.active !== "boolean") throw new Error("INVALID_TEMPLATE");
+        const changed = await client.query("update public.disciplinary_case_templates set active=$2,updated_at=now() where id=$1 returning name", [templateId, body.active]);
+        if (!changed.rowCount) throw new Error("INVALID_TEMPLATE");
+        await client.query("insert into public.audit_logs(user_id,action,details) values($1,'DISCIPLINE_TEMPLATE_UPDATED',$2)", [actorId, `${body.active ? "Enabled" : "Disabled"} disciplinary case template: ${changed.rows[0].name}`]);
+        return { templateId };
       }
 
       const caseId = cleanText(body?.caseId, 40);
@@ -303,7 +380,7 @@ export async function POST(request: Request) {
       INVALID_APPEAL_LINK: ["Enter a valid appeal document link", 400], NOT_APPEALABLE: ["This case cannot currently be appealed", 409], APPEAL_ALREADY_PENDING: ["This case already has an appeal awaiting review", 409],
       INVALID_APPEAL_REVIEW: ["Choose an outcome and enter review notes", 400], APPEAL_NOT_PENDING: ["This appeal is no longer awaiting review", 409],
       VOID_REASON_REQUIRED: ["Enter a reason for voiding the record", 400], CASE_NOT_FOUND: ["Case not found", 404],
-      INVALID_CATALOG_ACTION: ["Enter a valid action name and category", 400], INVALID_OPERATION: ["Invalid disciplinary operation", 400],
+      INVALID_CATALOG_ACTION: ["Enter a valid action name and category", 400], INVALID_TEMPLATE: ["Enter a valid unique template name and configuration", 400], INVALID_OPERATION: ["Invalid disciplinary operation", 400],
     };
     if (known[code]) return NextResponse.json({ error: known[code][0] }, { status: known[code][1] });
     console.error("[discipline] Update failed", error);

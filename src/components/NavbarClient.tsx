@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getAppSession, signOutOfApp, type AppUser } from "@/lib/client-auth";
+import { getAppAuthHeaders, getAppSession, signOutOfApp, type AppUser } from "@/lib/client-auth";
 import { pagePermissionDefinitions } from "@/data/pagePermissions";
 import {
   BookOpen,
@@ -59,6 +59,7 @@ export default function NavbarClient() {
   const [user, setUser] = useState<AppUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [permissions, setPermissions] = useState<Record<string, string>>({});
+  const [disciplineAttention, setDisciplineAttention] = useState({ pendingApproval: 0, openAppeals: 0, overdueActions: 0, total: 0 });
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
@@ -80,9 +81,36 @@ export default function NavbarClient() {
     getUser();
   }, [router]);
 
+  useEffect(() => {
+    if (!permissions["admin.discipline"]) {
+      return;
+    }
+
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch("/api/admin/discipline?summary=true", { cache: "no-store", headers: await getAppAuthHeaders() });
+        if (!response.ok) return;
+        const summary = await response.json();
+        if (active) setDisciplineAttention(summary);
+      } catch {
+        // Navigation remains usable if the optional attention summary is unavailable.
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [permissions]);
+
   const handleLogout = async () => {
     await signOutOfApp();
     setUser(null);
+    setDisciplineAttention({ pendingApproval: 0, openAppeals: 0, overdueActions: 0, total: 0 });
     router.push("/login");
   };
 
@@ -520,6 +548,11 @@ export default function NavbarClient() {
                   <span className="text-sm font-medium uppercase tracking-[0.12em]">
                     {group.label}
                   </span>
+                  {group.label === "Admin" && disciplineAttention.total > 0 && (
+                    <span title={`${disciplineAttention.pendingApproval} awaiting approval, ${disciplineAttention.openAppeals} appeal(s), ${disciplineAttention.overdueActions} overdue action(s)`} className="inline-flex min-w-5 items-center justify-center border border-red-400/40 bg-red-400/15 px-1.5 py-0.5 text-[10px] font-black text-red-200">
+                      {disciplineAttention.total}
+                    </span>
+                  )}
                   <ChevronDown
                     size={15}
                     className={`transition-transform duration-200 ${
@@ -584,8 +617,9 @@ export default function NavbarClient() {
                                     </div>
 
                                     <div className="min-w-0">
-                                      <div className="text-sm font-medium text-white transition group-hover/item:text-[#00ff66]">
-                                        {item.label}
+                                      <div className="flex items-center gap-2 text-sm font-medium text-white transition group-hover/item:text-[#00ff66]">
+                                        <span>{item.label}</span>
+                                        {item.href === "/admin/discipline" && disciplineAttention.total > 0 && <span className="inline-flex min-w-5 items-center justify-center border border-red-400/40 bg-red-400/15 px-1 text-[10px] font-black text-red-200">{disciplineAttention.total}</span>}
                                       </div>
                                       {item.description && (
                                         <div className="mt-0.5 line-clamp-1 text-[11px] leading-4 text-gray-400">
@@ -733,8 +767,9 @@ export default function NavbarClient() {
                     </div>
 
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em]">
-                        {group.label}
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em]">
+                        <span>{group.label}</span>
+                        {group.label === "Admin" && disciplineAttention.total > 0 && <span className="inline-flex min-w-5 items-center justify-center border border-red-400/40 bg-red-400/15 px-1 py-0.5 text-[10px] font-black text-red-200">{disciplineAttention.total}</span>}
                       </div>
                       <div className="mt-1 line-clamp-1 text-[11px] normal-case tracking-normal text-gray-400">
                         {group.description}
@@ -775,8 +810,9 @@ export default function NavbarClient() {
                                     </div>
 
                                     <div className="min-w-0">
-                                      <div className="text-sm font-medium text-white transition group-hover/mobile:text-[#00ff66]">
-                                        {item.label}
+                                      <div className="flex items-center gap-2 text-sm font-medium text-white transition group-hover/mobile:text-[#00ff66]">
+                                        <span>{item.label}</span>
+                                        {item.href === "/admin/discipline" && disciplineAttention.total > 0 && <span className="inline-flex min-w-5 items-center justify-center border border-red-400/40 bg-red-400/15 px-1 text-[10px] font-black text-red-200">{disciplineAttention.total}</span>}
                                       </div>
 
                                       {item.description && (

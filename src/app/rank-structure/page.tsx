@@ -93,7 +93,7 @@ const tracks: RankTrack[] = [
         icon: "/rank-icons/clone-trooper-private-second-class.png",
         summary:
           "The second slotted promotion, recognising continued commitment and growing usefulness to the squad through certifications.",
-        requirements: ["Slotted member", "80 days TIG", "Attendance above 50%", "140 DT"],
+        requirements: ["Slotted member", "80 days TIG", "Attendance above 50%", "140 days total service"],
       },
       {
         name: "Clone Trooper (Private First Class)",
@@ -101,7 +101,7 @@ const tracks: RankTrack[] = [
         icon: "/rank-icons/clone-trooper-private-first-class.png",
         summary:
           "The final Clone Trooper promotion, awarded for commitment and proven reliability as a team and squad member.",
-        requirements: ["Slotted member", "100 days TIG", "Attendance above 50%", "240 DT"],
+        requirements: ["Slotted member", "100 days TIG", "Attendance above 50%", "240 days total service"],
       },
       {
         name: "Clone Senior Trooper / Senior Clone Trooper",
@@ -122,7 +122,7 @@ const tracks: RankTrack[] = [
         icon: "/rank-icons/clone-veteran-trooper.png",
         summary:
           "Continues enlisted progression and begins unlocking further armour customisation, including chest rigs and thermals.",
-        requirements: ["Slotted member", "100 days TIG", "Attendance above 70%", "465 DT"],
+        requirements: ["Slotted member", "100 days TIG", "Attendance above 70%", "465 days total service"],
       },
       {
         name: "Clone Specialist",
@@ -135,7 +135,7 @@ const tracks: RankTrack[] = [
           "120 days TIG",
           "Attendance above 80%",
           "Company approval",
-          "585 DT",
+          "585 days total service",
         ],
       },
       {

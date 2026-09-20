@@ -192,6 +192,11 @@ export default function NavbarClient() {
           label: "Weekly Attendance",
           description: "Weekly Mainop Attendance Tracking",
         },
+        {
+          href: "/admin/promotion-readiness",
+          label: "Promotion Readiness",
+          description: "Review promotion progress and outstanding requirements",
+        },
       ],
     },
     {
@@ -301,13 +306,6 @@ export default function NavbarClient() {
           href: "/admin/rank-corrections",
           label: "Rank Corrections",
           description: "Correct ranks without changing TIG",
-          allowedRoles: [],
-          category: "Personnel Admin",
-        },
-        {
-          href: "/admin/promotion-readiness",
-          label: "Promotion Readiness",
-          description: "Review promotion progress and requirements",
           allowedRoles: [],
           category: "Personnel Admin",
         },

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   CheckCircle2,
@@ -16,7 +15,6 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type ReadinessStatus = "ready" | "review" | "in-progress" | "setup-required" | "terminal";
 type CriterionState = "met" | "not-met" | "review" | "unavailable";
@@ -90,7 +88,6 @@ function CriterionIcon({ state }: { state: CriterionState }) {
 }
 
 export default function PromotionReadinessPage() {
-  const router = useRouter();
   const [data, setData] = useState<ResponseBody | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -103,7 +100,6 @@ export default function PromotionReadinessPage() {
     try {
       const response = await fetch("/api/admin/promotion-readiness", {
         cache: "no-store",
-        headers: await getAppAuthHeaders(),
       });
       const body = await response.json() as ResponseBody & { error?: string };
       if (!response.ok) throw new Error(body.error || "Failed to calculate promotion readiness");
@@ -117,15 +113,8 @@ export default function PromotionReadinessPage() {
   }, []);
 
   useEffect(() => {
-    void (async () => {
-      const session = await getAppSession();
-      if (!session || !hasAppPermission(session, "admin.promotion-readiness", "read")) {
-        router.replace(session ? "/" : "/login");
-        return;
-      }
-      await load();
-    })();
-  }, [load, router]);
+    void load();
+  }, [load]);
 
   const ranks = useMemo(() => [...new Set((data?.people || []).map((person) => person.current_rank || "Unranked"))].sort(), [data]);
   const people = useMemo(() => {
@@ -169,7 +158,7 @@ export default function PromotionReadinessPage() {
         {error && <div className="border-b border-red-300/25 bg-red-300/10 px-5 py-4 text-red-200">{error}</div>}
 
         <div className="border-b border-cyan-300/15 bg-cyan-300/[0.04] px-5 py-4 text-sm leading-6 text-[#9db3a7] sm:px-7">
-          This page provides recommendations only. Attendance is calculated as <strong className="text-cyan-200">Y / (Y + N)</strong>; Excused and LOA records are excluded. Course completion and command approval always require human confirmation.
+          This page provides recommendations only. Attendance is calculated from <strong className="text-cyan-200">MainOps only</strong> as Y / (Y + N); Excused and LOA records are excluded. Course completion and command approval always require human confirmation.
         </div>
 
         <div className="grid gap-px border-b border-[#00ff66]/15 bg-[#00ff66]/10 sm:grid-cols-2 xl:grid-cols-5">

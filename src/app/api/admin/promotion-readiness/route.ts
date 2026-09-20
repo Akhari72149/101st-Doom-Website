@@ -35,6 +35,12 @@ type PersonnelRow = {
 
 type CriterionState = "met" | "not-met" | "review" | "unavailable";
 
+type SetupIssue = {
+  key: string;
+  label: string;
+  detail: string;
+};
+
 const rules: PromotionRule[] = [
   { from: ["CR", "Clone Recruit"], target: "CR-C", minimumAttendances: 4, minimumMainOps: 1 },
   { from: ["CR-C", "Clone Cadet"], target: "CT", minimumAttendances: 4, minimumMainOps: 1, manual: ["BCT completion"] },
@@ -133,6 +139,18 @@ export async function GET(request: Request) {
         : null;
 
       if (!rule) {
+        const rankLabel = person.current_rank || "Unranked personnel";
+        const setupIssues: SetupIssue[] = person.current_rank
+          ? [{
+              key: `route:${normalize(person.current_rank)}`,
+              label: `Define progression from ${rankLabel}`,
+              detail: `Add the next rank and promotion requirements for ${rankLabel} to the Promotion Readiness rules.`,
+            }]
+          : [{
+              key: "rank:unassigned",
+              label: "Assign a current rank",
+              detail: "Assign a current rank in Ranks & Slots before promotion readiness can be calculated.",
+            }];
         return {
           ...person,
           attendancePercentage,
@@ -140,6 +158,7 @@ export async function GET(request: Request) {
           targetConfigured: false,
           status: "setup-required",
           criteria: [],
+          setupIssues,
         };
       }
 
@@ -175,6 +194,11 @@ export async function GET(request: Request) {
       const hasManualReview = criteria.some((item) => item.state === "review");
       const targetNames = [rule.target, ...(rule.targetAliases || [])];
       const targetConfigured = targetNames.some((name) => configuredRanks.has(normalize(name)));
+      const setupIssues: SetupIssue[] = targetConfigured ? [] : [{
+        key: `target:${normalize(rule.target)}`,
+        label: `Create or activate ${rule.target}`,
+        detail: `${rule.target} must exist as an active rank in Admin > Rank Management before this progression can be evaluated.`,
+      }];
       const status = !targetConfigured ? "setup-required" : hasBlocker ? "in-progress" : hasManualReview ? "review" : "ready";
 
       return {
@@ -184,6 +208,7 @@ export async function GET(request: Request) {
         targetConfigured,
         status,
         criteria,
+        setupIssues,
       };
     });
 
@@ -193,10 +218,24 @@ export async function GET(request: Request) {
       inProgress: people.filter((person) => person.status === "in-progress").length,
       needsSetup: people.filter((person) => person.status === "setup-required").length,
     };
+    const setupIssueMap = new Map<string, SetupIssue & { affected: number }>();
+    for (const person of people) {
+      for (const issue of person.setupIssues) {
+        const existing = setupIssueMap.get(issue.key);
+        setupIssueMap.set(issue.key, {
+          ...issue,
+          affected: (existing?.affected || 0) + 1,
+        });
+      }
+    }
+    const setupIssues = [...setupIssueMap.values()].sort((left, right) =>
+      right.affected - left.affected || left.label.localeCompare(right.label)
+    );
 
     return NextResponse.json({
       people,
       summary,
+      setupIssues,
       attendanceWindow: windowResult.rows[0] || { first_record: null, last_record: null, periods: 0 },
       calculatedAt: new Date().toISOString(),
     }, { headers: { "Cache-Control": "no-store" } });

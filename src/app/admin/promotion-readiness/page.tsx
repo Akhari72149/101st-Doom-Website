@@ -29,6 +29,13 @@ type Criterion = {
   state: CriterionState;
 };
 
+type SetupIssue = {
+  key: string;
+  label: string;
+  detail: string;
+  affected?: number;
+};
+
 type Person = {
   id: string;
   name: string;
@@ -44,11 +51,13 @@ type Person = {
   targetConfigured: boolean;
   status: ReadinessStatus;
   criteria: Criterion[];
+  setupIssues: SetupIssue[];
 };
 
 type ResponseBody = {
   people: Person[];
   summary: { ready: number; review: number; inProgress: number; needsSetup: number };
+  setupIssues: Array<SetupIssue & { affected: number }>;
   attendanceWindow: { first_record: string | null; last_record: string | null; periods: number };
   calculatedAt: string;
 };
@@ -197,6 +206,38 @@ export default function PromotionReadinessPage() {
           </div>
         </section>
 
+        {!!data?.setupIssues.length && (
+          <section className="border-b border-red-300/20 bg-red-300/[0.03] p-5 sm:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-200">Required setup</p>
+                <h2 className="mt-2 text-xl font-black uppercase">Configuration actions</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-[#94a99e]">
+                  Complete these actions to replace setup warnings with calculated readiness results.
+                </p>
+              </div>
+              <a href="/admin/ranks" className="border border-red-300/30 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-red-200 transition hover:bg-red-300/10">
+                Open Rank Management
+              </a>
+            </div>
+            <div className="mt-5 grid gap-px bg-red-300/15 lg:grid-cols-2">
+              {data.setupIssues.map((issue) => (
+                <article key={issue.key} className="bg-[#020806] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-red-100">{issue.label}</h3>
+                      <p className="mt-2 text-sm leading-6 text-[#8fa398]">{issue.detail}</p>
+                    </div>
+                    <span className="shrink-0 border border-red-300/25 bg-red-300/10 px-2 py-1 text-xs font-bold text-red-200">
+                      {issue.affected} affected
+                    </span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="divide-y divide-[#00ff66]/10">
           {loading && !data ? (
             <div className="grid min-h-80 place-items-center text-[#00ff66]"><RefreshCw className="animate-spin" /></div>
@@ -232,6 +273,12 @@ export default function PromotionReadinessPage() {
                   <span className={`inline-flex items-center gap-2 border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] ${detail.className}`}>
                     <detail.icon size={15} />{detail.label}
                   </span>
+                  {person.setupIssues.length > 0 && (
+                    <div className="w-full border-l-2 border-red-300/40 bg-red-300/[0.04] px-4 py-3 text-sm text-red-100">
+                      <strong className="mr-2 uppercase tracking-[0.1em]">Setup:</strong>
+                      {person.setupIssues.map((issue) => issue.label).join("; ")}
+                    </div>
+                  )}
                   <details className="group w-full border-t border-white/10 pt-4">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-xs font-bold uppercase tracking-[0.14em] text-[#91a59a]">
                       Requirement breakdown
@@ -249,12 +296,12 @@ export default function PromotionReadinessPage() {
                       )) : (
                         <div className="border border-red-300/25 bg-red-300/5 p-3 text-sm text-red-200">No standard promotion route is configured for this rank.</div>
                       )}
-                      {person.targetRank && !person.targetConfigured && (
-                        <div className="flex items-start gap-3 border border-red-300/25 bg-red-300/5 p-3 text-red-200">
+                      {person.setupIssues.map((issue) => (
+                        <div key={issue.key} className="flex items-start gap-3 border border-red-300/25 bg-red-300/5 p-3 text-red-200">
                           <TriangleAlert size={16} className="mt-0.5 shrink-0" />
-                          <div><p className="text-xs font-bold uppercase tracking-[0.12em]">Rank setup required</p><p className="mt-1 text-xs text-white/65">{person.targetRank} is not yet an active rank definition.</p></div>
+                          <div><p className="text-xs font-bold uppercase tracking-[0.12em]">{issue.label}</p><p className="mt-1 text-xs text-white/65">{issue.detail}</p></div>
                         </div>
-                      )}
+                      ))}
                     </div>
                   </details>
                 </div>

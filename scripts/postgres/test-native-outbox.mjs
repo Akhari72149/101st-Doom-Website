@@ -107,6 +107,41 @@ try {
     status: 'retired',
   });
 
+  const sharedRoleId = '12345678901234567';
+  const differentRoleId = '12345678901234568';
+  const ranks = await client.query(`
+    insert into public.ranks(name, rank_level, discord_role_id, is_active)
+    values ('Role sync smoke old', 2001, $1, false),
+           ('Role sync smoke same', 2002, $1, false),
+           ('Role sync smoke different', 2003, $2, false)
+    returning id
+  `, [sharedRoleId, differentRoleId]);
+  const outboxCountBefore = await client.query(
+    'select count(*)::integer count from public.discord_role_outbox',
+  );
+  const queuedRankSync = await client.query(
+    'select public.enqueue_rank_role_sync($1, $2, $3) queued_id',
+    [personnel.rows[0].id, ranks.rows[0].id, ranks.rows[1].id],
+  );
+  const outboxCountAfter = await client.query(
+    'select count(*)::integer count from public.discord_role_outbox',
+  );
+  assert.equal(queuedRankSync.rows[0].queued_id, null);
+  assert.equal(outboxCountAfter.rows[0].count, outboxCountBefore.rows[0].count);
+
+  const changedRankSync = await client.query(
+    'select public.enqueue_rank_role_sync($1, $2, $3) queued_id',
+    [personnel.rows[0].id, ranks.rows[0].id, ranks.rows[2].id],
+  );
+  const changedEvent = await client.query(`
+    select payload
+    from public.discord_role_outbox
+    where id = $1
+  `, [changedRankSync.rows[0].queued_id]);
+  assert.equal(changedEvent.rowCount, 1);
+  assert.equal(changedEvent.rows[0].payload.oldRoleId, sharedRoleId);
+  assert.equal(changedEvent.rows[0].payload.newRoleId, differentRoleId);
+
   await client.query('rollback');
   console.log('PASS: native Discord outbox migrations, trigger payloads and legacy password removal.');
 } catch (error) {

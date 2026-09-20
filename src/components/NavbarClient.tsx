@@ -111,6 +111,11 @@ export default function NavbarClient() {
           description: "Training, qualifications and opportunities",
         },
         {
+          href: "/rank-structure",
+          label: "Rank Structure",
+          description: "Progression routes and promotion requirements",
+        },
+        {
           href: "/documents",
           label: "Documents & Forms",
           description: "Important files, policies and paperwork",
@@ -142,11 +147,6 @@ export default function NavbarClient() {
           href: "/grand-orbat",
           label: "Grand ORBAT",
           description: "Unit structure and force organisation",
-        },
-        {
-          href: "/rank-structure",
-          label: "Rank Structure",
-          description: "Progression routes and promotion requirements",
         },
         {
           href: "/certifications",

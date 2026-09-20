@@ -23,6 +23,7 @@ export default function LayoutWrapper({
     "/Art-of-War",
     "/documents",
     "/faq",
+    "/rank-structure",
   ].includes(pathname);
 
   return (

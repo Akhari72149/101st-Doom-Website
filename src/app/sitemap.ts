@@ -11,6 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/Art-of-War",
     "/personnel-profile",
     "/grand-orbat",
+    "/rank-structure",
     "/roster",
     "/servers",
     "/vault",

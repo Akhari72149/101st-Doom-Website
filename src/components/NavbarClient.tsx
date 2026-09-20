@@ -144,6 +144,11 @@ export default function NavbarClient() {
           description: "Unit structure and force organisation",
         },
         {
+          href: "/rank-structure",
+          label: "Rank Structure",
+          description: "Progression routes and promotion requirements",
+        },
+        {
           href: "/certifications",
           label: "Certification Lookup",
           description: "Search qualifications by person or cert",

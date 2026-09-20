@@ -130,6 +130,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["recruiter", "nco", "admin"],
   },
   {
+    key: "admin.discipline",
+    pagePath: "/admin/discipline",
+    label: "Warnings & DAs",
+    category: "Records",
+    description: "Issue and review warnings, disciplinary actions, approvals, and appeals.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.discord-announcements",
     pagePath: "/admin/discord-announcemets",
     label: "Discord Pings",

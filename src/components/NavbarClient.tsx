@@ -359,6 +359,13 @@ export default function NavbarClient() {
           category: "Records",
         },
         {
+          href: "/admin/discipline",
+          label: "Warnings & DAs",
+          description: "Issue and review disciplinary records",
+          allowedRoles: [],
+          category: "Records",
+        },
+        {
           href: "/GC-Asset-Log",
           label: "Asset Log",
           description: "Track campaign asset purchases",

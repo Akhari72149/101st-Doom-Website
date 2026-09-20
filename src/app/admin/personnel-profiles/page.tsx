@@ -32,6 +32,7 @@ type Rank = { id: string; name: string; rank_level: number };
 type WebsiteAccount = { id: string; username: string | null; displayName: string; disabled: boolean; matchType: "linked" | "name-match" };
 type SteamLink = { steamId: string; displayName: string | null; profileUrl: string; linkedAt: string };
 type HistoryEntry = { id: string; action: string; details: string | null; created_at: string; actor: string };
+type DisciplinaryNote = { reference: string; kind: "warning" | "da"; summary: string; status: string; detachmentBan: boolean };
 
 type Personnel = {
   id: string;
@@ -50,6 +51,7 @@ type Personnel = {
   steam_link: SteamLink | null;
   website_account: WebsiteAccount | null;
   recent_history: HistoryEntry[];
+  disciplinary_notes: DisciplinaryNote[];
 };
 
 type ViewMode = "active" | "inactive";
@@ -309,6 +311,20 @@ export default function PersonnelProfilesAdminPage() {
                     <div className="h-full bg-[#00ff66] transition-[width]" style={{ width: `${(completeness.complete / completeness.total) * 100}%` }} />
                   </div>
                 </div>
+
+                {selected.disciplinary_notes.length > 0 && (
+                  <div className="border-b border-red-400/20 bg-red-400/[0.04] p-6">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-red-200"><ShieldCheck className="h-4 w-4" /> Active Disciplinary Notes</div>
+                    <div className="mt-4 divide-y divide-red-300/10 border border-red-300/20">
+                      {selected.disciplinary_notes.map((note) => (
+                        <div key={note.reference} className="p-4">
+                          <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs text-red-200">{note.reference}</span><span className="border border-red-300/20 px-2 py-0.5 text-[10px] font-bold uppercase text-red-100">{note.kind === "da" ? "DA" : "Warning"}</span>{note.detachmentBan && <span className="border border-amber-300/25 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-100">Detachment ban</span>}</div>
+                          <p className="mt-2 text-sm text-[#d5c4c4]">{note.summary}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="border-b border-[#00ff66]/15 p-6">
                   <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#00ff66]/70"><UserRoundCheck className="h-4 w-4" /> Identity Overview</div>

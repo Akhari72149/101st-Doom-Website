@@ -99,7 +99,25 @@ export async function GET(request: Request) {
                    limit 12
                  ) history),
                 '[]'::jsonb
-              ) as recent_history
+              ) as recent_history,
+              coalesce(
+                (select jsonb_agg(jsonb_build_object(
+                    'reference', cases.reference,
+                    'kind', cases.case_kind,
+                    'summary', cases.summary,
+                    'status', cases.status,
+                    'detachmentBan', exists(
+                      select 1 from public.disciplinary_case_actions actions
+                      join public.disciplinary_action_catalog catalog on catalog.id=actions.catalog_action_id
+                      where actions.case_id=cases.id and catalog.slug='detachment-ban'
+                    )
+                  ) order by cases.created_at desc)
+                 from public.disciplinary_cases cases
+                 where cases.personnel_id=personnel.id
+                   and cases.status in ('active','appealed')
+                   and (cases.case_kind='da' or cases.expires_at>now())),
+                '[]'::jsonb
+              ) as disciplinary_notes
        from public.personnel personnel
        left join public.ranks ranks on ranks.id = personnel.rank_id
        where ($1 = '' or personnel.name ilike '%' || $1 || '%')

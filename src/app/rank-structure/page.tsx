@@ -220,6 +220,116 @@ const tracks: RankTrack[] = [
     ],
   },
   {
+    id: "pilot",
+    label: "Pilot Progression",
+    eyebrow: "Flight Operations",
+    accent: "cyan",
+    ranks: [
+      {
+        name: "Clone Ensign Cadet",
+        abbreviation: "CXC",
+        icon: "/rank-icons/clone-ensign-cadet.png",
+        summary:
+          "The entry rank for personnel beginning the pilot pathway and serving within an active flight.",
+        requirements: ["Complete the Academy Course", "Slotted into a flight"],
+      },
+      {
+        name: "Clone Ensign",
+        abbreviation: "CX",
+        icon: "/rank-icons/clone-ensign-pilot.png",
+        summary:
+          "A qualified flight member who has completed the core Clone Ensign training pathway.",
+        requirements: ["90 days TIG", "Complete the CX Course", "Attendance above 75%"],
+      },
+      {
+        name: "Clone Senior Ensign",
+        abbreviation: "CSX",
+        icon: "/rank-icons/clone-senior-ensign.png",
+        summary:
+          "A senior pilot recognised for sustained flight activity, attendance, and broader aviation capability.",
+        requirements: [
+          "150 days TIG",
+          "Attendance above 75%",
+          "VTOL qualification",
+          "Platoon approval",
+        ],
+      },
+      {
+        name: "Clone Veteran Ensign",
+        abbreviation: "CVX",
+        icon: "/rank-icons/clone-veteran-ensign.png",
+        summary:
+          "An experienced pilot who has demonstrated consistent operational attendance and earned platoon confidence.",
+        requirements: ["120 days TIG", "Attendance above 80%", "Platoon approval"],
+      },
+      {
+        name: "Clone Specialist Ensign",
+        abbreviation: "CXX",
+        icon: "/rank-icons/clone-specialist-ensign.png",
+        summary:
+          "A specialist flight rank recognising continued experience and dependable operational participation.",
+        requirements: ["125 days TIG", "Attendance above 80%"],
+      },
+      {
+        name: "Clone Ensign Specialist Technician",
+        abbreviation: "CXT",
+        icon: "/rank-icons/clone-ensign-specialist-technician.png",
+        summary:
+          "The senior technical pilot rank for highly experienced and consistently active flight personnel.",
+        requirements: ["180 days TIG", "Attendance above 90%"],
+      },
+      {
+        name: "Clone Ensign Corporal",
+        abbreviation: "CXP",
+        icon: "/rank-icons/clone-ensign-corporal.png",
+        summary:
+          "The pilot Corporal rank, awarded after completing the unit's Corporals Course.",
+        requirements: ["Complete the CP Course"],
+      },
+      {
+        name: "Clone Ensign Sergeant",
+        abbreviation: "CXS",
+        icon: "/rank-icons/clone-ensign-sergeant.png",
+        summary:
+          "The pilot Sergeant rank, awarded after completing the unit's Sergeants Course.",
+        requirements: ["Complete the CS Course"],
+      },
+      {
+        name: "Clone Ensign Specialist Sergeant",
+        abbreviation: "CXSS",
+        icon: "/rank-icons/clone-ensign-specialist-sergeant.png",
+        summary:
+          "A senior flight Sergeant rank recognising established leadership and reliable attendance.",
+        requirements: ["125 days TIG", "Attendance above 75%"],
+      },
+      {
+        name: "Clone Ensign Master Sergeant",
+        abbreviation: "CXMS",
+        icon: "/rank-icons/clone-ensign-master-sergeant.png",
+        summary:
+          "The senior regular flight Sergeant rank, requiring strong attendance and company confidence.",
+        requirements: ["145 days TIG", "Attendance above 80%", "Company approval"],
+      },
+      {
+        name: "Clone Flight Sergeant Major",
+        abbreviation: "CXM",
+        icon: "/rank-icons/clone-flight-sergeant-major.png",
+        summary:
+          "The Sergeant Major rank for flight leadership and senior aviation administration.",
+        requirements: ["Complete the CSM Course"],
+      },
+      {
+        name: "Clone Squadron Overseer",
+        abbreviation: "CX-O",
+        icon: "/rank-icons/clone-squadron-overseer.png",
+        summary:
+          "The legacy Squadron Overseer designation held by Akhari.",
+        requirements: ["Be Akhari"],
+        note: "Legacy rank",
+      },
+    ],
+  },
+  {
     id: "sergeant",
     label: "Sergeant Cadre",
     eyebrow: "Squad Leadership",

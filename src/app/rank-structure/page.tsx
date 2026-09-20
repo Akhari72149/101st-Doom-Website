@@ -9,6 +9,7 @@ import {
   Star,
   Users,
 } from "lucide-react";
+import RankStructureTabs from "./RankStructureTabs";
 
 type Rank = {
   name: string;
@@ -221,14 +222,14 @@ const tracks: RankTrack[] = [
   },
   {
     id: "pilot",
-    label: "Pilot Progression",
-    eyebrow: "Flight Operations",
+    label: "Hammer Pilot Progression",
+    eyebrow: "Hammer MOS",
     accent: "cyan",
     ranks: [
       {
         name: "Clone Ensign Cadet",
         abbreviation: "CXC",
-        icon: "/rank-icons/clone-ensign-cadet.png",
+        icon: "/rank-icons/hammer/cxc.png",
         summary:
           "The entry rank for personnel beginning the pilot pathway and serving within an active flight.",
         requirements: ["Complete the Academy Course", "Slotted into a flight"],
@@ -236,7 +237,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Ensign",
         abbreviation: "CX",
-        icon: "/rank-icons/clone-ensign-pilot.png",
+        icon: "/rank-icons/hammer/cx.png",
         summary:
           "A qualified flight member who has completed the core Clone Ensign training pathway.",
         requirements: ["90 days TIG", "Complete the CX Course", "Attendance above 75%"],
@@ -257,7 +258,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Veteran Ensign",
         abbreviation: "CVX",
-        icon: "/rank-icons/clone-veteran-ensign.png",
+        icon: "/rank-icons/hammer/cxv.png",
         summary:
           "An experienced pilot who has demonstrated consistent operational attendance and earned platoon confidence.",
         requirements: ["120 days TIG", "Attendance above 80%", "Platoon approval"],
@@ -265,7 +266,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Specialist Ensign",
         abbreviation: "CXX",
-        icon: "/rank-icons/clone-specialist-ensign.png",
+        icon: "/rank-icons/hammer/cxx.png",
         summary:
           "A specialist flight rank recognising continued experience and dependable operational participation.",
         requirements: ["125 days TIG", "Attendance above 80%"],
@@ -281,7 +282,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Ensign Corporal",
         abbreviation: "CXP",
-        icon: "/rank-icons/clone-ensign-corporal.png",
+        icon: "/rank-icons/hammer/cxp.png",
         summary:
           "The pilot Corporal rank, awarded after completing the unit's Corporals Course.",
         requirements: ["Complete the CP Course"],
@@ -289,7 +290,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Ensign Sergeant",
         abbreviation: "CXS",
-        icon: "/rank-icons/clone-ensign-sergeant.png",
+        icon: "/rank-icons/hammer/cxs.png",
         summary:
           "The pilot Sergeant rank, awarded after completing the unit's Sergeants Course.",
         requirements: ["Complete the CS Course"],
@@ -305,7 +306,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Ensign Master Sergeant",
         abbreviation: "CXMS",
-        icon: "/rank-icons/clone-ensign-master-sergeant.png",
+        icon: "/rank-icons/hammer/cxsm.png",
         summary:
           "The senior regular flight Sergeant rank, requiring strong attendance and company confidence.",
         requirements: ["145 days TIG", "Attendance above 80%", "Company approval"],
@@ -313,7 +314,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Flight Sergeant Major",
         abbreviation: "CXM",
-        icon: "/rank-icons/clone-flight-sergeant-major.png",
+        icon: "/rank-icons/hammer/cxm.png",
         summary:
           "The Sergeant Major rank for flight leadership and senior aviation administration.",
         requirements: ["Complete the CSM Course"],
@@ -321,7 +322,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Squadron Overseer",
         abbreviation: "CXO",
-        icon: "/rank-icons/clone-squadron-overseer.png",
+        icon: "/rank-icons/hammer/cxo.png",
         summary:
           "The legacy Squadron Overseer designation held by Akhari.",
         requirements: ["Be Akhari"],
@@ -529,65 +530,12 @@ const accentClasses = {
   },
 } as const;
 
-export default function RankStructurePage() {
-  const rankCount = tracks.reduce((total, track) => total + track.ranks.length, 0);
-
+function RankTrackView({ selectedTracks }: { selectedTracks: RankTrack[] }) {
   return (
-    <main className="min-h-screen bg-[#020806] text-white">
-      <header className="relative isolate min-h-[430px] overflow-hidden border-b border-[#00ff66]/25">
-        <Image
-          src="/background/bg.jpg"
-          alt="101st Doom Battalion formation"
-          fill
-          priority
-          className="-z-20 object-cover object-center opacity-25"
-        />
-        <div className="absolute inset-0 -z-10 bg-black/70" />
-        <div className="mx-auto flex min-h-[430px] max-w-7xl items-center px-5 py-16 sm:px-8 lg:px-12">
-          <div className="grid w-full items-center gap-10 lg:grid-cols-[1fr_280px]">
-            <div>
-              <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.24em] text-[#00ff66]">
-                <Shield size={18} aria-hidden="true" />
-                Personnel Doctrine
-              </div>
-              <h1 className="mt-5 max-w-4xl text-4xl font-black uppercase sm:text-6xl">
-                Rank Structure
-              </h1>
-              <p className="mt-5 max-w-3xl text-base leading-8 text-[#b6c8bd] sm:text-lg">
-                The full 101st Doom Battalion progression path, from a new Clone Recruit
-                through enlisted service, NCO leadership, and battalion command.
-              </p>
-              <dl className="mt-8 grid max-w-3xl grid-cols-2 gap-px bg-[#00ff66]/20 sm:grid-cols-3">
-                <div className="bg-[#020806]/90 p-4">
-                  <dt className="text-[11px] uppercase tracking-[0.18em] text-[#789486]">Published ranks</dt>
-                  <dd className="mt-2 text-2xl font-black text-[#00ff66]">{rankCount}</dd>
-                </div>
-                <div className="bg-[#020806]/90 p-4">
-                  <dt className="text-[11px] uppercase tracking-[0.18em] text-[#789486]">Progression tracks</dt>
-                  <dd className="mt-2 text-2xl font-black text-cyan-300">{tracks.length}</dd>
-                </div>
-                <div className="col-span-2 bg-[#020806]/90 p-4 sm:col-span-1">
-                  <dt className="text-[11px] uppercase tracking-[0.18em] text-[#789486]">Primary measures</dt>
-                  <dd className="mt-2 text-sm font-bold text-amber-200">TIG · Attendance · Training</dd>
-                </div>
-              </dl>
-            </div>
-            <div className="hidden justify-self-end border border-[#00ff66]/25 bg-black/60 p-5 lg:block">
-              <Image
-                src="/icons/DBLogo.jpg"
-                alt="101st Doom Battalion emblem"
-                width={240}
-                height={240}
-                className="aspect-square object-contain"
-              />
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <>
       <nav aria-label="Rank progression sections" className="border-b border-[#00ff66]/20 bg-black/80">
         <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-5 py-4 sm:px-8 lg:px-12">
-          {tracks.map((track) => (
+          {selectedTracks.map((track) => (
             <a
               key={track.id}
               href={`#${track.id}`}
@@ -616,7 +564,7 @@ export default function RankStructurePage() {
         </section>
 
         <div className="space-y-16">
-          {tracks.map((track, trackIndex) => {
+          {selectedTracks.map((track, trackIndex) => {
             const accent = accentClasses[track.accent];
             return (
               <section key={track.id} id={track.id} className="scroll-mt-28">
@@ -689,6 +637,76 @@ export default function RankStructurePage() {
           })}
         </div>
       </div>
+    </>
+  );
+}
+
+export default function RankStructurePage() {
+  const rankCount = tracks.reduce((total, track) => total + track.ranks.length, 0);
+  const overallTracks = tracks.filter((track) => track.id !== "pilot");
+  const mosTracks = tracks.filter((track) => track.id === "pilot");
+  const overallRankCount = overallTracks.reduce((total, track) => total + track.ranks.length, 0);
+  const mosRankCount = mosTracks.reduce((total, track) => total + track.ranks.length, 0);
+
+  return (
+    <main className="min-h-screen bg-[#020806] text-white">
+      <header className="relative isolate min-h-[430px] overflow-hidden border-b border-[#00ff66]/25">
+        <Image
+          src="/background/bg.jpg"
+          alt="101st Doom Battalion formation"
+          fill
+          priority
+          className="-z-20 object-cover object-center opacity-25"
+        />
+        <div className="absolute inset-0 -z-10 bg-black/70" />
+        <div className="mx-auto flex min-h-[430px] max-w-7xl items-center px-5 py-16 sm:px-8 lg:px-12">
+          <div className="grid w-full items-center gap-10 lg:grid-cols-[1fr_280px]">
+            <div>
+              <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.24em] text-[#00ff66]">
+                <Shield size={18} aria-hidden="true" />
+                Personnel Doctrine
+              </div>
+              <h1 className="mt-5 max-w-4xl text-4xl font-black uppercase sm:text-6xl">
+                Rank Structure
+              </h1>
+              <p className="mt-5 max-w-3xl text-base leading-8 text-[#b6c8bd] sm:text-lg">
+                The full 101st Doom Battalion progression path, from a new Clone Recruit
+                through enlisted service, NCO leadership, and battalion command.
+              </p>
+              <dl className="mt-8 grid max-w-3xl grid-cols-2 gap-px bg-[#00ff66]/20 sm:grid-cols-3">
+                <div className="bg-[#020806]/90 p-4">
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-[#789486]">Published ranks</dt>
+                  <dd className="mt-2 text-2xl font-black text-[#00ff66]">{rankCount}</dd>
+                </div>
+                <div className="bg-[#020806]/90 p-4">
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-[#789486]">Progression tracks</dt>
+                  <dd className="mt-2 text-2xl font-black text-cyan-300">{tracks.length}</dd>
+                </div>
+                <div className="col-span-2 bg-[#020806]/90 p-4 sm:col-span-1">
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-[#789486]">Primary measures</dt>
+                  <dd className="mt-2 text-sm font-bold text-amber-200">TIG · Attendance · Training</dd>
+                </div>
+              </dl>
+            </div>
+            <div className="hidden justify-self-end border border-[#00ff66]/25 bg-black/60 p-5 lg:block">
+              <Image
+                src="/icons/DBLogo.jpg"
+                alt="101st Doom Battalion emblem"
+                width={240}
+                height={240}
+                className="aspect-square object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <RankStructureTabs
+        overall={<RankTrackView selectedTracks={overallTracks} />}
+        mos={<RankTrackView selectedTracks={mosTracks} />}
+        overallRankCount={overallRankCount}
+        mosRankCount={mosRankCount}
+      />
     </main>
   );
 }

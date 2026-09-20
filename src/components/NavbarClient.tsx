@@ -305,6 +305,13 @@ export default function NavbarClient() {
           category: "Personnel Admin",
         },
         {
+          href: "/admin/promotion-readiness",
+          label: "Promotion Readiness",
+          description: "Review promotion progress and requirements",
+          allowedRoles: [],
+          category: "Personnel Admin",
+        },
+        {
           href: "/admin/personnel-profiles",
           label: "Personnel Profiles",
           description: "Manage join dates, Discord links and reactivations",

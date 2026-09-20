@@ -84,6 +84,7 @@ const permissionPresets: PermissionPreset[] = [
     permissions: {
       "records.audit": "read",
       "admin.positions": "edit",
+      "admin.promotion-readiness": "read",
       "admin.medals": "read",
       "admin.weekly-attendance": "edit",
       "admin.removal": "edit",

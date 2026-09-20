@@ -13,6 +13,7 @@ import {
 type Rank = {
   name: string;
   abbreviation: string;
+  icon?: string;
   summary: string;
   requirements: string[];
   note?: string;
@@ -42,6 +43,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Recruit",
         abbreviation: "CR",
+        icon: "/rank-icons/clone-recruit.png",
         summary:
           "A new arrival to the unit who has not yet completed formal training, but is free to attend operations.",
         requirements: [],
@@ -49,6 +51,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Cadet",
         abbreviation: "CR-C",
+        icon: "/rank-icons/clone-cadet.png",
         summary:
           "Has completed either Basic Combat Training or the initial operation requirement. CLS and RTO training are now available.",
         requirements: [
@@ -59,6 +62,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Trooper",
         abbreviation: "CT",
+        icon: "/rank-icons/clone-trooper.png",
         summary:
           "Has completed the basic training and attendance required to qualify as a full trooper. All basic certifications are now open for training.",
         requirements: [
@@ -99,6 +103,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Senior Trooper / Senior Clone Trooper",
         abbreviation: "CST",
+        icon: "/rank-icons/clone-senior-trooper.png",
         summary:
           "The first rank beyond Clone Trooper and the first rank to unlock custom armour.",
         requirements: [
@@ -111,6 +116,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Veteran Trooper / Veteran Clone Trooper",
         abbreviation: "CVT",
+        icon: "/rank-icons/clone-veteran-trooper.png",
         summary:
           "Continues enlisted progression and begins unlocking further armour customisation, including chest rigs and thermals.",
         requirements: ["Slotted member", "100 days TIG", "Attendance above 70%", "465 DT"],
@@ -118,6 +124,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Specialist",
         abbreviation: "CSP",
+        icon: "/rank-icons/clone-specialist.png",
         summary:
           "The second-most senior non-NCO position. Specialists are expected to be highly capable squad members who assist NCOs and support newcomers.",
         requirements: [
@@ -151,6 +158,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Lance Corporal",
         abbreviation: "LCP",
+        icon: "/rank-icons/clone-lance-corporal.png",
         summary:
           "Awarded upon taking a Corporal NCO billet and beginning the Corporals Course.",
         requirements: ["Slotted into a CP NCO billet"],
@@ -158,12 +166,14 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Corporal",
         abbreviation: "CP",
+        icon: "/rank-icons/clone-corporal.png",
         summary: "The base Corporal rank awarded after completing the Corporals Course.",
         requirements: ["Complete the CP Course"],
       },
       {
         name: "Clone Senior Corporal",
         abbreviation: "CSC",
+        icon: "/rank-icons/clone-senior-corporal.png",
         summary:
           "The first senior Corporal rank, recognising consistent attendance and assistance to the squad leader with training and organisation.",
         requirements: ["Slotted member", "100 days TIG", "Attendance above 50%"],
@@ -218,6 +228,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Sergeant",
         abbreviation: "CS",
+        icon: "/rank-icons/clone-sergeant.png",
         summary: "The base Sergeant rank awarded after completing the Sergeants Course.",
         requirements: [
           "Complete the CS Course",
@@ -227,6 +238,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Staff Sergeant",
         abbreviation: "CSS",
+        icon: "/rank-icons/clone-staff-sergeant.png",
         summary:
           "The first senior Sergeant rank, recognising dependable leadership in training, organisation, and squad activity.",
         requirements: ["Slotted member", "100 days TIG", "Attendance above 50%"],
@@ -274,6 +286,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Sergeant Major",
         abbreviation: "CSM",
+        icon: "/rank-icons/clone-sergeant-major.png",
         summary:
           "The first Sergeant Major rank, responsible for leading a platoon alongside the Platoon Commanding Officer.",
         requirements: [
@@ -318,6 +331,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone 2nd Lieutenant",
         abbreviation: "CL",
+        icon: "/rank-icons/clone-second-lieutenant.png",
         summary: "The base officer rank awarded after completing the OCS Course.",
         requirements: [
           "Complete the OCS Course",
@@ -327,6 +341,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone 1st Lieutenant",
         abbreviation: "CL",
+        icon: "/rank-icons/clone-first-lieutenant.png",
         summary:
           "A senior Lieutenant promotion recognising dedication and experience, intended for the future Company XO rank.",
         requirements: [],
@@ -334,6 +349,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Company Sergeant Major",
         abbreviation: "CSM",
+        icon: "/rank-icons/company-sergeant-major.png",
         summary:
           "The Company Sergeant Major billet, assisting the Company Commanding Officer and Executive Officer.",
         requirements: [
@@ -345,6 +361,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Captain",
         abbreviation: "CC",
+        icon: "/rank-icons/clone-captain.png",
         summary: "The Company XO billet and the intended future Company Lead billet.",
         requirements: [
           "Complete the Captains Course",
@@ -361,6 +378,7 @@ const tracks: RankTrack[] = [
       {
         name: "Battalion Commander",
         abbreviation: "BC",
+        icon: "/rank-icons/battalion-commander.png",
         summary: "The Unit Owner and highest authority within the battalion.",
         requirements: ["Not applicable"],
       },
@@ -491,8 +509,18 @@ export default function RankStructurePage() {
                   {track.ranks.map((rank, rankIndex) => (
                     <article key={`${rank.name}-${rankIndex}`} className={`relative border ${accent.border} bg-black/65 p-5 sm:p-6`}>
                       <div className="flex items-start gap-4">
-                        <div className={`grid h-14 w-14 shrink-0 place-items-center border ${accent.border} ${accent.muted} text-sm font-black ${accent.text}`}>
-                          {rank.abbreviation}
+                        <div className={`relative grid h-14 w-14 shrink-0 place-items-center border ${accent.border} ${accent.muted} text-sm font-black ${accent.text}`}>
+                          {rank.icon ? (
+                            <Image
+                              src={rank.icon}
+                              alt={`${rank.name} insignia`}
+                              width={42}
+                              height={42}
+                              className="h-10 w-10 object-contain [image-rendering:pixelated]"
+                            />
+                          ) : (
+                            rank.abbreviation
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#667c70]">

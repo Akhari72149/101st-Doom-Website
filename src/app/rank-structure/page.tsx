@@ -82,6 +82,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Trooper (Private Third Class)",
         abbreviation: "CT/PTC",
+        icon: "/rank-icons/clone-trooper-private-third-class.png",
         summary:
           "The first slotted promotion, recognising time in the squad and a demonstrated commitment to the unit.",
         requirements: ["Slotted member", "60 days TIG", "Attendance above 50%"],
@@ -89,6 +90,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Trooper (Private Second Class)",
         abbreviation: "CT/PSC",
+        icon: "/rank-icons/clone-trooper-private-second-class.png",
         summary:
           "The second slotted promotion, recognising continued commitment and growing usefulness to the squad through certifications.",
         requirements: ["Slotted member", "80 days TIG", "Attendance above 50%", "140 DT"],
@@ -96,6 +98,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Trooper (Private First Class)",
         abbreviation: "CT/PFC",
+        icon: "/rank-icons/clone-trooper-private-first-class.png",
         summary:
           "The final Clone Trooper promotion, awarded for commitment and proven reliability as a team and squad member.",
         requirements: ["Slotted member", "100 days TIG", "Attendance above 50%", "240 DT"],
@@ -138,6 +141,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Technical Specialist",
         abbreviation: "CTS",
+        icon: "/rank-icons/clone-technical-specialist.png",
         summary:
           "The most senior non-NCO rank, reserved for exceptionally dedicated members who consistently support their squad.",
         requirements: [
@@ -181,6 +185,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Veteran Corporal",
         abbreviation: "CVC",
+        icon: "/rank-icons/clone-veteran-corporal.png",
         summary:
           "The second senior Corporal rank, requiring increased attendance and continued support of troopers and the squad leader.",
         requirements: ["Slotted member", "120 days TIG", "Attendance above 70%"],
@@ -188,6 +193,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Master Corporal",
         abbreviation: "CMC",
+        icon: "/rank-icons/clone-master-corporal.png",
         summary:
           "The most senior regular Corporal rank, recognising strong attendance, team leadership, and support provided to the Sergeant.",
         requirements: [
@@ -200,6 +206,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone First Corporal",
         abbreviation: "CFC",
+        icon: "/rank-icons/clone-first-corporal.png",
         summary:
           "The senior-most Corporal in a platoon and the leading candidate for an available Sergeant billet. Only one may exist per platoon.",
         requirements: [
@@ -221,6 +228,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Lance Sergeant",
         abbreviation: "LCS",
+        icon: "/rank-icons/clone-lance-sergeant.png",
         summary:
           "Awarded upon taking a Sergeant NCO billet before completing the Sergeants Course.",
         requirements: ["Slotted into a CS NCO billet"],
@@ -246,6 +254,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Gunnery Sergeant",
         abbreviation: "CGS",
+        icon: "/rank-icons/clone-gunnery-sergeant.png",
         summary:
           "The second senior Sergeant rank, requiring increased attendance and continued leadership of troopers and squad activity.",
         requirements: ["Slotted member", "120 days TIG", "Attendance above 70%"],
@@ -253,6 +262,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Master Sergeant",
         abbreviation: "CMS",
+        icon: "/rank-icons/clone-master-sergeant.png",
         summary:
           "The most senior regular Sergeant rank, responsible for squad administration, training, and the overall welfare of the squad.",
         requirements: [
@@ -265,6 +275,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone First Sergeant",
         abbreviation: "CFS",
+        icon: "/rank-icons/clone-first-sergeant.png",
         summary:
           "The senior-most Sergeant in a platoon and the leading candidate for an available Sergeant Major billet. Only one may exist per platoon.",
         requirements: [
@@ -297,6 +308,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Staff Sergeant Major",
         abbreviation: "SSM",
+        icon: "/rank-icons/clone-staff-sergeant-major.png",
         summary:
           "A senior promotion for an experienced Sergeant Major who has demonstrated sustained dedication.",
         requirements: [
@@ -309,6 +321,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Battalion Sergeant Major",
         abbreviation: "BSM",
+        icon: "/rank-icons/clone-battalion-sergeant-major.png",
         summary: "The Battalion Sergeant Major rank for the battalion.",
         requirements: [],
         note: "Not currently in active use",
@@ -324,6 +337,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Ensign",
         abbreviation: "CE",
+        icon: "/rank-icons/clone-ensign.png",
         summary:
           "Awarded upon taking an officer billet before completing the Officer Candidate School course.",
         requirements: ["Slotted into a CL officer billet"],
@@ -372,6 +386,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Major",
         abbreviation: "CMaj.",
+        icon: "/rank-icons/clone-major.png",
         summary: "The Company Lead billet and intended future Battalion Lead.",
         requirements: ["Chosen by the Unit Owner"],
       },

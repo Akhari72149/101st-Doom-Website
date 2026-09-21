@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
+import { getAppSession, hasAppPermission } from "@/lib/client-auth";
 import {
   GiArmorVest,
   GiCheckedShield,
@@ -369,8 +370,21 @@ export default function PersonnelProfile() {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [directoryError, setDirectoryError] = useState("");
   const [profileError, setProfileError] = useState("");
+  const [canViewDiscipline, setCanViewDiscipline] = useState(false);
   const profileRequestId = useRef(0);
   const selectedPersonId = selectedPerson?.id;
+
+  useEffect(() => {
+    let active = true;
+    void getAppSession()
+      .then((session) => {
+        if (active) setCanViewDiscipline(hasAppPermission(session, "admin.discipline", "read"));
+      })
+      .catch(() => {
+        if (active) setCanViewDiscipline(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1092,6 +1106,14 @@ export default function PersonnelProfile() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      {canViewDiscipline && (
+                        <button
+                          onClick={() => router.push(`/admin/discipline?personnelId=${encodeURIComponent(selectedPerson.id)}`)}
+                          className="rounded-xl border border-cyan-300/25 bg-cyan-300/[0.04] px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/45"
+                        >
+                          DA Profile
+                        </button>
+                      )}
                       <button
                         onClick={goToPrevious}
                         disabled={selectedIndex <= 0}

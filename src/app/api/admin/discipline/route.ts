@@ -179,7 +179,7 @@ export async function POST(request: Request) {
     const result = await withPostgresTransaction(async (client) => {
       if (operation === "create-case") {
         const personnelId = cleanText(body?.personnelId, 40);
-        const caseKind = body?.caseKind === "warning" ? "warning" : body?.caseKind === "da" ? "da" : "";
+        const caseKind = body?.caseKind === "verbal" ? "verbal" : body?.caseKind === "warning" ? "warning" : body?.caseKind === "da" ? "da" : "";
         const incidentOn = cleanText(body?.incidentOn, 10);
         const summary = cleanText(body?.summary, 180);
         const reason = cleanText(body?.reason, 5000);
@@ -192,6 +192,7 @@ export async function POST(request: Request) {
         if (!Number.isInteger(appealWaitDays) || appealWaitDays < 0 || appealWaitDays > 3650) throw new Error("INVALID_APPEAL_WAIT");
         if (caseKind === "warning" && !DATE.test(expiresAt)) throw new Error("EXPIRY_REQUIRED");
         if (caseKind === "warning" && expiresAt < incidentOn) throw new Error("INVALID_EXPIRY");
+        if (caseKind === "verbal" && (inputActions.length || inputEvidence.length || appealWaitDays !== 0)) throw new Error("INVALID_VERBAL_CASE");
         if (inputActions.length > 30 || inputEvidence.length > 20) throw new Error("TOO_MANY_ITEMS");
         const person = await client.query("select id,name from public.personnel where id=$1", [personnelId]);
         if (!person.rowCount) throw new Error("PERSON_NOT_FOUND");
@@ -200,7 +201,7 @@ export async function POST(request: Request) {
           `insert into public.disciplinary_cases(reference,personnel_id,case_kind,status,incident_on,summary,reason,witnesses,appeal_wait_days,appeal_eligible_at,expires_at,issued_by)
            values($1,$2,$3,$4,$5,$6,$7,$8,$9,($5::date + $9::integer),case when $3='warning' then ($10::date + interval '1 day' - interval '1 second') else null end,$11)
            returning id`,
-          [reference.rows[0].reference, personnelId, caseKind, caseKind === "warning" ? "active" : "pending_approval", incidentOn, summary, reason, witnesses, appealWaitDays, expiresAt || null, actorId],
+          [reference.rows[0].reference, personnelId, caseKind, caseKind === "da" ? "pending_approval" : "active", incidentOn, summary, reason, witnesses, appealWaitDays, expiresAt || null, actorId],
         );
         const caseId = created.rows[0].id;
         const seenActions = new Set<string>();
@@ -232,7 +233,8 @@ export async function POST(request: Request) {
           if (!label || !validUrl(url)) throw new Error("INVALID_EVIDENCE");
           await client.query("insert into public.disciplinary_evidence_links(case_id,label,url,added_by) values($1,$2,$3,$4)", [caseId, label, url, actorId]);
         }
-        await appendEvent(client, caseId, "CASE_CREATED", `${caseKind === "da" ? "Disciplinary action" : "Warning"} issued to ${person.rows[0].name}${caseKind === "da" ? " and submitted for secondary approval" : ""}.`, actorId);
+        const typeLabel = caseKind === "da" ? "Disciplinary action" : caseKind === "verbal" ? "Verbal warning" : "Warning";
+        await appendEvent(client, caseId, "CASE_CREATED", `${typeLabel} issued to ${person.rows[0].name}${caseKind === "da" ? " and submitted for secondary approval" : ""}.`, actorId);
         return { caseId, reference: reference.rows[0].reference };
       }
 
@@ -359,8 +361,9 @@ export async function POST(request: Request) {
         const label = cleanText(body?.label, 100);
         const url = cleanText(body?.url, 2000);
         if (!label || !validUrl(url)) throw new Error("INVALID_EVIDENCE");
-        const target = await client.query("select id from public.disciplinary_cases where id=$1", [caseId]);
+        const target = await client.query<{ case_kind: string }>("select case_kind from public.disciplinary_cases where id=$1", [caseId]);
         if (!target.rowCount) throw new Error("CASE_NOT_FOUND");
+        if (target.rows[0].case_kind === "verbal") throw new Error("INVALID_VERBAL_CASE");
         await client.query("insert into public.disciplinary_evidence_links(case_id,label,url,added_by) values($1,$2,$3,$4)", [caseId, label, url, actorId]);
         await appendEvent(client, caseId, "EVIDENCE_ADDED", `Evidence link added: ${label}.`, actorId);
         return { caseId };
@@ -372,8 +375,8 @@ export async function POST(request: Request) {
         const bypassEligibility = body?.bypassEligibility === true;
         const bypassReason = cleanText(body?.bypassReason, 1000);
         if (!validUrl(documentUrl)) throw new Error("INVALID_APPEAL_LINK");
-        const target = await client.query<{ status: string; appeal_eligible_at: string }>("select status,appeal_eligible_at from public.disciplinary_cases where id=$1 for update", [caseId]);
-        if (!target.rowCount || !["active", "appealed"].includes(target.rows[0].status)) throw new Error("NOT_APPEALABLE");
+        const target = await client.query<{ status: string; case_kind: string; appeal_eligible_at: string }>("select status,case_kind,appeal_eligible_at from public.disciplinary_cases where id=$1 for update", [caseId]);
+        if (!target.rowCount || target.rows[0].case_kind === "verbal" || !["active", "appealed"].includes(target.rows[0].status)) throw new Error("NOT_APPEALABLE");
         const eligible = new Date(target.rows[0].appeal_eligible_at).getTime() <= Date.now();
         if (!eligible) {
           if (!bypassEligibility) throw new Error("APPEAL_NOT_YET_ELIGIBLE");
@@ -439,6 +442,7 @@ export async function POST(request: Request) {
     const code = error instanceof Error ? error.message : "";
     const known: Record<string, [string, number]> = {
       INVALID_CASE: ["Complete all required case fields", 400], EXPIRY_REQUIRED: ["Warnings require an expiry date", 400], INVALID_EXPIRY: ["Warning expiry cannot be before the incident date", 400],
+      INVALID_VERBAL_CASE: ["Verbal warnings cannot contain formal actions, evidence, or an appeal waiting period", 400],
       INVALID_APPEAL_WAIT: ["Enter an appeal waiting period between 0 and 3650 days", 400],
       TOO_MANY_ITEMS: ["Too many actions or evidence links", 400], PERSON_NOT_FOUND: ["Personnel record not found", 404],
       INVALID_ACTION: ["Select a valid disciplinary action", 400], TAG_SELECTION_REQUIRED: ["Select the tags to remove", 400],

@@ -222,7 +222,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Senior Ensign",
         abbreviation: "CSX",
-        icon: "/rank-icons/clone-senior-ensign.png",
+        icon: "/rank-icons/hammer/csx.png",
         summary:
           "A senior pilot recognised for sustained flight activity, attendance, and broader aviation capability.",
         requirements: [
@@ -251,7 +251,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Ensign Specialist Technician",
         abbreviation: "CXT",
-        icon: "/rank-icons/clone-ensign-specialist-technician.png",
+        icon: "/rank-icons/hammer/cxt.png",
         summary:
           "The senior technical pilot rank for highly experienced and consistently active flight personnel.",
         requirements: ["180 days TIG", "Attendance above 90%"],
@@ -275,7 +275,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Ensign Specialist Sergeant",
         abbreviation: "CXSS",
-        icon: "/rank-icons/clone-ensign-specialist-sergeant.png",
+        icon: "/rank-icons/hammer/cxss.png",
         summary:
           "A senior flight Sergeant rank recognising established leadership and reliable attendance.",
         requirements: ["125 days TIG", "Attendance above 75%"],
@@ -299,7 +299,7 @@ const tracks: RankTrack[] = [
       {
         name: "Clone Squadron Overseer",
         abbreviation: "CXO",
-        icon: "/rank-icons/hammer/cxo.png",
+        icon: "/rank-icons/hammer/cxo-v2.png",
         summary:
           "The legacy Squadron Overseer designation held by Akhari.",
         requirements: ["Be Akhari"],
@@ -498,7 +498,7 @@ export default function RankStructurePage() {
 
   return (
     <main className="min-h-screen bg-[#020806] text-white">
-      <header className="relative isolate min-h-[430px] overflow-hidden border-b border-[#00ff66]/25">
+      <header className="relative isolate min-h-[350px] overflow-hidden border-b border-[#00ff66]/25">
         <Image
           src="/background/bg.jpg"
           alt="101st Doom Battalion formation"
@@ -507,8 +507,8 @@ export default function RankStructurePage() {
           className="-z-20 object-cover object-center opacity-25"
         />
         <div className="absolute inset-0 -z-10 bg-black/70" />
-        <div className="mx-auto flex min-h-[430px] max-w-7xl items-center px-5 py-16 sm:px-8 lg:px-12">
-          <div className="grid w-full items-center gap-10 lg:grid-cols-[1fr_280px]">
+        <div className="mx-auto flex min-h-[350px] max-w-[1800px] items-center px-5 py-12 sm:px-8 lg:px-12">
+          <div className="grid w-full items-center gap-10 lg:grid-cols-[minmax(0,1fr)_240px]">
             <div>
               <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.24em] text-[#00ff66]">
                 <Shield size={18} aria-hidden="true" />

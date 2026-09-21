@@ -50,7 +50,7 @@ export default function RankStructureTabs({ overallTracks, mosTracks, overallRan
 
   return <>
     <div className="border-b border-[#00ff66]/20 bg-black/90">
-      <div role="tablist" aria-label="Rank structure views" className="mx-auto grid max-w-7xl grid-cols-2 px-5 sm:px-8 lg:px-12">
+      <div role="tablist" aria-label="Rank structure views" className="mx-auto grid max-w-[1800px] grid-cols-2 px-5 sm:px-8 lg:px-12">
         <button type="button" role="tab" id="rank-tab-overall" aria-controls="rank-panel-overall" aria-selected={activeTab === "overall"} onClick={() => changeTab("overall")} className={`flex min-h-16 items-center justify-center gap-3 border-x border-t px-4 py-3 text-xs font-black uppercase tracking-[0.14em] transition sm:text-sm ${activeTab === "overall" ? "border-[#00ff66]/60 bg-[#00ff66]/10 text-[#00ff66]" : "border-white/10 bg-black text-[#8ca095] hover:border-[#00ff66]/35 hover:text-white"}`}>
           <Layers3 size={18} aria-hidden="true" /><span>Overall</span><span className="hidden text-[10px] font-medium text-current/70 sm:inline">{overallRankCount} ranks</span>
         </button>
@@ -60,15 +60,15 @@ export default function RankStructureTabs({ overallTracks, mosTracks, overallRan
       </div>
     </div>
 
-    <div role="tabpanel" id={`rank-panel-${activeTab}`} aria-labelledby={`rank-tab-${activeTab}`} className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-12">
-      <div className="grid items-start gap-8 lg:grid-cols-[390px_1fr]">
-        <aside className="border border-[#00ff66]/25 bg-black/75 lg:sticky lg:top-24">
+    <div role="tabpanel" id={`rank-panel-${activeTab}`} aria-labelledby={`rank-tab-${activeTab}`} className="mx-auto max-w-[1800px] px-5 py-10 sm:px-8 lg:px-12">
+      <div className="grid items-start gap-8 lg:grid-cols-[380px_minmax(0,1fr)] xl:grid-cols-[460px_minmax(0,1fr)]">
+        <aside className="border border-[#00ff66]/25 bg-black/75">
           <header className="border-b border-[#00ff66]/15 p-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#00ff66]">Rank index</p>
             <p className="mt-1 text-sm text-[#82958a]">Select a rank to view its progression requirements.</p>
             <label className="relative mt-4 block"><span className="sr-only">Search ranks</span><Search size={16} className="absolute left-3 top-3.5 text-[#62776b]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search rank or requirement" className="min-h-11 w-full border border-white/10 bg-[#020806] pl-10 pr-3 text-sm text-white outline-none focus:border-[#00ff66]/45" /></label>
           </header>
-          <div className="max-h-[calc(100dvh-180px)] overflow-y-auto overscroll-contain">
+          <div>
             {visibleTracks.map((track) => {
               const accent = accentClasses[track.accent];
               return <section key={track.id}>
@@ -77,7 +77,7 @@ export default function RankStructureTabs({ overallTracks, mosTracks, overallRan
                   const position = activeTracks.find((item) => item.id === track.id)?.ranks.findIndex((item) => item.name === rank.name && item.abbreviation === rank.abbreviation) ?? 0;
                   return <button key={`${track.id}-${rank.name}-${rank.abbreviation}`} type="button" onClick={() => setSelected({ rank, track, position })} className="group flex min-h-16 w-full items-center gap-3 border-b border-white/10 px-4 py-3 text-left last:border-b-0 hover:bg-[#00ff66]/[.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00ff66]">
                     <span className={`relative grid h-10 w-10 shrink-0 place-items-center border ${accent.border} ${accent.background} text-xs font-black ${accent.text}`}>{rank.icon ? <Image src={rank.icon} alt="" width={32} height={32} className="h-8 w-8 object-contain [image-rendering:pixelated]" /> : rank.abbreviation}</span>
-                    <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white group-hover:text-[#00ff66]">{rank.name}</strong><span className="mt-0.5 block font-mono text-xs text-[#71847a]">{rank.abbreviation}</span></span>
+                    <span className="min-w-0 flex-1"><strong className="block text-sm leading-5 text-white group-hover:text-[#00ff66]">{rank.name}</strong><span className="mt-0.5 block font-mono text-xs text-[#71847a]">{rank.abbreviation}</span></span>
                     <ChevronRight size={16} className="shrink-0 text-[#52645a] group-hover:text-[#00ff66]" aria-hidden="true" />
                   </button>;
                 })}
@@ -87,7 +87,7 @@ export default function RankStructureTabs({ overallTracks, mosTracks, overallRan
           </div>
         </aside>
 
-        <section className="border border-[#00ff66]/20 bg-[#031009]">
+        <section className="border border-[#00ff66]/20 bg-[#031009] lg:sticky lg:top-24">
           <div className="border-b border-[#00ff66]/15 p-6 sm:p-8"><p className="text-xs font-black uppercase tracking-[0.2em] text-[#00ff66]">Progression reference</p><h2 className="mt-3 text-2xl font-black uppercase sm:text-3xl">Choose a rank from the index</h2><p className="mt-4 max-w-2xl text-sm leading-7 text-[#97aa9f]">Each rank opens a focused record containing its insignia, place in the progression track, description, and published requirements.</p></div>
           <div className="grid gap-px bg-[#00ff66]/15 md:grid-cols-3">
             <div className="bg-[#020806] p-5"><div className="flex items-center gap-3 text-[#00ff66]"><CircleDot size={18} /><strong>TIG</strong></div><p className="mt-2 text-sm leading-6 text-[#8ea397]">Time in Grade is counted from the effective date of the current rank.</p></div>

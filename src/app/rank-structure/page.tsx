@@ -1,32 +1,9 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import {
-  CheckCircle2,
-  ChevronRight,
-  CircleDot,
-  Crown,
   Shield,
-  Star,
-  Users,
 } from "lucide-react";
-import RankStructureTabs from "./RankStructureTabs";
-
-type Rank = {
-  name: string;
-  abbreviation: string;
-  icon?: string;
-  summary: string;
-  requirements: string[];
-  note?: string;
-};
-
-type RankTrack = {
-  id: string;
-  label: string;
-  eyebrow: string;
-  accent: "green" | "cyan" | "amber";
-  ranks: Rank[];
-};
+import RankStructureTabs, { type RankTrack } from "./RankStructureTabs";
 
 export const metadata: Metadata = {
   title: "Rank Structure | 101st Doom Battalion",
@@ -512,135 +489,6 @@ const tracks: RankTrack[] = [
   },
 ];
 
-const accentClasses = {
-  green: {
-    border: "border-[#00ff66]/30",
-    text: "text-[#00ff66]",
-    muted: "bg-[#00ff66]/8",
-  },
-  cyan: {
-    border: "border-cyan-300/30",
-    text: "text-cyan-300",
-    muted: "bg-cyan-300/8",
-  },
-  amber: {
-    border: "border-amber-300/30",
-    text: "text-amber-300",
-    muted: "bg-amber-300/8",
-  },
-} as const;
-
-function RankTrackView({ selectedTracks }: { selectedTracks: RankTrack[] }) {
-  return (
-    <>
-      <nav aria-label="Rank progression sections" className="border-b border-[#00ff66]/20 bg-black/80">
-        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-5 py-4 sm:px-8 lg:px-12">
-          {selectedTracks.map((track) => (
-            <a
-              key={track.id}
-              href={`#${track.id}`}
-              className="shrink-0 border border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#a8b9af] transition hover:border-[#00ff66]/50 hover:text-[#00ff66]"
-            >
-              {track.label}
-            </a>
-          ))}
-        </div>
-      </nav>
-
-      <div className="mx-auto max-w-7xl px-5 py-12 sm:px-8 lg:px-12">
-        <section className="mb-12 grid gap-px border border-[#00ff66]/20 bg-[#00ff66]/20 md:grid-cols-3">
-          <div className="bg-[#031009] p-5">
-            <div className="flex items-center gap-3 text-[#00ff66]"><CircleDot size={18} /><strong>TIG</strong></div>
-            <p className="mt-2 text-sm leading-6 text-[#8ea397]">Time in Grade is counted from the effective date of the current rank.</p>
-          </div>
-          <div className="bg-[#031009] p-5">
-            <div className="flex items-center gap-3 text-cyan-300"><Users size={18} /><strong>Attendance</strong></div>
-            <p className="mt-2 text-sm leading-6 text-[#8ea397]">Attendance thresholds represent the minimum expected operational participation.</p>
-          </div>
-          <div className="bg-[#031009] p-5">
-            <div className="flex items-center gap-3 text-amber-300"><Star size={18} /><strong>Approval</strong></div>
-            <p className="mt-2 text-sm leading-6 text-[#8ea397]">Meeting minimum criteria does not replace billet availability or command approval.</p>
-          </div>
-        </section>
-
-        <div className="space-y-16">
-          {selectedTracks.map((track, trackIndex) => {
-            const accent = accentClasses[track.accent];
-            return (
-              <section key={track.id} id={track.id} className="scroll-mt-28">
-                <header className={`mb-6 flex flex-col gap-3 border-l-4 ${accent.border} pl-5 sm:flex-row sm:items-end sm:justify-between`}>
-                  <div>
-                    <p className={`text-xs font-bold uppercase tracking-[0.22em] ${accent.text}`}>{track.eyebrow}</p>
-                    <h2 className="mt-2 text-2xl font-black uppercase sm:text-3xl">{track.label}</h2>
-                  </div>
-                  <div className="text-xs uppercase tracking-[0.16em] text-[#6f8579]">
-                    Track {String(trackIndex + 1).padStart(2, "0")} · {track.ranks.length} ranks
-                  </div>
-                </header>
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {track.ranks.map((rank, rankIndex) => (
-                    <article key={`${rank.name}-${rankIndex}`} className={`relative border ${accent.border} bg-black/65 p-5 sm:p-6`}>
-                      <div className="flex items-start gap-4">
-                        <div className={`relative grid h-14 w-14 shrink-0 place-items-center border ${accent.border} ${accent.muted} text-sm font-black ${accent.text}`}>
-                          {rank.icon ? (
-                            <Image
-                              src={rank.icon}
-                              alt={`${rank.name} insignia`}
-                              width={42}
-                              height={42}
-                              className="h-10 w-10 object-contain [image-rendering:pixelated]"
-                            />
-                          ) : (
-                            rank.abbreviation
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#667c70]">
-                            {String(rankIndex + 1).padStart(2, "0")}
-                            <ChevronRight size={13} aria-hidden="true" />
-                            {track.label}
-                          </div>
-                          <h3 className="mt-2 text-lg font-black leading-7 sm:text-xl">{rank.name}</h3>
-                        </div>
-                      </div>
-
-                      <p className="mt-5 text-sm leading-7 text-[#a9bbb0]">{rank.summary}</p>
-
-                      <div className="mt-5 border-t border-white/10 pt-4">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#758a7e]">Promotion requirements</p>
-                        {rank.requirements.length ? (
-                          <ul className="mt-3 space-y-2">
-                            {rank.requirements.map((requirement) => (
-                              <li key={requirement} className="flex gap-3 text-sm leading-6 text-[#d4e1d9]">
-                                <CheckCircle2 size={16} className={`mt-1 shrink-0 ${accent.text}`} aria-hidden="true" />
-                                <span>{requirement}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="mt-3 text-sm text-[#788e82]">No formal requirement is currently published.</p>
-                        )}
-                      </div>
-
-                      {rank.note && (
-                        <div className="mt-5 flex items-center gap-3 border border-amber-300/25 bg-amber-300/5 p-3 text-xs font-bold uppercase tracking-[0.12em] text-amber-200">
-                          <Crown size={16} aria-hidden="true" />
-                          {rank.note}
-                        </div>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      </div>
-    </>
-  );
-}
-
 export default function RankStructurePage() {
   const rankCount = tracks.reduce((total, track) => total + track.ranks.length, 0);
   const overallTracks = tracks.filter((track) => track.id !== "pilot");
@@ -702,8 +550,8 @@ export default function RankStructurePage() {
       </header>
 
       <RankStructureTabs
-        overall={<RankTrackView selectedTracks={overallTracks} />}
-        mos={<RankTrackView selectedTracks={mosTracks} />}
+        overallTracks={overallTracks}
+        mosTracks={mosTracks}
         overallRankCount={overallRankCount}
         mosRankCount={mosRankCount}
       />

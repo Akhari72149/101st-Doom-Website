@@ -83,7 +83,7 @@ export async function GET(request: Request) {
         total: row.pending_approval + row.open_appeals + row.overdue_actions,
       }, { headers: { "Cache-Control": "no-store" } });
     }
-    const [personnel, catalog, templates, cases, actions, approvals, appeals, evidence, events, edit, full] = await Promise.all([
+    const [personnel, catalog, templates, cases, actions, approvals, appeals, evidence, events, bans, edit, full] = await Promise.all([
       pool.query(`select p.id,p.name,p.status,p.birth_number,
           coalesce(jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'discordRoleId',c.cert_id)
             order by c.name) filter (where c.id is not null),'[]'::jsonb) certifications
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
         group by p.id,p.name,p.status,p.birth_number order by p.name`),
       pool.query(`select id,slug,name,category,description,active,created_at,updated_at
         from public.disciplinary_action_catalog order by category,name`),
-      pool.query(`select id,name,case_kind,summary,reason,warning_expiry_days,actions,active,created_at,updated_at
+      pool.query(`select id,name,case_kind,summary,reason,witnesses,appeal_wait_days,warning_expiry_days,actions,active,created_at,updated_at
         from public.disciplinary_case_templates order by active desc,name`),
       pool.query(`select cases.*,
           personnel.name personnel_name,personnel.birth_number,
@@ -130,6 +130,13 @@ export async function GET(request: Request) {
         from public.disciplinary_case_events events
         left join public.app_auth_users accounts on accounts.id=events.actor_id
         order by events.created_at desc`),
+      pool.query(`select bans.*,
+          coalesce(creator."displayUsername",creator.name,creator.username,'Unknown') created_by_name,
+          coalesce(lifter."displayUsername",lifter.name,lifter.username) lifted_by_name
+        from public.disciplinary_bans bans
+        left join public.app_auth_users creator on creator.id=bans.created_by
+        left join public.app_auth_users lifter on lifter.id=bans.lifted_by
+        order by (bans.status='active') desc,bans.banned_on desc,bans.created_at desc`),
       requirePageAccess(request, PERMISSION, "edit").catch(() => null),
       requirePageAccess(request, PERMISSION, "full").catch(() => null),
     ]);
@@ -140,6 +147,7 @@ export async function GET(request: Request) {
       personnel: personnel.rows,
       catalog: catalog.rows,
       templates: templates.rows,
+      bans: bans.rows,
       cases: cases.rows.map((row) => ({
         ...row,
         actions: actions.rows.filter((item) => item.case_id === row.id),
@@ -161,7 +169,7 @@ export async function POST(request: Request) {
   }
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const operation = cleanText(body?.operation, 40);
-  const fullOnly = ["void-case", "catalog-add", "catalog-toggle", "template-save", "template-toggle"].includes(operation);
+  const fullOnly = ["void-case", "catalog-add", "catalog-toggle", "template-save", "template-toggle", "lift-ban"].includes(operation);
   const auth = await requirePageAccess(request, PERMISSION, fullOnly ? "full" : "edit").catch(() => null);
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const actorId = auth.userId;
@@ -175,10 +183,13 @@ export async function POST(request: Request) {
         const incidentOn = cleanText(body?.incidentOn, 10);
         const summary = cleanText(body?.summary, 180);
         const reason = cleanText(body?.reason, 5000);
+        const witnesses = cleanText(body?.witnesses, 2000);
+        const appealWaitDays = Number(body?.appealWaitDays);
         const expiresAt = cleanText(body?.expiresAt, 10);
         const inputActions = Array.isArray(body?.actions) ? body.actions as ActionInput[] : [];
         const inputEvidence = Array.isArray(body?.evidence) ? body.evidence as EvidenceInput[] : [];
         if (!UUID.test(personnelId) || !caseKind || !DATE.test(incidentOn) || summary.length < 3 || reason.length < 3) throw new Error("INVALID_CASE");
+        if (!Number.isInteger(appealWaitDays) || appealWaitDays < 0 || appealWaitDays > 3650) throw new Error("INVALID_APPEAL_WAIT");
         if (caseKind === "warning" && !DATE.test(expiresAt)) throw new Error("EXPIRY_REQUIRED");
         if (caseKind === "warning" && expiresAt < incidentOn) throw new Error("INVALID_EXPIRY");
         if (inputActions.length > 30 || inputEvidence.length > 20) throw new Error("TOO_MANY_ITEMS");
@@ -186,10 +197,10 @@ export async function POST(request: Request) {
         if (!person.rowCount) throw new Error("PERSON_NOT_FOUND");
         const reference = await client.query<{ reference: string }>("select public.next_disciplinary_reference($1) reference", [caseKind]);
         const created = await client.query<{ id: string }>(
-          `insert into public.disciplinary_cases(reference,personnel_id,case_kind,status,incident_on,summary,reason,expires_at,issued_by)
-           values($1,$2,$3,$4,$5,$6,$7,case when $3='warning' then ($8::date + interval '1 day' - interval '1 second') else null end,$9)
+          `insert into public.disciplinary_cases(reference,personnel_id,case_kind,status,incident_on,summary,reason,witnesses,appeal_wait_days,appeal_eligible_at,expires_at,issued_by)
+           values($1,$2,$3,$4,$5,$6,$7,$8,$9,($5::date + $9::integer),case when $3='warning' then ($10::date + interval '1 day' - interval '1 second') else null end,$11)
            returning id`,
-          [reference.rows[0].reference, personnelId, caseKind, caseKind === "warning" ? "active" : "pending_approval", incidentOn, summary, reason, expiresAt || null, actorId],
+          [reference.rows[0].reference, personnelId, caseKind, caseKind === "warning" ? "active" : "pending_approval", incidentOn, summary, reason, witnesses, appealWaitDays, expiresAt || null, actorId],
         );
         const caseId = created.rows[0].id;
         const seenActions = new Set<string>();
@@ -225,14 +236,61 @@ export async function POST(request: Request) {
         return { caseId, reference: reference.rows[0].reference };
       }
 
+      if (operation === "add-ban") {
+        const personnelId = cleanText(body?.personnelId, 40);
+        const manualName = cleanText(body?.displayName, 180);
+        const manualNumber = cleanText(body?.birthNumber, 80);
+        const bannedOn = cleanText(body?.bannedOn, 10);
+        const reason = cleanText(body?.reason, 5000);
+        const evidenceUrl = cleanText(body?.evidenceUrl, 2000);
+        const notes = cleanText(body?.notes, 2000);
+        if (!DATE.test(bannedOn) || reason.length < 3 || (evidenceUrl && !validUrl(evidenceUrl))) throw new Error("INVALID_BAN");
+        let displayName = manualName;
+        let birthNumber = manualNumber;
+        let linkedPersonnelId: string | null = null;
+        if (personnelId) {
+          if (!UUID.test(personnelId)) throw new Error("INVALID_BAN");
+          const person = await client.query<{ name: string; birth_number: string | null }>("select name,birth_number from public.personnel where id=$1", [personnelId]);
+          if (!person.rowCount) throw new Error("PERSON_NOT_FOUND");
+          linkedPersonnelId = personnelId;
+          displayName = person.rows[0].name;
+          birthNumber = person.rows[0].birth_number || birthNumber;
+        }
+        if (!displayName) throw new Error("INVALID_BAN");
+        if (linkedPersonnelId) {
+          const existing = await client.query("select 1 from public.disciplinary_bans where personnel_id=$1 and status='active'", [linkedPersonnelId]);
+          if (existing.rowCount) throw new Error("BAN_ALREADY_ACTIVE");
+        }
+        const created = await client.query<{ id: string }>(`insert into public.disciplinary_bans
+          (personnel_id,display_name,birth_number,banned_on,reason,evidence_url,notes,created_by)
+          values($1,$2,$3,$4,$5,$6,$7,$8) returning id`,
+        [linkedPersonnelId, displayName, birthNumber || null, bannedOn, reason, evidenceUrl || null, notes || null, actorId]);
+        await client.query("insert into public.audit_logs(user_id,target_personnel_id,action,details) values($1,$2,'DISCIPLINE_BAN_ADDED',$3)", [actorId, linkedPersonnelId, `Added ${displayName} to the banned register.`]);
+        return { banId: created.rows[0].id };
+      }
+
+      if (operation === "lift-ban") {
+        const banId = cleanText(body?.banId, 40);
+        const reason = cleanText(body?.reason, 1000);
+        if (!UUID.test(banId) || reason.length < 3) throw new Error("INVALID_BAN_LIFT");
+        const changed = await client.query<{ personnel_id: string | null; display_name: string }>(`update public.disciplinary_bans
+          set status='lifted',lifted_by=$2,lifted_at=now(),lift_reason=$3
+          where id=$1 and status='active' returning personnel_id,display_name`, [banId, actorId, reason]);
+        if (!changed.rowCount) throw new Error("BAN_NOT_ACTIVE");
+        await client.query("insert into public.audit_logs(user_id,target_personnel_id,action,details) values($1,$2,'DISCIPLINE_BAN_LIFTED',$3)", [actorId, changed.rows[0].personnel_id, `Lifted the ban for ${changed.rows[0].display_name}. Reason: ${reason}`]);
+        return { banId };
+      }
+
       if (operation === "template-save") {
         const name = cleanText(body?.name, 120);
         const caseKind = body?.caseKind === "warning" ? "warning" : body?.caseKind === "da" ? "da" : "";
         const summary = cleanText(body?.summary, 180);
         const reason = cleanText(body?.reason, 5000);
+        const witnesses = cleanText(body?.witnesses, 2000);
+        const appealWaitDays = Number(body?.appealWaitDays);
         const warningExpiryDays = Number(body?.warningExpiryDays);
         const inputActions = Array.isArray(body?.actions) ? body.actions as ActionInput[] : [];
-        if (name.length < 3 || !caseKind || inputActions.length > 30 || (caseKind === "warning" && (!Number.isInteger(warningExpiryDays) || warningExpiryDays < 1 || warningExpiryDays > 3650))) throw new Error("INVALID_TEMPLATE");
+        if (name.length < 3 || !caseKind || inputActions.length > 30 || !Number.isInteger(appealWaitDays) || appealWaitDays < 0 || appealWaitDays > 3650 || (caseKind === "warning" && (!Number.isInteger(warningExpiryDays) || warningExpiryDays < 1 || warningExpiryDays > 3650))) throw new Error("INVALID_TEMPLATE");
         const storedActions: { catalogActionId: string; details: Record<string, string | number> }[] = [];
         const seen = new Set<string>();
         for (const input of inputActions) {
@@ -244,9 +302,9 @@ export async function POST(request: Request) {
           storedActions.push({ catalogActionId, details: actionDetails(input.details) });
         }
         const created = await client.query<{ id: string }>(`insert into public.disciplinary_case_templates
-          (name,case_kind,summary,reason,warning_expiry_days,actions,created_by)
-          values($1,$2,$3,$4,$5,$6::jsonb,$7) returning id`,
-        [name, caseKind, summary, reason, caseKind === "warning" ? warningExpiryDays : null, JSON.stringify(storedActions), actorId]);
+          (name,case_kind,summary,reason,witnesses,appeal_wait_days,warning_expiry_days,actions,created_by)
+          values($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9) returning id`,
+        [name, caseKind, summary, reason, witnesses, appealWaitDays, caseKind === "warning" ? warningExpiryDays : null, JSON.stringify(storedActions), actorId]);
         await client.query("insert into public.audit_logs(user_id,action,details) values($1,'DISCIPLINE_TEMPLATE_ADDED',$2)", [actorId, `Added disciplinary case template: ${name}`]);
         return { templateId: created.rows[0].id };
       }
@@ -311,14 +369,23 @@ export async function POST(request: Request) {
       if (operation === "submit-appeal") {
         const documentUrl = cleanText(body?.documentUrl, 2000);
         const notes = cleanText(body?.notes, 2000);
+        const bypassEligibility = body?.bypassEligibility === true;
+        const bypassReason = cleanText(body?.bypassReason, 1000);
         if (!validUrl(documentUrl)) throw new Error("INVALID_APPEAL_LINK");
-        const target = await client.query<{ status: string }>("select status from public.disciplinary_cases where id=$1 for update", [caseId]);
+        const target = await client.query<{ status: string; appeal_eligible_at: string }>("select status,appeal_eligible_at from public.disciplinary_cases where id=$1 for update", [caseId]);
         if (!target.rowCount || !["active", "appealed"].includes(target.rows[0].status)) throw new Error("NOT_APPEALABLE");
+        const eligible = new Date(target.rows[0].appeal_eligible_at).getTime() <= Date.now();
+        if (!eligible) {
+          if (!bypassEligibility) throw new Error("APPEAL_NOT_YET_ELIGIBLE");
+          const full = await requirePageAccess(request, PERMISSION, "full").catch(() => null);
+          if (!full) throw new Error("APPEAL_BYPASS_FORBIDDEN");
+          if (bypassReason.length < 3) throw new Error("APPEAL_BYPASS_REASON_REQUIRED");
+        }
         const pending = await client.query("select 1 from public.disciplinary_appeals where case_id=$1 and status in ('pending','more_info') limit 1", [caseId]);
         if (pending.rowCount) throw new Error("APPEAL_ALREADY_PENDING");
-        const appeal = await client.query<{ id: string }>("insert into public.disciplinary_appeals(case_id,document_url,notes,submitted_by) values($1,$2,$3,$4) returning id", [caseId, documentUrl, notes || null, actorId]);
+        const appeal = await client.query<{ id: string }>("insert into public.disciplinary_appeals(case_id,document_url,notes,submitted_by,eligibility_bypassed,bypass_reason) values($1,$2,$3,$4,$5,$6) returning id", [caseId, documentUrl, notes || null, actorId, !eligible, !eligible ? bypassReason : null]);
         await client.query("update public.disciplinary_cases set status='appealed',updated_at=now() where id=$1", [caseId]);
-        await appendEvent(client, caseId, "APPEAL_SUBMITTED", "Appeal submitted for review.", actorId);
+        await appendEvent(client, caseId, !eligible ? "APPEAL_ELIGIBILITY_BYPASSED" : "APPEAL_SUBMITTED", !eligible ? `Appeal submitted early by a full-access user. Reason: ${bypassReason}` : "Appeal submitted for review.", actorId);
         return { appealId: appeal.rows[0].id };
       }
 
@@ -372,15 +439,17 @@ export async function POST(request: Request) {
     const code = error instanceof Error ? error.message : "";
     const known: Record<string, [string, number]> = {
       INVALID_CASE: ["Complete all required case fields", 400], EXPIRY_REQUIRED: ["Warnings require an expiry date", 400], INVALID_EXPIRY: ["Warning expiry cannot be before the incident date", 400],
+      INVALID_APPEAL_WAIT: ["Enter an appeal waiting period between 0 and 3650 days", 400],
       TOO_MANY_ITEMS: ["Too many actions or evidence links", 400], PERSON_NOT_FOUND: ["Personnel record not found", 404],
       INVALID_ACTION: ["Select a valid disciplinary action", 400], TAG_SELECTION_REQUIRED: ["Select the tags to remove", 400],
       INVALID_TAG_SELECTION: ["One or more selected tags are no longer assigned", 409], INVALID_EVIDENCE: ["Enter a label and valid evidence link", 400],
       NOT_AWAITING_APPROVAL: ["This DA is no longer awaiting approval", 409], SELF_APPROVAL: ["The issuer cannot approve their own DA", 403],
       INVALID_DECISION: ["Select an approval decision", 400], ACTION_NOT_PENDING: ["This action is no longer pending", 409],
-      INVALID_APPEAL_LINK: ["Enter a valid appeal document link", 400], NOT_APPEALABLE: ["This case cannot currently be appealed", 409], APPEAL_ALREADY_PENDING: ["This case already has an appeal awaiting review", 409],
+      INVALID_APPEAL_LINK: ["Enter a valid appeal document link", 400], NOT_APPEALABLE: ["This case cannot currently be appealed", 409], APPEAL_NOT_YET_ELIGIBLE: ["The appeal eligibility date has not been reached", 409], APPEAL_BYPASS_FORBIDDEN: ["Full permission is required to bypass appeal eligibility", 403], APPEAL_BYPASS_REASON_REQUIRED: ["Enter a reason for bypassing appeal eligibility", 400], APPEAL_ALREADY_PENDING: ["This case already has an appeal awaiting review", 409],
       INVALID_APPEAL_REVIEW: ["Choose an outcome and enter review notes", 400], APPEAL_NOT_PENDING: ["This appeal is no longer awaiting review", 409],
       VOID_REASON_REQUIRED: ["Enter a reason for voiding the record", 400], CASE_NOT_FOUND: ["Case not found", 404],
       INVALID_CATALOG_ACTION: ["Enter a valid action name and category", 400], INVALID_TEMPLATE: ["Enter a valid unique template name and configuration", 400], INVALID_OPERATION: ["Invalid disciplinary operation", 400],
+      INVALID_BAN: ["Complete the banned-person record and use a valid evidence link", 400], BAN_ALREADY_ACTIVE: ["That personnel record already has an active ban", 409], INVALID_BAN_LIFT: ["Enter a reason for lifting the ban", 400], BAN_NOT_ACTIVE: ["This ban is no longer active", 409],
     };
     if (known[code]) return NextResponse.json({ error: known[code][0] }, { status: known[code][1] });
     console.error("[discipline] Update failed", error);

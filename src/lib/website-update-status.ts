@@ -3,6 +3,7 @@ export type PublicUpdateJob = {
   status: "pending" | "running" | "succeeded" | "failed";
   stage: string;
   message: string;
+  log: string;
   progress: number;
   requestedAt: string;
   updatedAt: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   Loader2,
   RefreshCw,
   Server,
+  TerminalSquare,
   TriangleAlert,
 } from "lucide-react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
@@ -35,6 +36,7 @@ type UpdateJob = {
   status: "pending" | "running" | "succeeded" | "failed";
   stage: string;
   message: string | null;
+  log: string;
   requested_at: string;
   completed_at: string | null;
   updated_at: string;
@@ -69,6 +71,7 @@ export default function UpdaterPage() {
   const [installing, setInstalling] = useState(false);
   const [status, setStatus] = useState<UpdaterStatus | null>(null);
   const [error, setError] = useState("");
+  const logRef = useRef<HTMLPreElement>(null);
 
   const loadStatus = useCallback(async (force = false) => {
     setLoading(true);
@@ -107,6 +110,7 @@ export default function UpdaterPage() {
               status: job.status,
               stage: job.stage,
               message: job.message,
+              log: job.log,
               requested_at: job.requestedAt,
               completed_at: job.completedAt,
               updated_at: job.updatedAt,
@@ -138,6 +142,11 @@ export default function UpdaterPage() {
     const timer = window.setInterval(() => void loadLiveStatus(), 2_000);
     return () => window.clearInterval(timer);
   }, [installing, jobStatus, loadLiveStatus]);
+
+  useEffect(() => {
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [status?.job?.log]);
 
   async function installUpdate() {
     if (!status?.canInstall || installing) return;
@@ -259,6 +268,20 @@ export default function UpdaterPage() {
               </div>
             </div>
           </div>
+
+          {status?.job && (
+            <section className="mt-6 overflow-hidden border border-[#00ff66]/20 bg-[#010503]">
+              <header className="flex items-center justify-between gap-4 border-b border-[#00ff66]/15 bg-[#03110b]/80 px-4 py-3">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#00ff66]">
+                  <TerminalSquare size={16} /> Deployment Log
+                </div>
+                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#698075]">Live · last 20 KB</span>
+              </header>
+              <pre ref={logRef} aria-live="polite" className="max-h-80 min-h-40 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-6 text-[#9ed9b5] scrollbar-thin">
+                {status.job.log || `[${status.job.stage}] ${status.job.message || "Waiting for updater output..."}`}
+              </pre>
+            </section>
+          )}
 
           <footer className="mt-6 flex flex-col gap-5 border-t border-[#00ff66]/15 pt-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-3xl text-sm leading-6 text-gray-400">

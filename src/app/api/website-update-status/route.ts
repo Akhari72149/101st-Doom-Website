@@ -11,6 +11,7 @@ type UpdateJobRow = {
   status: PublicUpdateJob["status"];
   stage: string;
   message: string | null;
+  output: string | null;
   requested_at: Date;
   completed_at: Date | null;
   updated_at: Date;
@@ -25,7 +26,7 @@ export async function GET() {
     });
   }
   try {
-    const result = await getPostgresPool().query<UpdateJobRow>(`select id,status,stage,message,
+    const result = await getPostgresPool().query<UpdateJobRow>(`select id,status,stage,message,output,
         requested_at,completed_at,updated_at
       from public.website_update_jobs
       where status in ('pending','running')
@@ -38,6 +39,7 @@ export async function GET() {
           status: row.status,
           stage: row.stage,
           message: row.message || "Website update is being prepared",
+          log: row.output || "",
           progress: updateStageProgress(row.stage, row.status),
           requestedAt: row.requested_at.toISOString(),
           updatedAt: row.updated_at.toISOString(),

@@ -19,6 +19,7 @@ type UpdateJob = {
   status: "pending" | "running" | "succeeded" | "failed";
   stage: string;
   message: string | null;
+  log: string;
   requested_at: Date;
   started_at: Date | null;
   completed_at: Date | null;
@@ -27,7 +28,7 @@ type UpdateJob = {
 
 async function latestJob() {
   const result = await getPostgresPool().query<UpdateJob>(`select id,requested_by_name,
-      from_commit,target_commit,status,stage,message,requested_at,started_at,completed_at,updated_at
+      from_commit,target_commit,status,stage,message,coalesce(output,'') as log,requested_at,started_at,completed_at,updated_at
     from public.website_update_jobs order by requested_at desc limit 1`);
   return result.rows[0] || null;
 }

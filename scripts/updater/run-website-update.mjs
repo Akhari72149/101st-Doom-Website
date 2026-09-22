@@ -1,12 +1,12 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import pg from 'pg';
 import { assertTarget } from '../postgres/target-guard.mjs';
 
-const exec = promisify(execFile);
 const SHA = /^[0-9a-f]{40}$/;
+const MAX_LOG_SIZE = 20_000;
+const MAX_COMMAND_OUTPUT = 8 * 1024 * 1024;
 const enabled = process.env.WEBSITE_UPDATE_EXECUTION_ENABLED === 'true';
 if (!enabled) throw new Error('WEBSITE_UPDATE_EXECUTION_ENABLED must be true');
 const { database } = assertTarget({ purpose: 'website update worker' });
@@ -44,8 +44,23 @@ const stageProgress = {
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 function append(stage, text) {
-  const clean = String(text || '').trim();
-  if (clean) output.push(`[${stage}]\n${clean.slice(-6000)}`);
+  const clean = String(text || '')
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\bpostgres(?:ql)?:\/\/[^\s]+/gi, '[redacted database URL]')
+    .replace(/\b(TOKEN|SECRET|PASSWORD|KEY)(\s*[:=]\s*)[^\s]+/gi, '$1$2[redacted]')
+    .replace(/\b[A-Z]:\\[^\r\n]+/gi, '[local path]')
+    .replaceAll('\0', '')
+    .replace(/\r\n?/g, '\n')
+    .trim();
+  if (!clean) return;
+  output.push(`[${new Date().toLocaleTimeString('en-GB')}] [${stage}]\n${clean.slice(-6000)}`);
+  const combined = output.join('\n\n');
+  if (combined.length > MAX_LOG_SIZE) output.splice(0, output.length, combined.slice(-MAX_LOG_SIZE));
+  if (publicJobStatus) publicJobStatus.log = currentLog();
+}
+
+function currentLog() {
+  return output.join('\n\n').slice(-MAX_LOG_SIZE);
 }
 
 async function command(stage, file, args, options = {}) {
@@ -63,16 +78,50 @@ async function command(stage, file, args, options = {}) {
   heartbeat?.unref();
 
   try {
-    const result = await exec(file, args, {
-      cwd: root,
-      windowsHide: true,
-      timeout: options.timeout || 10 * 60_000,
-      maxBuffer: 8 * 1024 * 1024,
-      env: options.env || process.env,
+    return await new Promise((resolve, reject) => {
+      const child = spawn(file, args, {
+        cwd: root,
+        windowsHide: true,
+        env: options.env || process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stdout = '';
+      let stderr = '';
+      let outputSize = 0;
+      let commandError = null;
+      const timeout = setTimeout(() => {
+        commandError = new Error(`Command timed out during ${stage}`);
+        child.kill();
+      }, options.timeout || 10 * 60_000);
+      timeout.unref();
+
+      const capture = (stream, chunk) => {
+        const text = chunk.toString('utf8');
+        outputSize += Buffer.byteLength(text);
+        if (stream === 'stdout') stdout += text;
+        else stderr += text;
+        append(stage, text);
+        if (outputSize > MAX_COMMAND_OUTPUT && !commandError) {
+          commandError = new Error(`Command output exceeded the limit during ${stage}`);
+          child.kill();
+        }
+      };
+      child.stdout.on('data', (chunk) => capture('stdout', chunk));
+      child.stderr.on('data', (chunk) => capture('stderr', chunk));
+      child.once('error', (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      child.once('close', (code, signal) => {
+        clearTimeout(timeout);
+        if (commandError) return reject(commandError);
+        if (code === 0) return resolve({ stdout, stderr });
+        const error = new Error(`Command failed during ${stage} with exit code ${code ?? signal ?? 'unknown'}`);
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+      });
     });
-    append(stage, result.stdout);
-    append(stage, result.stderr);
-    return result;
   } finally {
     if (heartbeat) clearInterval(heartbeat);
   }
@@ -80,12 +129,14 @@ async function command(stage, file, args, options = {}) {
 
 async function updateJob(status, stage, message, completed = false) {
   if (!job) return;
+  append(stage, message);
   const now = new Date().toISOString();
   publicJobStatus = {
     id: job.id,
     status,
     stage,
     message,
+    log: currentLog(),
     progress: status === 'succeeded' || status === 'failed' ? 100 : (stageProgress[stage] || 5),
     requestedAt: new Date(job.requested_at).toISOString(),
     updatedAt: now,
@@ -93,7 +144,7 @@ async function updateJob(status, stage, message, completed = false) {
   };
   await client.query(`update public.website_update_jobs set status=$2,stage=$3,message=$4,
       output=$5,updated_at=now(),completed_at=case when $6 then now() else completed_at end
-    where id=$1`, [job.id, status, stage, message, output.join('\n\n').slice(-20_000), completed]);
+    where id=$1`, [job.id, status, stage, message, currentLog(), completed]);
 }
 
 function publicStatusPayload() {
@@ -109,11 +160,11 @@ function maintenanceDocument() {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>101st Doom Battalion | Updating</title>
 <style>
-html{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#020806;color:#fff;font-family:Arial,sans-serif;background-image:linear-gradient(rgba(0,255,102,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,102,.035) 1px,transparent 1px);background-size:44px 44px}.panel{width:min(620px,100%);border:1px solid rgba(0,255,102,.3);background:rgba(0,8,5,.96);padding:32px;box-shadow:0 0 55px rgba(0,255,102,.09)}.eyebrow{color:#79a08a;font-size:12px;letter-spacing:.2em;text-transform:uppercase}.title{margin:12px 0 8px;color:#00ff66;font-size:clamp(25px,5vw,38px);letter-spacing:.08em;text-transform:uppercase}.message{color:#c5d2ca;line-height:1.65}.bar{height:8px;margin-top:28px;background:rgba(255,255,255,.1);overflow:hidden}.fill{height:100%;width:2%;background:#67e8f9;transition:width .7s}.meta{display:flex;justify-content:space-between;gap:16px;margin-top:10px;color:#748078;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.note{margin-top:26px;padding-top:18px;border-top:1px solid rgba(0,255,102,.15);color:#87958c;font-size:13px;line-height:1.6}.spin{display:inline-block;width:12px;height:12px;margin-right:8px;border:2px solid rgba(103,232,249,.25);border-top-color:#67e8f9;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-</style></head><body><main class="panel"><div class="eyebrow">101st Doom Battalion Systems</div><h1 class="title">Website Updating</h1><p class="message" id="message"><span class="spin"></span>Connecting to update worker...</p><div class="bar"><div class="fill" id="fill"></div></div><div class="meta"><span id="stage">Preparing</span><span id="progress">2%</span></div><p class="note">This page will reconnect and refresh automatically when the updated website is ready. No action is required.</p></main>
+html{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#020806;color:#fff;font-family:Arial,sans-serif;background-image:linear-gradient(rgba(0,255,102,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,102,.035) 1px,transparent 1px);background-size:44px 44px}.panel{width:min(820px,100%);border:1px solid rgba(0,255,102,.3);background:rgba(0,8,5,.96);padding:32px;box-shadow:0 0 55px rgba(0,255,102,.09)}.eyebrow{color:#79a08a;font-size:12px;letter-spacing:.2em;text-transform:uppercase}.title{margin:12px 0 8px;color:#00ff66;font-size:clamp(25px,5vw,38px);letter-spacing:.08em;text-transform:uppercase}.message{color:#c5d2ca;line-height:1.65}.bar{height:8px;margin-top:28px;background:rgba(255,255,255,.1);overflow:hidden}.fill{height:100%;width:2%;background:#67e8f9;transition:width .7s}.meta{display:flex;justify-content:space-between;gap:16px;margin-top:10px;color:#748078;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.log-wrap{margin-top:24px;border:1px solid rgba(0,255,102,.2);background:#010503}.log-head{display:flex;justify-content:space-between;gap:12px;padding:11px 14px;border-bottom:1px solid rgba(0,255,102,.15);color:#00ff66;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.log{height:220px;margin:0;overflow:auto;padding:14px;color:#9ed9b5;font:12px/1.65 Consolas,monospace;white-space:pre-wrap;word-break:break-word}.note{margin-top:22px;padding-top:18px;border-top:1px solid rgba(0,255,102,.15);color:#87958c;font-size:13px;line-height:1.6}.spin{display:inline-block;width:12px;height:12px;margin-right:8px;border:2px solid rgba(103,232,249,.25);border-top-color:#67e8f9;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+</style></head><body><main class="panel"><div class="eyebrow">101st Doom Battalion Systems</div><h1 class="title">Website Updating</h1><p class="message" id="message"><span class="spin"></span>Connecting to update worker...</p><div class="bar"><div class="fill" id="fill"></div></div><div class="meta"><span id="stage">Preparing</span><span id="progress">2%</span></div><section class="log-wrap"><div class="log-head"><span>Deployment Log</span><span>Live</span></div><pre class="log" id="log">Waiting for updater output...</pre></section><p class="note">This page will reconnect and refresh automatically when the updated website is ready. No action is required.</p></main>
 <script>
 let reloadQueued=false;
-async function poll(){try{const response=await fetch('/api/website-update-status',{cache:'no-store'});if(!response.ok)return;const data=await response.json();if(!data.job)return;const job=data.job;document.getElementById('message').textContent=job.message;document.getElementById('stage').textContent=job.stage;document.getElementById('progress').textContent=job.progress+'%';document.getElementById('fill').style.width=Math.max(2,Math.min(100,job.progress))+'%';if(job.status==='succeeded'&&!reloadQueued){reloadQueued=true;setTimeout(()=>location.reload(),2500)}if(job.status==='failed'){document.querySelector('.title').textContent='Update Needs Attention';document.getElementById('fill').style.background='#f87171'}}catch{}}
+async function poll(){try{const response=await fetch('/api/website-update-status',{cache:'no-store'});if(!response.ok)return;const data=await response.json();if(!data.job)return;const job=data.job;document.getElementById('message').textContent=job.message;document.getElementById('stage').textContent=job.stage;document.getElementById('progress').textContent=job.progress+'%';document.getElementById('fill').style.width=Math.max(2,Math.min(100,job.progress))+'%';const log=document.getElementById('log');log.textContent=job.log||'Waiting for updater output...';log.scrollTop=log.scrollHeight;if(job.status==='succeeded'&&!reloadQueued){reloadQueued=true;setTimeout(()=>location.reload(),2500)}if(job.status==='failed'){document.querySelector('.title').textContent='Update Needs Attention';document.getElementById('fill').style.background='#f87171'}}catch{}}
 poll();setInterval(poll,2000);
 </script></body></html>`;
 }

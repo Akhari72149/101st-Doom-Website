@@ -139,7 +139,7 @@ export default function UpdaterPage() {
     const jobActive = Boolean(jobStatus && ["pending", "running"].includes(jobStatus));
     if (!installing && !jobActive) return;
     void loadLiveStatus();
-    const timer = window.setInterval(() => void loadLiveStatus(), 2_000);
+    const timer = window.setInterval(() => void loadLiveStatus(), 1_000);
     return () => window.clearInterval(timer);
   }, [installing, jobStatus, loadLiveStatus]);
 

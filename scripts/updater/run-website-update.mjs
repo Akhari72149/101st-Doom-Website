@@ -32,6 +32,8 @@ let maintenanceServer = null;
 let publicJobStatus = null;
 let sourceChanged = false;
 let dependenciesChanged = false;
+let logFlushTimer = null;
+let logFlushPending = Promise.resolve();
 
 const stageProgress = {
   queued: 2, countdown: 5, preflight: 10, fetch: 16, backup: 28,
@@ -57,10 +59,40 @@ function append(stage, text) {
   const combined = output.join('\n\n');
   if (combined.length > MAX_LOG_SIZE) output.splice(0, output.length, combined.slice(-MAX_LOG_SIZE));
   if (publicJobStatus) publicJobStatus.log = currentLog();
+  scheduleLogFlush();
 }
 
 function currentLog() {
   return output.join('\n\n').slice(-MAX_LOG_SIZE);
+}
+
+function queueLogFlush() {
+  if (!job) return logFlushPending;
+  const snapshot = currentLog();
+  logFlushPending = logFlushPending
+    .catch(() => {})
+    .then(() => client.query(
+      `update public.website_update_jobs set output=$2,updated_at=now() where id=$1`,
+      [job.id, snapshot],
+    ));
+  return logFlushPending;
+}
+
+function scheduleLogFlush() {
+  if (!job || logFlushTimer) return;
+  logFlushTimer = setTimeout(() => {
+    logFlushTimer = null;
+    void queueLogFlush().catch((error) => console.error('Unable to flush updater log', error));
+  }, 750);
+  logFlushTimer.unref();
+}
+
+async function flushLog() {
+  if (logFlushTimer) {
+    clearTimeout(logFlushTimer);
+    logFlushTimer = null;
+  }
+  await queueLogFlush();
 }
 
 async function command(stage, file, args, options = {}) {
@@ -165,7 +197,7 @@ html{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;di
 <script>
 let reloadQueued=false;
 async function poll(){try{const response=await fetch('/api/website-update-status',{cache:'no-store'});if(!response.ok)return;const data=await response.json();if(!data.job)return;const job=data.job;document.getElementById('message').textContent=job.message;document.getElementById('stage').textContent=job.stage;document.getElementById('progress').textContent=job.progress+'%';document.getElementById('fill').style.width=Math.max(2,Math.min(100,job.progress))+'%';const log=document.getElementById('log');log.textContent=job.log||'Waiting for updater output...';log.scrollTop=log.scrollHeight;if(job.status==='succeeded'&&!reloadQueued){reloadQueued=true;setTimeout(()=>location.reload(),2500)}if(job.status==='failed'){document.querySelector('.title').textContent='Update Needs Attention';document.getElementById('fill').style.background='#f87171'}}catch{}}
-poll();setInterval(poll,2000);
+poll();setInterval(poll,1000);
 </script></body></html>`;
 }
 
@@ -387,5 +419,6 @@ try {
   process.exitCode = 1;
 } finally {
   await stopMaintenanceServer().catch(() => {});
+  await flushLog().catch(() => {});
   await client.end();
 }

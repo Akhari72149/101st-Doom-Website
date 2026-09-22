@@ -9,7 +9,7 @@ import {
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type Certification = { id: string; name: string; discordRoleId: string | null };
-type Person = { id: string; name: string; status: string | null; birth_number: string | null; certifications: Certification[] };
+type Person = { id: string; name: string; status: string | null; birth_number: string | null; certifications: Certification[]; is_legacy: boolean };
 type CatalogAction = { id: string; slug: string; name: string; category: "formal" | "community"; description: string | null; active: boolean };
 type ActionDetails = Record<string, string | number>;
 type StoredActionDetails = { certificationIds?: string[]; [key: string]: string | number | string[] | undefined };
@@ -125,13 +125,13 @@ export default function DisciplinePage() {
   const personnelResults = useMemo(() => {
     const search = personnelSearch.trim().toLowerCase();
     if (!search || personnelId) return [];
-    return (data?.personnel || []).filter((item) => `${item.name} ${item.birth_number || ""}`.toLowerCase().includes(search)).slice(0, 12);
+    return (data?.personnel || []).filter((item) => !item.is_legacy && `${item.name} ${item.birth_number || ""}`.toLowerCase().includes(search)).slice(0, 12);
   }, [data, personnelId, personnelSearch]);
   const verbalPerson = data?.personnel.find((item) => item.id === verbalPersonnelId);
   const verbalPersonnelResults = useMemo(() => {
     const search = verbalPersonnelSearch.trim().toLowerCase();
     if (!search || verbalPersonnelId) return [];
-    return (data?.personnel || []).filter((item) => `${item.name} ${item.birth_number || ""}`.toLowerCase().includes(search)).slice(0, 12);
+    return (data?.personnel || []).filter((item) => !item.is_legacy && `${item.name} ${item.birth_number || ""}`.toLowerCase().includes(search)).slice(0, 12);
   }, [data, verbalPersonnelId, verbalPersonnelSearch]);
   const actionResults = useMemo(() => {
     const search = actionSearch.trim().toLowerCase();
@@ -164,7 +164,7 @@ export default function DisciplinePage() {
   const banPersonResults = useMemo(() => {
     const search = banPersonSearch.trim().toLowerCase();
     if (!search || banPersonnelId) return [];
-    return (data?.personnel || []).filter((item) => `${item.name} ${item.birth_number || ""}`.toLowerCase().includes(search)).slice(0, 10);
+    return (data?.personnel || []).filter((item) => !item.is_legacy && `${item.name} ${item.birth_number || ""}`.toLowerCase().includes(search)).slice(0, 10);
   }, [banPersonSearch, banPersonnelId, data]);
   const visibleBans = useMemo(() => {
     const search = banQuery.trim().toLowerCase();

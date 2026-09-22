@@ -9,6 +9,8 @@
     "db:restore-rehearsal": "node --env-file=.env.postgres-target.local scripts/postgres/restore-rehearsal.mjs",
     "db:verify-rehearsal": "node --env-file=.env.postgres-export.local --env-file=.env.postgres-target.local scripts/postgres/verify-rehearsal.mjs",
     "db:migrate-native": "node --env-file=.env.postgres-target.local scripts/postgres/apply-native-migrations.mjs",
+    "db:import-legacy-discipline": "node --use-system-ca --env-file=.env.postgres-target.local scripts/postgres/import-legacy-discipline.mjs",
+    "db:import-legacy-discipline-cutover": "node --use-system-ca --env-file=.env.postgres-cutover.local scripts/postgres/import-legacy-discipline.mjs --cutover",
     "db:provision-runtime": "node --env-file=.env.postgres-target.local scripts/postgres/provision-runtime-role.mjs",
     "db:verify-runtime": "node --env-file=.env.postgres-runtime.local scripts/postgres/verify-runtime-role.mjs",
     "db:provision-scheduler": "node --env-file=.env.postgres-target.local scripts/postgres/provision-scheduler-role.mjs",

@@ -84,27 +84,35 @@ export async function GET(request: Request) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const [personnel, catalog, templates, cases, actions, approvals, appeals, evidence, events, bans, edit, full] = await Promise.all([
-      pool.query(`select p.id,p.name,p.status,p.birth_number,
-          coalesce(jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'discordRoleId',c.cert_id)
-            order by c.name) filter (where c.id is not null),'[]'::jsonb) certifications
-        from public.personnel p
-        left join public.personnel_certifications pc on pc.personnel_id=p.id
-        left join public.certifications c on c.id=pc.certification_id
-        group by p.id,p.name,p.status,p.birth_number order by p.name`),
+      pool.query(`select * from (
+          select p.id,p.name,p.status,p.birth_number,false is_legacy,
+            coalesce(jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'discordRoleId',c.cert_id)
+              order by c.name) filter (where c.id is not null),'[]'::jsonb) certifications
+          from public.personnel p
+          left join public.personnel_certifications pc on pc.personnel_id=p.id
+          left join public.certifications c on c.id=pc.certification_id
+          group by p.id,p.name,p.status,p.birth_number
+          union all
+          select legacy.id,legacy.display_name,'Legacy record',legacy.birth_number,true,'[]'::jsonb
+          from public.disciplinary_legacy_subjects legacy
+        ) subjects order by name`),
       pool.query(`select id,slug,name,category,description,active,created_at,updated_at
         from public.disciplinary_action_catalog order by category,name`),
       pool.query(`select id,name,case_kind,summary,reason,witnesses,appeal_wait_days,warning_expiry_days,actions,active,created_at,updated_at
         from public.disciplinary_case_templates order by active desc,name`),
       pool.query(`select cases.*,
-          personnel.name personnel_name,personnel.birth_number,
-          coalesce(issuer."displayUsername",issuer.name,issuer.username,'Unknown') issuer_name,
+          coalesce(personnel.name,legacy.display_name) personnel_name,
+          coalesce(personnel.birth_number,legacy.birth_number) birth_number,
+          coalesce(cases.personnel_id,cases.legacy_subject_id) profile_id,
+          coalesce(nullif(cases.legacy_issuer_name,''),issuer."displayUsername",issuer.name,issuer.username,'Unknown') issuer_name,
           coalesce(approver."displayUsername",approver.name,approver.username) approver_name,
           case when cases.case_kind='warning' and cases.status='active' and cases.expires_at <= now()
             then 'expired' else cases.status end effective_status,
           count(*) filter(where cases.case_kind='warning' and cases.status='active'
-            and cases.expires_at>now()) over(partition by cases.personnel_id)::integer active_warning_count
+            and cases.expires_at>now()) over(partition by coalesce(cases.personnel_id,cases.legacy_subject_id))::integer active_warning_count
         from public.disciplinary_cases cases
-        join public.personnel personnel on personnel.id=cases.personnel_id
+        left join public.personnel personnel on personnel.id=cases.personnel_id
+        left join public.disciplinary_legacy_subjects legacy on legacy.id=cases.legacy_subject_id
         left join public.app_auth_users issuer on issuer.id=cases.issued_by
         left join public.app_auth_users approver on approver.id=cases.approved_by
         order by cases.created_at desc`),
@@ -130,7 +138,7 @@ export async function GET(request: Request) {
         from public.disciplinary_case_events events
         left join public.app_auth_users accounts on accounts.id=events.actor_id
         order by events.created_at desc`),
-      pool.query(`select bans.*,
+      pool.query(`select bans.*,coalesce(bans.personnel_id,bans.legacy_subject_id) profile_id,
           coalesce(creator."displayUsername",creator.name,creator.username,'Unknown') created_by_name,
           coalesce(lifter."displayUsername",lifter.name,lifter.username) lifted_by_name
         from public.disciplinary_bans bans
@@ -147,9 +155,10 @@ export async function GET(request: Request) {
       personnel: personnel.rows,
       catalog: catalog.rows,
       templates: templates.rows,
-      bans: bans.rows,
+      bans: bans.rows.map((row) => ({ ...row, personnel_id: row.profile_id })),
       cases: cases.rows.map((row) => ({
         ...row,
+        personnel_id: row.profile_id,
         actions: actions.rows.filter((item) => item.case_id === row.id),
         approvals: approvals.rows.filter((item) => item.case_id === row.id),
         appeals: appeals.rows.filter((item) => item.case_id === row.id),
@@ -194,14 +203,16 @@ export async function POST(request: Request) {
         if (caseKind === "warning" && expiresAt < incidentOn) throw new Error("INVALID_EXPIRY");
         if (caseKind === "verbal" && (inputActions.length || inputEvidence.length || appealWaitDays !== 0)) throw new Error("INVALID_VERBAL_CASE");
         if (inputActions.length > 30 || inputEvidence.length > 20) throw new Error("TOO_MANY_ITEMS");
-        const person = await client.query("select id,name from public.personnel where id=$1", [personnelId]);
-        if (!person.rowCount) throw new Error("PERSON_NOT_FOUND");
+        const person = await client.query<{ id: string; name: string }>("select id,name from public.personnel where id=$1", [personnelId]);
+        const legacyPerson = person.rowCount ? null : await client.query<{ id: string; display_name: string }>("select id,display_name from public.disciplinary_legacy_subjects where id=$1", [personnelId]);
+        if (!person.rowCount && !legacyPerson?.rowCount) throw new Error("PERSON_NOT_FOUND");
+        const targetName = person.rows[0]?.name || legacyPerson?.rows[0]?.display_name || "Unknown";
         const reference = await client.query<{ reference: string }>("select public.next_disciplinary_reference($1) reference", [caseKind]);
         const created = await client.query<{ id: string }>(
-          `insert into public.disciplinary_cases(reference,personnel_id,case_kind,status,incident_on,summary,reason,witnesses,appeal_wait_days,appeal_eligible_at,expires_at,issued_by)
-           values($1,$2,$3,$4,$5,$6,$7,$8,$9,($5::date + $9::integer),case when $3='warning' then ($10::date + interval '1 day' - interval '1 second') else null end,$11)
+          `insert into public.disciplinary_cases(reference,personnel_id,legacy_subject_id,case_kind,status,incident_on,summary,reason,witnesses,appeal_wait_days,appeal_eligible_at,expires_at,issued_by)
+           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,($6::date + $10::integer),case when $4='warning' then ($11::date + interval '1 day' - interval '1 second') else null end,$12)
            returning id`,
-          [reference.rows[0].reference, personnelId, caseKind, caseKind === "da" ? "pending_approval" : "active", incidentOn, summary, reason, witnesses, appealWaitDays, expiresAt || null, actorId],
+          [reference.rows[0].reference, person.rowCount ? personnelId : null, legacyPerson?.rowCount ? personnelId : null, caseKind, caseKind === "da" ? "pending_approval" : "active", incidentOn, summary, reason, witnesses, appealWaitDays, expiresAt || null, actorId],
         );
         const caseId = created.rows[0].id;
         const seenActions = new Set<string>();
@@ -234,7 +245,7 @@ export async function POST(request: Request) {
           await client.query("insert into public.disciplinary_evidence_links(case_id,label,url,added_by) values($1,$2,$3,$4)", [caseId, label, url, actorId]);
         }
         const typeLabel = caseKind === "da" ? "Disciplinary action" : caseKind === "verbal" ? "Verbal warning" : "Warning";
-        await appendEvent(client, caseId, "CASE_CREATED", `${typeLabel} issued to ${person.rows[0].name}${caseKind === "da" ? " and submitted for secondary approval" : ""}.`, actorId);
+        await appendEvent(client, caseId, "CASE_CREATED", `${typeLabel} issued to ${targetName}${caseKind === "da" ? " and submitted for secondary approval" : ""}.`, actorId);
         return { caseId, reference: reference.rows[0].reference };
       }
 

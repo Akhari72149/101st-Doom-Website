@@ -282,6 +282,26 @@ export async function POST(request: Request) {
         return { banId: created.rows[0].id };
       }
 
+      if (operation === "edit-ban") {
+        const banId = cleanText(body?.banId, 40);
+        const reason = cleanText(body?.reason, 5000);
+        const notes = cleanText(body?.notes, 2000);
+        if (!UUID.test(banId) || reason.length < 3) throw new Error("INVALID_BAN_EDIT");
+        const changed = await client.query<{ personnel_id: string | null; display_name: string }>(
+          `update public.disciplinary_bans
+           set reason=$2,notes=$3
+           where id=$1
+           returning personnel_id,display_name`,
+          [banId, reason, notes || null],
+        );
+        if (!changed.rowCount) throw new Error("BAN_NOT_FOUND");
+        await client.query(
+          "insert into public.audit_logs(user_id,target_personnel_id,action,details) values($1,$2,'DISCIPLINE_BAN_EDITED',$3)",
+          [actorId, changed.rows[0].personnel_id, `Edited the banned-register entry for ${changed.rows[0].display_name}.`],
+        );
+        return { banId };
+      }
+
       if (operation === "lift-ban") {
         const banId = cleanText(body?.banId, 40);
         const reason = cleanText(body?.reason, 1000);
@@ -464,7 +484,7 @@ export async function POST(request: Request) {
       INVALID_APPEAL_REVIEW: ["Choose an outcome and enter review notes", 400], APPEAL_NOT_PENDING: ["This appeal is no longer awaiting review", 409],
       VOID_REASON_REQUIRED: ["Enter a reason for voiding the record", 400], CASE_NOT_FOUND: ["Case not found", 404],
       INVALID_CATALOG_ACTION: ["Enter a valid action name and category", 400], INVALID_TEMPLATE: ["Enter a valid unique template name and configuration", 400], INVALID_OPERATION: ["Invalid disciplinary operation", 400],
-      INVALID_BAN: ["Complete the banned-person record and use a valid evidence link", 400], BAN_ALREADY_ACTIVE: ["That personnel record already has an active ban", 409], INVALID_BAN_LIFT: ["Enter a reason for lifting the ban", 400], BAN_NOT_ACTIVE: ["This ban is no longer active", 409],
+      INVALID_BAN: ["Complete the banned-person record and use a valid evidence link", 400], BAN_ALREADY_ACTIVE: ["That personnel record already has an active ban", 409], INVALID_BAN_EDIT: ["Enter a valid reason for the ban", 400], BAN_NOT_FOUND: ["Banned-register entry not found", 404], INVALID_BAN_LIFT: ["Enter a reason for lifting the ban", 400], BAN_NOT_ACTIVE: ["This ban is no longer active", 409],
     };
     if (known[code]) return NextResponse.json({ error: known[code][0] }, { status: known[code][1] });
     console.error("[discipline] Update failed", error);

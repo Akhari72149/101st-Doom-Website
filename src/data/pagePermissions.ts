@@ -134,7 +134,15 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     pagePath: "/admin/discipline",
     label: "Warnings & DAs",
     category: "Records",
-    description: "Issue and review warnings, disciplinary actions, approvals, and appeals.",
+    description: "Issue and review warnings, disciplinary actions, and appeals.",
+    legacyRoles: [],
+  },
+  {
+    key: "admin.discipline-approval",
+    pagePath: "/admin/discipline/approval",
+    label: "DA Approval",
+    category: "Records",
+    description: "Read opens the approval queue; Edit or Full can approve or reject submitted disciplinary actions.",
     legacyRoles: [],
   },
   {

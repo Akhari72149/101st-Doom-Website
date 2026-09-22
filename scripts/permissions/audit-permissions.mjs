@@ -30,6 +30,7 @@ const contracts = [
   ["src/app/api/admin/medals/route.ts", 'requirePageAccess(request,"admin.medals","read")', 'requirePageAccess(request,"admin.medals","edit")'],
   ["src/app/api/admin/personnel-operations/route.ts", 'requirePageAccess(request,permission,"read")', 'requirePageAccess(request,permission,"edit")'],
   ["src/app/api/admin/updater/route.ts", 'requirePageAccess(request,"admin.updater","read")', 'requirePageAccess(request,"admin.updater","full")'],
+  ["src/app/api/admin/discipline/route.ts", 'requirePageAccess(request,PERMISSION,"read")', 'approvalOnly?APPROVAL_PERMISSION:PERMISSION', 'approvalOnly?"edit":fullOnly?"full":"edit"'],
   ["src/app/api/admin/permissions/route.ts", 'requirePermissionManager(request,"admin.permissions","read")', 'requirePermissionManager(request,actionPermission,"full")'],
   ["src/app/api/attendance/route.ts", 'requirePageAccess(request,PERMISSION_KEY,"edit")'],
   ["src/app/api/audit-logs/route.ts", 'requirePageAccess(request,permission,"read")'],

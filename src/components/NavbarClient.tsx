@@ -82,7 +82,7 @@ export default function NavbarClient() {
   }, [router]);
 
   useEffect(() => {
-    if (!permissions["admin.discipline"]) {
+    if (!permissions["admin.discipline"] && !permissions["admin.discipline-approval"]) {
       return;
     }
 
@@ -464,10 +464,16 @@ export default function NavbarClient() {
 
   const filteredGroups = useMemo(() => {
     const normalizedRoles = new Set(roles.map((role) => role.toLowerCase()));
-    const permissionByPath = new Map(pagePermissionDefinitions.map((entry) => [entry.pagePath, entry.key]));
+    const permissionsByPath = new Map<string, string[]>();
+    for (const definition of pagePermissionDefinitions) {
+      permissionsByPath.set(definition.pagePath, [...(permissionsByPath.get(definition.pagePath) || []), definition.key]);
+    }
     const canSeeItem = (item: NavItem) => {
-      const permissionKey = permissionByPath.get(item.href);
-      if (permissionKey) return Boolean(permissions[permissionKey]);
+      if (item.href === "/admin/discipline") {
+        return Boolean(permissions["admin.discipline"] || permissions["admin.discipline-approval"]);
+      }
+      const permissionKeys = permissionsByPath.get(item.href);
+      if (permissionKeys) return permissionKeys.some((permissionKey) => Boolean(permissions[permissionKey]));
       return !item.allowedRoles || item.allowedRoles.some((role) => normalizedRoles.has(role.toLowerCase()));
     };
     return navGroups

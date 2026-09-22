@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const PERMISSION = "admin.discipline";
+const APPROVAL_PERMISSION = "admin.discipline-approval";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -63,7 +64,8 @@ async function appendEvent(client: PoolClient, caseId: string, eventType: string
 }
 
 export async function GET(request: Request) {
-  const auth = await requirePageAccess(request, PERMISSION, "read").catch(() => null);
+  const auth = await requirePageAccess(request, PERMISSION, "read").catch(() => null)
+    || await requirePageAccess(request, APPROVAL_PERMISSION, "read").catch(() => null);
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
@@ -83,7 +85,7 @@ export async function GET(request: Request) {
         total: row.pending_approval + row.open_appeals + row.overdue_actions,
       }, { headers: { "Cache-Control": "no-store" } });
     }
-    const [personnel, catalog, templates, cases, actions, approvals, appeals, evidence, events, bans, edit, full] = await Promise.all([
+    const [personnel, catalog, templates, cases, actions, approvals, appeals, evidence, events, bans, edit, full, approval] = await Promise.all([
       pool.query(`select * from (
           select p.id,p.name,p.status,p.birth_number,false is_legacy,
             coalesce(jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'discordRoleId',c.cert_id)
@@ -147,11 +149,13 @@ export async function GET(request: Request) {
         order by (bans.status='active') desc,bans.banned_on desc,bans.created_at desc`),
       requirePageAccess(request, PERMISSION, "edit").catch(() => null),
       requirePageAccess(request, PERMISSION, "full").catch(() => null),
+      requirePageAccess(request, APPROVAL_PERMISSION, "edit").catch(() => null),
     ]);
 
     return NextResponse.json({
       currentUserId: auth.userId,
       access: full ? "full" : edit ? "edit" : "read",
+      canApprove: Boolean(approval),
       personnel: personnel.rows,
       catalog: catalog.rows,
       templates: templates.rows,
@@ -178,9 +182,14 @@ export async function POST(request: Request) {
   }
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const operation = cleanText(body?.operation, 40);
+  const approvalOnly = operation === "approve-case";
   const fullOnly = ["void-case", "catalog-add", "catalog-toggle", "template-save", "template-toggle", "lift-ban"].includes(operation);
-  const auth = await requirePageAccess(request, PERMISSION, fullOnly ? "full" : "edit").catch(() => null);
-  if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const auth = await requirePageAccess(
+    request,
+    approvalOnly ? APPROVAL_PERMISSION : PERMISSION,
+    approvalOnly ? "edit" : fullOnly ? "full" : "edit",
+  ).catch(() => null);
+  if (!auth) return NextResponse.json({ error: approvalOnly ? "DA Approval Edit permission is required" : "Forbidden" }, { status: 403 });
   const actorId = auth.userId;
   if (!actorId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 

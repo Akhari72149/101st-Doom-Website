@@ -153,6 +153,10 @@ export default function SystemHealthPage() {
       good: health?.updater?.status !== "failed",
     },
   ];
+  const operationalChecks = health
+    ? [deadCount === 0, true, Boolean(health.xp.last_event_at), health.updater?.status !== "failed"].filter(Boolean).length
+    : 0;
+  const attentionChecks = 4 - operationalChecks;
 
   return (
     <main className="min-h-screen bg-[#020806] px-4 py-10 text-white sm:px-8">
@@ -172,6 +176,17 @@ export default function SystemHealthPage() {
 
         {error && <div className="border-b border-red-400/30 bg-red-400/10 p-4 text-red-200">{error}</div>}
         {actionMessage && <div className="border-b border-cyan-300/25 bg-cyan-300/[.06] p-4 text-cyan-100">{actionMessage}</div>}
+
+        {health && <div className={`flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between ${attentionChecks ? "border-amber-300/25 bg-amber-300/[.05]" : "border-[#00ff66]/25 bg-[#00ff66]/[.05]"}`}>
+          <div className="flex items-start gap-3">
+            {attentionChecks ? <TriangleAlert className="mt-0.5 shrink-0 text-amber-300" size={21}/> : <CheckCircle2 className="mt-0.5 shrink-0 text-[#00ff66]" size={21}/>}
+            <div>
+              <p className={`font-black uppercase tracking-[.12em] ${attentionChecks ? "text-amber-200" : "text-[#00ff66]"}`}>{attentionChecks ? `${attentionChecks} monitored ${attentionChecks === 1 ? "service needs" : "services need"} attention` : "All monitored services operational"}</p>
+              <p className="mt-1 text-sm text-gray-400">{operationalChecks} of 4 checks currently reporting healthy.</p>
+            </div>
+          </div>
+          <div className="border border-white/10 bg-black/30 px-3 py-2 text-xs uppercase tracking-[.12em] text-gray-400">Checked {fmt(health.checkedAt)}</div>
+        </div>}
 
         <div className="grid gap-px bg-[#00ff66]/10 md:grid-cols-2">
           <button

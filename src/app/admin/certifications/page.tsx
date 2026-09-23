@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
+import { BadgeCheck, X } from "lucide-react";
+import { getCertificationFamilyName } from "@/lib/certification-families";
 
 type Personnel = {
   id: string;
@@ -37,6 +39,14 @@ type CertificationsResponse = {
   currentUserId?: string;
 };
 
+type CertificationLeadFamily = {
+  name: string;
+  certificationIds: string[];
+  lead_personnel_id: string | null;
+  lead_name: string | null;
+  mixedLeads: boolean;
+};
+
 export default function ManageCertifications() {
   const router = useRouter();
 
@@ -57,9 +67,10 @@ export default function ManageCertifications() {
   const [processedByName, setProcessedByName] = useState("Unknown");
   const [leadCertificationSearch, setLeadCertificationSearch] = useState("");
   const [leadPersonnelSearch, setLeadPersonnelSearch] = useState("");
-  const [editingLeadCertificationId, setEditingLeadCertificationId] = useState<string | null>(null);
-  const [savingLeadCertificationId, setSavingLeadCertificationId] = useState<string | null>(null);
+  const [editingLeadFamilyName, setEditingLeadFamilyName] = useState<string | null>(null);
+  const [savingLeadFamilyName, setSavingLeadFamilyName] = useState<string | null>(null);
   const [leadMessage, setLeadMessage] = useState("");
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     const response = await fetch("/api/admin/certifications", {
@@ -141,6 +152,20 @@ export default function ManageCertifications() {
     }
     return () => { cancelled = true; };
   }, [fetchPersonCerts, selectedPeople]);
+
+  useEffect(() => {
+    if (!leadModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLeadModalOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [leadModalOpen]);
 
   const broadcastWebsiteAction = async (payload: Record<string, unknown>) => {
     try {
@@ -226,9 +251,9 @@ export default function ManageCertifications() {
     }
   };
 
-  const assignCertificationLead = async (certificationId: string, leadPersonnelId: string) => {
+  const assignCertificationLead = async (family: CertificationLeadFamily, leadPersonnelId: string) => {
     if (!canEdit) return;
-    setSavingLeadCertificationId(certificationId);
+    setSavingLeadFamilyName(family.name);
     setLeadMessage("");
     const response = await fetch("/api/admin/certifications", {
       method: "PATCH",
@@ -237,16 +262,16 @@ export default function ManageCertifications() {
         "Content-Type": "application/json",
         ...(await getAppAuthHeaders()),
       },
-      body: JSON.stringify({ certificationId, leadPersonnelId }),
+      body: JSON.stringify({ certificationIds: family.certificationIds, leadPersonnelId }),
     });
     const body = await response.json().catch(() => null);
-    setSavingLeadCertificationId(null);
+    setSavingLeadFamilyName(null);
     if (!response.ok) {
       setLeadMessage(body?.error || "Failed to update certification lead.");
       return;
     }
     setCertifications((current) => current.map((certification) =>
-      certification.id === certificationId
+      family.certificationIds.includes(certification.id)
         ? {
             ...certification,
             lead_personnel_id: leadPersonnelId,
@@ -255,7 +280,7 @@ export default function ManageCertifications() {
           }
         : certification
     ));
-    setEditingLeadCertificationId(null);
+    setEditingLeadFamilyName(null);
     setLeadPersonnelSearch("");
     setLeadMessage("Certification lead updated.");
     if (selectedPeople.length === 1) refreshPersonCerts(selectedPeople[0]);
@@ -266,13 +291,13 @@ export default function ManageCertifications() {
     return rank ? rank.name : "Unranked";
   };
 
-  if (loadingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#00ff66]">
-        Checking Permissions...
-      </div>
-    );
-  }
+  const closeLeadModal = () => {
+    setLeadModalOpen(false);
+    setEditingLeadFamilyName(null);
+    setLeadCertificationSearch("");
+    setLeadPersonnelSearch("");
+    setLeadMessage("");
+  };
 
   const filteredPersonnel = personnel.filter((p) =>
     `${getRankName(p)} ${p.name}`
@@ -283,8 +308,37 @@ export default function ManageCertifications() {
     const status = String(person.status || "").trim().toLowerCase();
     return !["removed", "retired", "transferred"].includes(status);
   });
-  const visibleLeadCertifications = certifications.filter((certification) =>
-    certification.name.toLowerCase().includes(leadCertificationSearch.trim().toLowerCase())
+  const certificationLeadFamilies = useMemo(() => {
+    const groups = new Map<string, Certification[]>();
+    for (const certification of certifications) {
+      const familyName = getCertificationFamilyName(certification.name);
+      groups.set(familyName, [...(groups.get(familyName) || []), certification]);
+    }
+    return [...groups.entries()].map(([name, members]): CertificationLeadFamily => {
+      const leadIds = new Set(members.map((member) => member.lead_personnel_id || null));
+      const mixedLeads = leadIds.size > 1;
+      const leadPersonnelId = mixedLeads ? null : members[0]?.lead_personnel_id || null;
+      const lead = personnel.find((person) => person.id === leadPersonnelId);
+      return {
+        name,
+        certificationIds: members.map((member) => member.id),
+        lead_personnel_id: leadPersonnelId,
+        lead_name: mixedLeads ? null : lead?.name || members[0]?.lead_name || null,
+        mixedLeads,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [certifications, personnel]);
+
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#00ff66]">
+        Checking Permissions...
+      </div>
+    );
+  }
+
+  const visibleLeadCertifications = certificationLeadFamilies.filter((family) =>
+    family.name.toLowerCase().includes(leadCertificationSearch.trim().toLowerCase())
   );
   const visibleLeadPersonnel = activeLeadPersonnel.filter((person) =>
     `${getRankName(person)} ${person.name}`
@@ -306,101 +360,24 @@ export default function ManageCertifications() {
           Certification Management
         </h1>
 
-        <section className="mb-10 border border-[#00ff66]/25 bg-black/45">
-          <div className="flex flex-col gap-4 border-b border-[#00ff66]/20 p-5 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#00ff66]">
-                Certification Leadership
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Certification Leads</h2>
-              <p className="mt-1 text-sm text-gray-400">
-                Assign one active lead to each certification. Lead changes are recorded in the audit log.
-              </p>
-            </div>
-            <input
-              type="search"
-              value={leadCertificationSearch}
-              onChange={(event) => setLeadCertificationSearch(event.target.value)}
-              placeholder="Search certifications"
-              className="w-full border border-[#00ff66]/30 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#00ff66] md:max-w-xs"
-            />
+        <div className="mb-10 flex flex-col gap-4 border border-[#00ff66]/25 bg-black/45 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#00ff66]">
+              Certification Leadership
+            </p>
+            <p className="mt-1 text-sm text-gray-400">
+              Review and assign the lead responsible for each certification.
+            </p>
           </div>
-
-          {leadMessage && (
-            <div className={`border-b px-5 py-3 text-sm ${
-              leadMessage === "Certification lead updated."
-                ? "border-[#00ff66]/20 bg-[#00ff66]/10 text-[#72ffab]"
-                : "border-red-500/25 bg-red-500/10 text-red-300"
-            }`}>
-              {leadMessage}
-            </div>
-          )}
-
-          <div className="max-h-[420px] divide-y divide-[#00ff66]/10 overflow-y-auto">
-            {visibleLeadCertifications.map((certification) => {
-              const isEditing = editingLeadCertificationId === certification.id;
-              const lead = personnel.find((person) => person.id === certification.lead_personnel_id);
-              return (
-                <div key={certification.id} className="p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-white">{certification.name}</p>
-                      <p className={`mt-1 text-sm ${certification.lead_name ? "text-[#72ffab]" : "text-amber-300"}`}>
-                        {certification.lead_name
-                          ? `Lead: ${lead ? `${getRankName(lead)} ` : ""}${certification.lead_name}`
-                          : "Lead unassigned"}
-                      </p>
-                    </div>
-                    {canEdit && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingLeadCertificationId(isEditing ? null : certification.id);
-                          setLeadPersonnelSearch("");
-                          setLeadMessage("");
-                        }}
-                        className="shrink-0 border border-[#00ff66]/35 px-3 py-2 text-sm font-semibold text-[#00ff66] transition hover:bg-[#00ff66]/10"
-                      >
-                        {isEditing ? "Cancel" : certification.lead_name ? "Change Lead" : "Assign Lead"}
-                      </button>
-                    )}
-                  </div>
-
-                  {isEditing && (
-                    <div className="mt-4 border border-[#00ff66]/20 bg-black/70 p-3">
-                      <input
-                        type="search"
-                        autoFocus
-                        value={leadPersonnelSearch}
-                        onChange={(event) => setLeadPersonnelSearch(event.target.value)}
-                        placeholder="Search active personnel by rank or name"
-                        className="w-full border border-[#00ff66]/30 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#00ff66]"
-                      />
-                      <div className="mt-2 max-h-52 divide-y divide-white/5 overflow-y-auto border border-white/10">
-                        {visibleLeadPersonnel.length === 0 ? (
-                          <p className="px-3 py-4 text-sm text-gray-400">No active personnel found.</p>
-                        ) : visibleLeadPersonnel.map((person) => (
-                          <button
-                            key={person.id}
-                            type="button"
-                            disabled={savingLeadCertificationId === certification.id}
-                            onClick={() => assignCertificationLead(certification.id, person.id)}
-                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gray-200 transition hover:bg-[#00ff66]/10 hover:text-white disabled:opacity-50"
-                          >
-                            <span>{getRankName(person)} {person.name}</span>
-                            {person.id === certification.lead_personnel_id && (
-                              <span className="text-xs font-semibold uppercase text-[#00ff66]">Current</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
+          <button
+            type="button"
+            onClick={() => setLeadModalOpen(true)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/10 px-4 py-2 font-semibold text-[#00ff66] transition hover:bg-[#00ff66]/20"
+          >
+            <BadgeCheck aria-hidden="true" className="h-5 w-5" />
+            Manage Certification Leads
+          </button>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           {/* LEFT COLUMN */}
@@ -706,6 +683,140 @@ export default function ManageCertifications() {
           </div>
         </div>
       </div>
+
+      {leadModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="certification-leads-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeLeadModal();
+          }}
+        >
+          <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden border border-[#00ff66]/35 bg-[#001108] shadow-[0_0_60px_rgba(0,255,102,0.12)] sm:max-h-[calc(100dvh-3rem)]">
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#00ff66]/20 p-4 sm:p-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#00ff66]">
+                  Certification Leadership
+                </p>
+                <h2 id="certification-leads-title" className="mt-2 text-xl font-semibold text-white sm:text-2xl">
+                  Manage Certification Leads
+                </h2>
+                <p className="mt-1 text-sm text-gray-400">
+                  Assign one active lead to each certification. Changes are recorded in the audit log.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeLeadModal}
+                aria-label="Close certification leads"
+                className="grid h-10 w-10 shrink-0 place-items-center border border-white/15 text-gray-300 transition hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300"
+              >
+                <X aria-hidden="true" className="h-5 w-5" />
+              </button>
+            </header>
+
+            <div className="shrink-0 border-b border-[#00ff66]/15 p-4 sm:p-5">
+              <input
+                type="search"
+                value={leadCertificationSearch}
+                onChange={(event) => setLeadCertificationSearch(event.target.value)}
+                placeholder="Search certifications"
+                className="w-full border border-[#00ff66]/30 bg-black px-3 py-3 text-sm text-white outline-none focus:border-[#00ff66]"
+              />
+              {leadMessage && (
+                <div className={`mt-3 border px-4 py-3 text-sm ${
+                  leadMessage === "Certification lead updated."
+                    ? "border-[#00ff66]/25 bg-[#00ff66]/10 text-[#72ffab]"
+                    : "border-red-500/25 bg-red-500/10 text-red-300"
+                }`}>
+                  {leadMessage}
+                </div>
+              )}
+            </div>
+
+            <div className="min-h-0 flex-1 divide-y divide-[#00ff66]/10 overflow-y-auto overscroll-contain">
+              {visibleLeadCertifications.length === 0 ? (
+                <p className="p-8 text-center text-sm text-gray-400">No certifications found.</p>
+              ) : visibleLeadCertifications.map((family) => {
+                const isEditing = editingLeadFamilyName === family.name;
+                const lead = personnel.find((person) => person.id === family.lead_personnel_id);
+                return (
+                  <div key={family.name} className="p-4 sm:p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-white">{family.name}</p>
+                        <p className={`mt-1 text-sm ${family.lead_name ? "text-[#72ffab]" : "text-amber-300"}`}>
+                          {family.mixedLeads
+                            ? "Multiple leads assigned across this family"
+                            : family.lead_name
+                              ? `Lead: ${lead ? `${getRankName(lead)} ` : ""}${family.lead_name}`
+                              : "Lead unassigned"}
+                        </p>
+                      </div>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingLeadFamilyName(isEditing ? null : family.name);
+                            setLeadPersonnelSearch("");
+                            setLeadMessage("");
+                          }}
+                          className="min-h-10 shrink-0 border border-[#00ff66]/35 px-3 py-2 text-sm font-semibold text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                        >
+                          {isEditing ? "Cancel" : family.lead_name || family.mixedLeads ? "Change Lead" : "Assign Lead"}
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditing && (
+                      <div className="mt-4 border border-[#00ff66]/20 bg-black/70 p-3">
+                        <input
+                          type="search"
+                          autoFocus
+                          value={leadPersonnelSearch}
+                          onChange={(event) => setLeadPersonnelSearch(event.target.value)}
+                          placeholder="Search active personnel by rank or name"
+                          className="w-full border border-[#00ff66]/30 bg-black px-3 py-3 text-sm text-white outline-none focus:border-[#00ff66]"
+                        />
+                        <div className="mt-2 max-h-52 divide-y divide-white/5 overflow-y-auto border border-white/10">
+                          {visibleLeadPersonnel.length === 0 ? (
+                            <p className="px-3 py-4 text-sm text-gray-400">No active personnel found.</p>
+                          ) : visibleLeadPersonnel.map((person) => (
+                            <button
+                              key={person.id}
+                              type="button"
+                              disabled={savingLeadFamilyName === family.name}
+                              onClick={() => assignCertificationLead(family, person.id)}
+                              className="flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-gray-200 transition hover:bg-[#00ff66]/10 hover:text-white disabled:opacity-50"
+                            >
+                              <span>{getRankName(person)} {person.name}</span>
+                              {person.id === family.lead_personnel_id && (
+                                <span className="text-xs font-semibold uppercase text-[#00ff66]">Current</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <footer className="shrink-0 border-t border-[#00ff66]/20 bg-black/40 p-4 text-right">
+              <button
+                type="button"
+                onClick={closeLeadModal}
+                className="min-h-11 border border-white/20 px-5 py-2 text-sm font-semibold text-gray-200 transition hover:border-[#00ff66]/40 hover:text-white"
+              >
+                Close
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

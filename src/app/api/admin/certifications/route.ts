@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getCertificationFamilyName } from "@/lib/certification-families";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -127,11 +128,21 @@ export async function PATCH(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     certificationId?: unknown;
+    certificationIds?: unknown;
     leadPersonnelId?: unknown;
   } | null;
-  const certificationId = String(body?.certificationId || "");
+  const certificationIds = Array.isArray(body?.certificationIds)
+    ? [...new Set(body.certificationIds.map(String))]
+    : body?.certificationId
+      ? [String(body.certificationId)]
+      : [];
   const leadPersonnelId = String(body?.leadPersonnelId || "");
-  if (!UUID.test(certificationId) || !UUID.test(leadPersonnelId)) {
+  if (
+    !certificationIds.length ||
+    certificationIds.length > 20 ||
+    certificationIds.some((id) => !UUID.test(id)) ||
+    !UUID.test(leadPersonnelId)
+  ) {
     return NextResponse.json({ error: "Invalid certification lead assignment" }, { status: 400 });
   }
   if (backend() !== "postgres") {
@@ -147,18 +158,26 @@ export async function PATCH(request: Request) {
         "select name,status from public.personnel where id=$1 for update",
         [leadPersonnelId],
       );
-      const certification = await client.query<{ name: string }>(
-        "select name from public.certifications where id=$1 for update",
-        [certificationId],
+      const certification = await client.query<{ id: string; name: string }>(
+        "select id,name from public.certifications where id=any($1::uuid[]) order by name for update",
+        [certificationIds],
       );
-      if (!person.rowCount || !certification.rowCount) throw new Error("NOT_FOUND");
+      if (!person.rowCount || certification.rowCount !== certificationIds.length) {
+        throw new Error("NOT_FOUND");
+      }
+
+      const familyNames = new Set(
+        certification.rows.map((row) => getCertificationFamilyName(row.name)),
+      );
+      if (familyNames.size !== 1) throw new Error("MIXED_FAMILIES");
+      const familyName = [...familyNames][0];
 
       const status = String(person.rows[0].status || "").trim().toLowerCase();
       if (["removed", "retired", "transferred"].includes(status)) throw new Error("INACTIVE");
 
       await client.query(
-        "update public.certifications set lead_personnel_id=$2 where id=$1",
-        [certificationId, leadPersonnelId],
+        "update public.certifications set lead_personnel_id=$2 where id=any($1::uuid[])",
+        [certificationIds, leadPersonnelId],
       );
       await client.query(
         `insert into public.audit_logs(user_id,target_personnel_id,action,details)
@@ -166,10 +185,10 @@ export async function PATCH(request: Request) {
         [
           auth.userId,
           leadPersonnelId,
-          `Assigned ${person.rows[0].name} as lead for ${certification.rows[0].name}.`,
+          `Assigned ${person.rows[0].name} as lead for the ${familyName} certification family.`,
         ],
       );
-      return { certificationId, leadPersonnelId, leadName: person.rows[0].name };
+      return { certificationIds, familyName, leadPersonnelId, leadName: person.rows[0].name };
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
@@ -178,6 +197,9 @@ export async function PATCH(request: Request) {
     }
     if (error instanceof Error && error.message === "INACTIVE") {
       return NextResponse.json({ error: "Certification leads must be active personnel" }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "MIXED_FAMILIES") {
+      return NextResponse.json({ error: "Certification records must belong to one lead family" }, { status: 400 });
     }
     console.error("[admin-certs] Lead update failed", error);
     return NextResponse.json({ error: "Failed to update certification lead" }, { status: 500 });

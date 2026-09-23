@@ -1,27 +1,89 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { useRouter } from "next/navigation";
+
+type Personnel = {
+  id: string;
+  name: string;
+  rank_id: string | null;
+  status?: string | null;
+  slotted_position?: string | null;
+};
+
+type Rank = { id: string; name: string; rank_level?: number | null };
+
+type Certification = {
+  id: string;
+  name: string;
+  is_trainer_cert?: boolean;
+  lead_personnel_id?: string | null;
+  lead_name?: string | null;
+  lead_rank_id?: string | null;
+};
+
+type PersonnelCertification = {
+  id: string;
+  personnel_id: string;
+  certification?: Certification | null;
+};
+
+type CertificationsResponse = {
+  personnel?: Personnel[];
+  ranks?: Rank[];
+  certifications?: Certification[];
+  trainers?: Personnel[];
+  currentUserId?: string;
+};
 
 export default function ManageCertifications() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [canEdit, setCanEdit] = useState(false);
-  const [personnel, setPersonnel] = useState<any[]>([]);
-  const [ranks, setRanks] = useState<any[]>([]);
-  const [certifications, setCertifications] = useState<any[]>([]);
-  const [personCerts, setPersonCerts] = useState<any[]>([]);
+  const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [ranks, setRanks] = useState<Rank[]>([]);
+  const [certifications, setCertifications] = useState<Certification[]>([]);
+  const [personCerts, setPersonCerts] = useState<PersonnelCertification[]>([]);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [searchPerson, setSearchPerson] = useState("");
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
-  const [filteredCerts, setFilteredCerts] = useState<any[]>([]);
+  const [filteredCerts, setFilteredCerts] = useState<Certification[]>([]);
   const [loading, setLoading] = useState(false);
-  const [trainerPersonnel, setTrainerPersonnel] = useState<any[]>([]);
+  const [trainerPersonnel, setTrainerPersonnel] = useState<Personnel[]>([]);
   const [selectedTrainer, setSelectedTrainer] = useState("");
   const [trainerSearch, setTrainerSearch] = useState("");
   const [processedByName, setProcessedByName] = useState("Unknown");
+  const [leadCertificationSearch, setLeadCertificationSearch] = useState("");
+  const [leadPersonnelSearch, setLeadPersonnelSearch] = useState("");
+  const [editingLeadCertificationId, setEditingLeadCertificationId] = useState<string | null>(null);
+  const [savingLeadCertificationId, setSavingLeadCertificationId] = useState<string | null>(null);
+  const [leadMessage, setLeadMessage] = useState("");
+
+  const fetchData = useCallback(async () => {
+    const response = await fetch("/api/admin/certifications", {
+      cache: "no-store",
+      headers: await getAppAuthHeaders(),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as CertificationsResponse;
+  }, []);
+
+  const fetchPersonCerts = useCallback(async (personId: string) => {
+    const response = await fetch(
+      `/api/admin/certifications?personId=${encodeURIComponent(personId)}`,
+      { cache: "no-store", headers: await getAppAuthHeaders() },
+    );
+    const data = (await response.json().catch(() => null)) as {
+      personCerts?: PersonnelCertification[];
+    } | null;
+    return response.ok ? data?.personCerts || [] : [];
+  }, []);
+
+  const refreshPersonCerts = useCallback(async (personId: string) => {
+    setPersonCerts(await fetchPersonCerts(personId));
+  }, [fetchPersonCerts]);
 
   /* ================= AUTH ================= */
 
@@ -49,18 +111,38 @@ export default function ManageCertifications() {
   }, [router]);
 
   useEffect(() => {
-    if (!loadingAuth) fetchData();
-  }, [loadingAuth]);
+    if (loadingAuth) return;
+    let cancelled = false;
+    void fetchData().then((data) => {
+      if (cancelled || !data) return;
+      setPersonnel(data.personnel || []);
+      setRanks(data.ranks || []);
+      setCertifications(data.certifications || []);
+      setTrainerPersonnel(data.trainers || []);
+      if ((data.trainers || []).some((trainer) => trainer.id === data.currentUserId)) {
+        setSelectedTrainer(data.currentUserId || "");
+      } else if ((data.trainers || []).length === 1) {
+        setSelectedTrainer(data.trainers?.[0].id || "");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [fetchData, loadingAuth]);
 
   useEffect(() => {
+    let cancelled = false;
     if (selectedPeople.length === 1) {
-      fetchPersonCerts(selectedPeople[0]);
+      void fetchPersonCerts(selectedPeople[0]).then((records) => {
+        if (!cancelled) setPersonCerts(records);
+      });
     } else {
-      setPersonCerts([]);
+      void Promise.resolve().then(() => {
+        if (!cancelled) setPersonCerts([]);
+      });
     }
-  }, [selectedPeople]);
+    return () => { cancelled = true; };
+  }, [fetchPersonCerts, selectedPeople]);
 
-  const broadcastWebsiteAction = async (payload: any) => {
+  const broadcastWebsiteAction = async (payload: Record<string, unknown>) => {
     try {
       await fetch("/api/website-action", {
         method: "POST",
@@ -73,18 +155,6 @@ export default function ManageCertifications() {
     } catch (error) {
       console.error("Failed to broadcast website action:", error);
     }
-  };
-
-  const fetchData = async () => {
-    const response=await fetch("/api/admin/certifications",{cache:"no-store",headers:await getAppAuthHeaders()});
-    if(!response.ok)return;const data=await response.json();
-    setPersonnel(data.personnel||[]);setRanks(data.ranks||[]);setCertifications(data.certifications||[]);setTrainerPersonnel(data.trainers||[]);
-    if((data.trainers||[]).some((t:any)=>t.id===data.currentUserId))setSelectedTrainer(data.currentUserId);else if((data.trainers||[]).length===1)setSelectedTrainer(data.trainers[0].id);
-  };
-
-  const fetchPersonCerts = async (personId: string) => {
-    const response=await fetch(`/api/admin/certifications?personId=${encodeURIComponent(personId)}`,{cache:"no-store",headers:await getAppAuthHeaders()});
-    const data=await response.json().catch(()=>null);setPersonCerts(response.ok?data?.personCerts||[]:[]);
   };
 
   const assignCertification = async () => {
@@ -152,11 +222,46 @@ export default function ManageCertifications() {
     }
 
     if (selectedPeople.length === 1) {
-      fetchPersonCerts(selectedPeople[0]);
+      refreshPersonCerts(selectedPeople[0]);
     }
   };
 
-  const getRankName = (person: any) => {
+  const assignCertificationLead = async (certificationId: string, leadPersonnelId: string) => {
+    if (!canEdit) return;
+    setSavingLeadCertificationId(certificationId);
+    setLeadMessage("");
+    const response = await fetch("/api/admin/certifications", {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(await getAppAuthHeaders()),
+      },
+      body: JSON.stringify({ certificationId, leadPersonnelId }),
+    });
+    const body = await response.json().catch(() => null);
+    setSavingLeadCertificationId(null);
+    if (!response.ok) {
+      setLeadMessage(body?.error || "Failed to update certification lead.");
+      return;
+    }
+    setCertifications((current) => current.map((certification) =>
+      certification.id === certificationId
+        ? {
+            ...certification,
+            lead_personnel_id: leadPersonnelId,
+            lead_name: body?.leadName || "Unknown",
+            lead_rank_id: personnel.find((person) => person.id === leadPersonnelId)?.rank_id || null,
+          }
+        : certification
+    ));
+    setEditingLeadCertificationId(null);
+    setLeadPersonnelSearch("");
+    setLeadMessage("Certification lead updated.");
+    if (selectedPeople.length === 1) refreshPersonCerts(selectedPeople[0]);
+  };
+
+  const getRankName = (person: Personnel) => {
     const rank = ranks.find((r) => r.id === person.rank_id);
     return rank ? rank.name : "Unranked";
   };
@@ -174,6 +279,18 @@ export default function ManageCertifications() {
       .toLowerCase()
       .includes(searchPerson.toLowerCase())
   );
+  const activeLeadPersonnel = personnel.filter((person) => {
+    const status = String(person.status || "").trim().toLowerCase();
+    return !["removed", "retired", "transferred"].includes(status);
+  });
+  const visibleLeadCertifications = certifications.filter((certification) =>
+    certification.name.toLowerCase().includes(leadCertificationSearch.trim().toLowerCase())
+  );
+  const visibleLeadPersonnel = activeLeadPersonnel.filter((person) =>
+    `${getRankName(person)} ${person.name}`
+      .toLowerCase()
+      .includes(leadPersonnelSearch.trim().toLowerCase())
+  );
 
   return (
     <div className="min-h-screen p-10 bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-white">
@@ -188,6 +305,102 @@ export default function ManageCertifications() {
         <h1 className="text-3xl font-bold mb-10 text-[#00ff66]">
           Certification Management
         </h1>
+
+        <section className="mb-10 border border-[#00ff66]/25 bg-black/45">
+          <div className="flex flex-col gap-4 border-b border-[#00ff66]/20 p-5 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#00ff66]">
+                Certification Leadership
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Certification Leads</h2>
+              <p className="mt-1 text-sm text-gray-400">
+                Assign one active lead to each certification. Lead changes are recorded in the audit log.
+              </p>
+            </div>
+            <input
+              type="search"
+              value={leadCertificationSearch}
+              onChange={(event) => setLeadCertificationSearch(event.target.value)}
+              placeholder="Search certifications"
+              className="w-full border border-[#00ff66]/30 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#00ff66] md:max-w-xs"
+            />
+          </div>
+
+          {leadMessage && (
+            <div className={`border-b px-5 py-3 text-sm ${
+              leadMessage === "Certification lead updated."
+                ? "border-[#00ff66]/20 bg-[#00ff66]/10 text-[#72ffab]"
+                : "border-red-500/25 bg-red-500/10 text-red-300"
+            }`}>
+              {leadMessage}
+            </div>
+          )}
+
+          <div className="max-h-[420px] divide-y divide-[#00ff66]/10 overflow-y-auto">
+            {visibleLeadCertifications.map((certification) => {
+              const isEditing = editingLeadCertificationId === certification.id;
+              const lead = personnel.find((person) => person.id === certification.lead_personnel_id);
+              return (
+                <div key={certification.id} className="p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-white">{certification.name}</p>
+                      <p className={`mt-1 text-sm ${certification.lead_name ? "text-[#72ffab]" : "text-amber-300"}`}>
+                        {certification.lead_name
+                          ? `Lead: ${lead ? `${getRankName(lead)} ` : ""}${certification.lead_name}`
+                          : "Lead unassigned"}
+                      </p>
+                    </div>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingLeadCertificationId(isEditing ? null : certification.id);
+                          setLeadPersonnelSearch("");
+                          setLeadMessage("");
+                        }}
+                        className="shrink-0 border border-[#00ff66]/35 px-3 py-2 text-sm font-semibold text-[#00ff66] transition hover:bg-[#00ff66]/10"
+                      >
+                        {isEditing ? "Cancel" : certification.lead_name ? "Change Lead" : "Assign Lead"}
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditing && (
+                    <div className="mt-4 border border-[#00ff66]/20 bg-black/70 p-3">
+                      <input
+                        type="search"
+                        autoFocus
+                        value={leadPersonnelSearch}
+                        onChange={(event) => setLeadPersonnelSearch(event.target.value)}
+                        placeholder="Search active personnel by rank or name"
+                        className="w-full border border-[#00ff66]/30 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#00ff66]"
+                      />
+                      <div className="mt-2 max-h-52 divide-y divide-white/5 overflow-y-auto border border-white/10">
+                        {visibleLeadPersonnel.length === 0 ? (
+                          <p className="px-3 py-4 text-sm text-gray-400">No active personnel found.</p>
+                        ) : visibleLeadPersonnel.map((person) => (
+                          <button
+                            key={person.id}
+                            type="button"
+                            disabled={savingLeadCertificationId === certification.id}
+                            onClick={() => assignCertificationLead(certification.id, person.id)}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gray-200 transition hover:bg-[#00ff66]/10 hover:text-white disabled:opacity-50"
+                          >
+                            <span>{getRankName(person)} {person.name}</span>
+                            {person.id === certification.lead_personnel_id && (
+                              <span className="text-xs font-semibold uppercase text-[#00ff66]">Current</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           {/* LEFT COLUMN */}
@@ -361,6 +574,11 @@ export default function ManageCertifications() {
                           <span className="text-xs text-[#00ff66]/70">
                             ✔ Certified
                           </span>
+                          {pc.certification?.lead_personnel_id === selectedPeople[0] && (
+                            <span className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
+                              Certification Lead
+                            </span>
+                          )}
                         </div>
 
                         <button

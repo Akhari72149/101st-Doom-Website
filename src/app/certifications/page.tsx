@@ -23,6 +23,9 @@ type CertificationRow = {
   certification?: {
     id?: string;
     name?: string | null;
+    lead_personnel_id?: string | null;
+    lead_name?: string | null;
+    is_lead?: boolean;
   } | null;
 };
 
@@ -419,6 +422,9 @@ export default function CertificationByPerson() {
                                   <th className="px-4 py-3 text-left font-semibold">
                                     Certification
                                   </th>
+                                  <th className="px-4 py-3 text-left font-semibold">
+                                    Certification Lead
+                                  </th>
                                   <th className="w-[180px] px-4 py-3 text-left font-semibold">
                                     Awarded
                                   </th>
@@ -437,7 +443,16 @@ export default function CertificationByPerson() {
                                     `}
                                   >
                                     <td className="px-4 py-3 text-white">
-                                      {c.certification?.name || "Unknown"}
+                                      <span>{c.certification?.name || "Unknown"}</span>
+                                      {c.certification?.is_lead && (
+                                        <span className="ml-3 border border-cyan-400/40 bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-300">
+                                          Lead
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    <td className="px-4 py-3 text-gray-300">
+                                      {c.certification?.lead_name || "Unassigned"}
                                     </td>
 
                                     <td className="px-4 py-3 text-[#00ff66]">

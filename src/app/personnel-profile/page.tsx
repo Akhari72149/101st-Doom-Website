@@ -47,6 +47,9 @@ type Person = {
 type CertificationRow = {
   certification?: {
     name?: string | null;
+    lead_personnel_id?: string | null;
+    lead_name?: string | null;
+    is_lead?: boolean;
   } | null;
 };
 
@@ -1844,6 +1847,16 @@ export default function PersonnelProfile() {
                               <p className="text-sm text-white">
                                 {c.certification?.name}
                               </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                {c.certification?.is_lead && (
+                                  <span className="border border-cyan-400/40 bg-cyan-400/10 px-2 py-1 font-semibold uppercase tracking-[0.12em] text-cyan-300">
+                                    Certification Lead
+                                  </span>
+                                )}
+                                <span className="text-gray-500">
+                                  Lead: {c.certification?.lead_name || "Unassigned"}
+                                </span>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1863,6 +1876,16 @@ export default function PersonnelProfile() {
                               <p className="text-sm text-white">
                                 {c.certification?.name}
                               </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                {c.certification?.is_lead && (
+                                  <span className="border border-cyan-400/40 bg-cyan-400/10 px-2 py-1 font-semibold uppercase tracking-[0.12em] text-cyan-300">
+                                    Certification Lead
+                                  </span>
+                                )}
+                                <span className="text-gray-500">
+                                  Lead: {c.certification?.lead_name || "Unassigned"}
+                                </span>
+                              </div>
                             </div>
                           ))}
                         </div>

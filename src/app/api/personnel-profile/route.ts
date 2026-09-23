@@ -66,9 +66,16 @@ async function readDossierFromPostgres(personnelId: string) {
   const pool = getPostgresPool();
   const [certifications, rankHistory, statusAudit, awards, linkedSteam, auditTimeline] = await Promise.all([
     pool.query(`select pc.id, pc.awarded_at,
-        json_build_object('id', c.id, 'name', c.name) as certification
+        json_build_object(
+          'id', c.id,
+          'name', c.name,
+          'lead_personnel_id', c.lead_personnel_id,
+          'lead_name', lead.name,
+          'is_lead', c.lead_personnel_id = $1
+        ) as certification
       from public.personnel_certifications pc
       join public.certifications c on c.id = pc.certification_id
+      left join public.personnel lead on lead.id = c.lead_personnel_id
       where pc.personnel_id = $1 order by c.name`, [personnelId]),
     pool.query(`select history.id, history.old_rank_id, history.new_rank_id, history.changed_at,
       old_rank.name old_rank_name, new_rank.name new_rank_name

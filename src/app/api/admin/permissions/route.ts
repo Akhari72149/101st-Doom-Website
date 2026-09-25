@@ -10,6 +10,7 @@ import { requireNativePermission } from "@/lib/postgres/permissions";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { accountRoleTagKeys } from "@/data/accountRoleTags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,11 @@ type UserPermissionRow = {
   access_level: string;
   granted_by_name?: string | null;
   updated_at?: Date | null;
+};
+
+type AccountRoleTagRow = {
+  user_id: string;
+  tag: string;
 };
 
 function jsonError(error: string, status = 400) {
@@ -125,7 +131,7 @@ function hasValidOrigin(request: Request) {
 
 async function getNativeAccounts() {
   const pool = getPostgresPool();
-  const [users, roles, profiles, permissions] = await Promise.all([
+  const [users, roles, roleTags, profiles, permissions] = await Promise.all([
     pool.query<{
       id: string;
       name: string;
@@ -140,6 +146,9 @@ async function getNativeAccounts() {
             "mustChangePassword" as must_change_password
           from public.app_auth_users order by lower(coalesce(name, username))`),
     pool.query<UserRoleRow>("select user_id, role from public.user_roles"),
+    pool.query<AccountRoleTagRow>(
+      "select user_id,tag from public.account_role_tags order by assigned_at,tag",
+    ),
     pool.query<ProfileRow>("select id, display_name from public.profiles"),
     pool.query<UserPermissionRow>(`select permissions.user_id,permissions.permission_key,permissions.access_level,
       coalesce(grantor."displayUsername",grantor.username) granted_by_name,permissions.updated_at
@@ -154,6 +163,12 @@ async function getNativeAccounts() {
     rolesByUser.set(row.user_id, entries);
   }
   const profilesByUser = new Map(profiles.rows.map((profile) => [profile.id, profile]));
+  const roleTagsByUser = new Map<string, string[]>();
+  for (const row of roleTags.rows) {
+    const entries = roleTagsByUser.get(row.user_id) || [];
+    entries.push(row.tag);
+    roleTagsByUser.set(row.user_id, entries);
+  }
   const permissionsByUser = new Map<string, Record<string, string>>();
   const permissionMetaByUser = new Map<string, Record<string, { grantedBy: string; updatedAt: Date | null }>>();
   for (const row of permissions.rows) {
@@ -175,6 +190,7 @@ async function getNativeAccounts() {
     lastSignInAt: user.last_sign_in_at,
     disabled: user.disabled,
     roles: rolesByUser.get(user.id) || [],
+    roleTags: roleTagsByUser.get(user.id) || [],
     permissions: permissionsByUser.get(user.id) || {},
     permissionMeta: permissionMetaByUser.get(user.id) || {},
   }));
@@ -325,6 +341,7 @@ export async function GET(request: Request) {
       user.banned_until !== "none" &&
       new Date(user.banned_until || 0).getTime() > Date.now(),
     roles: rolesByUser.get(user.id) || [],
+    roleTags: [],
     permissions: permissionsByUser.get(user.id) || {},
     protected: [
       user.user_metadata?.username,
@@ -348,11 +365,12 @@ export async function PATCH(request: Request) {
     userId?: string;
     username?: unknown;
     permissions?: Array<{ permissionKey?: string; accessLevel?: string | null }>;
+    roleTags?: unknown;
   } | null;
 
   const action = String(body?.action || "").trim();
   const userId = cleanUuid(body?.userId);
-  const actionPermission = action === "permissions"
+  const actionPermission = action === "permissions" || action === "role-tags"
     ? "admin.permissions"
     : action === "reset-password"
       ? "admin.account-password-reset"
@@ -461,6 +479,53 @@ export async function PATCH(request: Request) {
       username: reset.username,
       temporaryPassword,
     }, { headers: { "Cache-Control": "no-store" } });
+  }
+
+  if (action === "role-tags") {
+    if (process.env.NATIVE_AUTH_ENABLED !== "true") {
+      return jsonError("Account role tags require native authentication", 409);
+    }
+    const roleTags = Array.isArray(body?.roleTags)
+      ? [...new Set(body.roleTags.map((tag) => String(tag).trim()))]
+      : [];
+    if (
+      roleTags.length > accountRoleTagKeys.size ||
+      roleTags.some((tag) => !accountRoleTagKeys.has(tag))
+    ) {
+      return jsonError("Invalid account role tag");
+    }
+    try {
+      await withPostgresTransaction(async (client) => {
+        const target = await client.query(
+          "select id from public.app_auth_users where id=$1 for update",
+          [userId],
+        );
+        if (!target.rowCount) throw new Error("NOT_FOUND");
+        await client.query("delete from public.account_role_tags where user_id=$1", [userId]);
+        for (const tag of roleTags) {
+          await client.query(
+            `insert into public.account_role_tags(user_id,tag,assigned_by)
+             values($1,$2,$3)`,
+            [userId, tag, auth.userId],
+          );
+        }
+        await client.query(
+          `insert into public.audit_logs(user_id,action,details)
+           values($1,'ACCOUNT_ROLE_TAGS_UPDATED',$2)`,
+          [
+            auth.userId,
+            `Updated display role tags for account ${userId}: ${roleTags.join(", ") || "none"}.`,
+          ],
+        );
+      });
+      return NextResponse.json({ success: true, roleTags });
+    } catch (error) {
+      if (error instanceof Error && error.message === "NOT_FOUND") {
+        return jsonError("Account not found", 404);
+      }
+      console.error("[permissions] Role tag update failed", error);
+      return jsonError("Unable to update role tags", 500);
+    }
   }
 
   if (action === "disable") {

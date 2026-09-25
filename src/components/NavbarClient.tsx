@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getAppAuthHeaders, getAppSession, signOutOfApp, type AppUser } from "@/lib/client-auth";
 import { pagePermissionDefinitions } from "@/data/pagePermissions";
+import { getAccountRoleTagDefinition } from "@/data/accountRoleTags";
 import {
   BookOpen,
   CalendarDays,
@@ -58,6 +59,7 @@ export default function NavbarClient() {
 
   const [user, setUser] = useState<AppUser | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
+  const [roleTags, setRoleTags] = useState<string[]>([]);
   const [permissions, setPermissions] = useState<Record<string, string>>({});
   const [disciplineAttention, setDisciplineAttention] = useState({ pendingApproval: 0, openAppeals: 0, overdueActions: 0, total: 0 });
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -75,10 +77,13 @@ export default function NavbarClient() {
       }
       setUser(session?.user || null);
       setRoles(session?.roles || []);
+      setRoleTags(session?.roleTags || []);
       setPermissions(session?.permissions || {});
     };
 
-    getUser();
+    void getUser();
+    window.addEventListener("app-session-updated", getUser);
+    return () => window.removeEventListener("app-session-updated", getUser);
   }, [router]);
 
   useEffect(() => {
@@ -110,6 +115,7 @@ export default function NavbarClient() {
   const handleLogout = async () => {
     await signOutOfApp();
     setUser(null);
+    setRoleTags([]);
     setDisciplineAttention({ pendingApproval: 0, openAppeals: 0, overdueActions: 0, total: 0 });
     router.push("/login");
   };
@@ -695,8 +701,22 @@ export default function NavbarClient() {
           {user ? (
             <>
               <div className="hidden text-right md:block">
-                <div className="text-sm text-gray-300">
-                  {user.displayName || user.username || user.email}
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <span className="text-sm text-gray-300">
+                    {user.displayName || user.username || user.email}
+                  </span>
+                  {roleTags.map((tag) => {
+                    const definition = getAccountRoleTagDefinition(tag);
+                    if (!definition) return null;
+                    return (
+                      <span
+                        key={tag}
+                        className={`border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${definition.className}`}
+                      >
+                        {definition.label}
+                      </span>
+                    );
+                  })}
                 </div>
 
                 {roles.length > 0 && (

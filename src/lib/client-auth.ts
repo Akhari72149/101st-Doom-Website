@@ -12,6 +12,7 @@ export type AppUser = {
 export type AppSession = {
   user: AppUser;
   roles: string[];
+  roleTags: string[];
   permissions: Record<string, "read" | "edit" | "full">;
   mode: "native" | "supabase";
   mustChangePassword: boolean;

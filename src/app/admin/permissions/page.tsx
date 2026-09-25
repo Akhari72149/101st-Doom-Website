@@ -13,6 +13,7 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Tags,
   Trash2,
   UserPlus,
   UserCog,
@@ -24,6 +25,10 @@ import {
   pagePermissionLevels,
 } from "@/data/pagePermissions";
 import { getAppAuthHeaders, getAppSession } from "@/lib/client-auth";
+import {
+  accountRoleTagDefinitions,
+  getAccountRoleTagDefinition,
+} from "@/data/accountRoleTags";
 
 type Account = {
   id: string;
@@ -34,6 +39,7 @@ type Account = {
   bannedUntil: string | undefined;
   disabled: boolean;
   roles: string[];
+  roleTags: string[];
   permissions: Record<string, PagePermissionAccess>;
   permissionMeta?: Record<string, { grantedBy: string; updatedAt: string | null }>;
   username?: string;
@@ -168,6 +174,8 @@ export default function AdminPermissionsPage() {
   const [credentialsCopied, setCredentialsCopied] = useState(false);
   const [createError, setCreateError] = useState("");
   const [showPermissionReview, setShowPermissionReview] = useState(false);
+  const [roleTagAccount, setRoleTagAccount] = useState<Account | null>(null);
+  const [draftRoleTags, setDraftRoleTags] = useState<string[]>([]);
 
   const groupedDefinitions = useMemo(() => {
     const groups = new Map<string, PagePermissionDefinition[]>();
@@ -197,6 +205,7 @@ export default function AdminPermissionsPage() {
           account.displayName || "",
           account.username || "",
           account.roles.join(" "),
+          account.roleTags.join(" "),
           account.id,
         ]
           .join(" ")
@@ -298,6 +307,43 @@ export default function AdminPermissionsPage() {
     setSelectedAccount(account);
     setDraftPermissions({ ...(account.permissions || {}) });
     setStatus(null);
+  }
+
+  function openRoleTagModal(account: Account) {
+    setRoleTagAccount(account);
+    setDraftRoleTags([...(account.roleTags || [])]);
+    setStatus(null);
+  }
+
+  async function saveRoleTags() {
+    if (!roleTagAccount) return;
+    setSaving(true);
+    setStatus(null);
+    const response = await fetch("/api/admin/permissions", {
+      method: "PATCH",
+      headers: {
+        ...(await getAppAuthHeaders()),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "role-tags",
+        userId: roleTagAccount.id,
+        roleTags: draftRoleTags,
+      }),
+    });
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) {
+      setStatus(body?.error || "Failed to save role tags");
+      setSaving(false);
+      return;
+    }
+    await loadPermissions();
+    if (roleTagAccount.id === currentUserId) {
+      window.dispatchEvent(new Event("app-session-updated"));
+    }
+    setRoleTagAccount(null);
+    setSaving(false);
+    setStatus("Role tags updated.");
   }
 
   function applyPermissionPreset(preset: PermissionPreset) {
@@ -618,7 +664,7 @@ export default function AdminPermissionsPage() {
         <div className="mt-6 border border-[#00ff66]/20 bg-black/72">
           <div className="grid grid-cols-[1.4fr_1fr_1fr_auto] gap-4 border-b border-[#00ff66]/15 px-5 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-[#00ff66]/70 max-lg:hidden">
             <div>Account</div>
-            <div>Roles</div>
+            <div>Roles & Tags</div>
             <div>Activity</div>
             <div>Controls</div>
           </div>
@@ -670,6 +716,18 @@ export default function AdminPermissionsPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      {account.roleTags.map((tag) => {
+                        const definition = getAccountRoleTagDefinition(tag);
+                        if (!definition) return null;
+                        return (
+                          <span
+                            key={tag}
+                            className={`border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${definition.className}`}
+                          >
+                            {definition.label}
+                          </span>
+                        );
+                      })}
                       {account.roles.length > 0 ? (
                         account.roles.map((role) => (
                           <span
@@ -679,9 +737,9 @@ export default function AdminPermissionsPage() {
                             {role}
                           </span>
                         ))
-                      ) : (
+                      ) : account.roleTags.length === 0 ? (
                         <span className="text-sm text-gray-600">No roles</span>
-                      )}
+                      ) : null}
                       <span className="border border-cyan-400/20 bg-cyan-400/8 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-300">
                         {permissionCount} permissions
                       </span>
@@ -702,6 +760,16 @@ export default function AdminPermissionsPage() {
                       >
                         <KeyRound size={15} />
                         Permissions
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openRoleTagModal(account)}
+                        disabled={!capabilities.canManagePermissions || !canManageProtected}
+                        title={!capabilities.canManagePermissions ? "Full Permissions access is required" : !canManageProtected ? "Only Akhari can edit this account" : undefined}
+                        className="inline-flex items-center gap-2 border border-violet-400/35 bg-violet-400/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-violet-300 transition hover:bg-violet-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-gray-600"
+                      >
+                        <Tags size={15} />
+                        Role Tags
                       </button>
                       <button
                         type="button"
@@ -751,6 +819,91 @@ export default function AdminPermissionsPage() {
           )}
         </div>
       </section>
+
+      {roleTagAccount && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="account-role-tags-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !saving) setRoleTagAccount(null);
+          }}
+        >
+          <section className="w-full max-w-xl overflow-hidden border border-violet-400/30 bg-[#020806] shadow-[0_0_60px_rgba(167,139,250,0.12)]">
+            <header className="flex items-start justify-between gap-4 border-b border-violet-400/20 bg-violet-400/[0.04] p-5">
+              <div>
+                <div className="flex items-center gap-2 text-violet-300">
+                  <Tags size={18} />
+                  <span className="text-xs font-bold uppercase tracking-[0.2em]">Display Role Tags</span>
+                </div>
+                <h2 id="account-role-tags-title" className="mt-2 text-xl font-black text-white">
+                  {roleTagAccount.displayName || roleTagAccount.username || "Unnamed account"}
+                </h2>
+                <p className="mt-1 text-sm text-gray-400">
+                  Tags are visual labels only and do not grant permissions.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close role tag editor"
+                disabled={saving}
+                onClick={() => setRoleTagAccount(null)}
+                className="grid h-10 w-10 shrink-0 place-items-center border border-white/10 text-gray-400 transition hover:border-red-400/40 hover:text-red-300 disabled:opacity-40"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <div className="space-y-2 p-5">
+              {accountRoleTagDefinitions.map((definition) => {
+                const selected = draftRoleTags.includes(definition.key);
+                return (
+                  <label
+                    key={definition.key}
+                    className={`flex min-h-14 cursor-pointer items-center justify-between gap-4 border px-4 py-3 transition ${
+                      selected ? definition.className : "border-white/10 bg-white/[0.02] text-gray-300 hover:border-white/20"
+                    }`}
+                  >
+                    <span className="font-semibold">{definition.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      disabled={saving}
+                      onChange={() => setDraftRoleTags((current) =>
+                        current.includes(definition.key)
+                          ? current.filter((tag) => tag !== definition.key)
+                          : [...current, definition.key]
+                      )}
+                      className="h-5 w-5 accent-violet-400"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+
+            <footer className="flex flex-col-reverse gap-2 border-t border-white/10 bg-black/30 p-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setRoleTagAccount(null)}
+                className="min-h-11 border border-white/15 px-5 py-2 text-sm font-semibold text-gray-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void saveRoleTags()}
+                className="inline-flex min-h-11 items-center justify-center gap-2 border border-violet-400/40 bg-violet-400/10 px-5 py-2 text-sm font-bold text-violet-200 transition hover:bg-violet-400/20 disabled:opacity-40"
+              >
+                {saving ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
+                Save Role Tags
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
 
       {selectedAccount && (
         <div className="fixed inset-0 z-[80] flex items-stretch justify-center bg-black/85 p-0 backdrop-blur-sm sm:items-center sm:p-4">

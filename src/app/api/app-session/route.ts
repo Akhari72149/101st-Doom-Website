@@ -24,9 +24,13 @@ export async function GET(request: Request) {
       mustChangePassword?: boolean;
     };
     const mustChangePassword = Boolean(nativeUser.mustChangePassword);
-    const [roleData, permissionData] = await Promise.all([
+    const [roleData, roleTagData, permissionData] = await Promise.all([
       getPostgresPool().query<{ role: string }>(
         "select role from public.user_roles where user_id = $1",
+        [nativeUser.id],
+      ),
+      getPostgresPool().query<{ tag: string }>(
+        "select tag from public.account_role_tags where user_id = $1 order by assigned_at, tag",
         [nativeUser.id],
       ),
       mustChangePassword
@@ -46,6 +50,7 @@ export async function GET(request: Request) {
         email: nativeUser.email || null,
       },
       roles: mustChangePassword ? [] : roleData.rows.map((row) => String(row.role).toLowerCase()),
+      roleTags: mustChangePassword ? [] : roleTagData.rows.map((row) => row.tag),
       permissions: Object.fromEntries(
         permissionData.rows.map((row) => [row.permission_key, row.access_level]),
       ),
@@ -81,6 +86,7 @@ export async function GET(request: Request) {
       email: auth.email,
     },
     roles: auth.roles,
+    roleTags: [],
     permissions,
     mode: "supabase",
     mustChangePassword: false,

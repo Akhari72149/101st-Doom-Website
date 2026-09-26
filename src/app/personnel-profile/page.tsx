@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
 import { getAppSession, hasAppPermission } from "@/lib/client-auth";
+import { Paperclip } from "lucide-react";
 import {
   GiArmorVest,
   GiCheckedShield,
@@ -349,6 +350,7 @@ function MedalIcon({
   if (iconKey === "plasma") return <GiMedicines className={className} style={style} />;
   if (iconKey === "surgery") return <GiLifeSupport className={className} style={style} />;
   if (iconKey === "lungs") return <GiLungs className={className} style={style} />;
+  if (iconKey === "paperclip") return <Paperclip className={className} style={style} />;
   return <GiMedal className={className} style={style} />;
 }
 

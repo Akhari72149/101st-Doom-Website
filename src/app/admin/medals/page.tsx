@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   FileText,
   Medal,
+  Paperclip,
   Search,
   Trash2,
   UserRound,
@@ -101,6 +102,7 @@ function MedalIcon({
   if (iconKey === "lungs") return <GiLungs className={className} style={style} />;
   if (iconKey === "hammer") return <Gi3dHammer className={className} style={style} />;
   if (iconKey === "server") return <GiServerRack className={className} style={style} />;
+  if (iconKey === "paperclip") return <Paperclip className={className} style={style} />;
   return <GiMedal className={className} style={style} />;
 }
 

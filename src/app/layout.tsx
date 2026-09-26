@@ -9,9 +9,28 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
-  title: "101st Doom Battalion | Official Military Operations Hub",
+  metadataBase: new URL("https://101stdoombattalion.com"),
+  applicationName: "101st Doom Battalion",
+  title: {
+    default: "101st Doom Battalion",
+    template: "%s | 101st Doom Battalion",
+  },
   description:
-    "The official operational command system for personnel management.",
+    "The official website and personnel operations platform of the 101st Doom Battalion.",
+  openGraph: {
+    type: "website",
+    siteName: "101st Doom Battalion",
+    title: "101st Doom Battalion",
+    description: "The official website and personnel operations platform of the 101st Doom Battalion.",
+    url: "/",
+    images: [{ url: "/icons/DBLogo.jpg", alt: "101st Doom Battalion emblem" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "101st Doom Battalion",
+    description: "The official website and personnel operations platform of the 101st Doom Battalion.",
+    images: ["/icons/DBLogo.jpg"],
+  },
   icons: {
     icon: [{ url: "/icons/DBLogo-favicon.png", type: "image/png" }],
     shortcut: "/icons/DBLogo-favicon.png",

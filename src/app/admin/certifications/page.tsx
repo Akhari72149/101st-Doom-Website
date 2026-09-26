@@ -169,7 +169,7 @@ export default function ManageCertifications() {
 
   const broadcastWebsiteAction = async (payload: Record<string, unknown>) => {
     try {
-      await fetch("/api/website-action", {
+      const response = await fetch("/api/website-action", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -177,8 +177,14 @@ export default function ManageCertifications() {
         },
         body: JSON.stringify(payload),
       });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error || `Discord notification returned HTTP ${response.status}`);
+      }
+      return true;
     } catch (error) {
       console.error("Failed to broadcast website action:", error);
+      return false;
     }
   };
 
@@ -204,17 +210,22 @@ export default function ManageCertifications() {
       return;
     }
 
+    let notificationFailed = false;
     for (const personId of selectedPeople) {
       for (const certId of selectedCerts) {
         const certification = certifications.find((c) => c.id === certId);
 
-        await broadcastWebsiteAction({
+        if (!(await broadcastWebsiteAction({
           action: "CERTIFICATION_ASSIGNED",
           target_personnel_id: personId,
           processedBy: processedByName,
           certName: certification?.name || "Unknown Certification",
-        });
+        }))) notificationFailed = true;
       }
+    }
+
+    if (notificationFailed) {
+      alert("Certifications were assigned, but one or more Discord admin messages could not be sent.");
     }
 
     setSelectedCerts([]);
@@ -238,12 +249,15 @@ export default function ManageCertifications() {
     }
 
     if (targetPersonnelId) {
-      await broadcastWebsiteAction({
+      const notified = await broadcastWebsiteAction({
         action: "CERTIFICATION_REVOKED",
         target_personnel_id: targetPersonnelId,
         processedBy: processedByName,
         certName,
       });
+      if (!notified) {
+        alert("The certification was revoked, but its Discord admin message could not be sent.");
+      }
     }
 
     if (selectedPeople.length === 1) {

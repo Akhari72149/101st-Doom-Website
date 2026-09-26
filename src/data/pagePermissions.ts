@@ -18,14 +18,6 @@ export const pagePermissionLevels: PagePermissionAccess[] = [
 
 export const pagePermissionDefinitions: PagePermissionDefinition[] = [
   {
-    key: "records.audit",
-    pagePath: "/audit",
-    label: "Audit Log",
-    category: "Records",
-    description: "Review system and personnel audit actions.",
-    legacyRoles: ["admin", "nco", "trainer", "di"],
-  },
-  {
     key: "admin.taskboard",
     pagePath: "/admin/Taskboard",
     label: "Taskboard",

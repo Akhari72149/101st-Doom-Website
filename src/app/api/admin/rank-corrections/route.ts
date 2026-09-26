@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
+import { broadcastWebsiteAction } from "@/lib/broadcastWebsiteAction";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,8 +34,11 @@ export async function POST(request: Request) {
 
   try {
     const result = await withPostgresTransaction(async (client) => {
-      const person = await client.query<{ name: string; rank_id: string | null; rank_effective_at: Date | null }>(
-        `select name,rank_id,rank_effective_at from public.personnel where id=$1 for update`, [personnelId],
+      const person = await client.query<{ name: string; discord_id: string | null; rank_id: string | null; rank_name: string | null; rank_effective_at: Date | null }>(
+        `select personnel.name,personnel.discord_id,personnel.rank_id,personnel.rank_effective_at,ranks.name rank_name
+           from public.personnel personnel
+           left join public.ranks ranks on ranks.id=personnel.rank_id
+          where personnel.id=$1 for update of personnel`, [personnelId],
       );
       if (!person.rowCount) throw new Error("NOT_FOUND");
       const current = person.rows[0];
@@ -51,9 +55,23 @@ export async function POST(request: Request) {
         auth.userId, personnelId, current.rank_id, rankId,
         `Corrected rank to ${rank.rows[0].name} without changing TIG. Reason: ${reason}`,
       ]);
-      return { rankId, rankName: rank.rows[0].name, rankEffectiveAt: current.rank_effective_at };
+      return { rankId, rankName: rank.rows[0].name, rankEffectiveAt: current.rank_effective_at,
+        personName: current.name, personnelDiscordId: current.discord_id, oldRankName: current.rank_name };
     });
-    return NextResponse.json({ success: true, ...result });
+    const actor = await getPostgresPool().query<{ display_name: string | null }>(
+      `select coalesce(nullif("displayUsername",''),nullif(name,''),nullif(username,'')) display_name
+         from public.app_auth_users where id=$1`, [auth.userId],
+    );
+    await broadcastWebsiteAction({
+      action: "RANK_CHANGED",
+      target_personnel_id: personnelId,
+      personnelName: result.personName,
+      personnelDiscordId: result.personnelDiscordId,
+      processedBy: actor.rows[0]?.display_name || auth.email || "Website administrator",
+      oldRankName: result.oldRankName || "Unranked",
+      rankName: result.rankName,
+    });
+    return NextResponse.json({ success: true, rankId: result.rankId, rankName: result.rankName, rankEffectiveAt: result.rankEffectiveAt });
   } catch (caught) {
     const code = caught instanceof Error ? caught.message : "";
     if (code === "NOT_FOUND") return fail("Personnel record not found", 404);

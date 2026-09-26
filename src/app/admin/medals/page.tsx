@@ -248,14 +248,15 @@ export default function MedalAwardingPage() {
     setSuccessMessage("");
 
     const response = await fetch("/api/admin/medals", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({ personnelId:selectedPerson.id, awardId:selectedMedal.id, notes }) });
+    const result=await response.json().catch(()=>null) as {error?:string;discordNotified?:boolean}|null;
     if (!response.ok) {
-      const data=await response.json().catch(()=>null) as {error?:string}|null;
-      setErrorMessage(data?.error || "Failed to award medal");
+      setErrorMessage(result?.error || "Failed to award medal");
       setSubmitting(false);
       return;
     }
 
     setSuccessMessage(`${selectedMedal.name} awarded to ${selectedPerson.name}.`);
+    if(result?.discordNotified===false)setErrorMessage("The medal was awarded, but its Discord admin message could not be sent.");
     setSelectedMedal(null);
     setMedalSearch("");
     setNotes("");
@@ -272,14 +273,15 @@ export default function MedalAwardingPage() {
     setSuccessMessage("");
 
     const response = await fetch(`/api/admin/medals?id=${encodeURIComponent(rowId)}`, { method:"DELETE", credentials:"same-origin", headers:await getAppAuthHeaders() });
+    const result=await response.json().catch(()=>null) as {error?:string;discordNotified?:boolean}|null;
     if (!response.ok) {
-      const data=await response.json().catch(()=>null) as {error?:string}|null;
-      setErrorMessage(data?.error || "Failed to remove medal");
+      setErrorMessage(result?.error || "Failed to remove medal");
       setRemovingMedalId(null);
       return;
     }
 
     setSuccessMessage("Medal removed.");
+    if(result?.discordNotified===false)setErrorMessage("The medal was removed, but its Discord admin message could not be sent.");
     await loadMedalsForPerson(selectedPerson);
     setRemovingMedalId(null);
   }

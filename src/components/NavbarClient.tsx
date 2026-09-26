@@ -159,6 +159,11 @@ export default function NavbarClient() {
           label: "FAQ",
           description: "Common questions and quick answers",
         },
+        {
+          href: "/audit",
+          label: "Audit Log",
+          description: "Review logged system and personnel actions",
+        },
       ],
     },
     {
@@ -191,12 +196,6 @@ export default function NavbarClient() {
           href: "/Tags",
           label: "Tag Lookup",
           description: "Search personnel by role or status tags",
-        },
-        {
-          href: "/audit",
-          label: "Audit Log",
-          description: "Review logged system and personnel actions",
-          allowedRoles: ["admin", "nco", "trainer", "di"],
         },
       ],
     },

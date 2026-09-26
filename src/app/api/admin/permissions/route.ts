@@ -496,11 +496,16 @@ export async function PATCH(request: Request) {
     }
     try {
       await withPostgresTransaction(async (client) => {
-        const target = await client.query(
-          "select id from public.app_auth_users where id=$1 for update",
+        const target = await client.query<{ id: string; display_name: string }>(
+          `select id, coalesce("displayUsername", name, username) as display_name
+             from public.app_auth_users where id=$1 for update`,
           [userId],
         );
         if (!target.rowCount) throw new Error("NOT_FOUND");
+        const previousTags = await client.query<{ tag: string }>(
+          "select tag from public.account_role_tags where user_id=$1 order by tag",
+          [userId],
+        );
         await client.query("delete from public.account_role_tags where user_id=$1", [userId]);
         for (const tag of roleTags) {
           await client.query(
@@ -510,11 +515,12 @@ export async function PATCH(request: Request) {
           );
         }
         await client.query(
-          `insert into public.audit_logs(user_id,action,details)
-           values($1,'ACCOUNT_ROLE_TAGS_UPDATED',$2)`,
+          `insert into public.audit_logs(user_id,target_account_id,action,details)
+           values($1,$2,'ACCOUNT_ROLE_TAGS_UPDATED',$3)`,
           [
             auth.userId,
-            `Updated display role tags for account ${userId}: ${roleTags.join(", ") || "none"}.`,
+            userId,
+            `Role tags changed from ${previousTags.rows.map((row) => row.tag).join(", ") || "none"} to ${roleTags.join(", ") || "none"}.`,
           ],
         );
       });

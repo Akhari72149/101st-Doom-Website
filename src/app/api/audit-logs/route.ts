@@ -22,6 +22,9 @@ function serialize(row: Record<string, unknown>) {
     profiles: row.profile_name ? { display_name: row.profile_name } : null,
     processor: row.processor_name ? { name: row.processor_name } : null,
     personnel: row.personnel_name ? { name: row.personnel_name } : null,
+    targetAccount: row.target_account_name
+      ? { display_name: row.target_account_name }
+      : null,
     ranks: row.rank_name ? { name: row.rank_name } : null,
     oldRank: row.old_rank_name ? { name: row.old_rank_name } : null,
     certifications: row.certification_name ? { name: row.certification_name } : null,
@@ -87,12 +90,14 @@ async function postgresLogs(input: ReturnType<typeof filters>) {
             a.target_personnel_id, a.target_slot_label, a.target_slot_section, a.target_slot_subsection,
             coalesce(accounts."displayUsername", accounts.name, accounts.username, pr.display_name) as profile_name,
             processor.name as processor_name, p.name as personnel_name,
+            coalesce(target_account."displayUsername", target_account.name, target_account.username) as target_account_name,
             r.name as rank_name, oldr.name as old_rank_name, c.name as certification_name
        from public.audit_logs a
        left join public.app_auth_users accounts on accounts.id = a.user_id
        left join public.profiles pr on pr.id = a.user_id
        left join public.personnel processor on processor.id = a.processed_by
        left join public.personnel p on p.id = a.target_personnel_id
+       left join public.app_auth_users target_account on target_account.id = a.target_account_id
        left join public.ranks r on r.id = a.target_rank_id
        left join public.ranks oldr on oldr.id = a.old_rank_id
        left join public.certifications c on c.id = a.target_certification_id
@@ -128,8 +133,10 @@ async function supabaseLogs(input: ReturnType<typeof filters>) {
 
 export async function GET(request: Request) {
   const input = filters(request);
-  const permission = input.scope === "removals" ? "admin.removal-log" : "records.audit";
-  if (!(await requirePageAccess(request, permission, "read").catch(() => null))) {
+  if (
+    input.scope === "removals" &&
+    !(await requirePageAccess(request, "admin.removal-log", "read").catch(() => null))
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   try {

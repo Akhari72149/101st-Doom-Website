@@ -88,7 +88,6 @@ const permissionPresets: PermissionPreset[] = [
     name: "NCO",
     description: "Ranks, attendance records, removals, and personnel oversight",
     permissions: {
-      "records.audit": "read",
       "admin.positions": "edit",
       "admin.medals": "read",
       "admin.weekly-attendance": "edit",
@@ -100,7 +99,6 @@ const permissionPresets: PermissionPreset[] = [
     name: "Trainer",
     description: "Certification management and personnel oversight",
     permissions: {
-      "records.audit": "read",
       "admin.certifications": "edit",
     },
   },

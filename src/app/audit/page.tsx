@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   RefreshCw,
@@ -19,6 +18,7 @@ const DEFAULT_RECENT_DAYS = 5;
 type LogRow = {
   id: string;
   action: string;
+  details?: string | null;
   created_at: string;
   user_id: string | null;
   processed_by: string | null;
@@ -30,6 +30,9 @@ type LogRow = {
   } | null;
   personnel?: {
     name?: string | null;
+  } | null;
+  targetAccount?: {
+    display_name?: string | null;
   } | null;
   ranks?: {
     name?: string | null;
@@ -43,6 +46,55 @@ type LogRow = {
   target_slot_label?: string | null;
   target_slot_section?: string | null;
   target_slot_subsection?: string | null;
+};
+
+const formatAction = (action: string) =>
+  action
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+const formatAffectedRecord = (log: LogRow) => {
+  if (log.targetAccount?.display_name) return log.targetAccount.display_name;
+  if (log.personnel?.name) return log.personnel.name;
+  if (log.certifications?.name) return log.certifications.name;
+  if (log.ranks?.name) return log.ranks.name;
+  if (log.target_slot_label) return log.target_slot_label;
+  return "System configuration";
+};
+
+const formatChange = (log: LogRow) => {
+  if (
+    log.action === "CERTIFICATION_ASSIGNED" ||
+    log.action === "CERTIFICATION_REVOKED"
+  ) {
+    const verb = log.action === "CERTIFICATION_ASSIGNED" ? "Assigned" : "Revoked";
+    return `${verb} ${log.certifications?.name || "unknown certification"}.`;
+  }
+
+  if (log.action === "RANK_CHANGED") {
+    const oldRank = log.oldRank?.name || "Unranked";
+    const newRank = log.ranks?.name || "Unranked";
+    const change = oldRank === newRank
+      ? `Updated the effective date for ${newRank}.`
+      : `Changed rank from ${oldRank} to ${newRank}.`;
+    return log.details ? `${change} ${log.details}` : change;
+  }
+
+  if (
+    log.action === "POSITION_ASSIGNED" ||
+    log.action === "POSITION_UNASSIGNED"
+  ) {
+    const section = log.target_slot_section || "";
+    const subsection = log.target_slot_subsection || "";
+    const label = log.target_slot_label || "Unknown Slot";
+    const parts = [section, subsection, label].filter(Boolean);
+    const verb = log.action === "POSITION_ASSIGNED" ? "Assigned to" : "Removed from";
+    return `${verb} ${parts.join(" - ")}.`;
+  }
+
+  return log.details || `${formatAction(log.action)} was recorded.`;
 };
 
 export default function AuditLogsPage() {
@@ -72,17 +124,8 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     const init = async () => {
-      const session = await getAppSession();
-      if (!session) {
-        router.replace("/login");
-        return;
-      }
-      if (!hasAppPermission(session, "records.audit")) {
-        router.replace("/");
-        return;
-      }
       const response = await fetch("/api/audit-logs?options=true", {
-        cache: "no-store", headers: await getAppAuthHeaders(),
+        cache: "no-store",
       });
       if (response.ok) {
         const data = await response.json() as { users?: string[]; actions?: string[]; personnel?: string[] };
@@ -94,7 +137,7 @@ export default function AuditLogsPage() {
     };
 
     init();
-  }, [router]);
+  }, []);
 
   const renderName = (name: string) => {
     if (!name) return <span className="text-gray-500">Unknown</span>;
@@ -114,7 +157,7 @@ export default function AuditLogsPage() {
     return <span className="text-white">{name}</span>;
   };
 
-  const fetchLogs = async (isManualRefresh = false) => {
+  const fetchLogs = useCallback(async (isManualRefresh = false) => {
     if (isManualRefresh) {
       setRefreshing(true);
     } else {
@@ -150,7 +193,7 @@ export default function AuditLogsPage() {
     }
 
     const response = await fetch(`/api/audit-logs?${params}`, {
-      cache: "no-store", headers: await getAppAuthHeaders(),
+      cache: "no-store",
     });
     const payload = await response.json().catch(() => null) as { logs?: LogRow[]; error?: string } | null;
     if (!response.ok) {
@@ -163,7 +206,7 @@ export default function AuditLogsPage() {
     setLogs(payload?.logs || []);
     setLoadingLogs(false);
     setRefreshing(false);
-  };
+  }, [hasManualFilter, selectedAction, selectedDate, selectedPersonnel, selectedUser]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -172,14 +215,7 @@ export default function AuditLogsPage() {
     }
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [
-    loadingAuth,
-    selectedUser,
-    selectedAction,
-    selectedDate,
-    selectedPersonnel,
-    search,
-  ]);
+  }, [fetchLogs, loadingAuth]);
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleString();
@@ -200,36 +236,6 @@ export default function AuditLogsPage() {
     if (days < 7) return `${days}d ago`;
 
     return new Date(date).toLocaleDateString();
-  };
-
-  const formatTarget = (log: LogRow) => {
-    if (
-      log.action === "CERTIFICATION_ASSIGNED" ||
-      log.action === "CERTIFICATION_REVOKED"
-    ) {
-      return `Certification → ${
-        log.certifications?.name || "Unknown Certification"
-      }`;
-    }
-
-    if (log.action === "RANK_CHANGED") {
-      const oldRank = log.oldRank?.name || "Unranked";
-      const newRank = log.ranks?.name || "Unranked";
-      return `${oldRank} → ${newRank}`;
-    }
-
-    if (
-      log.action === "POSITION_ASSIGNED" ||
-      log.action === "POSITION_UNASSIGNED"
-    ) {
-      const section = log.target_slot_section || "";
-      const subsection = log.target_slot_subsection || "";
-      const label = log.target_slot_label || "Unknown Slot";
-      const parts = [section, subsection, label].filter(Boolean);
-      return parts.join(" — ");
-    }
-
-    return "General audit entry";
   };
 
   const getUserName = (log: LogRow) => {
@@ -273,16 +279,16 @@ export default function AuditLogsPage() {
 
     return logs.filter((log) => {
       const userName = getUserName(log).toLowerCase();
-      const personnelName = (log.personnel?.name || "Mommy Doombot").toLowerCase();
-      const targetText = formatTarget(log).toLowerCase();
+      const affectedRecord = formatAffectedRecord(log).toLowerCase();
+      const changeText = formatChange(log).toLowerCase();
       const actionText = (log.action || "").toLowerCase();
 
       if (!term) return true;
 
       return (
         userName.includes(term) ||
-        personnelName.includes(term) ||
-        targetText.includes(term) ||
+        affectedRecord.includes(term) ||
+        changeText.includes(term) ||
         actionText.includes(term)
       );
     });
@@ -492,7 +498,7 @@ export default function AuditLogsPage() {
                   <option value="all">All Actions</option>
                   {actions.map((action) => (
                     <option key={action} value={action}>
-                      {action}
+                      {formatAction(action)}
                     </option>
                   ))}
                 </select>
@@ -553,8 +559,8 @@ export default function AuditLogsPage() {
               <table className="w-full min-w-[1080px] text-left border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-black/90 backdrop-blur-xl border-b border-[#00ff66]/15 text-[#00ff66] text-sm">
-                    <th className="p-4 font-semibold">User</th>
-                    <th className="p-4 font-semibold">Personnel</th>
+                    <th className="p-4 font-semibold">Actor</th>
+                    <th className="p-4 font-semibold">Affected Record</th>
                     <th className="p-4 font-semibold">Action</th>
                     <th className="p-4 font-semibold">Details</th>
                     <th className="p-4 font-semibold">Time</th>
@@ -607,9 +613,8 @@ export default function AuditLogsPage() {
                   ) : (
                     filteredLogs.map((log) => {
                       const userName = getUserName(log);
-                      const personnelName =
-                        log.personnel?.name || "Mommy Doombot";
-                      const targetText = formatTarget(log);
+                      const affectedRecord = formatAffectedRecord(log);
+                      const changeText = formatChange(log);
 
                       return (
                         <tr
@@ -624,7 +629,7 @@ export default function AuditLogsPage() {
 
                           <td className="p-4 align-top">
                             <div className="font-medium">
-                              {renderName(personnelName)}
+                              {renderName(affectedRecord)}
                             </div>
                           </td>
 
@@ -634,17 +639,17 @@ export default function AuditLogsPage() {
                                 log.action
                               )}`}
                             >
-                              {log.action}
+                              {formatAction(log.action)}
                             </div>
                           </td>
 
                           <td className="p-4 align-top">
                             <div className="max-w-[520px]">
                               <div className="text-[11px] uppercase tracking-[0.16em] text-gray-500 mb-1">
-                                Target
+                                Change
                               </div>
                               <div className="text-sm text-gray-300 leading-relaxed break-words">
-                                {targetText}
+                                {changeText}
                               </div>
                             </div>
                           </td>

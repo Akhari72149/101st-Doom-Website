@@ -34,11 +34,16 @@ export default function RankManagementPage() {
 
   async function save(rank: Rank) {
     setSaving(rank.id); setMessage("");
-    const response = await fetch("/api/admin/ranks", { method: "PATCH", headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({ id: rank.id, name: rank.name, rankLevel: rank.rank_level, discordRoleId: rank.discord_role_id, isActive: rank.is_active }) });
-    const body = await response.json();
-    setSaving("");
-    if (!response.ok) return setMessage(body.error || "Failed to update rank");
-    setMessage("Rank updated."); await load();
+    try {
+      const response = await fetch("/api/admin/ranks", { method: "PATCH", headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({ id: rank.id, name: rank.name, rankLevel: rank.rank_level, discordRoleId: rank.discord_role_id, isActive: rank.is_active }) });
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) return setMessage(body?.error || "Failed to update rank");
+      setMessage("Rank updated."); await load();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Failed to update rank");
+    } finally {
+      setSaving("");
+    }
   }
 
   async function create() {

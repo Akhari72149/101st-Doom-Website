@@ -70,7 +70,7 @@ const rules: PromotionRule[] = [
   { from: ["CXC", "CX-C"], target: "CX", minimumTigDays: 90, minimumAttendance: 75, requiresSlot: true, manual: ["CX Course completion"] },
   { from: ["CX"], target: "CSX", minimumTigDays: 150, minimumAttendance: 75, requiresSlot: true, manual: ["VTOL qualification", "Platoon approval"] },
   { from: ["CSX"], target: "CVX", minimumTigDays: 120, minimumAttendance: 80, requiresSlot: true, manual: ["Platoon approval"] },
-  { from: ["CVX"], target: "CXX", targetAliases: ["CX-X"], minimumTigDays: 125, minimumAttendance: 80, requiresSlot: true },
+  { from: ["CVX", "CX-V"], target: "CXX", targetAliases: ["CX-X"], minimumTigDays: 125, minimumAttendance: 80, requiresSlot: true },
   { from: ["CXX", "CX-X"], target: "CXT", targetAliases: ["CX-T"], minimumTigDays: 180, minimumAttendance: 90, requiresSlot: true },
   { from: ["CXT", "CX-T"], target: "CXP", targetAliases: ["CX-P"], requiresAlphaPilotSlot: true, manual: ["Corporals Course completion"] },
   { from: ["CXP", "CX-P"], target: "CXS", manual: ["Sergeants Course completion"] },

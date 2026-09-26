@@ -66,15 +66,21 @@ export async function PATCH(request: Request) {
   if (isActive === false && !(await requirePageAccess(request, "admin.ranks", "full").catch(() => null))) {
     return error("Full access is required to retire a rank", 403);
   }
-  const updated = await withPostgresTransaction(async (client) => {
-    const result = await client.query(`update public.ranks set name=$2,rank_level=$3,discord_role_id=$4,is_active=$5
-      where id=$1 returning id,name,rank_level,discord_role_id,is_active`, [id, name, level, discordRoleId, isActive]);
-    if (!result.rowCount) return null;
-    await client.query(`insert into public.audit_logs(user_id,action,details)
-      values($1,'RANK_DEFINITION_UPDATED',$2)`, [auth.userId, `Updated rank ${name}; active=${isActive}`]);
-    return result.rows[0];
-  });
-  return updated ? NextResponse.json({ rank: updated }) : error("Rank not found", 404);
+  try {
+    const updated = await withPostgresTransaction(async (client) => {
+      const result = await client.query(`update public.ranks set name=$2,rank_level=$3,discord_role_id=$4,is_active=$5
+        where id=$1 returning id,name,rank_level,discord_role_id,is_active`, [id, name, level, discordRoleId, isActive]);
+      if (!result.rowCount) return null;
+      await client.query(`insert into public.audit_logs(user_id,action,details)
+        values($1,'RANK_DEFINITION_UPDATED',$2)`, [auth.userId, `Updated rank ${name}; active=${isActive}`]);
+      return result.rows[0];
+    });
+    return updated ? NextResponse.json({ rank: updated }) : error("Rank not found", 404);
+  } catch (caught) {
+    if ((caught as { code?: string }).code === "23505") return error(`A rank named ${name} already exists`, 409);
+    console.error("[ranks] Update failed", caught);
+    return error("Failed to update rank", 500);
+  }
 }
 
 export async function PUT(request: Request) {

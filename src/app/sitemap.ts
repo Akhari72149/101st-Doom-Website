@@ -5,16 +5,23 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const routes = [
     "/",
-    "/Who-Are-We",
+    "/Who-We-Are",
+    "/Join",
+    "/certs",
     "/certifications",
-    "/Galactic-Campaign",
-    "/Art-of-War",
-    "/personnel-profile",
-    "/grand-orbat",
     "/rank-structure",
+    "/documents",
+    "/faq",
+    "/audit",
     "/roster",
+    "/grand-orbat",
+    "/Tags",
     "/servers",
-    "/vault",
+    "/Galactic-Campaign",
+    "/Galactic-Campaign/operation-last-stand",
+    "/Art-of-War",
+    "/News",
+    "/model-customiser",
     "/legal/privacy",
     "/legal/terms",
     "/legal/cookies",
@@ -22,7 +29,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return routes.map((route) => ({
     url: `${baseUrl}${route}`,
-    lastModified: new Date(),
     changeFrequency: "weekly",
     priority: route === "/" ? 1 : 0.8,
   }));

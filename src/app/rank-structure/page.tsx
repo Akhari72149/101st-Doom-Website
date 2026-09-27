@@ -1,15 +1,8 @@
-import type { Metadata } from "next";
 import Image from "next/image";
 import {
   Shield,
 } from "lucide-react";
 import RankStructureTabs, { type RankTrack } from "./RankStructureTabs";
-
-export const metadata: Metadata = {
-  title: "Rank Structure | 101st Doom Battalion",
-  description:
-    "View the 101st Doom Battalion rank structure, progression routes, and promotion requirements.",
-};
 
 const tracks: RankTrack[] = [
   {

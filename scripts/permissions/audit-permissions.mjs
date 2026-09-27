@@ -26,14 +26,14 @@ assert(!serverPermissionSource.includes("legacyRoles"), "Legacy roles must not b
 
 const contracts = [
   ["src/app/api/admin/personnel-profiles/route.ts", 'requirePageAccess(request,PERMISSION,"read")', 'validActions.includes(action)', 'action==="reactivate"?"full":"edit"', 'requirePageAccess(request,PERMISSION,requiredAccess)'],
-  ["src/app/api/admin/certifications/route.ts", 'requirePageAccess(req,"admin.certifications","read")', 'requirePageAccess(req,"admin.certifications","edit")'],
+  ["src/app/api/admin/certifications/route.ts", 'requirePageAccess(request,"admin.certifications","read")', 'requirePageAccess(request,"admin.certifications","edit")'],
   ["src/app/api/admin/medals/route.ts", 'requirePageAccess(request,"admin.medals","read")', 'requirePageAccess(request,"admin.medals","edit")'],
   ["src/app/api/admin/personnel-operations/route.ts", 'requirePageAccess(request,permission,"read")', 'requirePageAccess(request,permission,"edit")'],
   ["src/app/api/admin/updater/route.ts", 'requirePageAccess(request,"admin.updater","read")', 'requirePageAccess(request,"admin.updater","full")'],
   ["src/app/api/admin/discipline/route.ts", 'requirePageAccess(request,PERMISSION,"read")', 'approvalOnly?APPROVAL_PERMISSION:PERMISSION', 'approvalOnly?"edit":fullOnly?"full":"edit"'],
   ["src/app/api/admin/permissions/route.ts", 'requirePermissionManager(request,"admin.permissions","read")', 'requirePermissionManager(request,actionPermission,"full")'],
   ["src/app/api/attendance/route.ts", 'requirePageAccess(request,PERMISSION_KEY,"edit")'],
-  ["src/app/api/audit-logs/route.ts", 'requirePageAccess(request,permission,"read")'],
+  ["src/app/api/audit-logs/route.ts", 'input.scope==="removals"', 'requirePageAccess(request,"admin.removal-log","read")'],
   ["src/app/api/cis-logistics/route.ts", 'requirePageAccess(request,KEY,"read")', 'requirePageAccess(request,KEY,"edit")'],
   ["src/app/api/discord-announcements/route.ts", 'requirePageAccess(request,"admin.discord-announcements","read")', 'requirePageAccess(request,"admin.discord-announcements","edit")'],
   ["src/app/api/discord-announcements/[id]/route.ts", 'requirePageAccess(request,"admin.discord-announcements","edit")'],

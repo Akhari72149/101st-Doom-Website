@@ -50,6 +50,7 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 [IO.File]::WriteAllText($websiteLauncher, @"
 @echo off
 cd /d "$WebsiteRoot"
+set NODE_USE_SYSTEM_CA=1
 "$node" "node_modules\next\dist\bin\next" start
 "@, $utf8)
 
@@ -87,4 +88,3 @@ Register-ScheduledTask -TaskName $UpdaterTaskName -Action $updaterAction `
 
 Write-Host "Managed website and updater tasks were registered."
 Write-Host "Stop the current interactive website, then run: Start-ScheduledTask -TaskName '$WebsiteTaskName'"
-

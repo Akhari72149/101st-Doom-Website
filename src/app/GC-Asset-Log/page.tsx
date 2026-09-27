@@ -548,7 +548,7 @@ export default function GCLogisticsTransactionsPage() {
             <div className="p-10 text-center">
               <div className="text-lg text-red-400">{error}</div>
               <div className="text-sm text-gray-500 mt-2">
-                Please try refreshing the page or checking Supabase access.
+                Please try refreshing the page or checking database access.
               </div>
             </div>
           ) : groupedTransactions.length === 0 ? (

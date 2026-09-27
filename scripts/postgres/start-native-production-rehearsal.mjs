@@ -30,6 +30,7 @@ const child = spawn(process.execPath, [next, 'start', '-H', '127.0.0.1', ...args
   env: {
     ...process.env,
     ...backendEnvironment,
+    NODE_USE_SYSTEM_CA: '1',
     NODE_ENV: 'production',
     NATIVE_AUTH_ENABLED: 'true',
     NEXT_PUBLIC_AUTH_BACKEND: 'native',

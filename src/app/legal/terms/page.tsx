@@ -3,7 +3,7 @@ import LegalPage, { LegalSection } from "@/components/legal/LegalPage";
 import { LEGAL_CONTACT_NAME } from "@/config/legal";
 
 export const metadata: Metadata = {
-  title: "Website Terms of Use | 101st Doom Battalion",
+  title: "Website Terms of Use",
   description:
     "Website Terms of Use for the 101st Doom Battalion operational website and account-linked community systems.",
 };
@@ -93,7 +93,7 @@ const termsSections: LegalSection[] = [
     id: "third-parties",
     title: "11. Third-party services and affiliation disclaimer",
     paragraphs: [
-      "The website may interact with third-party services including Discord, Steam or Valve, Supabase, hosting providers, Cloudflare where used, and email providers where configured.",
+      "The website may interact with third-party services including Discord, Steam or Valve, hosting providers, Cloudflare where used, and email providers where configured.",
       "The 101st Doom Battalion website and community are not officially affiliated with, endorsed by, sponsored by, or operated by Discord, Valve, Steam, Bohemia Interactive, Disney, or Lucasfilm. No ownership is claimed over third-party trademarks, names, services, or intellectual property.",
     ],
   },

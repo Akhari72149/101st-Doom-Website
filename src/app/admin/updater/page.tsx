@@ -187,7 +187,7 @@ export default function UpdaterPage() {
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-2xl font-black uppercase tracking-[0.12em] sm:text-3xl">Website Updater</h1>
-                <StatusBadge active={Boolean(active)} healthy={Boolean(healthy)} failed={status?.job?.status === "failed"} />
+                <StatusBadge active={Boolean(active)} healthy={Boolean(healthy)} failed={status?.job?.status === "failed"} unavailable={!status && !loading} />
               </div>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
                 Compare the installed release with the approved main branch and monitor controlled deployments.
@@ -204,7 +204,15 @@ export default function UpdaterPage() {
         <div className="p-6 lg:p-8">
           {error && <div className="mb-6 flex items-start gap-3 border border-red-400/35 bg-red-500/10 p-4 text-sm text-red-200"><TriangleAlert size={19} />{error}</div>}
 
-          {status?.updateAvailable ? (
+          {!status ? (
+            <div className="flex min-h-36 items-center gap-4 border border-amber-300/30 bg-amber-300/[0.06] p-6 text-amber-100">
+              <TriangleAlert className="shrink-0 text-amber-300" size={26} />
+              <div>
+                <div className="font-black uppercase tracking-[0.12em]">Release status unavailable</div>
+                <div className="mt-2 text-sm text-gray-300">The installed and available releases could not be compared. Check again before making deployment decisions.</div>
+              </div>
+            </div>
+          ) : status.updateAvailable ? (
             <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
               <ReleasePanel label="Installed Release" release={status.installed} />
               <div className="hidden items-center text-[#00ff66]/60 lg:flex"><ArrowRight size={26} /></div>
@@ -253,17 +261,17 @@ export default function UpdaterPage() {
 
           <div className="mt-6 grid gap-4 border border-[#00ff66]/15 bg-[#03110b]/75 p-5 sm:grid-cols-2 lg:grid-cols-4">
             <Detail icon={<Code2 size={17} />} label="Database" value="PostgreSQL 16" />
-            <Detail icon={<Server size={17} />} label="Node / Platform" value={status ? `${status.server.node} / ${status.server.platform}` : "Loading"} />
-            <Detail icon={<Clock3 size={17} />} label="Server Timezone" value={status?.server.timezone || "Loading"} />
-            <Detail icon={<GitBranch size={17} />} label="Working Tree" value={status?.installed.clean ? "Clean" : "Changes detected"} warning={status?.installed.clean === false} />
+            <Detail icon={<Server size={17} />} label="Node / Platform" value={status ? `${status.server.node} / ${status.server.platform}` : "Unavailable"} />
+            <Detail icon={<Clock3 size={17} />} label="Server Timezone" value={status?.server.timezone || "Unavailable"} />
+            <Detail icon={<GitBranch size={17} />} label="Working Tree" value={status ? (status.installed.clean ? "Clean" : "Changes detected") : "Unavailable"} warning={status?.installed.clean === false} />
           </div>
 
-          <div className={`mt-6 border p-5 ${status?.job?.status === "failed" ? "border-red-400/35 bg-red-500/10" : active ? "border-cyan-400/35 bg-cyan-400/10" : "border-[#00ff66]/30 bg-[#00ff66]/8"}`}>
+          <div className={`mt-6 border p-5 ${!status ? "border-amber-300/30 bg-amber-300/[0.06]" : status.job?.status === "failed" ? "border-red-400/35 bg-red-500/10" : active ? "border-cyan-400/35 bg-cyan-400/10" : "border-[#00ff66]/30 bg-[#00ff66]/8"}`}>
             <div className="flex items-start gap-3">
-              {active ? <Loader2 className="mt-0.5 animate-spin text-cyan-300" size={21} /> : status?.job?.status === "failed" ? <TriangleAlert className="mt-0.5 text-red-300" size={21} /> : <CheckCircle2 className="mt-0.5 text-[#00ff66]" size={21} />}
+              {!status ? <TriangleAlert className="mt-0.5 text-amber-300" size={21} /> : active ? <Loader2 className="mt-0.5 animate-spin text-cyan-300" size={21} /> : status.job?.status === "failed" ? <TriangleAlert className="mt-0.5 text-red-300" size={21} /> : <CheckCircle2 className="mt-0.5 text-[#00ff66]" size={21} />}
               <div>
-                <div className="font-bold">{active ? `Update ${status?.job?.stage || "queued"}` : status?.updateAvailable ? "A newer release is available" : "This server is running the latest release"}</div>
-                <div className="mt-1 text-sm text-gray-300">{status?.job?.message || (status?.updateAvailable ? "A full-permission updater may approve installation." : "No deployment action is required.")}</div>
+                <div className="font-bold">{!status ? "Release state could not be confirmed" : active ? `Update ${status.job?.stage || "queued"}` : status.updateAvailable ? "A newer release is available" : "This server is running the latest release"}</div>
+                <div className="mt-1 text-sm text-gray-300">{!status ? "Retry the release check or review the updater service before proceeding." : status.job?.message || (status.updateAvailable ? "A full-permission updater may approve installation." : "No deployment action is required.")}</div>
                 {status?.job && <div className="mt-2 text-xs uppercase tracking-[0.12em] text-gray-500">Last activity {dateTime(status.job.updated_at)} by {status.job.requested_by_name}</div>}
               </div>
             </div>
@@ -316,7 +324,7 @@ function Detail({ icon, label, value, warning }: { icon: React.ReactNode; label:
   return <div><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#7f9f8f]">{icon}{label}</div><div className={`mt-2 text-sm font-bold ${warning ? "text-amber-300" : "text-white"}`}>{value}</div></div>;
 }
 
-function StatusBadge({ active, healthy, failed }: { active: boolean; healthy: boolean; failed: boolean }) {
+function StatusBadge({ active, healthy, failed, unavailable }: { active: boolean; healthy: boolean; failed: boolean; unavailable: boolean }) {
   const style = failed ? "border-red-400/35 bg-red-500/10 text-red-300" : active ? "border-cyan-400/35 bg-cyan-400/10 text-cyan-300" : healthy ? "border-[#00ff66]/30 bg-[#00ff66]/10 text-[#00ff66]" : "border-amber-300/35 bg-amber-300/10 text-amber-200";
-  return <span className={`border px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${style}`}>{failed ? "Attention" : active ? "Updating" : healthy ? "Up to date" : "Update available"}</span>;
+  return <span className={`border px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${style}`}>{failed ? "Attention" : active ? "Updating" : healthy ? "Up to date" : unavailable ? "Status unavailable" : "Update available"}</span>;
 }

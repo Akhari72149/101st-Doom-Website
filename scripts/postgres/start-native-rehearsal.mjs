@@ -17,6 +17,7 @@ const child = spawn(process.execPath, [next, 'dev', ...args], {
   windowsHide: true,
   env: {
     ...process.env,
+    NODE_USE_SYSTEM_CA: '1',
     NATIVE_AUTH_ENABLED: 'true',
     NEXT_PUBLIC_AUTH_BACKEND: 'native',
     SERVER_BOOKINGS_BACKEND: 'postgres',

@@ -3,7 +3,7 @@ import LegalPage, { LegalSection } from "@/components/legal/LegalPage";
 import { LEGAL_CONTACT_NAME } from "@/config/legal";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy | 101st Doom Battalion",
+  title: "Cookie Policy",
   description:
     "Cookie Policy for the 101st Doom Battalion website, covering authentication, Steam linking, security, preference storage, analytics, and third-party storage.",
 };
@@ -14,7 +14,7 @@ const cookieSections: LegalSection[] = [
     title: "1. Overview",
     paragraphs: [
       "This Cookie Policy explains how the 101st Doom Battalion website uses cookies and similar browser storage technologies.",
-      "Only essential authentication and session storage, including Supabase authentication storage and a short-lived Steam linking cookie are used on this website. No non-essential analytics or advertising trackers are in use.",
+      "Only essential authentication and session storage, including the native website login session and a short-lived Steam linking cookie, are used on this website. No non-essential analytics or advertising trackers are in use.",
     ],
   },
   {
@@ -22,15 +22,15 @@ const cookieSections: LegalSection[] = [
     title: "2. Strictly necessary storage",
     paragraphs: [
       "Strictly necessary storage is used to keep the website secure, maintain login sessions, protect restricted areas, and support account-linking flows.",
-      "This includes Supabase authentication storage used by the website login system and the short-lived HTTP-only Steam linking session cookie used during Steam account linking.",
+      "This includes the secure session cookie used by the website login system and the short-lived HTTP-only Steam linking session cookie used during Steam account linking.",
     ],
   },
   {
-    id: "supabase",
-    title: "3. Supabase authentication storage",
+    id: "authentication",
+    title: "3. Website authentication session",
     paragraphs: [
-      "The website uses Supabase for authentication. Supabase client authentication may store session information in browser storage so that logged-in users can remain signed in and the website can check access to protected pages.",
-      "This storage is necessary for account login, role checks, and authenticated website features.",
+      "The website uses its own account system backed by the website database. A secure session cookie allows logged-in users to remain signed in and lets the website check access to protected pages.",
+      "This cookie is necessary for account login, permission checks, and authenticated website features.",
     ],
   },
   {

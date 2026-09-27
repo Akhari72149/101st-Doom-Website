@@ -6,14 +6,16 @@ import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client
 import { structure } from "@/data/structure";
 import { useRouter } from "next/navigation";
 import {
-  ChevronDown,
-  ChevronRight,
+  CalendarDays,
+  Check,
   Search,
   Users,
   CheckCircle2,
+  Clock3,
+  Loader2,
+  RefreshCw,
+  TriangleAlert,
   XCircle,
-  ShieldCheck,
-  PlaneTakeoff,
 } from "lucide-react";
 
 type Member = {
@@ -45,6 +47,13 @@ type AttendanceRecordRow = {
 };
 
 const assignmentOptions = ["Y", "N", "Excused", "LOA"];
+
+const statusLabels: Record<string, string> = {
+  Y: "Present",
+  N: "Absent",
+  Excused: "Excused",
+  LOA: "LOA",
+};
 
 const months = [
   "January",
@@ -110,26 +119,6 @@ function getDefaultAttendancePeriod() {
   };
 }
 
-function getStatusStyles(status: string) {
-  if (status === "Y") {
-    return "border-emerald-500/40 bg-[#0b1a12] text-emerald-300";
-  }
-
-  if (status === "N") {
-    return "border-red-500/40 bg-[#1a0b0b] text-red-300";
-  }
-
-  if (status === "Excused") {
-    return "border-amber-500/40 bg-[#1a140b] text-amber-300";
-  }
-
-  if (status === "LOA") {
-    return "border-sky-500/40 bg-[#0b141a] text-sky-300";
-  }
-
-  return "border-[#00ff66]/20 bg-[#08110c] text-[#b7f5cb]";
-}
-
 function getStatusPillStyles(status: string) {
   if (status === "Y") {
     return "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
@@ -148,6 +137,38 @@ function getStatusPillStyles(status: string) {
   }
 
   return "border-[#00ff66]/20 bg-[#08110c] text-[#b7f5cb]";
+}
+
+function AttendanceStatusButtons({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (status: string) => void;
+}) {
+  return (
+    <div className="grid w-full grid-cols-4 border border-[#00ff66]/15 bg-black/45" role="group" aria-label="Attendance status">
+      {assignmentOptions.map((option) => {
+        const selected = value === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            disabled={disabled}
+            aria-pressed={selected}
+            aria-label={`Mark ${statusLabels[option]}`}
+            onClick={() => option !== value && onChange(option)}
+            className={`min-h-10 border-r border-[#00ff66]/10 px-2 text-[10px] font-bold uppercase tracking-[0.08em] transition last:border-r-0 disabled:cursor-wait disabled:opacity-50 ${selected ? getStatusPillStyles(option) : "text-[#7f9f8f] hover:bg-[#00ff66]/8 hover:text-white"}`}
+          >
+            {selected && <Check className="mx-auto mb-0.5 h-3 w-3" />}
+            {statusLabels[option]}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function normaliseValue(value: string | null | undefined) {
@@ -275,14 +296,15 @@ export default function AttendancePage() {
 
   const [activeTab, setActiveTab] = useState<string | null>("Tomahawk 1");
   const [activeSquad, setActiveSquad] = useState<string | null>("Tomahawk Platoon");
-  const [expandedTab, setExpandedTab] = useState<string | null>("Tomahawk 1");
-
   const [selectedMonth, setSelectedMonth] = useState(defaultPeriod.month);
   const [selectedWeek, setSelectedWeek] = useState(defaultPeriod.week);
   const [selectedType, setSelectedType] = useState("MainOp");
   const [search, setSearch] = useState("");
   const [updatingAll, setUpdatingAll] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
+  const [bulkStatus, setBulkStatus] = useState("Y");
+  const [notice, setNotice] = useState("");
+  const [requestError, setRequestError] = useState("");
 
   const tabs = [
     "Company Command",
@@ -325,6 +347,7 @@ export default function AttendancePage() {
 
     try {
       setLoading(true);
+      setRequestError("");
 
       const response = await fetch(
         `/api/attendance?mode=roster&month=${encodeURIComponent(selectedMonth)}&week=${selectedWeek}&type=${encodeURIComponent(selectedType)}`,
@@ -332,7 +355,7 @@ export default function AttendancePage() {
       );
       const payload = await response.json().catch(() => null) as { records?: AttendanceRecordRow[]; error?: string } | null;
       if (!response.ok || !payload?.records) {
-        console.error(payload?.error || "Failed to load attendance");
+        setRequestError(payload?.error || "Failed to load attendance");
         setRoster([]);
         return;
       }
@@ -382,6 +405,7 @@ export default function AttendancePage() {
       setRoster(formatted);
     } catch (err) {
       console.error(err);
+      setRequestError("Attendance records could not be loaded. Please try again.");
       setRoster([]);
     } finally {
       setLoading(false);
@@ -404,50 +428,65 @@ export default function AttendancePage() {
   const updateAssignment = async (recordId: string, value: string) => {
     if (!canEdit) return;
     setUpdatingMemberId(recordId);
+    setRequestError("");
+    setNotice("");
 
-    const response = await fetch("/api/attendance", {
-      method: "PATCH",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
-      body: JSON.stringify({ ids: [recordId], status: value }),
-    });
-    if (!response.ok) {
-      console.error(await response.text());
+    try {
+      const response = await fetch("/api/attendance", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+        body: JSON.stringify({ ids: [recordId], status: value }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        setRequestError(payload?.error || "Attendance could not be updated.");
+        return;
+      }
+
+      setRoster((prev) =>
+        prev.map((member) =>
+          member.recordId === recordId ? { ...member, status: value } : member
+        )
+      );
+    } catch {
+      setRequestError("Attendance could not be updated. Please try again.");
+    } finally {
       setUpdatingMemberId(null);
-      return;
     }
-
-    setRoster((prev) =>
-      prev.map((member) =>
-        member.recordId === recordId ? { ...member, status: value } : member
-      )
-    );
-
-    setUpdatingMemberId(null);
   };
 
   const bulkUpdateAssignment = async (value: string) => {
     if (!canEdit) return;
     if (!roster.length) return;
+    if (!window.confirm(`Mark all ${roster.length} personnel in ${activeSquad || activeTab} as ${statusLabels[value]}?`)) return;
 
     setUpdatingAll(true);
+    setRequestError("");
+    setNotice("");
 
     const ids = roster.map((member) => member.recordId);
 
-    const response = await fetch("/api/attendance", {
-      method: "PATCH",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
-      body: JSON.stringify({ ids, status: value }),
-    });
-    if (!response.ok) {
-      console.error(await response.text());
-      setUpdatingAll(false);
-      return;
-    }
+    try {
+      const response = await fetch("/api/attendance", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+        body: JSON.stringify({ ids, status: value }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        setRequestError(payload?.error || "Bulk attendance update failed.");
+        return;
+      }
 
-    setRoster((prev) => prev.map((member) => ({ ...member, status: value })));
-    setUpdatingAll(false);
+      setRoster((prev) => prev.map((member) => ({ ...member, status: value })));
+      setNotice(`${roster.length} personnel marked ${statusLabels[value]}.`);
+    } catch {
+      setRequestError("Bulk attendance update failed. Please try again.");
+    } finally {
+      setUpdatingAll(false);
+    }
   };
 
   const filteredRoster = useMemo(() => {
@@ -486,392 +525,159 @@ export default function AttendancePage() {
   }
 
   return (
-    <motion.div className="relative min-h-screen text-white font-orbitron overflow-hidden">
-      <div
-        className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-20 pointer-events-none z-0"
-        style={{ backgroundImage: "url('/background/bg.jpg')" }}
-      />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] z-0" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,102,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none" />
+    <motion.main className="relative min-h-screen overflow-hidden bg-[#020806] text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(0,255,102,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.025)_1px,transparent_1px)] bg-[size:42px_42px]" />
 
-      <div className="relative z-10 mx-auto max-w-7xl p-6 md:p-10 xl:p-12">
-        <button
-          onClick={() => router.push("/")}
-          className="mb-6 px-4 py-2 rounded-xl border border-[#00ff66]/40 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-[1.02] transition"
-        >
-          ← Return to Dashboard
+      <div className="relative mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:px-10">
+        <button type="button" onClick={() => router.push("/")} className="mb-5 border border-[#00ff66]/30 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/10">
+          ← Dashboard
         </button>
 
-        <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-6 md:p-8 shadow-[0_0_40px_rgba(0,255,102,0.08)] mb-8">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-2xl">
-              <p className="text-xs uppercase tracking-[0.35em] text-[#00ff66]/60 mb-3">
-                Personnel Command
-              </p>
-              <h1 className="text-3xl md:text-4xl font-bold text-[#00ff66] tracking-[0.18em]">
-                WEEKLY ATTENDANCE CONTROL
-              </h1>
-              <p className="mt-3 text-sm md:text-base text-[#b9d8c4]">
-                Manage platoon and squad attendance for Training and MainOp periods.
-                Select a formation, review the roster, then update individual or bulk statuses.
-              </p>
+        <header className="border border-[#00ff66]/20 bg-black/65">
+          <div className="flex flex-col gap-5 border-b border-[#00ff66]/15 p-5 lg:flex-row lg:items-center lg:justify-between lg:p-7">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00ff66]/60">Personnel Command</p>
+              <h1 className="mt-2 text-2xl font-black uppercase tracking-[0.1em] text-white sm:text-3xl">Weekly Attendance</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#9ab9a4]">Choose the event period and formation, then mark each member. Changes save immediately.</p>
             </div>
+            <div className={`w-fit border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] ${canEdit ? "border-[#00ff66]/30 bg-[#00ff66]/10 text-[#00ff66]" : "border-amber-300/30 bg-amber-300/10 text-amber-200"}`}>
+              {canEdit ? "Edit access" : "View only"}
+            </div>
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 min-w-0 xl:min-w-[620px]">
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
-              >
-                {months.map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
+          <section className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-[1.15fr_0.8fr_0.9fr_1.5fr_auto]" aria-label="Attendance period controls">
+            <label className="block">
+              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Month</span>
+              <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">
+                {months.map((month) => <option key={month}>{month}</option>)}
               </select>
-
-              <select
-                value={selectedWeek}
-                onChange={(e) => setSelectedWeek(Number(e.target.value))}
-                className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
-              >
-                {[1, 2, 3, 4, 5].map((w) => (
-                  <option key={w} value={w}>
-                    Week {w}
-                  </option>
-                ))}
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Week</span>
+              <select value={selectedWeek} onChange={(event) => setSelectedWeek(Number(event.target.value))} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">
+                {[1, 2, 3, 4, 5].map((week) => <option key={week} value={week}>Week {week}</option>)}
               </select>
-
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="bg-[#06100a] border border-[#00ff66]/30 text-[#00ff66] px-4 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
-              >
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Event</span>
+              <select value={selectedType} onChange={(event) => setSelectedType(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">
+                <option value="MainOp">Main Operation</option>
                 <option value="Training">Training</option>
-                <option value="MainOp">MainOp</option>
               </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Find personnel</span>
+              <span className="relative block">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#00ff66]/50" />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, rank, slot or status" className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] pl-10 pr-3 text-sm text-white outline-none placeholder:text-gray-600 focus:border-[#00ff66]/70" />
+              </span>
+            </label>
+            <button type="button" onClick={() => void fetchRoster()} disabled={loading} title="Refresh roster" className="mt-auto grid h-11 w-11 place-items-center border border-[#00ff66]/30 text-[#00ff66] transition hover:bg-[#00ff66]/10 disabled:opacity-50">
+              <RefreshCw className={loading ? "animate-spin" : ""} size={17} />
+            </button>
+          </section>
+        </header>
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#00ff66]/50" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search roster..."
-                  className="w-full bg-[#06100a] border border-[#00ff66]/30 text-white px-10 py-3 rounded-xl backdrop-blur-md outline-none focus:border-[#00ff66]/70"
-                />
-              </div>
-            </div>
+        <section className="mt-5 border border-[#00ff66]/20 bg-black/65" aria-label="Formation selection">
+          <div className="flex items-center gap-2 border-b border-[#00ff66]/15 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-[#00ff66]"><Users size={16} /> Formation</div>
+          <div className="grid grid-cols-2 border-b border-[#00ff66]/10 sm:grid-cols-3 lg:grid-cols-5">
+            {tabs.map((tab) => (
+              <button key={tab} type="button" onClick={() => { setActiveTab(tab); setActiveSquad(platoons[tab]?.[0] || null); }} className={`min-h-12 border-r border-[#00ff66]/10 px-3 text-xs font-bold uppercase tracking-[0.08em] transition last:border-r-0 ${activeTab === tab ? "bg-[#00ff66] text-black" : "text-[#9bc4a8] hover:bg-[#00ff66]/10 hover:text-white"}`}>
+                {tab}
+              </button>
+            ))}
           </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <div className="rounded-2xl border border-[#00ff66]/15 bg-[#08110c]/80 p-4">
-              <div className="flex items-center gap-3 text-[#00ff66]/70 text-xs uppercase tracking-[0.2em]">
-                <Users className="h-4 w-4" />
-                Selected Platoon
-              </div>
-              <div className="mt-3 text-white font-semibold">
-                {activeTab || "None Selected"}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[#00ff66]/15 bg-[#08110c]/80 p-4">
-              <div className="flex items-center gap-3 text-[#00ff66]/70 text-xs uppercase tracking-[0.2em]">
-                <ShieldCheck className="h-4 w-4" />
-                Selected Squad
-              </div>
-              <div className="mt-3 text-white font-semibold">
-                {activeSquad || "All"}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[#00ff66]/15 bg-[#08110c]/80 p-4">
-              <div className="flex items-center gap-3 text-[#00ff66]/70 text-xs uppercase tracking-[0.2em]">
-                <Users className="h-4 w-4" />
-                Total
-              </div>
-              <div className="mt-3 text-white font-semibold">{stats.total}</div>
-            </div>
-
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-              <div className="flex items-center gap-3 text-emerald-300/80 text-xs uppercase tracking-[0.2em]">
-                <CheckCircle2 className="h-4 w-4" />
-                Y
-              </div>
-              <div className="mt-3 text-white font-semibold">{stats.yes}</div>
-            </div>
-
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-              <div className="flex items-center gap-3 text-red-300/80 text-xs uppercase tracking-[0.2em]">
-                <XCircle className="h-4 w-4" />
-                N
-              </div>
-              <div className="mt-3 text-white font-semibold">{stats.no}</div>
-            </div>
-
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-              <div className="flex items-center gap-3 text-amber-300/80 text-xs uppercase tracking-[0.2em]">
-                <PlaneTakeoff className="h-4 w-4" />
-                Excused / LOA
-              </div>
-              <div className="mt-3 text-white font-semibold">
-                {stats.excused + stats.loa}
-              </div>
-            </div>
+          <div className="flex flex-wrap gap-2 p-4">
+            {currentSquads.map((squad) => (
+              <button key={squad} type="button" onClick={() => setActiveSquad(squad)} className={`min-h-9 border px-3 text-xs font-bold uppercase tracking-[0.08em] transition ${activeSquad === squad ? "border-[#00ff66] bg-[#00ff66]/15 text-[#00ff66]" : "border-[#00ff66]/20 text-[#7f9f8f] hover:border-[#00ff66]/50 hover:text-white"}`}>
+                {squad}
+              </button>
+            ))}
           </div>
-        </div>
+        </section>
 
-        <div className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-5 shadow-[0_0_30px_rgba(0,255,102,0.05)] h-fit">
-            <div className="mb-5">
-              <h2 className="text-lg font-bold text-white">Formation Selection</h2>
-              <p className="text-sm text-[#9bc4a8] mt-1">
-                Expand a platoon, then choose the squad to manage.
-              </p>
+        <section className="mt-5 grid grid-cols-2 border border-[#00ff66]/20 bg-black/65 sm:grid-cols-3 lg:grid-cols-5" aria-label="Attendance totals">
+          {[
+            { label: "Roster", value: stats.total, tone: "text-white", icon: <Users size={15} /> },
+            { label: "Present", value: stats.yes, tone: "text-emerald-300", icon: <CheckCircle2 size={15} /> },
+            { label: "Absent", value: stats.no, tone: "text-red-300", icon: <XCircle size={15} /> },
+            { label: "Excused", value: stats.excused, tone: "text-amber-300", icon: <Clock3 size={15} /> },
+            { label: "LOA", value: stats.loa, tone: "text-sky-300", icon: <CalendarDays size={15} /> },
+          ].map((item) => (
+            <div key={item.label} className="border-b border-r border-[#00ff66]/10 p-4 last:border-r-0 sm:border-b-0">
+              <div className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] ${item.tone}`}>{item.icon}{item.label}</div>
+              <div className="mt-2 text-2xl font-black text-white">{item.value}</div>
             </div>
+          ))}
+        </section>
 
-            <div className="space-y-3">
-              {tabs.map((tab) => {
-                const isOpen = expandedTab === tab;
-                const isActive = activeTab === tab;
-                const squads = platoons[tab] || [];
-
-                return (
-                  <div
-                    key={tab}
-                    className={`rounded-2xl border transition-all ${
-                      isActive
-                        ? "border-[#00ff66]/45 bg-[#08110c]/90"
-                        : "border-[#00ff66]/15 bg-[#060b08]/80"
-                    }`}
-                  >
-                    <button
-                      onClick={() => {
-                        if (isOpen) {
-                          setExpandedTab(null);
-                          return;
-                        }
-
-                        setExpandedTab(tab);
-                        setActiveTab(tab);
-                        setActiveSquad(squads[0] || null);
-                      }}
-                      className="w-full px-5 py-4 flex items-center justify-between text-left"
-                    >
-                      <div>
-                        <div className="text-white font-semibold">{tab}</div>
-                        <div className="text-xs uppercase tracking-[0.18em] text-[#00ff66]/55 mt-1">
-                          {squads.length} formations
-                        </div>
-                      </div>
-
-                      {isOpen ? (
-                        <ChevronDown className="h-5 w-5 text-[#00ff66]/70" />
-                      ) : (
-                        <ChevronRight className="h-5 w-5 text-[#00ff66]/70" />
-                      )}
-                    </button>
-
-                    {isOpen && squads.length > 0 && (
-                      <div className="px-4 pb-4">
-                        <div className="border-t border-[#00ff66]/10 pt-4 flex flex-wrap gap-2">
-                          {squads.map((squad) => (
-                            <button
-                              key={squad}
-                              onClick={() => {
-                                setActiveTab(tab);
-                                setActiveSquad(squad);
-                              }}
-                              className={`px-3 py-2 rounded-xl border text-sm transition ${
-                                activeSquad === squad && activeTab === tab
-                                  ? "bg-[#00ff66] text-black border-[#00ff66]"
-                                  : "bg-black/40 border-[#00ff66]/25 text-[#a9efbc] hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
-                              }`}
-                            >
-                              {squad}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+        {(requestError || notice) && (
+          <div className={`mt-5 flex items-start gap-3 border p-4 text-sm ${requestError ? "border-red-400/35 bg-red-500/10 text-red-200" : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"}`}>
+            {requestError ? <TriangleAlert size={18} /> : <CheckCircle2 size={18} />}
+            {requestError || notice}
           </div>
+        )}
 
-          <div className="rounded-3xl border border-[#00ff66]/20 bg-black/55 backdrop-blur-xl p-5 md:p-6 shadow-[0_0_30px_rgba(0,255,102,0.05)]">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-white">
-                  {activeTab || "No Platoon Selected"}
-                </h2>
-                <p className="text-sm text-[#9bc4a8] mt-1">
-                  {activeSquad
-                    ? `Managing ${selectedType} attendance for ${activeSquad}`
-                    : "Select a squad to begin managing attendance."}
-                </p>
-              </div>
+        <section className="mt-5 border border-[#00ff66]/20 bg-black/65">
+          <header className="flex flex-col gap-4 border-b border-[#00ff66]/15 p-5 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#00ff66]/60">{selectedMonth} · Week {selectedWeek} · {selectedType === "MainOp" ? "Main Operation" : "Training"}</p>
+              <h2 className="mt-2 text-xl font-black text-white">{activeSquad || activeTab}</h2>
+              <p className="mt-1 text-sm text-[#7f9f8f]">{filteredRoster.length} of {roster.length} personnel shown. Select a status to save it immediately.</p>
+            </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => bulkUpdateAssignment("Y")}
-                  disabled={!canEdit || !roster.length || updatingAll}
-                  className="px-3 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 transition"
-                >
-                  Mark All Y
-                </button>
-                <button
-                  onClick={() => bulkUpdateAssignment("N")}
-                  disabled={!canEdit || !roster.length || updatingAll}
-                  className="px-3 py-2 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-50 transition"
-                >
-                  Mark All N
-                </button>
-                <button
-                  onClick={() => bulkUpdateAssignment("Excused")}
-                  disabled={!canEdit || !roster.length || updatingAll}
-                  className="px-3 py-2 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50 transition"
-                >
-                  Mark All Excused
-                </button>
-                <button
-                  onClick={() => bulkUpdateAssignment("LOA")}
-                  disabled={!canEdit || !roster.length || updatingAll}
-                  className="px-3 py-2 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 transition"
-                >
-                  Mark All LOA
+            <div className="border border-amber-300/20 bg-amber-300/[0.04] p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-amber-200">Apply to entire formation</div>
+              <div className="flex gap-2">
+                <select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value)} disabled={!canEdit || updatingAll} className="h-10 min-w-32 border border-amber-300/25 bg-[#0c0b05] px-3 text-sm text-white outline-none">
+                  {assignmentOptions.map((option) => <option key={option} value={option}>{statusLabels[option]}</option>)}
+                </select>
+                <button type="button" onClick={() => void bulkUpdateAssignment(bulkStatus)} disabled={!canEdit || !roster.length || updatingAll} className="inline-flex h-10 items-center gap-2 border border-amber-300/35 px-4 text-xs font-bold uppercase tracking-[0.1em] text-amber-200 transition hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-40">
+                  {updatingAll && <Loader2 className="animate-spin" size={15} />} Apply
                 </button>
               </div>
             </div>
+          </header>
 
-            {loading ? (
-              <p className="text-center text-gray-400 py-16">
-                Loading selected attendance roster...
-              </p>
-            ) : filteredRoster.length === 0 ? (
-              <div className="rounded-2xl border border-[#00ff66]/10 bg-[#08110c]/70 px-6 py-16 text-center">
-                <p className="text-lg text-white">No roster entries found.</p>
-                <p className="text-sm text-[#88b596] mt-2">
-                  Select a platoon and squad, or adjust the attendance filters.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="hidden lg:block overflow-hidden rounded-2xl border border-[#00ff66]/15">
-                  <table className="min-w-full">
-                    <thead className="bg-[#0d1611] text-left text-xs uppercase tracking-[0.18em] text-[#00ff66]/60">
-                      <tr>
-                        <th className="px-5 py-4">Personnel</th>
-                        <th className="px-5 py-4">Rank</th>
-                        <th className="px-5 py-4">Slot</th>
-                        <th className="px-5 py-4">Current</th>
-                        <th className="px-5 py-4">Update</th>
+          {loading ? (
+            <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-[#7f9f8f]"><Loader2 className="animate-spin text-[#00ff66]" size={20} /> Loading attendance roster...</div>
+          ) : filteredRoster.length === 0 ? (
+            <div className="px-6 py-20 text-center"><p className="font-bold text-white">No personnel found</p><p className="mt-2 text-sm text-[#7f9f8f]">Change the formation, period, or search filter.</p></div>
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[960px]">
+                  <thead className="bg-[#07100b] text-left text-[10px] font-bold uppercase tracking-[0.16em] text-[#6f927b]">
+                    <tr><th className="px-5 py-3">Personnel</th><th className="px-5 py-3">Rank</th><th className="px-5 py-3">Position</th><th className="px-5 py-3">Attendance status</th></tr>
+                  </thead>
+                  <tbody>
+                    {filteredRoster.map((member) => (
+                      <tr key={member.recordId} className="border-t border-[#00ff66]/10 transition hover:bg-[#00ff66]/[0.025]">
+                        <td className="px-5 py-4 font-bold text-white">{member.name}</td>
+                        <td className="px-5 py-4 text-sm text-[#9ab9a4]">{member.rank}</td>
+                        <td className="max-w-xs px-5 py-4 text-sm text-[#9ab9a4]">{member.slot}</td>
+                        <td className="px-5 py-3"><AttendanceStatusButtons value={member.status} disabled={!canEdit || updatingMemberId === member.recordId} onChange={(status) => void updateAssignment(member.recordId, status)} /></td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRoster.map((member) => (
-                        <tr
-                          key={member.recordId}
-                          className="border-t border-[#00ff66]/10 bg-black/20"
-                        >
-                          <td className="px-5 py-4 text-white font-medium">
-                            {member.name}
-                          </td>
-                          <td className="px-5 py-4 text-[#a8d7b7]">{member.rank}</td>
-                          <td className="px-5 py-4 text-[#a8d7b7]">{member.slot}</td>
-                          <td className="px-5 py-4">
-                            <span
-                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusPillStyles(member.status)}`}
-                            >
-                              {member.status}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4">
-                            <select
-                              value={member.status}
-                              disabled={!canEdit || updatingMemberId === member.recordId}
-                              onChange={(e) => updateAssignment(member.recordId, e.target.value)}
-                              className={`w-full rounded-xl border px-3 py-2 text-sm outline-none transition ${getStatusStyles(member.status)}`}
-                            >
-                              {assignmentOptions.map((opt) => (
-                                <option key={opt} value={opt}>
-                                  {opt}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid gap-4 lg:hidden">
-                  {filteredRoster.map((member) => (
-                    <div
-                      key={member.recordId}
-                      className="rounded-2xl border border-[#00ff66]/15 bg-[#07100b]/80 p-5"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h3 className="text-lg text-[#dfffea] font-semibold">
-                            {member.name}
-                          </h3>
-                          <p className="text-[#9fc6ac] text-sm mt-1">{member.rank}</p>
-                        </div>
-
-                        <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusPillStyles(member.status)}`}
-                        >
-                          {member.status}
-                        </span>
-                      </div>
-
-                      <p className="text-sm mt-4 text-[#a8d7b7]">
-                        Slot: <span className="text-white">{member.slot}</span>
-                      </p>
-
-                      <select
-                        value={member.status}
-                        disabled={!canEdit || updatingMemberId === member.recordId}
-                        onChange={(e) => updateAssignment(member.recordId, e.target.value)}
-                        className={`mt-4 w-full rounded-xl border px-3 py-3 text-sm outline-none transition ${getStatusStyles(member.status)}`}
-                      >
-                        {assignmentOptions.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {currentSquads.length > 0 && activeTab && (
-              <div className="mt-6 pt-6 border-t border-[#00ff66]/10">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#00ff66]/55 mb-3">
-                  Quick Squad Switch
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {currentSquads.map((squad) => (
-                    <button
-                      key={squad}
-                      onClick={() => setActiveSquad(squad)}
-                      className={`px-3 py-2 rounded-xl border text-sm transition ${
-                        activeSquad === squad
-                          ? "bg-[#00ff66] text-black border-[#00ff66]"
-                          : "bg-black/40 border-[#00ff66]/25 text-[#a9efbc] hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
-                      }`}
-                    >
-                      {squad}
-                    </button>
-                  ))}
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </div>
-        </div>
+
+              <div className="divide-y divide-[#00ff66]/10 lg:hidden">
+                {filteredRoster.map((member) => (
+                  <article key={member.recordId} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div><h3 className="font-bold text-white">{member.name}</h3><p className="mt-1 text-xs text-[#7f9f8f]">{member.rank} · {member.slot}</p></div>
+                      <span className={`border px-2 py-1 text-[10px] font-bold uppercase ${getStatusPillStyles(member.status)}`}>{statusLabels[member.status] || member.status}</span>
+                    </div>
+                    <div className="mt-4"><AttendanceStatusButtons value={member.status} disabled={!canEdit || updatingMemberId === member.recordId} onChange={(status) => void updateAssignment(member.recordId, status)} /></div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
       </div>
-    </motion.div>
+    </motion.main>
   );
 }

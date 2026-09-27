@@ -159,6 +159,17 @@ async function command(stage, file, args, options = {}) {
   }
 }
 
+function systemCaEnvironment(source = process.env) {
+  const env = { ...source, NODE_USE_SYSTEM_CA: '1' };
+  const nodeOptions = String(env.NODE_OPTIONS || '')
+    .split(/\s+/)
+    .filter((option) => option && option !== '--use-system-ca')
+    .join(' ');
+  if (nodeOptions) env.NODE_OPTIONS = nodeOptions;
+  else delete env.NODE_OPTIONS;
+  return env;
+}
+
 async function updateJob(status, stage, message, completed = false) {
   if (!job) return;
   append(stage, message);
@@ -356,7 +367,7 @@ try {
     ], { progressMessage: 'Applying checksum-locked database migrations' });
 
     await updateJob('running', 'building', 'Creating the production website build');
-    const buildEnv = { ...process.env };
+    const buildEnv = systemCaEnvironment();
     for (const name of [
       'DATABASE_URL', 'POSTGRES_ADMIN_URL', 'NATIVE_MIGRATION_DATABASE',
       'CUTOVER_CONFIRM_DATABASE', 'POSTGRES_SOURCE_ARCHIVE',
@@ -393,7 +404,7 @@ try {
         });
       }
       await updateJob('running', 'rollback-build', 'Rebuilding the previous website release');
-      const rollbackBuildEnv = { ...process.env };
+      const rollbackBuildEnv = systemCaEnvironment();
       for (const name of ['DATABASE_URL','POSTGRES_ADMIN_URL','NATIVE_MIGRATION_DATABASE','CUTOVER_CONFIRM_DATABASE','POSTGRES_SOURCE_ARCHIVE','POSTGRES_RUNTIME_ENV_FILE','POSTGRES_SCHEDULER_ENV_FILE','POSTGRES_BACKUP_ENV_FILE','POSTGRES_BACKUP_DIRECTORY']) delete rollbackBuildEnv[name];
       await command('rollback-build', process.execPath, [npmCli, 'run', 'build'], {
         env: rollbackBuildEnv,

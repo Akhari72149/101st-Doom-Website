@@ -50,8 +50,8 @@
     "dev:native-rehearsal": "node --env-file=.env.postgres-runtime.local scripts/postgres/start-native-rehearsal.mjs",
     "dev:hosted-rollback": "next dev",
     "start:native-rehearsal": "node --env-file=.env.postgres-runtime.local scripts/postgres/start-native-production-rehearsal.mjs",
-    "build": "node --use-system-ca node_modules/next/dist/bin/next build",
-    "start": "node --use-system-ca node_modules/next/dist/bin/next start",
+    "build": "node scripts/run-next-with-system-ca.mjs build",
+    "start": "node scripts/run-next-with-system-ca.mjs start",
     "lint": "eslint"
   },
   "dependencies": {

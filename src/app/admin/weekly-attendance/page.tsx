@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { structure } from "@/data/structure";
+import AttendancePersonReview from "@/components/attendance/AttendancePersonReview";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
@@ -15,6 +16,7 @@ import {
   Loader2,
   RefreshCw,
   TriangleAlert,
+  UserSearch,
   XCircle,
 } from "lucide-react";
 
@@ -305,6 +307,7 @@ export default function AttendancePage() {
   const [bulkStatus, setBulkStatus] = useState("Y");
   const [notice, setNotice] = useState("");
   const [requestError, setRequestError] = useState("");
+  const [viewMode, setViewMode] = useState<"manage" | "review">("manage");
 
   const tabs = [
     "Company Command",
@@ -545,7 +548,12 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          <section className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-[1.15fr_0.8fr_0.9fr_1.5fr_auto]" aria-label="Attendance period controls">
+          <div className="grid grid-cols-2 border-b border-[#00ff66]/15">
+            <button type="button" onClick={() => setViewMode("manage")} className={`inline-flex min-h-12 items-center justify-center gap-2 px-4 text-xs font-black uppercase tracking-[0.1em] transition ${viewMode === "manage" ? "bg-[#00ff66] text-black" : "text-[#8eae99] hover:bg-[#00ff66]/10 hover:text-white"}`}><Users size={16} /> Manage attendance</button>
+            <button type="button" onClick={() => setViewMode("review")} className={`inline-flex min-h-12 items-center justify-center gap-2 border-l border-[#00ff66]/15 px-4 text-xs font-black uppercase tracking-[0.1em] transition ${viewMode === "review" ? "bg-[#00ff66] text-black" : "text-[#8eae99] hover:bg-[#00ff66]/10 hover:text-white"}`}><UserSearch size={16} /> Person review</button>
+          </div>
+
+          {viewMode === "manage" && <section className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-[1.15fr_0.8fr_0.9fr_1.5fr_auto]" aria-label="Attendance period controls">
             <label className="block">
               <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Month</span>
               <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">
@@ -575,9 +583,13 @@ export default function AttendancePage() {
             <button type="button" onClick={() => void fetchRoster()} disabled={loading} title="Refresh roster" className="mt-auto grid h-11 w-11 place-items-center border border-[#00ff66]/30 text-[#00ff66] transition hover:bg-[#00ff66]/10 disabled:opacity-50">
               <RefreshCw className={loading ? "animate-spin" : ""} size={17} />
             </button>
-          </section>
+          </section>}
         </header>
 
+        {viewMode === "review" ? (
+          <div className="mt-5"><AttendancePersonReview heading="Personnel attendance review" /></div>
+        ) : (
+        <>
         <section className="mt-5 border border-[#00ff66]/20 bg-black/65" aria-label="Formation selection">
           <div className="flex items-center gap-2 border-b border-[#00ff66]/15 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-[#00ff66]"><Users size={16} /> Formation</div>
           <div className="grid grid-cols-2 border-b border-[#00ff66]/10 sm:grid-cols-3 lg:grid-cols-5">
@@ -677,6 +689,8 @@ export default function AttendancePage() {
             </>
           )}
         </section>
+        </>
+        )}
       </div>
     </motion.main>
   );

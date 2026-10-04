@@ -14,7 +14,13 @@ import {
   XCircle,
 } from "lucide-react";
 import AttendancePersonReview from "@/components/attendance/AttendancePersonReview";
+import AttendanceCycleSelector from "@/components/attendance/AttendanceCycleSelector";
 import { structure } from "@/data/structure";
+import {
+  attendanceCycleEndDate,
+  attendancePeriodLabel,
+  currentAttendancePeriod,
+} from "@/lib/attendance-periods";
 
 type ViewerMember = {
   id: string;
@@ -49,11 +55,6 @@ type AttendanceRecordRow = {
 type StructureRole = { role: string; slotId: string };
 type StructureChild = { type: "sub-header"; title: string; roles?: StructureRole[] };
 type StructureSection = { type: "header"; title: string; children?: StructureChild[] };
-
-const months = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 const tabs = ["Company Command", "Tomahawk 1", "Claymore 2", "Broadsword 3", "Dagger"];
 
@@ -97,11 +98,7 @@ function buildStructureSlotOrder() {
 const structureSlotOrder = buildStructureSlotOrder();
 
 function defaultPeriod() {
-  const today = new Date();
-  const daysUntilSaturday = today.getDay() === 6 ? 0 : (6 - today.getDay() + 7) % 7;
-  const target = new Date(today);
-  target.setDate(today.getDate() + daysUntilSaturday);
-  return { month: months[target.getMonth()], week: Math.ceil(target.getDate() / 7) };
+  return currentAttendancePeriod();
 }
 
 function squadKey(selectedSquad: string | null) {
@@ -172,6 +169,7 @@ export default function WeeklyAttendancePage() {
   const [activeSquad, setActiveSquad] = useState("Tomahawk Platoon");
   const [selectedMonth, setSelectedMonth] = useState(initialPeriod.month);
   const [selectedWeek, setSelectedWeek] = useState(initialPeriod.week);
+  const [selectedYear, setSelectedYear] = useState(initialPeriod.year);
   const [selectedType, setSelectedType] = useState("MainOp");
   const [search, setSearch] = useState("");
 
@@ -179,7 +177,9 @@ export default function WeeklyAttendancePage() {
     setLoading(true);
     setError("");
     try {
+      const cycleEnd = attendanceCycleEndDate(selectedMonth, selectedWeek, selectedYear);
       const params = new URLSearchParams({ mode: "roster", month: selectedMonth, week: String(selectedWeek), type: selectedType });
+      if (cycleEnd) params.set("cycleEnd", cycleEnd);
       const response = await fetch(`/api/attendance?${params}`, { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as { records?: AttendanceRecordRow[]; error?: string } | null;
       if (!response.ok || !payload?.records) throw new Error(payload?.error || "Attendance records could not be loaded.");
@@ -211,7 +211,7 @@ export default function WeeklyAttendancePage() {
     } finally {
       setLoading(false);
     }
-  }, [activeSquad, activeTab, selectedMonth, selectedType, selectedWeek]);
+  }, [activeSquad, activeTab, selectedMonth, selectedType, selectedWeek, selectedYear]);
 
   useEffect(() => { void fetchRecords(); }, [fetchRecords]);
 
@@ -245,12 +245,13 @@ export default function WeeklyAttendancePage() {
           </div>
 
           {viewMode === "formation" && (
-            <section className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-[1.15fr_0.8fr_0.9fr_1.5fr_auto]" aria-label="Attendance controls">
-              <Control label="Month"><select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">{months.map((month) => <option key={month}>{month}</option>)}</select></Control>
-              <Control label="Week"><select value={selectedWeek} onChange={(event) => setSelectedWeek(Number(event.target.value))} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">{[1, 2, 3, 4, 5].map((week) => <option key={week} value={week}>Week {week}</option>)}</select></Control>
-              <Control label="Event"><select value={selectedType} onChange={(event) => setSelectedType(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70"><option value="MainOp">Main Operation</option><option value="Training">Training</option></select></Control>
-              <Control label="Find personnel"><span className="relative block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#00ff66]/50" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, rank, position or status" className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] pl-10 pr-3 text-sm text-white outline-none placeholder:text-gray-600 focus:border-[#00ff66]/70" /></span></Control>
-              <button type="button" onClick={() => void fetchRecords()} disabled={loading} title="Refresh attendance" className="mt-auto grid h-11 w-11 place-items-center border border-[#00ff66]/30 text-[#00ff66] transition hover:bg-[#00ff66]/10 disabled:opacity-50"><RefreshCw className={loading ? "animate-spin" : ""} size={17} /></button>
+            <section className="p-5" aria-label="Attendance controls">
+              <AttendanceCycleSelector month={selectedMonth} week={selectedWeek} year={selectedYear} onMonthChange={setSelectedMonth} onWeekChange={setSelectedWeek} onYearChange={setSelectedYear} />
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-[0.9fr_1.8fr_auto]">
+                <Control label="Event"><select value={selectedType} onChange={(event) => setSelectedType(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70"><option value="MainOp">Main Operation</option><option value="Training">Training</option></select></Control>
+                <Control label="Find personnel"><span className="relative block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#00ff66]/50" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, rank, position or status" className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] pl-10 pr-3 text-sm text-white outline-none placeholder:text-gray-600 focus:border-[#00ff66]/70" /></span></Control>
+                <button type="button" onClick={() => void fetchRecords()} disabled={loading} title="Refresh attendance" className="mt-auto grid h-11 w-11 place-items-center border border-[#00ff66]/30 text-[#00ff66] transition hover:bg-[#00ff66]/10 disabled:opacity-50"><RefreshCw className={loading ? "animate-spin" : ""} size={17} /></button>
+              </div>
             </section>
           )}
         </header>
@@ -281,7 +282,7 @@ export default function WeeklyAttendancePage() {
             {error && <div className="mt-5 border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>}
 
             <section className="mt-5 border border-[#00ff66]/20 bg-black/65">
-              <header className="border-b border-[#00ff66]/15 p-5"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#00ff66]/60">{selectedMonth} · Week {selectedWeek} · {selectedType === "MainOp" ? "Main Operation" : "Training"}</p><h2 className="mt-2 text-xl font-black text-white">{activeSquad}</h2><p className="mt-1 text-sm text-[#7f9f8f]">{filtered.length} of {records.length} personnel shown.</p></header>
+              <header className="border-b border-[#00ff66]/15 p-5"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#00ff66]/60">{attendancePeriodLabel(selectedMonth, selectedWeek, selectedYear)} · {selectedType === "MainOp" ? "Main Operation" : "Training"}</p><h2 className="mt-2 text-xl font-black text-white">{activeSquad}</h2><p className="mt-1 text-sm text-[#7f9f8f]">{filtered.length} of {records.length} personnel shown.</p></header>
               {loading ? (
                 <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-[#7f9f8f]"><Loader2 className="animate-spin text-[#00ff66]" size={20} /> Loading attendance roster...</div>
               ) : filtered.length === 0 ? (

@@ -11,6 +11,14 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
+import {
+  attendanceCycleEndDate,
+  attendanceCyclesForMonth,
+  attendanceMonths as months,
+  attendancePeriodLabel,
+  attendanceYears,
+  currentAttendancePeriod,
+} from "@/lib/attendance-periods";
 
 type AttendanceRecordRow = {
   id: string;
@@ -18,6 +26,7 @@ type AttendanceRecordRow = {
   status: string | null;
   attendance_month?: string | null;
   week_number?: number | null;
+  cycle_end_date?: string | null;
   personnel:
     | {
         id: string | null;
@@ -38,6 +47,8 @@ type AttendanceEntry = {
   id: string;
   month: string;
   week: number;
+  year: number;
+  cycleEndDate: string | null;
   type: string;
   status: string;
 };
@@ -56,21 +67,6 @@ type AttendancePerson = {
   entries: AttendanceEntry[];
 };
 
-const months = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
 const statusLabels: Record<string, string> = {
   Y: "Present",
   N: "Absent",
@@ -79,12 +75,7 @@ const statusLabels: Record<string, string> = {
 };
 
 function getDefaultPeriod() {
-  const today = new Date();
-  const currentDay = today.getDay();
-  const daysUntilSaturday = currentDay === 6 ? 0 : (6 - currentDay + 7) % 7;
-  const target = new Date(today);
-  target.setDate(today.getDate() + daysUntilSaturday);
-  return { month: months[target.getMonth()], week: Math.ceil(target.getDate() / 7) };
+  return currentAttendancePeriod();
 }
 
 function periodValue(month: string, week: number) {
@@ -120,8 +111,10 @@ export default function AttendancePersonReview({ heading = "Person attendance re
   const [eventType, setEventType] = useState<"All" | "Training" | "MainOp">("MainOp");
   const [startMonth, setStartMonth] = useState("January");
   const [startWeek, setStartWeek] = useState(1);
+  const [startYear, setStartYear] = useState(2026);
   const [endMonth, setEndMonth] = useState(defaultPeriod.month);
   const [endWeek, setEndWeek] = useState(defaultPeriod.week);
+  const [endYear, setEndYear] = useState(defaultPeriod.year);
   const [people, setPeople] = useState<AttendancePerson[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -148,6 +141,12 @@ export default function AttendancePersonReview({ heading = "Person attendance re
         months: monthsInRange(startMonth, startWeek, endMonth, endWeek).join(","),
         type: eventType,
       });
+      const cycleStart = attendanceCycleEndDate(startMonth, startWeek, startYear);
+      const cycleEnd = attendanceCycleEndDate(endMonth, endWeek, endYear);
+      if (cycleStart && cycleEnd) {
+        params.set("cycleStart", cycleStart < cycleEnd ? cycleStart : cycleEnd);
+        params.set("cycleEnd", cycleStart < cycleEnd ? cycleEnd : cycleStart);
+      }
       const response = await fetch(`/api/attendance?${params}`, { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as { records?: AttendanceRecordRow[]; error?: string } | null;
       if (!response.ok || !payload?.records) throw new Error(payload?.error || "Attendance records could not be loaded.");
@@ -158,7 +157,11 @@ export default function AttendancePersonReview({ heading = "Person attendance re
         const rank = Array.isArray(person?.ranks) ? person.ranks[0] : person?.ranks;
         const searchable = `${person?.name || ""} ${rank?.name || ""} ${person?.slotted_position || ""}`.toLowerCase();
         if (!person?.id || !searchable.includes(term) || !row.attendance_month || !row.week_number) continue;
-        if (!inRange(row.attendance_month, row.week_number, startMonth, startWeek, endMonth, endWeek)) continue;
+        if (row.cycle_end_date && cycleStart && cycleEnd) {
+          const rangeStart = cycleStart < cycleEnd ? cycleStart : cycleEnd;
+          const rangeEnd = cycleStart < cycleEnd ? cycleEnd : cycleStart;
+          if (row.cycle_end_date < rangeStart || row.cycle_end_date > rangeEnd) continue;
+        } else if (!inRange(row.attendance_month, row.week_number, startMonth, startWeek, endMonth, endWeek)) continue;
 
         const current = grouped.get(person.id) || {
           id: person.id,
@@ -182,6 +185,8 @@ export default function AttendancePersonReview({ heading = "Person attendance re
           id: row.id,
           month: row.attendance_month,
           week: row.week_number,
+          year: row.cycle_end_date ? Number(row.cycle_end_date.slice(0, 4)) : new Date().getFullYear(),
+          cycleEndDate: row.cycle_end_date || null,
           type: row.type || "Unknown",
           status: row.status || "N",
         });
@@ -194,7 +199,7 @@ export default function AttendancePersonReview({ heading = "Person attendance re
           attendancePct: person.present + person.absent > 0
             ? (person.present / (person.present + person.absent)) * 100
             : 0,
-          entries: person.entries.sort((a, b) => periodValue(b.month, b.week) - periodValue(a.month, a.week)),
+          entries: person.entries.sort((a, b) => (b.cycleEndDate || "").localeCompare(a.cycleEndDate || "") || periodValue(b.month, b.week) - periodValue(a.month, a.week)),
         }))
         .sort((a, b) => {
           const exactA = a.name.toLowerCase() === term ? 1 : 0;
@@ -242,8 +247,8 @@ export default function AttendancePersonReview({ heading = "Person attendance re
             <option value="All">All Events</option>
           </select>
         </label>
-        <PeriodControl label="From" month={startMonth} week={startWeek} onMonth={setStartMonth} onWeek={setStartWeek} />
-        <PeriodControl label="To" month={endMonth} week={endWeek} onMonth={setEndMonth} onWeek={setEndWeek} />
+        <PeriodControl label="From" month={startMonth} week={startWeek} year={startYear} onMonth={setStartMonth} onWeek={setStartWeek} onYear={setStartYear} />
+        <PeriodControl label="To" month={endMonth} week={endWeek} year={endYear} onMonth={setEndMonth} onWeek={setEndWeek} onYear={setEndYear} />
         <button type="submit" disabled={!query.trim() || loading} className="mt-auto inline-flex h-11 items-center justify-center gap-2 border border-[#00ff66]/40 px-5 text-xs font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/10 disabled:cursor-not-allowed disabled:opacity-40">
           {loading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
           Review
@@ -290,10 +295,17 @@ export default function AttendancePersonReview({ heading = "Person attendance re
               ].map((item) => <div key={item.label} className="border-b border-r border-[#00ff66]/10 p-3 last:border-r-0 sm:border-b-0"><div className={`flex items-center gap-2 text-[10px] font-bold uppercase ${item.tone}`}>{item.icon}{item.label}</div><div className="mt-2 text-xl font-black text-white">{item.value}</div></div>)}
             </div>
 
+            <div className="mt-5 border border-[#00ff66]/15 p-4">
+              <div className="flex items-center justify-between gap-3"><div><div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#00ff66]/60">Recent cycle trend</div><p className="mt-1 text-xs text-[#789383]">Newest twelve records in the selected review period.</p></div></div>
+              <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-6 xl:grid-cols-12">
+                {[...selected.entries].slice(0, 12).reverse().map((entry) => <div key={`trend-${entry.id}`} title={`${attendancePeriodLabel(entry.month, entry.week, entry.year)} · ${entry.type === "MainOp" ? "Main Op" : entry.type} · ${statusLabels[entry.status] || entry.status}`} className={`min-h-14 border p-2 ${statusStyles(entry.status)}`}><div className="text-[9px] font-black uppercase">{entry.status === "Y" ? "P" : entry.status === "N" ? "A" : entry.status === "Excused" ? "E" : "LOA"}</div><div className="mt-2 truncate text-[8px] opacity-75">{entry.cycleEndDate ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(new Date(`${entry.cycleEndDate}T12:00:00`)) : `W${entry.week}`}</div></div>)}
+              </div>
+            </div>
+
             <div className="mt-5 overflow-hidden border border-[#00ff66]/15">
               <div className="hidden grid-cols-[1fr_0.7fr_0.8fr] bg-[#07100b] px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#789383] sm:grid"><span>Period</span><span>Event</span><span>Status</span></div>
               <div className="max-h-52 overflow-y-auto">
-                {selected.entries.map((entry) => <div key={entry.id} className="flex items-start justify-between gap-3 border-t border-[#00ff66]/10 px-4 py-3 text-sm sm:grid sm:grid-cols-[1fr_0.7fr_0.8fr] sm:items-center"><span className="min-w-0 text-white">{entry.month} · Week {entry.week}<span className="mt-1 block text-xs text-[#8eae99] sm:hidden">{entry.type === "MainOp" ? "Main Op" : entry.type}</span></span><span className="hidden text-[#8eae99] sm:block">{entry.type === "MainOp" ? "Main Op" : entry.type}</span><span className={`w-fit shrink-0 border px-2 py-1 text-[10px] font-bold uppercase ${statusStyles(entry.status)}`}>{statusLabels[entry.status] || entry.status}</span></div>)}
+                {selected.entries.map((entry) => <div key={entry.id} className="flex items-start justify-between gap-3 border-t border-[#00ff66]/10 px-4 py-3 text-sm sm:grid sm:grid-cols-[1fr_0.7fr_0.8fr] sm:items-center"><span className="min-w-0 text-white">{attendancePeriodLabel(entry.month, entry.week, entry.year)}<span className="mt-1 block text-xs text-[#8eae99] sm:hidden">{entry.type === "MainOp" ? "Main Op" : entry.type}</span></span><span className="hidden text-[#8eae99] sm:block">{entry.type === "MainOp" ? "Main Op" : entry.type}</span><span className={`w-fit shrink-0 border px-2 py-1 text-[10px] font-bold uppercase ${statusStyles(entry.status)}`}>{statusLabels[entry.status] || entry.status}</span></div>)}
               </div>
             </div>
           </div>
@@ -303,13 +315,22 @@ export default function AttendancePersonReview({ heading = "Person attendance re
   );
 }
 
-function PeriodControl({ label, month, week, onMonth, onWeek }: { label: string; month: string; week: number; onMonth: (value: string) => void; onWeek: (value: number) => void }) {
+function PeriodControl({ label, month, week, year, onMonth, onWeek, onYear }: { label: string; month: string; week: number; year: number; onMonth: (value: string) => void; onWeek: (value: number) => void; onYear: (value: number) => void }) {
+  const cycles = attendanceCyclesForMonth(month, year);
+
+  function changeMonth(nextMonth: string) {
+    const nextCycles = attendanceCyclesForMonth(nextMonth, year);
+    onMonth(nextMonth);
+    onWeek(nextCycles[0]?.week ?? 1);
+  }
+
   return (
     <fieldset>
       <legend className="mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[#789383]">{label}</legend>
-      <div className="grid grid-cols-[1fr_78px]">
-        <select value={month} onChange={(event) => onMonth(event.target.value)} aria-label={`${label} month`} className="h-11 min-w-0 border border-r-0 border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">{months.map((item) => <option key={item}>{item}</option>)}</select>
-        <select value={week} onChange={(event) => onWeek(Number(event.target.value))} aria-label={`${label} week`} className="h-11 border border-[#00ff66]/25 bg-[#06100a] px-2 text-sm text-white outline-none focus:border-[#00ff66]/70">{[1, 2, 3, 4, 5].map((item) => <option key={item} value={item}>W{item}</option>)}</select>
+      <div className="grid grid-cols-[0.8fr_86px_1.2fr]">
+        <select value={month} onChange={(event) => changeMonth(event.target.value)} aria-label={`${label} closing month`} className="h-11 min-w-0 border border-r-0 border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">{months.map((item) => <option key={item}>{item}</option>)}</select>
+        <select value={year} onChange={(event) => { const nextYear = Number(event.target.value); onYear(nextYear); onWeek(attendanceCyclesForMonth(month, nextYear)[0]?.week ?? 1); }} aria-label={`${label} year`} className="h-11 min-w-0 border border-r-0 border-[#00ff66]/25 bg-[#06100a] px-2 text-sm text-white outline-none focus:border-[#00ff66]/70">{attendanceYears().map((item) => <option key={item}>{item}</option>)}</select>
+        <select value={week} onChange={(event) => onWeek(Number(event.target.value))} aria-label={`${label} attendance cycle`} className="h-11 min-w-0 border border-[#00ff66]/25 bg-[#06100a] px-2 text-sm text-white outline-none focus:border-[#00ff66]/70">{cycles.map((item) => <option key={item.week} value={item.week}>{item.compactLabel}</option>)}</select>
       </div>
     </fieldset>
   );

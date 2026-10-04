@@ -5,6 +5,12 @@ import { motion } from "framer-motion";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { structure } from "@/data/structure";
 import AttendancePersonReview from "@/components/attendance/AttendancePersonReview";
+import AttendanceCycleSelector from "@/components/attendance/AttendanceCycleSelector";
+import {
+  attendanceCycleEndDate,
+  attendancePeriodLabel,
+  currentAttendancePeriod,
+} from "@/lib/attendance-periods";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
@@ -17,6 +23,7 @@ import {
   RefreshCw,
   TriangleAlert,
   UserSearch,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -27,11 +34,15 @@ type Member = {
   rank: string;
   slot: string;
   status: string;
+  lastChangedAt: string | null;
+  lastChangedBy: string | null;
 };
 
 type AttendanceRecordRow = {
   id: string;
   status: string | null;
+  last_changed_at?: string | null;
+  last_changed_by?: string | null;
   personnel:
     | {
         id: string | null;
@@ -49,6 +60,14 @@ type AttendanceRecordRow = {
 };
 
 const assignmentOptions = ["Y", "N", "Excused", "LOA"];
+const tabs = ["Company Command", "Tomahawk 1", "Claymore 2", "Broadsword 3", "Dagger"];
+const platoons: Record<string, string[]> = {
+  "Company Command": ["Company"],
+  "Tomahawk 1": ["Tomahawk Platoon", "1-1", "1-2", "1-3", "Scimitar HQ", "Scimitar", "Anvil", "Hammer 1"],
+  "Claymore 2": ["Claymore Platoon", "2-1", "2-2", "2-3", "Hammer 2"],
+  "Broadsword 3": ["Broadsword Platoon", "3-1", "3-2", "3-3", "Halberd", "Hammer 3"],
+  Dagger: ["Dagger Platoon", "1-1", "1-2", "1-3", "Hammer 4"],
+};
 
 const statusLabels: Record<string, string> = {
   Y: "Present",
@@ -56,21 +75,6 @@ const statusLabels: Record<string, string> = {
   Excused: "Excused",
   LOA: "LOA",
 };
-
-const months = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 
 type StructureRole = {
   role: string;
@@ -108,17 +112,7 @@ function buildStructureSlotOrder() {
 const structureSlotOrder = buildStructureSlotOrder();
 
 function getDefaultAttendancePeriod() {
-  const today = new Date();
-  const currentDay = today.getDay();
-  const daysUntilSaturday = currentDay === 6 ? 0 : (6 - currentDay + 7) % 7;
-
-  const targetDate = new Date(today);
-  targetDate.setDate(today.getDate() + daysUntilSaturday);
-
-  return {
-    month: months[targetDate.getMonth()],
-    week: Math.ceil(targetDate.getDate() / 7),
-  };
+  return currentAttendancePeriod();
 }
 
 function getStatusPillStyles(status: string) {
@@ -139,6 +133,16 @@ function getStatusPillStyles(status: string) {
   }
 
   return "border-[#00ff66]/20 bg-[#08110c] text-[#b7f5cb]";
+}
+
+function formatChangeTime(value: string | null) {
+  if (!value) return "No recorded edits";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function AttendanceStatusButtons({
@@ -300,6 +304,7 @@ export default function AttendancePage() {
   const [activeSquad, setActiveSquad] = useState<string | null>("Tomahawk Platoon");
   const [selectedMonth, setSelectedMonth] = useState(defaultPeriod.month);
   const [selectedWeek, setSelectedWeek] = useState(defaultPeriod.week);
+  const [selectedYear, setSelectedYear] = useState(defaultPeriod.year);
   const [selectedType, setSelectedType] = useState("MainOp");
   const [search, setSearch] = useState("");
   const [updatingAll, setUpdatingAll] = useState(false);
@@ -308,22 +313,28 @@ export default function AttendancePage() {
   const [notice, setNotice] = useState("");
   const [requestError, setRequestError] = useState("");
   const [viewMode, setViewMode] = useState<"manage" | "review">("manage");
+  const [bulkPreviewOpen, setBulkPreviewOpen] = useState(false);
+  const [preferencesReady, setPreferencesReady] = useState(false);
 
-  const tabs = [
-    "Company Command",
-    "Tomahawk 1",
-    "Claymore 2",
-    "Broadsword 3",
-    "Dagger",
-  ];
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("attendance-admin-formation") || "null") as { tab?: string; squad?: string } | null;
+      if (saved?.tab && tabs.includes(saved.tab)) {
+        setActiveTab(saved.tab);
+        const availableSquads = platoons[saved.tab] || [];
+        setActiveSquad(saved.squad && availableSquads.includes(saved.squad) ? saved.squad : availableSquads[0] || null);
+      }
+    } catch {
+      localStorage.removeItem("attendance-admin-formation");
+    } finally {
+      setPreferencesReady(true);
+    }
+  }, []);
 
-  const platoons: Record<string, string[]> = {
-    "Company Command": ["Company"],
-    "Tomahawk 1": ["Tomahawk Platoon", "1-1", "1-2", "1-3", "Scimitar HQ", "Scimitar", "Anvil", "Hammer 1"],
-    "Claymore 2": ["Claymore Platoon", "2-1", "2-2", "2-3", "Hammer 2"],
-    "Broadsword 3": ["Broadsword Platoon", "3-1", "3-2", "3-3", "Halberd", "Hammer 3"],
-    Dagger: ["Dagger Platoon", "1-1", "1-2", "1-3", "Hammer 4"],
-  };
+  useEffect(() => {
+    if (!preferencesReady || !activeTab) return;
+    localStorage.setItem("attendance-admin-formation", JSON.stringify({ tab: activeTab, squad: activeSquad }));
+  }, [activeSquad, activeTab, preferencesReady]);
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -352,8 +363,11 @@ export default function AttendancePage() {
       setLoading(true);
       setRequestError("");
 
+      const cycleEnd = attendanceCycleEndDate(selectedMonth, selectedWeek, selectedYear);
+      const params = new URLSearchParams({ mode: "roster", month: selectedMonth, week: String(selectedWeek), type: selectedType });
+      if (cycleEnd) params.set("cycleEnd", cycleEnd);
       const response = await fetch(
-        `/api/attendance?mode=roster&month=${encodeURIComponent(selectedMonth)}&week=${selectedWeek}&type=${encodeURIComponent(selectedType)}`,
+        `/api/attendance?${params}`,
         { cache: "no-store", headers: await getAppAuthHeaders() },
       );
       const payload = await response.json().catch(() => null) as { records?: AttendanceRecordRow[]; error?: string } | null;
@@ -388,6 +402,8 @@ export default function AttendancePage() {
             rank: rankRow?.name ?? "Unknown",
             slot: person?.slotted_position ?? "Unassigned",
             status: row.status ?? "N",
+            lastChangedAt: row.last_changed_at || null,
+            lastChangedBy: row.last_changed_by || null,
           };
         })
         .filter((member) => member.id && member.recordId)
@@ -419,6 +435,7 @@ export default function AttendancePage() {
     selectedMonth,
     selectedWeek,
     selectedType,
+    selectedYear,
     loadingAuth,
   ]);
 
@@ -447,9 +464,12 @@ export default function AttendancePage() {
         return;
       }
 
+      const payload = await response.json().catch(() => null) as { changedAt?: string; changedBy?: string } | null;
       setRoster((prev) =>
         prev.map((member) =>
-          member.recordId === recordId ? { ...member, status: value } : member
+          member.recordId === recordId
+            ? { ...member, status: value, lastChangedAt: payload?.changedAt || new Date().toISOString(), lastChangedBy: payload?.changedBy || "Current account" }
+            : member
         )
       );
     } catch {
@@ -462,20 +482,20 @@ export default function AttendancePage() {
   const bulkUpdateAssignment = async (value: string) => {
     if (!canEdit) return;
     if (!roster.length) return;
-    if (!window.confirm(`Mark all ${roster.length} personnel in ${activeSquad || activeTab} as ${statusLabels[value]}?`)) return;
 
     setUpdatingAll(true);
     setRequestError("");
     setNotice("");
 
     const ids = roster.map((member) => member.recordId);
+    const changedCount = roster.filter((member) => member.status !== value).length;
 
     try {
       const response = await fetch("/api/attendance", {
         method: "PATCH",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
-        body: JSON.stringify({ ids, status: value }),
+        body: JSON.stringify({ ids, status: value, isBulk: true }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null;
@@ -483,8 +503,17 @@ export default function AttendancePage() {
         return;
       }
 
-      setRoster((prev) => prev.map((member) => ({ ...member, status: value })));
-      setNotice(`${roster.length} personnel marked ${statusLabels[value]}.`);
+      const payload = await response.json().catch(() => null) as { changedAt?: string; changedBy?: string } | null;
+      setRoster((prev) => prev.map((member) => member.status === value ? member : ({
+        ...member,
+        status: value,
+        lastChangedAt: payload?.changedAt || new Date().toISOString(),
+        lastChangedBy: payload?.changedBy || "Current account",
+      })));
+      setNotice(changedCount
+        ? `${changedCount} personnel marked ${statusLabels[value]}.`
+        : `All personnel were already marked ${statusLabels[value]}.`);
+      setBulkPreviewOpen(false);
     } catch {
       setRequestError("Bulk attendance update failed. Please try again.");
     } finally {
@@ -553,36 +582,27 @@ export default function AttendancePage() {
             <button type="button" onClick={() => setViewMode("review")} className={`inline-flex min-h-12 items-center justify-center gap-2 border-l border-[#00ff66]/15 px-4 text-xs font-black uppercase tracking-[0.1em] transition ${viewMode === "review" ? "bg-[#00ff66] text-black" : "text-[#8eae99] hover:bg-[#00ff66]/10 hover:text-white"}`}><UserSearch size={16} /> Person review</button>
           </div>
 
-          {viewMode === "manage" && <section className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-[1.15fr_0.8fr_0.9fr_1.5fr_auto]" aria-label="Attendance period controls">
-            <label className="block">
-              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Month</span>
-              <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">
-                {months.map((month) => <option key={month}>{month}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Week</span>
-              <select value={selectedWeek} onChange={(event) => setSelectedWeek(Number(event.target.value))} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">
-                {[1, 2, 3, 4, 5].map((week) => <option key={week} value={week}>Week {week}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Event</span>
-              <select value={selectedType} onChange={(event) => setSelectedType(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">
-                <option value="MainOp">Main Operation</option>
-                <option value="Training">Training</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Find personnel</span>
-              <span className="relative block">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#00ff66]/50" />
-                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, rank, slot or status" className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] pl-10 pr-3 text-sm text-white outline-none placeholder:text-gray-600 focus:border-[#00ff66]/70" />
-              </span>
-            </label>
-            <button type="button" onClick={() => void fetchRoster()} disabled={loading} title="Refresh roster" className="mt-auto grid h-11 w-11 place-items-center border border-[#00ff66]/30 text-[#00ff66] transition hover:bg-[#00ff66]/10 disabled:opacity-50">
-              <RefreshCw className={loading ? "animate-spin" : ""} size={17} />
-            </button>
+          {viewMode === "manage" && <section className="p-5" aria-label="Attendance period controls">
+            <AttendanceCycleSelector month={selectedMonth} week={selectedWeek} year={selectedYear} onMonthChange={setSelectedMonth} onWeekChange={setSelectedWeek} onYearChange={setSelectedYear} />
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-[0.9fr_1.8fr_auto]">
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Event</span>
+                <select value={selectedType} onChange={(event) => setSelectedType(event.target.value)} className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">
+                  <option value="MainOp">Main Operation</option>
+                  <option value="Training">Training</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9f8f]">Find personnel</span>
+                <span className="relative block">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#00ff66]/50" />
+                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, rank, slot or status" className="h-11 w-full border border-[#00ff66]/25 bg-[#06100a] pl-10 pr-3 text-sm text-white outline-none placeholder:text-gray-600 focus:border-[#00ff66]/70" />
+                </span>
+              </label>
+              <button type="button" onClick={() => void fetchRoster()} disabled={loading} title="Refresh roster" className="mt-auto grid h-11 w-11 place-items-center border border-[#00ff66]/30 text-[#00ff66] transition hover:bg-[#00ff66]/10 disabled:opacity-50">
+                <RefreshCw className={loading ? "animate-spin" : ""} size={17} />
+              </button>
+            </div>
           </section>}
         </header>
 
@@ -633,7 +653,7 @@ export default function AttendancePage() {
         <section className="mt-5 border border-[#00ff66]/20 bg-black/65">
           <header className="flex flex-col gap-4 border-b border-[#00ff66]/15 p-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#00ff66]/60">{selectedMonth} · Week {selectedWeek} · {selectedType === "MainOp" ? "Main Operation" : "Training"}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#00ff66]/60">{attendancePeriodLabel(selectedMonth, selectedWeek, selectedYear)} · {selectedType === "MainOp" ? "Main Operation" : "Training"}</p>
               <h2 className="mt-2 text-xl font-black text-white">{activeSquad || activeTab}</h2>
               <p className="mt-1 text-sm text-[#7f9f8f]">{filteredRoster.length} of {roster.length} personnel shown. Select a status to save it immediately.</p>
             </div>
@@ -644,8 +664,8 @@ export default function AttendancePage() {
                 <select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value)} disabled={!canEdit || updatingAll} className="h-10 min-w-32 border border-amber-300/25 bg-[#0c0b05] px-3 text-sm text-white outline-none">
                   {assignmentOptions.map((option) => <option key={option} value={option}>{statusLabels[option]}</option>)}
                 </select>
-                <button type="button" onClick={() => void bulkUpdateAssignment(bulkStatus)} disabled={!canEdit || !roster.length || updatingAll} className="inline-flex h-10 items-center gap-2 border border-amber-300/35 px-4 text-xs font-bold uppercase tracking-[0.1em] text-amber-200 transition hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-40">
-                  {updatingAll && <Loader2 className="animate-spin" size={15} />} Apply
+                <button type="button" onClick={() => setBulkPreviewOpen(true)} disabled={!canEdit || !roster.length || updatingAll} className="inline-flex h-10 items-center gap-2 border border-amber-300/35 px-4 text-xs font-bold uppercase tracking-[0.1em] text-amber-200 transition hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-40">
+                  Preview
                 </button>
               </div>
             </div>
@@ -665,7 +685,7 @@ export default function AttendancePage() {
                   <tbody>
                     {filteredRoster.map((member) => (
                       <tr key={member.recordId} className="border-t border-[#00ff66]/10 transition hover:bg-[#00ff66]/[0.025]">
-                        <td className="px-5 py-4 font-bold text-white">{member.name}</td>
+                        <td className="px-5 py-4"><div className="font-bold text-white">{member.name}</div><div className="mt-1 text-[10px] text-[#63806e]">{member.lastChangedBy ? `${member.lastChangedBy} · ${formatChangeTime(member.lastChangedAt)}` : "No recorded edits"}</div></td>
                         <td className="px-5 py-4 text-sm text-[#9ab9a4]">{member.rank}</td>
                         <td className="max-w-xs px-5 py-4 text-sm text-[#9ab9a4]">{member.slot}</td>
                         <td className="px-5 py-3"><AttendanceStatusButtons value={member.status} disabled={!canEdit || updatingMemberId === member.recordId} onChange={(status) => void updateAssignment(member.recordId, status)} /></td>
@@ -679,7 +699,7 @@ export default function AttendancePage() {
                 {filteredRoster.map((member) => (
                   <article key={member.recordId} className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div><h3 className="font-bold text-white">{member.name}</h3><p className="mt-1 text-xs text-[#7f9f8f]">{member.rank} · {member.slot}</p></div>
+                      <div><h3 className="font-bold text-white">{member.name}</h3><p className="mt-1 text-xs text-[#7f9f8f]">{member.rank} · {member.slot}</p><p className="mt-1 text-[10px] text-[#63806e]">{member.lastChangedBy ? `${member.lastChangedBy} · ${formatChangeTime(member.lastChangedAt)}` : "No recorded edits"}</p></div>
                       <span className={`border px-2 py-1 text-[10px] font-bold uppercase ${getStatusPillStyles(member.status)}`}>{statusLabels[member.status] || member.status}</span>
                     </div>
                     <div className="mt-4"><AttendanceStatusButtons value={member.status} disabled={!canEdit || updatingMemberId === member.recordId} onChange={(status) => void updateAssignment(member.recordId, status)} /></div>
@@ -689,6 +709,32 @@ export default function AttendancePage() {
             </>
           )}
         </section>
+        {bulkPreviewOpen && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-labelledby="bulk-attendance-title">
+            <div className="w-full max-w-xl border border-amber-300/35 bg-[#030806] shadow-[0_0_60px_rgba(251,191,36,0.08)]">
+              <header className="flex items-start justify-between border-b border-amber-300/20 p-5">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300/70">Bulk attendance preview</p>
+                  <h2 id="bulk-attendance-title" className="mt-1 text-xl font-black text-white">Mark formation {statusLabels[bulkStatus]}</h2>
+                  <p className="mt-2 text-sm text-[#8eae99]">{activeSquad || activeTab} · {attendancePeriodLabel(selectedMonth, selectedWeek, selectedYear)}</p>
+                </div>
+                <button type="button" onClick={() => setBulkPreviewOpen(false)} title="Close preview" className="grid h-9 w-9 place-items-center border border-[#00ff66]/20 text-[#8eae99] hover:text-white"><X size={16} /></button>
+              </header>
+              <div className="p-5">
+                <div className="grid grid-cols-2 border border-[#00ff66]/15 sm:grid-cols-4">
+                  {[{ label: "Present", value: stats.yes }, { label: "Absent", value: stats.no }, { label: "Excused", value: stats.excused }, { label: "LOA", value: stats.loa }].map((item) => <div key={item.label} className="border-b border-r border-[#00ff66]/10 p-3 sm:border-b-0"><div className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#789383]">{item.label}</div><div className="mt-1 text-xl font-black text-white">{item.value}</div></div>)}
+                </div>
+                <div className="mt-4 border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-100">
+                  {roster.filter((member) => member.status !== bulkStatus).length} of {roster.length} records will change. Every changed record will be attributed to your account.
+                </div>
+              </div>
+              <footer className="flex justify-end gap-3 border-t border-[#00ff66]/15 p-5">
+                <button type="button" onClick={() => setBulkPreviewOpen(false)} className="h-10 border border-[#00ff66]/20 px-4 text-xs font-bold uppercase text-[#8eae99] hover:text-white">Cancel</button>
+                <button type="button" onClick={() => void bulkUpdateAssignment(bulkStatus)} disabled={updatingAll} className="inline-flex h-10 items-center gap-2 border border-amber-300/40 bg-amber-300/10 px-4 text-xs font-bold uppercase text-amber-200 disabled:opacity-50">{updatingAll && <Loader2 className="animate-spin" size={15} />} Confirm update</button>
+              </footer>
+            </div>
+          </div>
+        )}
         </>
         )}
       </div>

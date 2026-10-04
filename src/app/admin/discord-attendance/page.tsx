@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { CalendarClock, Plus, RefreshCw, TriangleAlert, Trash2, X } from "lucide-react";
 import { discordAnnouncementChannels } from "@/data/discordAnnouncementChannels";
 import {
   attendanceAssignableRoles,
@@ -185,6 +185,31 @@ function EmojiPreview({
   return <span className={`${className} grid place-items-center text-lg`}>{emoji.preview}</span>;
 }
 
+function customEmojiFromValue(value: string): AttendanceEmojiOption | null {
+  const match = value.trim().match(/^<(a?):([A-Za-z0-9_]+):(\d+)>$/);
+  if (!match) return null;
+
+  const [, animatedPrefix, name, id] = match;
+  const animated = animatedPrefix === "a";
+  return {
+    id,
+    label: `:${name}:`,
+    value,
+    preview: `:${name}:`,
+    imageUrl: `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}?size=96&quality=lossless`,
+    source: "server",
+  };
+}
+
+function resolveEmojiOption(value: string, options: AttendanceEmojiOption[]) {
+  return options.find((emoji) => emoji.value === value) || customEmojiFromValue(value) || {
+    label: value || "Current",
+    preview: value || "?",
+    value,
+    source: "base" as const,
+  };
+}
+
 export default function DiscordAttendancePage() {
   const router = useRouter();
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -224,6 +249,7 @@ export default function DiscordAttendancePage() {
   const [options, setOptions] = useState<AttendanceOption[]>(() => cloneDefaultOptions());
   const [emojiOptions, setEmojiOptions] = useState<AttendanceEmojiOption[]>([]);
   const [loadingEmojis, setLoadingEmojis] = useState(true);
+  const [emojiWarning, setEmojiWarning] = useState("");
   const [openEmojiPickerIndex, setOpenEmojiPickerIndex] = useState<number | null>(null);
 
   const selectedChannel = useMemo(
@@ -247,12 +273,7 @@ export default function DiscordAttendancePage() {
     openEmojiPickerIndex === null ? null : options[openEmojiPickerIndex] || null;
 
   const activeSelectedEmoji = activeEmojiOption
-    ? emojiOptions.find((emoji) => emoji.value === activeEmojiOption.emoji) || {
-        label: activeEmojiOption.emoji || "Current",
-        preview: activeEmojiOption.emoji || "?",
-        value: activeEmojiOption.emoji,
-        source: "base" as const,
-      }
+    ? resolveEmojiOption(activeEmojiOption.emoji, emojiOptions)
     : null;
 
   async function loadEvents() {
@@ -277,15 +298,19 @@ export default function DiscordAttendancePage() {
 
   async function loadEmojiOptions() {
     setLoadingEmojis(true);
+    setEmojiWarning("");
 
     try {
       const response = await fetch("/api/discord-attendance/emojis", {
         headers: await getAppAuthHeaders(),
+        cache: "no-store",
       });
-      const result = await response.json();
+      const result = await response.json() as { emojis?: AttendanceEmojiOption[]; warning?: string; error?: string };
       setEmojiOptions(Array.isArray(result.emojis) ? result.emojis : []);
+      setEmojiWarning(result.warning || (!response.ok ? result.error || "Discord emojis could not be loaded." : ""));
     } catch {
       setEmojiOptions([]);
+      setEmojiWarning("Discord emojis could not be loaded. Saved custom icons remain available.");
     }
 
     setLoadingEmojis(false);
@@ -819,12 +844,7 @@ export default function DiscordAttendancePage() {
               <div className="mt-3 grid gap-3">
                 {options.map((option, index) => {
                   const selectedEmoji =
-                    emojiOptions.find((emoji) => emoji.value === option.emoji) || {
-                      label: option.emoji || "Current",
-                      preview: option.emoji || "?",
-                      value: option.emoji,
-                      source: "base" as const,
-                    };
+                    resolveEmojiOption(option.emoji, emojiOptions);
 
                   return (
                     <div
@@ -1048,6 +1068,23 @@ export default function DiscordAttendancePage() {
                 </div>
               ) : (
                 <>
+                  {emojiWarning && (
+                    <div className="mb-5 flex flex-col gap-3 border border-amber-300/30 bg-amber-300/[0.06] px-4 py-4 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="flex items-start gap-3">
+                        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                        {emojiWarning}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void loadEmojiOptions()}
+                        className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-amber-300/30 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200 transition hover:bg-amber-300/10"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
                   {activeEmojiOption.emoji &&
                     !emojiOptions.some((emoji) => emoji.value === activeEmojiOption.emoji) && (
                       <button
@@ -1059,7 +1096,7 @@ export default function DiscordAttendancePage() {
                           emoji={activeSelectedEmoji}
                           className="h-8 w-8 shrink-0"
                         />
-                        <span className="truncate">Current: {activeEmojiOption.emoji}</span>
+                        <span className="truncate">Current saved icon: {activeSelectedEmoji.label}</span>
                       </button>
                     )}
 

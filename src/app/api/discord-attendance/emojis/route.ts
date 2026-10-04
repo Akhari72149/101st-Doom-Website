@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePageAccess } from "@/lib/route-permissions";
 
-const DISCORD_GUILD_ID = "445933549816774656";
+const DEFAULT_DISCORD_GUILD_ID = "445933549816774656";
 
 const baseNumberEmojis = [
   { label: "0", value: "\u0030\ufe0f\u20e3", preview: "\u0030\ufe0f\u20e3", source: "base" },
@@ -30,28 +30,48 @@ export async function GET(request: Request) {
   }
 
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
+  const guildId = process.env.DISCORD_GUILD_ID || DEFAULT_DISCORD_GUILD_ID;
 
   if (!botToken) {
     return NextResponse.json({
       emojis: baseNumberEmojis,
       warning: "DISCORD_BOT_TOKEN is not configured; only base number emojis are available.",
+      discordStatus: "missing-token",
     });
   }
 
-  const response = await fetch(
-    `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/emojis`,
-    {
-      headers: {
-        Authorization: `Bot ${botToken}`,
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://discord.com/api/v10/guilds/${guildId}/emojis`,
+      {
+        headers: { Authorization: `Bot ${botToken}` },
+        cache: "no-store",
       },
-      next: { revalidate: 300 },
-    },
-  );
-
-  if (!response.ok) {
+    );
+  } catch (error) {
+    console.error("[discord-attendance-emojis] Discord request failed", error);
     return NextResponse.json({
       emojis: baseNumberEmojis,
-      warning: "Discord emojis could not be loaded; only base number emojis are available.",
+      warning: "Discord could not be reached; saved custom icons remain available.",
+      discordStatus: "unreachable",
+    });
+  }
+
+  if (!response.ok) {
+    console.error("[discord-attendance-emojis] Discord rejected emoji request", {
+      status: response.status,
+      guildId,
+    });
+    const warning = response.status === 401
+      ? "Discord rejected DISCORD_BOT_TOKEN. Update the website token and restart the website."
+      : response.status === 403
+        ? "The configured Discord bot cannot read emojis from the 101st server."
+        : `Discord emojis could not be loaded (status ${response.status}).`;
+    return NextResponse.json({
+      emojis: baseNumberEmojis,
+      warning,
+      discordStatus: response.status,
     });
   }
 
@@ -73,5 +93,8 @@ export async function GET(request: Request) {
       };
     });
 
-  return NextResponse.json({ emojis: [...baseNumberEmojis, ...serverEmojis] });
+  return NextResponse.json({
+    emojis: [...baseNumberEmojis, ...serverEmojis],
+    discordStatus: "connected",
+  });
 }

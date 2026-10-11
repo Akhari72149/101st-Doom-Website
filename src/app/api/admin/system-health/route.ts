@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
+import { getWebsiteStorageSummary } from "@/lib/website-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   }
   try {
     const pool = getPostgresPool();
-    const [database, jobs, outbox, outboxIssues, updater, xp, edit, full] = await Promise.all([
+    const [database, jobs, outbox, outboxIssues, updater, xp, storage, edit, full] = await Promise.all([
       pool.query(`select current_database() database, current_user role,
         current_setting('server_version') version, now() server_time`),
       pool.query(`select distinct on (job_name) job_name,status,started_at,completed_at,error_message
@@ -50,6 +51,10 @@ export async function GET(request: Request) {
         from public.website_update_jobs order by requested_at desc limit 1`),
       pool.query(`select max(last_event_at) last_event_at,count(*) filter(where total_xp>0)::integer active_profiles
         from public.personnel_xp_profiles`),
+      getWebsiteStorageSummary().catch((storageError) => {
+        console.error("[system-health] Storage check failed", storageError);
+        return null;
+      }),
       requirePageAccess(request, "admin.system-health", "edit").catch(() => null),
       requirePageAccess(request, "admin.system-health", "full").catch(() => null),
     ]);
@@ -57,7 +62,7 @@ export async function GET(request: Request) {
       checkedAt: new Date().toISOString(), database: database.rows[0], scheduledJobs: jobs.rows,
       discordOutbox: outbox.rows, discordOutboxIssues: outboxIssues.rows,
       discordOutboxPermissions: { canRetry: Boolean(edit), canRemove: Boolean(full) },
-      updater: updater.rows[0] || null, xp: xp.rows[0],
+      updater: updater.rows[0] || null, xp: xp.rows[0], storage,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[system-health] Check failed", error);

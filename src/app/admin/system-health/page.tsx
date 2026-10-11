@@ -8,9 +8,11 @@ import {
   ChevronDown,
   Clock3,
   Database,
+  HardDrive,
   RefreshCw,
   RotateCcw,
   Send,
+  Search,
   Trash2,
   TriangleAlert,
   Wrench,
@@ -48,11 +50,30 @@ type Health = {
   discordOutboxPermissions: { canRetry: boolean; canRemove: boolean };
   updater: { status: string; stage: string; message: string; updated_at: string } | null;
   xp: { last_event_at: string | null; active_profiles: number };
+  storage: {
+    measuredAt: string;
+    totalBytes: number;
+    categories: Array<{ key: string; label: string; bytes: number; files: number }>;
+    pages: Array<{ route: string; bytes: number; files: number; rendering: "static" | "dynamic" }>;
+    unattributedBytes: number;
+  } | null;
 };
 
 const fmt = (value: string | null | undefined) => value
   ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(value))
   : "No recorded activity";
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+  for (let index = 1; index < units.length && value >= 1024; index += 1) {
+    value /= 1024;
+    unit = units[index];
+  }
+  return `${value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2)} ${unit}`;
+}
 
 function outboxDiagnosis(issue: OutboxIssue) {
   if (!issue.last_error?.toLowerCase().includes("unknown member")) return null;
@@ -68,6 +89,8 @@ export default function SystemHealthPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [outboxOpen, setOutboxOpen] = useState(false);
+  const [storageOpen, setStorageOpen] = useState(false);
+  const [storageSearch, setStorageSearch] = useState("");
   const [workingEventId, setWorkingEventId] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [removeTarget, setRemoveTarget] = useState<OutboxIssue | null>(null);
@@ -123,11 +146,24 @@ export default function SystemHealthPage() {
     })();
   }, [load, router]);
 
+  useEffect(() => {
+    if (!storageOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [storageOpen]);
+
   const outbox = useMemo(
     () => Object.fromEntries((health?.discordOutbox || []).map((row) => [row.status, row])),
     [health],
   );
   const deadCount = Number(outbox.dead?.count || 0);
+  const storagePages = useMemo(() => {
+    const query = storageSearch.trim().toLowerCase();
+    return query
+      ? (health?.storage?.pages || []).filter((page) => page.route.toLowerCase().includes(query))
+      : health?.storage?.pages || [];
+  }, [health?.storage?.pages, storageSearch]);
   const cards = [
     {
       title: "PostgreSQL",
@@ -225,6 +261,23 @@ export default function SystemHealthPage() {
               <p className="mt-2 text-sm leading-6 text-gray-400">{card.detail}</p>
             </article>
           ))}
+
+          <button
+            type="button"
+            onClick={() => setStorageOpen(true)}
+            className="bg-[#020806] p-6 text-left transition hover:bg-white/[.03]"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <HardDrive className="text-cyan-300" />
+              <ChevronDown size={18} className="-rotate-90 text-gray-400" />
+            </div>
+            <h2 className="text-lg font-bold uppercase tracking-wider">Website Storage</h2>
+            <p className="mt-2 text-[#00ff66]">{health?.storage ? formatBytes(health.storage.totalBytes) : "Unavailable"}</p>
+            <p className="mt-2 text-sm leading-6 text-gray-400">
+              {health?.storage ? `${health.storage.pages.length} pages measured · build, cache, and public files` : "The deployment footprint could not be measured."}
+            </p>
+            <p className="mt-4 text-xs font-bold uppercase tracking-[.14em] text-cyan-200">Click to view storage breakdown</p>
+          </button>
         </div>
 
         {outboxOpen && (
@@ -352,6 +405,55 @@ export default function SystemHealthPage() {
                 Remove permanently
               </button>
             </footer>
+          </section>
+        </div>
+      )}
+
+      {storageOpen && (
+        <div className="fixed inset-0 z-[110] flex bg-black/90 p-0 backdrop-blur-sm sm:p-4" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="storage-title" className="mx-auto flex h-full w-full max-w-6xl flex-col border border-[#00ff66]/30 bg-[#020806] sm:h-[92vh]">
+            <header className="flex items-start justify-between gap-4 border-b border-[#00ff66]/20 p-5 sm:p-6">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[.18em] text-[#00ff66]">Deployment footprint</p>
+                <h2 id="storage-title" className="mt-2 text-2xl font-black uppercase">Website Storage</h2>
+                <p className="mt-2 text-sm text-gray-400">{health?.storage ? `${formatBytes(health.storage.totalBytes)} across the website build, cache, and public files` : "Storage information is unavailable."}</p>
+              </div>
+              <button type="button" onClick={() => setStorageOpen(false)} className="grid h-10 w-10 shrink-0 place-items-center border border-white/15 text-gray-400 hover:border-red-300/40 hover:text-red-200" aria-label="Close storage breakdown"><X size={18} /></button>
+            </header>
+
+            {health?.storage ? <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="grid gap-px border-b border-[#00ff66]/15 bg-[#00ff66]/10 sm:grid-cols-2 lg:grid-cols-5">
+                {health.storage.categories.map((category) => (
+                  <div key={category.key} className="bg-[#03100b] p-4">
+                    <p className="text-[9px] font-black uppercase tracking-[.13em] text-[#718479]">{category.label}</p>
+                    <p className="mt-2 text-xl font-black text-white">{formatBytes(category.bytes)}</p>
+                    <p className="mt-1 text-xs text-gray-500">{category.files.toLocaleString("en-GB")} files</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-b border-[#00ff66]/15 p-4 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div><p className="text-xs font-bold uppercase tracking-[.16em] text-[#00ff66]">Page output</p><h3 className="mt-2 text-xl font-black uppercase">Space by page</h3><p className="mt-2 max-w-2xl text-xs leading-5 text-gray-500">Page sizes contain output unique to that route. Shared code, images, and client files are shown above instead of being counted repeatedly.</p></div>
+                  <label className="relative block w-full sm:max-w-xs"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={15}/><span className="sr-only">Search pages</span><input value={storageSearch} onChange={(event) => setStorageSearch(event.target.value)} placeholder="Search route" className="h-11 w-full border border-white/12 bg-black pl-10 pr-3 text-sm outline-none focus:border-[#00ff66]/55" /></label>
+                </div>
+              </div>
+
+              <div className="divide-y divide-white/8">
+                {storagePages.map((page) => {
+                  const largest = health.storage?.pages[0]?.bytes || 1;
+                  const width = Math.max(1, (page.bytes / largest) * 100);
+                  return <article key={page.route} className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_120px_90px] sm:items-center sm:px-6">
+                    <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-mono text-sm font-bold text-white">{page.route}</p><span className={`border px-2 py-0.5 text-[8px] font-black uppercase ${page.rendering === "static" ? "border-[#00ff66]/25 text-[#00ff66]" : "border-cyan-300/25 text-cyan-200"}`}>{page.rendering}</span></div><div className="mt-2 h-1.5 w-full bg-white/5"><div className="h-full bg-[#00ff66]/65" style={{ width: `${width}%` }}/></div></div>
+                    <p className="text-sm font-black text-[#00ff66] sm:text-right">{formatBytes(page.bytes)}</p>
+                    <p className="text-xs text-gray-500 sm:text-right">{page.files} files</p>
+                  </article>;
+                })}
+                {!storagePages.length && <p className="p-8 text-center text-sm text-gray-500">No pages match that route.</p>}
+              </div>
+            </div> : <p className="p-8 text-gray-400">Run the health check again after a successful website build.</p>}
+
+            <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#00ff66]/15 px-5 py-3 text-[10px] uppercase tracking-[.12em] text-gray-500 sm:px-6"><span>Measured {fmt(health?.storage?.measuredAt)}</span><span>Refreshes every five minutes</span></footer>
           </section>
         </div>
       )}

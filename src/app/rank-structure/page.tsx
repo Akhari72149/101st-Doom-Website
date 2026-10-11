@@ -301,6 +301,83 @@ const tracks: RankTrack[] = [
     ],
   },
   {
+    id: "medical",
+    label: "Medical Progression",
+    eyebrow: "Medical MOS",
+    accent: "green",
+    ranks: [
+      {
+        name: "Clone Medic Cadet",
+        abbreviation: "CM-C",
+        icon: "/rank-icons/medical/gm.png",
+        summary:
+          "The entry medical designation for personnel completing their supervised field experience and initial examination.",
+        requirements: ["Complete 4 CLS shadows", "Pass the CM-C exam"],
+      },
+      {
+        name: "Clone Medic",
+        abbreviation: "CM",
+        icon: "/rank-icons/medical/gm.png",
+        summary:
+          "A qualified medic who has built operational experience and completed the core medical examination.",
+        requirements: ["Record 10 Medical Operation counts", "Pass the CM exam"],
+      },
+      {
+        name: "Clone Medic Veteran",
+        abbreviation: "CM-V",
+        icon: "/rank-icons/medical/gm.png",
+        summary:
+          "An experienced medic recognised for advanced medical training, sustained operation counts, and platoon confidence.",
+        requirements: [
+          "Complete the AMC Course",
+          "Record 30 Medical Operation counts",
+          "Platoon Medic or higher approval",
+        ],
+      },
+      {
+        name: "Clone Medic Technician",
+        abbreviation: "CM-T",
+        icon: "/rank-icons/medical/gm.png",
+        summary:
+          "The medical technician designation marking the beginning of the Corporal progression pathway.",
+        requirements: ["Begin the CP Course pathway"],
+      },
+      {
+        name: "Clone Medic Corporal",
+        abbreviation: "CM-P",
+        icon: "/rank-icons/medical/gm.png",
+        summary:
+          "A medical Corporal who has completed the Corporals Course and holds the corresponding base rank.",
+        requirements: ["Complete the CP Course", "Obtain the CP base rank"],
+      },
+      {
+        name: "Clone Medic Sergeant",
+        abbreviation: "CM-S",
+        icon: "/rank-icons/medical/cms.png",
+        summary:
+          "A medical Sergeant who has completed the Sergeants Course and holds the corresponding base rank.",
+        requirements: ["Complete the CS Course", "Obtain the CS base rank"],
+      },
+      {
+        name: "Clone Medic Senior Sergeant",
+        abbreviation: "CM-SS",
+        icon: "/rank-icons/medical/cmss.png",
+        summary:
+          "A senior medical Sergeant designation whose progression requirement has not yet been published.",
+        requirements: [],
+        note: "Requirement not yet published",
+      },
+      {
+        name: "Clone Medic Sergeant Major",
+        abbreviation: "CM-M",
+        icon: "/rank-icons/medical/cmsm.png",
+        summary:
+          "The senior medical leadership designation for personnel who have completed the Sergeant Major pathway.",
+        requirements: ["Complete the CSM Course", "Obtain the CSM base rank"],
+      },
+    ],
+  },
+  {
     id: "sergeant",
     label: "Sergeant Cadre",
     eyebrow: "Squad Leadership",
@@ -484,8 +561,9 @@ const tracks: RankTrack[] = [
 
 export default function RankStructurePage() {
   const rankCount = tracks.reduce((total, track) => total + track.ranks.length, 0);
-  const overallTracks = tracks.filter((track) => track.id !== "pilot");
-  const mosTracks = tracks.filter((track) => track.id === "pilot");
+  const mosTrackIds = new Set(["pilot", "medical"]);
+  const overallTracks = tracks.filter((track) => !mosTrackIds.has(track.id));
+  const mosTracks = tracks.filter((track) => mosTrackIds.has(track.id));
   const overallRankCount = overallTracks.reduce((total, track) => total + track.ranks.length, 0);
   const mosRankCount = mosTracks.reduce((total, track) => total + track.ranks.length, 0);
 

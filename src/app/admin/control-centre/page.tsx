@@ -64,8 +64,8 @@ const panels: PanelDefinition[] = [
   },
   {
     id: "join-links",
-    title: "Join Page Links",
-    description: "Maintain public modlist and unit whitelist destinations.",
+    title: "Join Page Content",
+    description: "Publish MainOp and FunOp files and maintain the unit whitelist.",
     permission: "admin.join-links",
     route: "/admin/join-links",
     group: "Website & Systems",

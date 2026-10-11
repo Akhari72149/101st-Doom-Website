@@ -196,9 +196,9 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
   {
     key: "admin.join-links",
     pagePath: "/admin/join-links",
-    label: "Join Page Links",
+    label: "Join Page Content",
     category: "Systems",
-    description: "Review and update the public Join page modlist and whitelist links.",
+    description: "Upload the public MainOp and FunOp modlists and maintain the unit whitelist link.",
     legacyRoles: [],
   },
   {

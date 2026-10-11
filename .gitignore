@@ -25,6 +25,7 @@
 *.pem
 /.tools/
 /.migration-private/
+/.runtime-data/
 
 # debug
 npm-debug.log*

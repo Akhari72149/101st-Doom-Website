@@ -1,9 +1,19 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import NavbarClient from "@/components/NavbarClient";
 import LegalFooter from "@/components/legal/LegalFooter";
 import WebsiteUpdateNotice from "@/components/WebsiteUpdateNotice";
+
+function subscribeToLocation(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+}
+
+function getEmbeddedSnapshot() {
+  return new URLSearchParams(window.location.search).get("embedded") === "1";
+}
 
 export default function LayoutWrapper({
   children,
@@ -11,10 +21,11 @@ export default function LayoutWrapper({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const embedded = useSyncExternalStore(subscribeToLocation, getEmbeddedSnapshot, () => false);
 
   const hideNavbar =
-    pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/planops");
-  const hideFooter = pathname === "/change-password" || pathname.startsWith("/planops");
+    embedded || pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/planops");
+  const hideFooter = embedded || pathname === "/change-password" || pathname.startsWith("/planops");
   const editorialPage = [
     "/",
     "/Who-We-Are",
@@ -36,7 +47,7 @@ export default function LayoutWrapper({
         {children}
       </div>
       {!hideFooter && <LegalFooter />}
-      <WebsiteUpdateNotice />
+      {!embedded && <WebsiteUpdateNotice />}
     </>
   );
 }

@@ -7,10 +7,12 @@ type RouteMetadata = {
 
 export const siteRouteMetadata = {
   "/admin/certifications": { title: "Certification Management", description: "Assign certifications, manage certification leads, and review personnel qualification records." },
+  "/admin/control-centre": { title: "Admin Control Centre", description: "Access routine personnel configuration, public content, XP, and system health tools from one workspace." },
   "/admin/create": { title: "Personnel Intake", description: "Create and onboard new personnel records for the 101st Doom Battalion." },
   "/admin/discipline": { title: "Discipline Management", description: "Issue, review, approve, and appeal official warnings and disciplinary actions." },
   "/admin/discord-announcemets": { title: "Discord Announcements", description: "Create and schedule official Discord announcements and unit pings." },
   "/admin/discord-attendance": { title: "Discord Attendance", description: "Schedule and resend reaction-based Discord attendance messages." },
+  "/admin/join-links": { title: "Join Page Links", description: "Review and update the modlist and whitelist links displayed on the public Join page." },
   "/admin/medals": { title: "Medal Management", description: "Award and manage medals recorded on personnel profiles." },
   "/admin/Mod-Taskboard": { title: "Mod Taskboard", description: "Manage the battalion mod-development pipeline and assigned work." },
   "/admin/permissions": { title: "Account Permissions", description: "Manage website accounts, access levels, presets, and display role tags." },

@@ -329,20 +329,6 @@ export default function NavbarClient() {
           category: "Personnel Admin",
         },
         {
-          href: "/admin/ranks",
-          label: "Rank Management",
-          description: "Create and maintain rank definitions",
-          allowedRoles: [],
-          category: "Personnel Admin",
-        },
-        {
-          href: "/admin/rank-corrections",
-          label: "Rank Corrections",
-          description: "Correct ranks without changing TIG",
-          allowedRoles: [],
-          category: "Personnel Admin",
-        },
-        {
           href: "/admin/personnel-profiles",
           label: "Personnel Profiles",
           description: "Manage join dates, Discord links and reactivations",
@@ -441,16 +427,9 @@ export default function NavbarClient() {
           category: "Systems",
         },
         {
-          href: "/admin/system-health",
-          label: "System Health",
-          description: "Review database and worker health",
-          allowedRoles: [],
-          category: "Systems",
-        },
-        {
-          href: "/admin/xp",
-          label: "XP Management",
-          description: "Review and correct personnel XP",
+          href: "/admin/control-centre",
+          label: "Control Centre",
+          description: "Open routine configuration and system tools",
           allowedRoles: [],
           category: "Systems",
         },
@@ -476,6 +455,16 @@ export default function NavbarClient() {
     const canSeeItem = (item: NavItem) => {
       if (item.href === "/admin/discipline") {
         return Boolean(permissions["admin.discipline"] || permissions["admin.discipline-approval"]);
+      }
+      if (item.href === "/admin/control-centre") {
+        return [
+          "admin.rank-corrections",
+          "admin.ranks",
+          "admin.certifications",
+          "admin.xp",
+          "admin.join-links",
+          "admin.system-health",
+        ].some((permissionKey) => Boolean(permissions[permissionKey]));
       }
       const permissionKeys = permissionsByPath.get(item.href);
       if (permissionKeys) return permissionKeys.some((permissionKey) => Boolean(permissions[permissionKey]));

@@ -122,6 +122,12 @@ export default function ManageCertifications() {
   }, [router]);
 
   useEffect(() => {
+    if (!loadingAuth && new URLSearchParams(window.location.search).get("leads") === "1") {
+      setLeadModalOpen(true);
+    }
+  }, [loadingAuth]);
+
+  useEffect(() => {
     if (loadingAuth) return;
     let cancelled = false;
     void fetchData().then((data) => {

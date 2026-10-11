@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { defaultJoinPageLinks, type JoinPageLinkKey } from "@/data/joinPageLinks";
 
 function SectionCard({
   title,
@@ -222,6 +223,19 @@ function TFARSetupBox() {
 export default function HowToJoinPage() {
   const router = useRouter();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [modLinks, setModLinks] = useState<Record<JoinPageLinkKey, string>>(defaultJoinPageLinks);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/join-links", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = await response.json() as { links?: Partial<Record<JoinPageLinkKey, string>> };
+        if (body.links) setModLinks((current) => ({ ...current, ...body.links }));
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
 
   const joinLinks = [
     {
@@ -424,7 +438,7 @@ export default function HowToJoinPage() {
 
                       <div className="space-y-3">
                         <a
-                          href="https://cdn.discordapp.com/attachments/1284402204748546114/1471514051950546995/Yoaboa_V2.html?ex=69a44dc1&is=69a2fc41&hm=49e5d6f3aa76a25df6f05c45caa25c409fb46ddf4d09bb255d42f3638bb8a110&"
+                          href={modLinks["main-operations"]}
                           target="_blank"
                           rel="noreferrer"
                           className="block rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[#00ff66] underline transition hover:border-[#00ff66]/40 hover:text-white"
@@ -433,7 +447,7 @@ export default function HowToJoinPage() {
                         </a>
 
                         <a
-                          href="https://cdn.discordapp.com/attachments/1284402204748546114/1471514051463876649/Training_Server_Modlist_V2.html?ex=69a44dc1&is=69a2fc41&hm=aefc731a0722aa326446839465e28a8fb57ba1c899d9d8a67900c7efcd2431b0&"
+                          href={modLinks.training}
                           target="_blank"
                           rel="noreferrer"
                           className="block rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[#00ff66] underline transition hover:border-[#00ff66]/40 hover:text-white"
@@ -442,7 +456,7 @@ export default function HowToJoinPage() {
                         </a>
 
                         <a
-                          href="https://cdn.discordapp.com/attachments/1284402204748546114/1471514051036188756/Funop_Modlist_V5.html?ex=69a44dc1&is=69a2fc41&hm=00bd71791d9fe0b992652f1059345ec4e48c00210af1a93a972ad094bedd3b5f&"
+                          href={modLinks["fun-operations"]}
                           target="_blank"
                           rel="noreferrer"
                           className="block rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[#00ff66] underline transition hover:border-[#00ff66]/40 hover:text-white"
@@ -451,7 +465,7 @@ export default function HowToJoinPage() {
                         </a>
 
                         <a
-                          href="https://cdn.discordapp.com/attachments/983174143400869898/1464716029312630987/101st_FOTM_40k_Rubicon.html?ex=69a3f65a&is=69a2a4da&hm=afb618de63df40618b068742e8af922f4d356dc14ec4a91018104ce5c9d9aae3&"
+                          href={modLinks.fotm}
                           target="_blank"
                           rel="noreferrer"
                           className="block rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[#00ff66] underline transition hover:border-[#00ff66]/40 hover:text-white"
@@ -480,7 +494,7 @@ export default function HowToJoinPage() {
                         </p>
 
                         <a
-                          href="https://steamcommunity.com/sharedfiles/filedetails/?id=3150345662"
+                          href={modLinks["unit-whitelist"]}
                           target="_blank"
                           rel="noreferrer"
                           className="mt-3 inline-block text-[#00ff66] underline transition hover:text-white"

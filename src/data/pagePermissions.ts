@@ -194,6 +194,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.join-links",
+    pagePath: "/admin/join-links",
+    label: "Join Page Links",
+    category: "Systems",
+    description: "Review and update the public Join page modlist and whitelist links.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.xp",
     pagePath: "/admin/xp",
     label: "XP Management",

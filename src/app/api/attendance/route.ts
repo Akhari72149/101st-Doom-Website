@@ -141,6 +141,37 @@ export async function GET(request: Request) {
   }
 }
 
+export async function POST(request: Request) {
+  if (!requestHasSameOrigin(request)) return errorResponse("Invalid request origin", 403);
+  const auth = await requirePageAccess(request, PERMISSION_KEY, "edit").catch(() => null);
+  if (!auth) return errorResponse("Forbidden", 403);
+  if (backend() !== "postgres") return errorResponse("Attendance cycle generation requires PostgreSQL", 409);
+
+  const body = await request.json().catch(() => null) as { action?: unknown; cycleEnd?: unknown; type?: unknown } | null;
+  const action = String(body?.action || "");
+  const cycleEnd = validDate(String(body?.cycleEnd || ""));
+  const type = String(body?.type || "");
+  const today = new Date();
+  const daysUntilSaturday = today.getDay() === 6 ? 0 : (6 - today.getDay() + 7) % 7;
+  const currentEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + daysUntilSaturday, 12);
+  const currentCycleEnd = `${currentEnd.getFullYear()}-${String(currentEnd.getMonth() + 1).padStart(2, "0")}-${String(currentEnd.getDate()).padStart(2, "0")}`;
+
+  if (action !== "ensureCurrentCycle" || !cycleEnd || cycleEnd !== currentCycleEnd || !VALID_TYPES.has(type)) {
+    return errorResponse("Invalid attendance cycle request", 400);
+  }
+
+  try {
+    const result = await getPostgresPool().query<{ affected_rows: number }>(
+      "select public.ensure_attendance_cycle($1::date, $2::text) as affected_rows",
+      [cycleEnd, type],
+    );
+    return NextResponse.json({ ensured: true, affected: result.rows[0]?.affected_rows || 0 }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("[attendance] Cycle generation failed", error);
+    return errorResponse("Failed to initialise the current attendance cycle", 500);
+  }
+}
+
 export async function PATCH(request: Request) {
   if (!requestHasSameOrigin(request)) return errorResponse("Invalid request origin", 403);
   const auth = await requirePageAccess(request, PERMISSION_KEY, "edit").catch(() => null);

@@ -366,15 +366,38 @@ export default function AttendancePage() {
       const cycleEnd = attendanceCycleEndDate(selectedMonth, selectedWeek, selectedYear);
       const params = new URLSearchParams({ mode: "roster", month: selectedMonth, week: String(selectedWeek), type: selectedType });
       if (cycleEnd) params.set("cycleEnd", cycleEnd);
-      const response = await fetch(
+      let response = await fetch(
         `/api/attendance?${params}`,
         { cache: "no-store", headers: await getAppAuthHeaders() },
       );
-      const payload = await response.json().catch(() => null) as { records?: AttendanceRecordRow[]; error?: string } | null;
+      let payload = await response.json().catch(() => null) as { records?: AttendanceRecordRow[]; error?: string } | null;
       if (!response.ok || !payload?.records) {
         setRequestError(payload?.error || "Failed to load attendance");
         setRoster([]);
         return;
+      }
+
+      if (!payload.records.length && canEdit && cycleEnd === currentAttendancePeriod().cycleEndDate) {
+        const ensureResponse = await fetch("/api/attendance", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+          body: JSON.stringify({ action: "ensureCurrentCycle", cycleEnd, type: selectedType }),
+        });
+        const ensurePayload = await ensureResponse.json().catch(() => null) as { error?: string } | null;
+        if (!ensureResponse.ok) {
+          setRequestError(ensurePayload?.error || "The current attendance cycle could not be initialised.");
+          setRoster([]);
+          return;
+        }
+        response = await fetch(`/api/attendance?${params}`, { cache: "no-store", headers: await getAppAuthHeaders() });
+        payload = await response.json().catch(() => null) as { records?: AttendanceRecordRow[]; error?: string } | null;
+        if (!response.ok || !payload?.records) {
+          setRequestError(payload?.error || "Failed to load the initialised attendance cycle");
+          setRoster([]);
+          return;
+        }
+        setNotice("The current attendance cycle was initialised automatically.");
       }
 
       const attendanceRows = payload.records;
@@ -437,6 +460,7 @@ export default function AttendancePage() {
     selectedType,
     selectedYear,
     loadingAuth,
+    canEdit,
   ]);
 
   useEffect(() => {

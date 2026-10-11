@@ -202,6 +202,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.uniform-guide",
+    pagePath: "/admin/uniform-guide",
+    label: "Uniform Guide",
+    category: "Systems",
+    description: "Review and maintain the public uniform, equipment, and restricted-item guide.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.xp",
     pagePath: "/admin/xp",
     label: "XP Management",

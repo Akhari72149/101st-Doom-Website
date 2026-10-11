@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Activity,
   BadgeCheck,
+  BookOpenCheck,
   ExternalLink,
   HeartPulse,
   Link2,
@@ -70,6 +71,15 @@ const panels: PanelDefinition[] = [
     route: "/admin/join-links",
     group: "Website & Systems",
     icon: Link2,
+  },
+  {
+    id: "uniform-guide",
+    title: "Uniform Guide",
+    description: "Maintain published uniforms, loadouts, images, and restricted items.",
+    permission: "admin.uniform-guide",
+    route: "/admin/uniform-guide",
+    group: "Website & Systems",
+    icon: BookOpenCheck,
   },
   {
     id: "system-health",

@@ -33,5 +33,12 @@ export async function requirePageAccess(
 export function requestHasSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return false;
-  try { return new URL(origin).origin === new URL(process.env.APP_ORIGIN || request.url).origin; } catch { return false; }
+  try {
+    const requestOrigin = new URL(request.url).origin;
+    const allowedOrigin = new URL(process.env.APP_ORIGIN || request.url).origin;
+    return new URL(origin).origin === allowedOrigin
+      || (process.env.NODE_ENV !== "production" && new URL(origin).origin === requestOrigin);
+  } catch {
+    return false;
+  }
 }

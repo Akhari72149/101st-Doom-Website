@@ -10,6 +10,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/certs",
     "/certifications",
     "/rank-structure",
+    "/uniform-guide",
     "/documents",
     "/faq",
     "/audit",

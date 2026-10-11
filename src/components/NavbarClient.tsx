@@ -150,6 +150,11 @@ export default function NavbarClient() {
           description: "Progression routes and promotion requirements",
         },
         {
+          href: "/uniform-guide",
+          label: "Uniform Guide",
+          description: "Approved uniforms, loadouts and restricted items",
+        },
+        {
           href: "/documents",
           label: "Documents & Forms",
           description: "Important files, policies and paperwork",
@@ -463,6 +468,7 @@ export default function NavbarClient() {
           "admin.certifications",
           "admin.xp",
           "admin.join-links",
+          "admin.uniform-guide",
           "admin.system-health",
         ].some((permissionKey) => Boolean(permissions[permissionKey]));
       }

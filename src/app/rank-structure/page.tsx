@@ -378,6 +378,91 @@ const tracks: RankTrack[] = [
     ],
   },
   {
+    id: "rto",
+    label: "RTO Progression",
+    eyebrow: "RTO MOS",
+    accent: "cyan",
+    ranks: [
+      {
+        name: "Clone Intercommunicator Cadet",
+        abbreviation: "CI-C",
+        icon: "/rank-icons/rto/rto.png",
+        summary:
+          "The entry RTO designation for a slotted squad communicator completing supervised shadows and the initial test.",
+        requirements: [
+          "Be slotted as a Squad RTO",
+          "Complete 4 shadows with a CI or higher",
+          "Complete the CI-C Test",
+        ],
+      },
+      {
+        name: "Clone Intercommunicator",
+        abbreviation: "CI",
+        icon: "/rank-icons/rto/rto.png",
+        summary:
+          "A qualified squad communicator building time in billet and demonstrating the ability to deliver RTO training.",
+        requirements: [
+          "Complete 35 days slotted TIG",
+          "Host 1 RTO training while shadowed by a CI-T or higher",
+        ],
+      },
+      {
+        name: "Clone Intercommunicator Technician",
+        abbreviation: "CI-T",
+        icon: "/rank-icons/rto/rto.png",
+        summary:
+          "The technician designation for a Platoon RTO second-in-command beginning the Corporal pathway.",
+        requirements: [
+          "Serve as 2IC to the Platoon RTO",
+          "Begin the CP Course",
+          "Receive Platoon approval",
+          "Receive Company approval",
+        ],
+      },
+      {
+        name: "Clone Intercommunicator Corporal",
+        abbreviation: "CI-P",
+        icon: "/rank-icons/rto/rto.png",
+        summary:
+          "A Platoon RTO second-in-command who has completed the Corporal pathway and demonstrated sustained experience.",
+        requirements: [
+          "Serve as 2IC to Platoon Romeo",
+          "Complete the CP Course",
+          "Complete the CI-P Test",
+          "Complete 45 days TIG",
+          "Receive Platoon RTO approval",
+        ],
+      },
+      {
+        name: "Clone Intercommunicator Sergeant",
+        abbreviation: "CI-S",
+        icon: "/rank-icons/rto/rto.png",
+        summary:
+          "The Platoon Romeo designation for an experienced communicator who has completed the Sergeant pathway.",
+        requirements: [
+          "Serve as Platoon Romeo",
+          "Complete the CS Course",
+          "Complete the CI-S Test",
+          "Complete 45 days TIB",
+          "Receive Company approval",
+        ],
+      },
+      {
+        name: "Clone Intercommunicator Sergeant Major",
+        abbreviation: "CI-SM",
+        icon: "/rank-icons/rto/rto.png",
+        summary:
+          "The senior RTO leadership designation for Company Romeo and battalion-level communications oversight.",
+        requirements: [
+          "Serve as Company Romeo",
+          "Complete the SNCO Course",
+          "Receive Battalion RTO approval",
+          "Receive Company HQ approval",
+        ],
+      },
+    ],
+  },
+  {
     id: "sergeant",
     label: "Sergeant Cadre",
     eyebrow: "Squad Leadership",
@@ -561,7 +646,7 @@ const tracks: RankTrack[] = [
 
 export default function RankStructurePage() {
   const rankCount = tracks.reduce((total, track) => total + track.ranks.length, 0);
-  const mosTrackIds = new Set(["pilot", "medical"]);
+  const mosTrackIds = new Set(["pilot", "medical", "rto"]);
   const overallTracks = tracks.filter((track) => !mosTrackIds.has(track.id));
   const mosTracks = tracks.filter((track) => mosTrackIds.has(track.id));
   const overallRankCount = overallTracks.reduce((total, track) => total + track.ranks.length, 0);

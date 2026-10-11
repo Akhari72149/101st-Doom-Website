@@ -10,6 +10,14 @@ export type DocumentBlockType =
 export type DocumentAlignment = "left" | "center" | "right";
 export type DocumentFont = "Alegreya" | "Arial" | "Courier New" | "Orbitron" | "Oswald" | "Times New Roman";
 export type DocumentColour = "default" | "green" | "cyan" | "amber" | "red";
+export type DocumentLibrarySection = "General" | "Certifications" | "MOS" | "C-Shop";
+
+export const documentLibrarySections: DocumentLibrarySection[] = [
+  "General",
+  "Certifications",
+  "MOS",
+  "C-Shop",
+];
 
 export type DocumentRun = {
   text: string;
@@ -35,7 +43,7 @@ export type SiteDocument = {
   slug: string;
   title: string;
   summary: string;
-  category: string;
+  category: DocumentLibrarySection;
   content: DocumentBlock[];
   sourceUrl: string | null;
   published: boolean;

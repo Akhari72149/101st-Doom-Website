@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import type { DocumentAlignment, DocumentBlock, DocumentBlockType, DocumentColour, DocumentFont, DocumentRun } from "@/data/siteDocuments";
-import { documentFonts } from "@/data/siteDocuments";
+import type { DocumentAlignment, DocumentBlock, DocumentBlockType, DocumentColour, DocumentFont, DocumentLibrarySection, DocumentRun } from "@/data/siteDocuments";
+import { documentFonts, documentLibrarySections } from "@/data/siteDocuments";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 
@@ -13,7 +13,7 @@ const colours = new Set<DocumentColour>(["default", "green", "cyan", "amber", "r
 const fonts = new Set<DocumentFont>(documentFonts);
 
 type DocumentRow = {
-  id: string; slug: string; title: string; summary: string; category: string; content: DocumentBlock[];
+  id: string; slug: string; title: string; summary: string; category: DocumentLibrarySection; content: DocumentBlock[];
   source_url: string | null; published: boolean; updated_at: Date; updated_by_name: string | null;
 };
 
@@ -59,7 +59,8 @@ function parseContent(value: unknown): DocumentBlock[] | null {
 }
 
 function mapDocument(row: DocumentRow) {
-  return { id: row.id, slug: row.slug, title: row.title, summary: row.summary, category: row.category,
+  const category = documentLibrarySections.includes(row.category) ? row.category : "General";
+  return { id: row.id, slug: row.slug, title: row.title, summary: row.summary, category,
     content: row.content, sourceUrl: row.source_url, published: row.published,
     updatedAt: row.updated_at.toISOString(), updatedBy: row.updated_by_name };
 }
@@ -113,11 +114,11 @@ export async function POST(request: Request) {
         const id = text(body?.id, 80);
         const title = text(body?.title, 180);
         const summary = String(body?.summary || "").trim().slice(0, 1200);
-        const category = text(body?.category, 80) || "General";
+        const category = text(body?.category, 80) as DocumentLibrarySection;
         const content = parseContent(body?.content);
         const suppliedSource = body?.sourceUrl;
         const sourceUrl = suppliedSource ? webUrl(suppliedSource) : "";
-        if (!title || !content || !content.length || (suppliedSource && !sourceUrl)) throw new Error("INVALID");
+        if (!title || !documentLibrarySections.includes(category) || !content || !content.length || (suppliedSource && !sourceUrl)) throw new Error("INVALID");
         if (action === "create") {
           const slug = text(body?.slug, 120).toLowerCase();
           if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error("INVALID_SLUG");

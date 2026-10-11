@@ -7,6 +7,7 @@ import {
   Activity,
   BadgeCheck,
   BookOpenCheck,
+  BookOpenText,
   ExternalLink,
   HeartPulse,
   Link2,
@@ -80,6 +81,15 @@ const panels: PanelDefinition[] = [
     route: "/admin/uniform-guide",
     group: "Website & Systems",
     icon: BookOpenCheck,
+  },
+  {
+    id: "documents",
+    title: "Document Library",
+    description: "Edit, publish, and review official website documents.",
+    permission: "admin.documents",
+    route: "/admin/documents",
+    group: "Website & Systems",
+    icon: BookOpenText,
   },
   {
     id: "system-health",

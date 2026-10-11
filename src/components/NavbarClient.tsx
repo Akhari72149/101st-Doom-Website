@@ -155,6 +155,11 @@ export default function NavbarClient() {
           description: "Approved uniforms, loadouts and restricted items",
         },
         {
+          href: "/rules-and-regulations",
+          label: "Rules & Regulations",
+          description: "Official conduct and operational standards",
+        },
+        {
           href: "/documents",
           label: "Documents & Forms",
           description: "Important files, policies and paperwork",
@@ -469,6 +474,7 @@ export default function NavbarClient() {
           "admin.xp",
           "admin.join-links",
           "admin.uniform-guide",
+          "admin.documents",
           "admin.system-health",
         ].some((permissionKey) => Boolean(permissions[permissionKey]));
       }

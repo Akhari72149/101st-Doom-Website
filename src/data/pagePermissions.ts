@@ -210,6 +210,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.documents",
+    pagePath: "/admin/documents",
+    label: "Document Library",
+    category: "Systems",
+    description: "Review and maintain published website documents and rich-text content.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.xp",
     pagePath: "/admin/xp",
     label: "XP Management",

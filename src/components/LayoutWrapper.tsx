@@ -36,6 +36,7 @@ export default function LayoutWrapper({
     "/faq",
     "/rank-structure",
     "/uniform-guide",
+    "/rules-and-regulations",
   ].includes(pathname);
 
   return (

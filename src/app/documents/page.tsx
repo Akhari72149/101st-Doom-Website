@@ -74,8 +74,8 @@ export default function DocumentsPage() {
 
     General: [
       {
-        label: "Unit Rules",
-        href: "https://docs.google.com/document/d/15tsyHzBSaqfvB-VcIr-eGbhROFKbX8zjc3_L4fA2ZrQ/edit?usp=sharing",
+        label: "Rules and Regulations",
+        href: "/rules-and-regulations",
       },
       {
         label: "WBK Melee Guide",
@@ -195,7 +195,8 @@ export default function DocumentsPage() {
               <a
                 key={index}
                 href={doc.href}
-                target="_blank"
+                target={doc.href.startsWith("/") ? undefined : "_blank"}
+                rel={doc.href.startsWith("/") ? undefined : "noreferrer"}
                 className="block p-5 rounded-2xl border border-[#00ff66]/20
                            bg-black/40 backdrop-blur-md
                            text-[#00ff66]

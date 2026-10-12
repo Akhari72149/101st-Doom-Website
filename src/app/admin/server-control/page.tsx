@@ -12,6 +12,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { battalionServers } from "@/data/servers";
 
 type ServerType = {
   id: number;
@@ -20,11 +21,6 @@ type ServerType = {
   maxPlayers: number;
   playerList?: string[];
   missionFile?: string;
-};
-
-type ServerCardConfig = {
-  id: number;
-  name: string;
 };
 
 export default function ServerControl() {
@@ -46,23 +42,18 @@ export default function ServerControl() {
 
   const watchIntervalRef = useRef<number | null>(null);
 
-  const servers: ServerCardConfig[] = [
-    { id: 1, name: "Server 1" },
-    { id: 2, name: "Server 2" },
-    { id: 3, name: "Server 3" },
-    { id: 4, name: "Server 4" },
-    { id: 5, name: "Server 5" },
-  ];
+  const servers = battalionServers;
 
   const getServerStatus = (serverId: number) => {
     return serverStatus.find((s) => s.id === serverId);
   };
 
   const stats = useMemo(() => {
-    const online = serverStatus.filter((s) => s.online).length;
-    const offline = serverStatus.length - online;
-    const totalPlayers = serverStatus.reduce((sum, s) => sum + (s.players || 0), 0);
-    const maxPlayers = serverStatus.reduce((sum, s) => sum + (s.maxPlayers || 0), 0);
+    const activeStatuses = serverStatus.filter((status) => servers.some((server) => server.id === status.id));
+    const online = activeStatuses.filter((s) => s.online).length;
+    const offline = activeStatuses.length - online;
+    const totalPlayers = activeStatuses.reduce((sum, s) => sum + (s.players || 0), 0);
+    const maxPlayers = activeStatuses.reduce((sum, s) => sum + (s.maxPlayers || 0), 0);
 
     return {
       online,
@@ -70,7 +61,7 @@ export default function ServerControl() {
       totalPlayers,
       maxPlayers,
     };
-  }, [serverStatus]);
+  }, [serverStatus, servers]);
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -183,7 +174,6 @@ export default function ServerControl() {
       setStartingServerId(null);
       setPollingPaused(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sendCommand = async (
@@ -358,6 +348,9 @@ export default function ServerControl() {
                           <h3 className="mt-1 text-2xl font-bold text-white">
                             {server.name}
                           </h3>
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#00ff66]">
+                            {server.purpose}
+                          </p>
                         </div>
 
                         <StatusBadge

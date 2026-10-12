@@ -2,7 +2,7 @@ export const joinPageLinkDefinitions = [
   {
     key: "main-operations",
     label: "Main Operations Modlist",
-    description: "Published mod preset used by Servers 1 and 3.",
+    description: "Published mod preset used by Server 1 for Main Operations and training.",
     uploadEnabled: true,
     defaultUrl: "https://cdn.discordapp.com/attachments/1284402204748546114/1471514051950546995/Yoaboa_V2.html?ex=69a44dc1&is=69a2fc41&hm=49e5d6f3aa76a25df6f05c45caa25c409fb46ddf4d09bb255d42f3638bb8a110&",
   },

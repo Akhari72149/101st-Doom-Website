@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { battalionServer, battalionServers } from "@/data/servers";
 
 type Booking = {
   id: string;
@@ -47,9 +48,6 @@ export default function ServersPage() {
     1: 0,
     2: 0,
     3: 0,
-    4: 0,
-    5: 0,
-    6: 0,
   });
 
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
@@ -134,7 +132,7 @@ export default function ServersPage() {
         throw new Error(data?.error || "Failed to load server bookings");
       }
       if (fetchToken !== fetchTokenRef.current) return;
-      const counts: ServerDayCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+      const counts: ServerDayCounts = { 1: 0, 2: 0, 3: 0 };
       for (const [serverId, count] of Object.entries(data.counts || {})) {
         counts[Number(serverId)] = Number(count) || 0;
       }
@@ -362,6 +360,7 @@ export default function ServersPage() {
 
   const blockedSlotCount = slots.filter((slot) => isBlocked(slot)).length;
   const freeSlotCount = slots.length - blockedSlotCount;
+  const activeServerDetails = battalionServer(activeServer);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_center,#001f11_0%,#000a06_100%)] px-3 py-5 text-white sm:px-6 sm:py-8 lg:px-10">
@@ -501,20 +500,20 @@ export default function ServersPage() {
               <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-[#7fa08e]">
                 Server Selection
               </label>
-              <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-6">
-                {[1, 2, 3, 4, 5, 6].map((server) => {
-                  const count = serverCounts[server] || 0;
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+                {battalionServers.map((server) => {
+                  const count = serverCounts[server.id] || 0;
                   const hasBookings = count > 0;
 
                   return (
                     <button
-                      key={server}
+                      key={server.id}
                       onClick={() => {
-                        setActiveServer(server);
+                        setActiveServer(server.id);
                         clearBookingDraft();
                       }}
                       className={`rounded-xl border p-3 text-left transition-all duration-200 sm:rounded-2xl sm:p-4 ${
-                        activeServer === server
+                        activeServer === server.id
                           ? "scale-[1.02] border-[#00ff66] bg-[#00ff66]/12 shadow-[0_0_20px_rgba(0,255,100,0.2)]"
                           : "border-[#00ff66]/20 bg-black/35 hover:border-[#00ff66]/45 hover:bg-[#00ff66]/6"
                       }`}
@@ -523,8 +522,9 @@ export default function ServersPage() {
                         Server
                       </div>
                       <div className="mt-1 text-lg font-bold text-[#00ff66]">
-                        {server}
+                        {server.name}
                       </div>
+                      <div className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-white">{server.purpose}</div>
                       <div className="mt-1 text-[11px] text-[#cbead6] sm:mt-2 sm:text-xs">
                         {count} item{count !== 1 ? "s" : ""}
                       </div>
@@ -578,7 +578,7 @@ export default function ServersPage() {
                   Active Server
                 </div>
                 <div className="mt-1 text-2xl font-bold text-[#00ff66]">
-                  Server {activeServer}
+                  {activeServerDetails.name} · {activeServerDetails.purpose}
                 </div>
               </div>
 
@@ -734,7 +734,7 @@ export default function ServersPage() {
                       Booking Window
                     </div>
                     <div className="mt-2 text-lg font-semibold text-white">
-                      Server {activeServer}
+                      {activeServerDetails.name} · {activeServerDetails.purpose}
                     </div>
                     <div className="mt-1 text-sm text-gray-300">
                       {formatFriendlyDate(selectedDate)}

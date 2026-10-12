@@ -427,11 +427,11 @@ export default function HowToJoinPage() {
                         modlists before attending operations.
                       </p>
                       <p>
-                        Servers 1 and 3 run the Main Operation Modlist. Server 1 is keyed. If you have
+                        Server 1 runs the Main Operation and Training Modlist and is keyed. If you have
                         mods outside the modlist or unit whitelist, you will not be able to
                         connect.
                       </p>
-                      <p>Server 2 runs the Fun Operation Modlist.</p>
+                      <p>Server 2 runs the Fun Operation Modlist. Server 3 is reserved for miscellaneous use; check Discord for the required setup.</p>
 
                       <div className="space-y-3">
                         <a
@@ -440,7 +440,7 @@ export default function HowToJoinPage() {
                           rel="noreferrer"
                           className="block rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[#00ff66] underline transition hover:border-[#00ff66]/40 hover:text-white"
                         >
-                          Download Main Operations Modlist (Servers 1 &amp; 3)
+                          Download Main Operations &amp; Training Modlist (Server 1)
                         </a>
 
                         <a

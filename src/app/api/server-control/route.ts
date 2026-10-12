@@ -3,7 +3,7 @@ import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions
 
 export const runtime = "nodejs";
 
-const COMMAND = /^(start|stop) server ([1-5])$/;
+const COMMAND = /^(start|stop) server ([1-3])$/;
 
 export async function POST(request: Request) {
   if (!requestHasSameOrigin(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });

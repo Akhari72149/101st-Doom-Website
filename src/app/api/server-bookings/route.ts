@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { battalionServerIds } from "@/data/servers";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -7,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const SERVER_IDS = new Set([1, 2, 3, 4, 5, 6]);
+const SERVER_IDS = new Set<number>(battalionServerIds);
 const DURATION_MS = new Set([60, 120, 240].map((minutes) => minutes * 60_000));
 const ELIGIBLE_CERTIFICATION_IDS = [
   "0a559b7d-b2d4-4972-a2a7-a64d805d968e",
@@ -203,9 +204,9 @@ async function readFromPostgres(serverId: number, start: Date, end: Date, includ
            union all
            select server_id from public.recurring_server_blocks where start_at < $2 and end_at > $1
          ) occupied
-        where server_id between 1 and 6
+        where server_id = any($3::integer[])
         group by server_id`,
-      [start, end],
+      [start, end, battalionServerIds],
     ),
     includePersonnel
       ? getPostgresPool().query<PersonnelRow>(

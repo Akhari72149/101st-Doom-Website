@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import type { DocumentAlignment, DocumentBlock, DocumentBlockType, DocumentColour, DocumentFont, DocumentLibrarySection, DocumentRun } from "@/data/siteDocuments";
-import { documentFonts, documentLibrarySections } from "@/data/siteDocuments";
+import type { DocumentAlignment, DocumentBackground, DocumentBlock, DocumentBlockType, DocumentColour, DocumentFont, DocumentLibrarySection, DocumentRun } from "@/data/siteDocuments";
+import { documentBackgrounds, documentFonts, documentLibrarySections } from "@/data/siteDocuments";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 
@@ -11,9 +11,10 @@ const blockTypes = new Set<DocumentBlockType>(["paragraph", "heading1", "heading
 const alignments = new Set<DocumentAlignment>(["left", "center", "right"]);
 const colours = new Set<DocumentColour>(["default", "green", "cyan", "amber", "red"]);
 const fonts = new Set<DocumentFont>(documentFonts);
+const backgrounds = new Set<DocumentBackground>(documentBackgrounds.map((item) => item.value));
 
 type DocumentRow = {
-  id: string; slug: string; title: string; summary: string; category: DocumentLibrarySection; content: DocumentBlock[];
+  id: string; slug: string; title: string; summary: string; category: DocumentLibrarySection; background: DocumentBackground; content: DocumentBlock[];
   source_url: string | null; published: boolean; updated_at: Date; updated_by_name: string | null;
 };
 
@@ -60,7 +61,7 @@ function parseContent(value: unknown): DocumentBlock[] | null {
 
 function mapDocument(row: DocumentRow) {
   const category = documentLibrarySections.includes(row.category) ? row.category : "General";
-  return { id: row.id, slug: row.slug, title: row.title, summary: row.summary, category,
+  return { id: row.id, slug: row.slug, title: row.title, summary: row.summary, category, background: backgrounds.has(row.background) ? row.background : "black",
     content: row.content, sourceUrl: row.source_url, published: row.published,
     updatedAt: row.updated_at.toISOString(), updatedBy: row.updated_by_name };
 }
@@ -71,7 +72,7 @@ async function readDocuments(includeAdmin: boolean, slug: string) {
   if (!includeAdmin) where.push("documents.published=true");
   if (slug) { params.push(slug); where.push(`documents.slug=$${params.length}`); }
   const result = await getPostgresPool().query<DocumentRow>(
-    `select documents.id,documents.slug,documents.title,documents.summary,documents.category,documents.content,
+    `select documents.id,documents.slug,documents.title,documents.summary,documents.category,documents.background,documents.content,
             documents.source_url,documents.published,documents.updated_at,
             coalesce(actor."displayUsername",actor.name,actor.username) as updated_by_name
        from public.site_documents documents left join public.app_auth_users actor on actor.id=documents.updated_by
@@ -115,18 +116,19 @@ export async function POST(request: Request) {
         const title = text(body?.title, 180);
         const summary = String(body?.summary || "").trim().slice(0, 1200);
         const category = text(body?.category, 80) as DocumentLibrarySection;
+        const background = text(body?.background, 20) as DocumentBackground;
         const content = parseContent(body?.content);
         const suppliedSource = body?.sourceUrl;
         const sourceUrl = suppliedSource ? webUrl(suppliedSource) : "";
-        if (!title || !documentLibrarySections.includes(category) || !content || !content.length || (suppliedSource && !sourceUrl)) throw new Error("INVALID");
+        if (!title || !documentLibrarySections.includes(category) || !backgrounds.has(background) || !content || !content.length || (suppliedSource && !sourceUrl)) throw new Error("INVALID");
         if (action === "create") {
           const slug = text(body?.slug, 120).toLowerCase();
           if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error("INVALID_SLUG");
           const published = full && body?.published === true;
           const created = await client.query<{ id: string }>(
-            `insert into public.site_documents(slug,title,summary,category,content,source_url,published,updated_by)
-             values($1,$2,$3,$4,$5::jsonb,$6,$7,$8) returning id`,
-            [slug,title,summary,category,JSON.stringify(content),sourceUrl || null,published,auth.userId]);
+            `insert into public.site_documents(slug,title,summary,category,background,content,source_url,published,updated_by)
+             values($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9) returning id`,
+            [slug,title,summary,category,background,JSON.stringify(content),sourceUrl || null,published,auth.userId]);
           await client.query(`insert into public.site_document_revisions(document_id,document_slug,action,snapshot,changed_by)
             select id,slug,'created',to_jsonb(documents),$2 from public.site_documents documents where id=$1`, [created.rows[0].id,auth.userId]);
           await client.query("insert into public.audit_logs(user_id,action,details) values($1,'DOCUMENT_CREATED',$2)", [auth.userId,`Created website document: ${title}`]);
@@ -137,8 +139,8 @@ export async function POST(request: Request) {
         const published = full ? body?.published === true : existing.rows[0].published;
         await client.query(`insert into public.site_document_revisions(document_id,document_slug,action,snapshot,changed_by)
           select id,slug,'updated',to_jsonb(documents),$2 from public.site_documents documents where id=$1`, [id,auth.userId]);
-        await client.query(`update public.site_documents set title=$2,summary=$3,category=$4,content=$5::jsonb,source_url=$6,published=$7,updated_at=now(),updated_by=$8 where id=$1`,
-          [id,title,summary,category,JSON.stringify(content),sourceUrl || null,published,auth.userId]);
+        await client.query(`update public.site_documents set title=$2,summary=$3,category=$4,background=$5,content=$6::jsonb,source_url=$7,published=$8,updated_at=now(),updated_by=$9 where id=$1`,
+          [id,title,summary,category,background,JSON.stringify(content),sourceUrl || null,published,auth.userId]);
         await client.query("insert into public.audit_logs(user_id,action,details) values($1,'DOCUMENT_UPDATED',$2)", [auth.userId,`Updated website document: ${title}`]);
         return;
       }

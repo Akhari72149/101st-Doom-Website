@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, BookOpenText, ExternalLink, Search } from "lucide-react";
 import DocumentRenderer from "@/components/documents/DocumentRenderer";
 import type { DocumentBlock, SiteDocument } from "@/data/siteDocuments";
-import { blockText, documentWordCount } from "@/data/siteDocuments";
+import { blockText, documentBackgroundAppearance, documentWordCount } from "@/data/siteDocuments";
 
 export default function ManagedDocumentClient({ slug }: { slug: string }) {
   const [document, setDocument] = useState<SiteDocument | null>(null);
@@ -34,6 +34,7 @@ export default function ManagedDocumentClient({ slug }: { slug: string }) {
   if (error || !document) return <main className="min-h-screen bg-[#020806] p-10 text-red-200">{error || "Document not found"}</main>;
 
   const updated = new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date(document.updatedAt));
+  const appearance = documentBackgroundAppearance(document.background);
 
   return (
     <main className="min-h-screen bg-[#020806] text-white">
@@ -55,9 +56,9 @@ export default function ManagedDocumentClient({ slug }: { slug: string }) {
           <label className="relative block w-full sm:max-w-md"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#607369]" size={16} /><span className="sr-only">Search document</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this document" className="h-11 w-full border border-white/12 bg-black pl-10 pr-3 text-sm outline-none placeholder:text-[#4f6056] focus:border-[#00ff66]/55" /></label>
           {document.sourceUrl && <a href={document.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 border border-cyan-300/20 px-4 text-[10px] font-black uppercase tracking-[0.1em] text-cyan-200 hover:bg-cyan-300/5">Original source <ExternalLink size={14} /></a>}
         </div>
-        <article className="border border-[#00ff66]/20 bg-black/55 px-5 py-7 sm:px-9 sm:py-10">
+        <article className="border px-5 py-7 sm:px-9 sm:py-10" style={{ backgroundColor: appearance.colour, borderColor: appearance.border, color: appearance.text }}>
           {query && <div className="mb-7 border border-cyan-300/25 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100">Showing {visibleContent.length} matching passages for <strong>{query}</strong>.</div>}
-          <DocumentRenderer content={visibleContent} />
+          <DocumentRenderer content={visibleContent} background={document.background} />
           {!visibleContent.length && <div className="py-20 text-center text-sm text-[#73877b]">No passages match that search.</div>}
         </article>
       </div>

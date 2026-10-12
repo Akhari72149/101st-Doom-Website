@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BookOpenCheck, ExternalLink, Search, ShieldCheck } from "lucide-react";
 import DocumentRenderer, { documentHeadingId } from "@/components/documents/DocumentRenderer";
 import type { DocumentBlock, SiteDocument } from "@/data/siteDocuments";
-import { blockText, documentWordCount } from "@/data/siteDocuments";
+import { blockText, documentBackgroundAppearance, documentWordCount } from "@/data/siteDocuments";
 
 type Section = { heading: DocumentBlock | null; headingIndex: number; blocks: Array<{ block: DocumentBlock; index: number }> };
 
@@ -51,6 +51,7 @@ export default function RulesDocumentClient() {
 
   const ruleCount = document.content.filter((block) => block.type === "numbered").length;
   const updated = new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date(document.updatedAt));
+  const appearance = documentBackgroundAppearance(document.background);
   return (
     <main className="min-h-screen bg-[#020806] text-white">
       <header className="border-b border-[#00ff66]/25 bg-[linear-gradient(90deg,rgba(0,255,102,0.08),transparent_58%)]">
@@ -84,11 +85,11 @@ export default function RulesDocumentClient() {
           {document.sourceUrl && <a href={document.sourceUrl} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-between border border-white/10 px-3 py-3 text-xs text-[#789082] hover:border-cyan-300/40 hover:text-cyan-200">Original source <ExternalLink size={14} /></a>}
         </aside>
 
-        <article className="min-w-0 border border-[#00ff66]/20 bg-black/55 px-5 py-7 sm:px-9 sm:py-10">
+        <article className="min-w-0 border px-5 py-7 sm:px-9 sm:py-10" style={{ backgroundColor: appearance.colour, borderColor: appearance.border, color: appearance.text }}>
           {query && <div className="mb-7 border border-cyan-300/25 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100">Showing {visible.reduce((total, section) => total + section.blocks.length, 0)} matching passages for <strong>{query}</strong>.</div>}
           {visible.map((section, sectionIndex) => {
             const blocks = [...(section.heading ? [{ block: section.heading, index: section.headingIndex }] : []), ...section.blocks];
-            return <DocumentRenderer key={`${section.headingIndex}-${sectionIndex}`} content={blocks.map(({ block }) => block)} />;
+            return <DocumentRenderer key={`${section.headingIndex}-${sectionIndex}`} content={blocks.map(({ block }) => block)} background={document.background} />;
           })}
           {!visible.length && <div className="py-24 text-center"><BookOpenCheck className="mx-auto text-[#00ff66]" size={32} /><h2 className="mt-4 text-xl font-black">No matching rules</h2><p className="mt-2 text-sm text-[#789082]">Try a broader term or clear the search.</p></div>}
           <footer className="mt-12 border-t border-[#00ff66]/20 pt-5 text-xs text-[#61766a]">{documentWordCount(document.content).toLocaleString("en-GB")} words · Managed through the website document library</footer>

@@ -127,7 +127,7 @@ export default function NavbarClient() {
       label: "Public",
       icon: BookOpen,
       description: "Information for visitors and new members",
-      columns: 1,
+      columns: 2,
       items: [
         {
           href: "/Who-We-Are",
@@ -150,19 +150,14 @@ export default function NavbarClient() {
           description: "Progression routes and promotion requirements",
         },
         {
-          href: "/uniform-guide",
-          label: "Uniform Guide",
-          description: "Approved uniforms, loadouts and restricted items",
-        },
-        {
-          href: "/rules-and-regulations",
-          label: "Rules & Regulations",
-          description: "Official conduct and operational standards",
-        },
-        {
           href: "/documents",
           label: "Documents & Forms",
           description: "Important files, policies and paperwork",
+        },
+        {
+          href: "/recognition",
+          label: "Recognition",
+          description: "Celebrate promotions, qualifications and medals",
         },
         {
           href: "/faq",
@@ -191,6 +186,11 @@ export default function NavbarClient() {
           href: "/roster",
           label: "Slotted Roster",
           description: "View assigned positions across the unit",
+        },
+        {
+          href: "/whos-who",
+          label: "Who's Who",
+          description: "Find leaders, certification leads and unit contacts",
         },
         {
           href: "/grand-orbat",

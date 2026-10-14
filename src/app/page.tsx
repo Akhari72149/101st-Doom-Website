@@ -871,9 +871,6 @@ export default function HomePage() {
                   }`}
                 >
                   <div className="space-y-3 p-4">
-                    <div className="grid grid-cols-3 border border-[#00ff66]/15 bg-black/45 p-1">
-                      {([['lifetime','Lifetime'],['current-week','This week'],['previous-week','Previous']] as const).map(([value,label])=><button key={value} type="button" onClick={()=>setXpLeaderboardPeriod(value)} className={`px-2 py-2 text-[10px] font-bold uppercase tracking-[.1em] ${xpLeaderboardPeriod===value?'bg-[#00ff66]/15 text-[#00ff66]':'text-gray-500 hover:text-white'}`}>{label}</button>)}
-                    </div>
                     {initialLoad ? (
                       <div className="py-6 text-center text-sm text-gray-400 animate-pulse">
                         Checking server status...
@@ -1003,6 +1000,9 @@ export default function HomePage() {
                   }`}
                 >
                   <div className="space-y-3 p-4">
+                    <div className="grid grid-cols-3 border border-[#00ff66]/15 bg-black/45 p-1" aria-label="XP leaderboard period">
+                      {([['lifetime','Lifetime'],['current-week','This week'],['previous-week','Previous']] as const).map(([value,label])=><button key={value} type="button" onClick={()=>setXpLeaderboardPeriod(value)} className={`px-2 py-2 text-[10px] font-bold uppercase tracking-[.1em] ${xpLeaderboardPeriod===value?'bg-[#00ff66]/15 text-[#00ff66]':'text-gray-500 hover:text-white'}`}>{label}</button>)}
+                    </div>
                     <div className="border border-[#00ff66]/15 bg-black/45 p-3 text-xs leading-5 text-gray-400">
                       Link your Steam account to your personnel profile to appear
                       on the board and earn XP from tracked Arma events.

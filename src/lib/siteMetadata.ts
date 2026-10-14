@@ -60,12 +60,14 @@ export const siteRouteMetadata = {
   "/rules-and-regulations": { title: "Rules and Regulations", description: "Review official conduct, operation, TeamSpeak, GARC, MOS, NCO, and Discord standards." },
   "/uniform-guide": { title: "Uniform Guide", description: "Review approved battalion uniforms, loadouts, equipment, and restricted items." },
   "/roster": { title: "Slotted Roster", description: "View active personnel and their assigned positions across the battalion." },
+  "/recognition": { title: "Battalion Recognition", description: "Celebrate recent promotions, qualifications, medals, and achievements across the 101st Doom Battalion." },
   "/servers": { title: "Server Booking", description: "View availability and reserve battalion servers for training or operations." },
   "/Tags": { title: "Personnel Tag Lookup", description: "Search active personnel by specialist, qualification, and status tags." },
   "/Task-Viewer": { title: "Task Viewer", description: "Review published website tasks and development progress." },
   "/vault": { title: "Document Vault", description: "Access authorised battalion files and protected reference material." },
   "/weekly-attendance": { title: "Attendance Records", description: "Review weekly main-operation attendance across the battalion." },
   "/Who-We-Are": { title: "Who We Are", description: "Meet the 101st Doom Battalion and learn about our community and mission." },
+  "/whos-who": { title: "Who's Who", description: "Find battalion leaders, certification leads, trainers, recruiters, and specialist unit contacts." },
   "/Workbench": { title: "Workbench", description: "Access practical battalion tools and operational utilities." },
 } satisfies Record<string, RouteMetadata>;
 

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Orbitron } from "next/font/google";
 import LayoutWrapper from "@/components/LayoutWrapper";
-import PwaInstaller from "@/components/PwaInstaller";
+import PwaServiceWorker from "@/components/PwaServiceWorker";
 
 const orbitron = Orbitron({
   subsets: ["latin"],
@@ -64,7 +64,7 @@ export default function RootLayout({
         <LayoutWrapper>
           {children}
         </LayoutWrapper>
-        <PwaInstaller />
+        <PwaServiceWorker />
       </body>
     </html>
   );

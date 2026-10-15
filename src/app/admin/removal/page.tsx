@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 import { Search, ShieldAlert, ShieldCheck, UserRound, Users } from "lucide-react";
@@ -11,13 +11,6 @@ type PersonnelRow = {
   birth_number: string | null;
   status: string | null;
 };
-
-type ProcessorRow = {
-  id: string;
-  name: string | null;
-  status: string | null;
-};
-
 
 type StatusAction = "Retired" | "Removed" | "Transferred";
 
@@ -46,17 +39,13 @@ export default function RemovePersonnelPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [personnel, setPersonnel] = useState<PersonnelRow[]>([]);
-  const [processors, setProcessors] = useState<ProcessorRow[]>([]);
+  const [actorName, setActorName] = useState("Current account");
 
   const [search, setSearch] = useState("");
   const [selectedPersonnelId, setSelectedPersonnelId] = useState("");
-  const [selectedProcessor, setSelectedProcessor] = useState("");
   const [statusAction, setStatusAction] = useState<StatusAction>("Removed");
   const [transferUnit, setTransferUnit] = useState("");
   const [reason, setReason] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-
-  const searchRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -71,20 +60,13 @@ export default function RemovePersonnelPage() {
         return;
       }
       setCanEdit(hasAppPermission(session, "admin.removal", "edit"));
+      setActorName(session.user.displayName || session.user.username || session.user.email || "Current account");
 
       setLoadingAuth(false);
     };
 
     checkAccess();
   }, [router]);
-
-  useEffect(() => {
-    const loadProcessors = async () => {
-      const response=await fetch("/api/admin/personnel-operations?scope=removal",{cache:"no-store",headers:await getAppAuthHeaders()});if(!response.ok)return;const data=await response.json() as {processors?:ProcessorRow[]};setProcessors(data.processors||[]);
-    };
-
-    loadProcessors();
-  }, []);
 
   useEffect(() => {
     const loadPersonnel = async () => {
@@ -105,18 +87,6 @@ export default function RemovePersonnelPage() {
       loadPersonnel();
     }
   }, [loadingAuth]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!searchRef.current) return;
-      if (!searchRef.current.contains(event.target as Node)) {
-        setSearchOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const filteredPersonnel = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -177,24 +147,17 @@ export default function RemovePersonnelPage() {
     setSearch(
       `${person.name || "Unknown"}${person.birth_number ? ` - ${person.birth_number}` : ""}`
     );
-    setSearchOpen(false);
   };
 
   const clearSelectedPersonnel = () => {
     setSelectedPersonnelId("");
     setSearch("");
-    setSearchOpen(false);
   };
 
   const handleStatusUpdate = async () => {
     if (!canEdit) return;
     if (!selectedPersonnelId) {
       alert("Please select a person.");
-      return;
-    }
-
-    if (!selectedProcessor) {
-      alert("Please select who processed this action.");
       return;
     }
 
@@ -218,7 +181,7 @@ export default function RemovePersonnelPage() {
 
     setSubmitting(true);
 
-    const response=await fetch("/api/admin/personnel-operations",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({scope:"removal",action:"status",personnelId:selectedPersonnelId,processorId:selectedProcessor,status:statusAction,transferUnit,reason})});
+    const response=await fetch("/api/admin/personnel-operations",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({scope:"removal",action:"status",personnelId:selectedPersonnelId,status:statusAction,transferUnit,reason})});
     if(!response.ok){const body=await response.json().catch(()=>null) as {error?:string}|null;alert(body?.error||"Failed to update personnel status");
       setSubmitting(false);
       return;
@@ -234,14 +197,12 @@ export default function RemovePersonnelPage() {
     setSelectedPersonnelId("");
     setSearch("");
     setReason("");
-    setSelectedProcessor("");
     setTransferUnit("");
     setSubmitting(false);
   };
 
   const submitDisabled =
     !selectedPersonnelId ||
-    !selectedProcessor ||
     submitting ||
     (statusAction === "Transferred" && !transferUnit);
 
@@ -302,7 +263,7 @@ export default function RemovePersonnelPage() {
                 </div>
               </div>
 
-              <div ref={searchRef} className="relative mb-4">
+              <div className="relative mb-4">
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#00ff66]/50" />
                 <input
                   type="text"
@@ -311,9 +272,7 @@ export default function RemovePersonnelPage() {
                   onChange={(e) => {
                     setSearch(e.target.value);
                     setSelectedPersonnelId("");
-                    setSearchOpen(true);
                   }}
-                  onFocus={() => setSearchOpen(true)}
                   className="w-full rounded-xl border border-[#00ff66]/40 bg-black/40 py-4 pl-12 pr-24 text-[#00ff66] placeholder:text-[#00ff66]/40 outline-none transition-all duration-300 focus:border-[#00ff66] focus:shadow-[0_0_15px_rgba(0,255,100,0.4)]"
                 />
 
@@ -412,10 +371,10 @@ export default function RemovePersonnelPage() {
 
                     <div className="rounded-2xl border border-white/10 bg-black/40 p-5">
                       <div className="text-[11px] uppercase tracking-[0.18em] text-gray-500">
-                        Processors Available
+                        Recorded By
                       </div>
                       <div className="mt-2 text-2xl font-bold text-white">
-                        {processors.length}
+                        {actorName}
                       </div>
                     </div>
                   </div>
@@ -531,24 +490,13 @@ export default function RemovePersonnelPage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-gray-300">
-                    Who Processed This Action?
-                  </label>
+                  <label className="mb-2 block text-sm text-gray-300">Processed By</label>
                   <p className="mb-2 text-xs text-[#00ff66]/60">
-                    Required for audit tracking
+                    Automatically recorded from the signed-in account
                   </p>
-                  <select
-                    value={selectedProcessor}
-                    onChange={(e) => setSelectedProcessor(e.target.value)}
-                    className="w-full rounded-xl border border-[#00ff66]/30 bg-black/60 p-4 text-[#00ff66] outline-none transition focus:border-[#00ff66] focus:shadow-[0_0_12px_rgba(0,255,102,0.35)]"
-                  >
-                    <option value="">-- Select Processor --</option>
-                    {processors.map((processor) => (
-                      <option key={processor.id} value={processor.id}>
-                        {processor.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="border border-[#00ff66]/30 bg-[#00ff66]/5 p-4 font-semibold text-[#b9ffd2]">
+                    {actorName}
+                  </div>
                 </div>
               </div>
 

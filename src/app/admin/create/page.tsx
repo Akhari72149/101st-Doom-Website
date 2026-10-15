@@ -10,7 +10,6 @@ import {
   Hash,
   Link2,
   Loader2,
-  Search,
   ShieldCheck,
   UserPlus,
   Users,
@@ -19,7 +18,6 @@ import {
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type RankRow = { id: string; name: string; rank_level: number };
-type ProcessorRow = { id: string; name: string | null; status: string | null };
 type DuplicateState = "idle" | "checking" | "available" | "duplicate" | "error";
 
 const fieldBase =
@@ -32,8 +30,7 @@ export default function CreatePersonnel() {
   const [canEdit, setCanEdit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [ranks, setRanks] = useState<RankRow[]>([]);
-  const [processors, setProcessors] = useState<ProcessorRow[]>([]);
-  const [processorSearch, setProcessorSearch] = useState("");
+  const [actorName, setActorName] = useState("Current account");
   const [rankId, setRankId] = useState("");
   const [birthNumber, setBirthNumber] = useState("");
   const [name, setName] = useState("");
@@ -41,29 +38,17 @@ export default function CreatePersonnel() {
   const [teamspeakId, setTeamspeakId] = useState("");
   const [importFromDiscord, setImportFromDiscord] = useState(false);
   const [createdAt, setCreatedAt] = useState("");
-  const [selectedProcessor, setSelectedProcessor] = useState("");
   const [nameStatus, setNameStatus] = useState<DuplicateState>("idle");
   const [birthStatus, setBirthStatus] = useState<DuplicateState>("idle");
   const [discordError, setDiscordError] = useState("");
   const [nameError, setNameError] = useState("");
   const [birthError, setBirthError] = useState("");
-  const [processorError, setProcessorError] = useState("");
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   const cleanName = (value: string) => value.replace(/\s+/g, " ").trim();
   const cleanBirth = (value: string) => value.replace(/\s+/g, "").trim();
   const selectedRank = useMemo(() => ranks.find((rank) => rank.id === rankId), [rankId, ranks]);
-  const selectedProcessorName = useMemo(
-    () => processors.find((processor) => processor.id === selectedProcessor)?.name || "",
-    [processors, selectedProcessor],
-  );
-  const filteredProcessors = useMemo(() => {
-    const query = processorSearch.trim().toLowerCase();
-    return query
-      ? processors.filter((processor) => (processor.name || "").toLowerCase().includes(query))
-      : processors;
-  }, [processorSearch, processors]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +62,7 @@ export default function CreatePersonnel() {
         router.replace("/");
         return;
       }
+      setActorName(session.user.displayName || session.user.username || session.user.email || "Current account");
       const response = await fetch("/api/admin/personnel-operations?scope=create", {
         cache: "no-store",
         credentials: "same-origin",
@@ -88,10 +74,9 @@ export default function CreatePersonnel() {
         setLoadingAuth(false);
         return;
       }
-      const data = await response.json() as { ranks?: RankRow[]; processors?: ProcessorRow[] };
+      const data = await response.json() as { ranks?: RankRow[] };
       setCanEdit(hasAppPermission(session, "admin.create", "edit"));
       setRanks(data.ranks || []);
-      setProcessors(data.processors || []);
       setLoadingAuth(false);
     })();
     return () => { cancelled = true; };
@@ -156,17 +141,12 @@ export default function CreatePersonnel() {
     setFormError("");
     setNameError("");
     setBirthError("");
-    setProcessorError("");
     if (!cleanName(name)) {
       setNameError("Name is required.");
       valid = false;
     }
     if (!cleanBirth(birthNumber)) {
       setBirthError("Service number is required.");
-      valid = false;
-    }
-    if (!selectedProcessor) {
-      setProcessorError("Select who processed this intake.");
       valid = false;
     }
     if (!validateDiscord()) valid = false;
@@ -181,14 +161,11 @@ export default function CreatePersonnel() {
     setTeamspeakId("");
     setImportFromDiscord(false);
     setCreatedAt("");
-    setProcessorSearch("");
-    setSelectedProcessor("");
     setNameStatus("idle");
     setBirthStatus("idle");
     setNameError("");
     setBirthError("");
     setDiscordError("");
-    setProcessorError("");
     setFormError("");
   }
 
@@ -221,7 +198,6 @@ export default function CreatePersonnel() {
           teamspeakId: teamspeakId.trim(),
           importFromDiscord,
           createdAt: createdAt ? new Date(createdAt).toISOString() : null,
-          processorId: selectedProcessor,
         }),
       });
       const body = await response.json().catch(() => null) as { error?: string } | null;
@@ -397,31 +373,9 @@ export default function CreatePersonnel() {
               <section className="p-4 sm:p-5">
                 <SectionTitle icon={<ShieldCheck size={17} />}>Processing and audit</SectionTitle>
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-                  <Field label="Processed by" required error={processorError} hint="Only certified processors are listed">
-                    <div className="grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-                      <div className="relative">
-                        <Search size={15} className="absolute left-3 top-3.5 text-[#648075]" />
-                        <input
-                          aria-label="Filter processors"
-                          value={processorSearch}
-                          disabled={!canEdit || submitting}
-                          onChange={(event) => setProcessorSearch(event.target.value)}
-                          className={`${inputClass()} pl-9`}
-                          placeholder="Filter processors"
-                        />
-                      </div>
-                      <select
-                        aria-label="Processed by"
-                        value={selectedProcessor}
-                        disabled={!canEdit || submitting}
-                        onChange={(event) => { setSelectedProcessor(event.target.value); setProcessorError(""); }}
-                        className={inputClass(Boolean(processorError))}
-                      >
-                        <option value="">Select processor</option>
-                        {filteredProcessors.map((processor) => (
-                          <option key={processor.id} value={processor.id}>{processor.name}</option>
-                        ))}
-                      </select>
+                  <Field label="Processed by" hint="Automatically recorded from the signed-in account">
+                    <div className="flex h-11 items-center border border-[#00ff66]/25 bg-[#00ff66]/5 px-3 text-sm font-semibold text-[#b9ffd2]">
+                      {actorName}
                     </div>
                   </Field>
                   <Field label="Record date and time" hint="Leave blank to use the current database time">
@@ -458,7 +412,7 @@ export default function CreatePersonnel() {
                   <Summary label="Rank source" value={importFromDiscord ? "Discord import" : selectedRank?.name || "No rank"} />
                   <Summary label="Discord" value={discordId || "Not linked"} mono />
                   <Summary label="TeamSpeak" value={teamspeakId.trim() || "Not linked"} />
-                  <Summary label="Processed by" value={selectedProcessorName || "Not selected"} />
+                  <Summary label="Processed by" value={actorName} />
                   <Summary label="Record time" value={createdAt ? createdAt.replace("T", " ") : "Current time"} />
                 </dl>
 

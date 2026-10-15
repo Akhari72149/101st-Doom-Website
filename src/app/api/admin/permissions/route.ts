@@ -250,6 +250,21 @@ export async function POST(request: Request) {
         [randomUUID(), userId, passwordHash],
       );
       await client.query(
+        `with candidate as (
+           select personnel.id
+             from public.personnel personnel
+            where personnel.auth_user_id is null
+              and (personnel.discord_id=$2 or lower(btrim(personnel.name))=lower(btrim($3)))
+            order by (personnel.discord_id=$2) desc, personnel.created_at, personnel.id
+            limit 1
+         )
+         update public.personnel personnel
+            set auth_user_id=$1
+           from candidate
+          where personnel.id=candidate.id`,
+        [userId, discordId, displayName],
+      );
+      await client.query(
         "select public.enqueue_account_credentials_dm($1::jsonb)",
         [JSON.stringify({ discordId, sealed })],
       );
@@ -577,6 +592,7 @@ export async function PATCH(request: Request) {
   if (action === "delete") {
     if (process.env.NATIVE_AUTH_ENABLED === "true") {
       const deleted = await withPostgresTransaction(async (client) => {
+        await client.query("update public.personnel set auth_user_id = null where auth_user_id = $1", [userId]);
         const result = await client.query(
           "delete from public.app_auth_users where id = $1 returning id",
           [userId],

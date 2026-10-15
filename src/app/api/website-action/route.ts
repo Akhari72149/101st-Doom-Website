@@ -2,16 +2,19 @@ import { NextResponse } from "next/server";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { getPostgresPool } from "@/lib/postgres/pool";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { resolveAdminActor } from "@/lib/admin-actor";
 
 export async function POST(req: Request) {
   if (!requestHasSameOrigin(req)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
-  if (!(await requirePageAccess(req, "admin.certifications", "edit").catch(() => null))) {
+  const auth = await requirePageAccess(req, "admin.certifications", "edit").catch(() => null);
+  if (!auth) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   try {
     console.log("[website-action] API route hit");
 
     const body = await req.json() as Record<string, unknown>;
+    const actor = await resolveAdminActor(auth);
 
     const allowedActions = new Set(["CERTIFICATION_ASSIGNED", "CERTIFICATION_REVOKED"]);
     if (!allowedActions.has(String(body?.action || ""))) {
@@ -46,6 +49,7 @@ export async function POST(req: Request) {
     }
     const forwardedBody = {
       ...body,
+      processedBy: actor.displayName,
       personnelName: personnel?.name || body.personnelName,
       personnelDiscordId: personnel?.discord_id || null,
     };

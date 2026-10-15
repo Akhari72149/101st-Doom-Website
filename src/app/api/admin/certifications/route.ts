@@ -3,6 +3,7 @@ import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getCertificationFamilyName } from "@/lib/certification-families";
+import { resolveAdminActor } from "@/lib/admin-actor";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
         });
       }
 
-      const [personnel, ranks, certifications, trainers] = await Promise.all([
+      const [personnel, ranks, certifications] = await Promise.all([
         getPostgresPool().query(
           "select id,name,rank_id,status,slotted_position from public.personnel order by name",
         ),
@@ -59,22 +60,14 @@ export async function GET(request: Request) {
            left join public.personnel lead on lead.id = c.lead_personnel_id
            order by c.name`,
         ),
-        getPostgresPool().query(
-          `select distinct p.id,p.name,p.rank_id
-           from public.personnel p
-           join public.personnel_certifications pc on pc.personnel_id=p.id
-           join public.certifications c on c.id=pc.certification_id
-           where c.is_trainer_cert=true order by p.name`,
-        ),
       ]);
+      const actor = await resolveAdminActor(auth);
 
       return NextResponse.json({
         personnel: personnel.rows,
         ranks: ranks.rows,
         certifications: certifications.rows,
-        trainers: trainers.rows,
-        currentUserId: auth.userId,
-        currentUserName: auth.email || "Unknown",
+        currentUserName: actor.displayName,
       });
     }
 
@@ -92,26 +85,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ personCerts: data || [] });
     }
 
-    const trainerIds = (certifications.data || [])
-      .filter((row) => row.is_trainer_cert)
-      .map((row) => row.id);
-    const { data: rows } = await supabaseAdmin
-      .from("personnel_certifications")
-      .select("personnel:personnel_id(id,name,rank_id)")
-      .in("certification_id", trainerIds);
-    const trainerRows = (rows || []) as unknown as Array<{
-      personnel: { id: string; name: string; rank_id: string | null } | null;
-    }>;
-    const trainers = [
-      ...new Map(trainerRows.map((row) => [row.personnel?.id, row.personnel])).values(),
-    ].filter(Boolean);
+    const actor = await resolveAdminActor(auth);
     return NextResponse.json({
       personnel: personnel.data || [],
       ranks: ranks.data || [],
       certifications: certifications.data || [],
-      trainers,
-      currentUserId: auth.userId,
-      currentUserName: auth.email || "Unknown",
+      currentUserName: actor.displayName,
     });
   } catch (error) {
     console.error("[admin-certs] Read failed", error);
@@ -210,28 +189,34 @@ export async function POST(request: Request) {
   if (!requestHasSameOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
-  if (!(await requirePageAccess(request, "admin.certifications", "edit"))) {
+  const auth = await requirePageAccess(request, "admin.certifications", "edit");
+  if (!auth) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = (await request.json().catch(() => null)) as {
     personnelIds?: unknown;
     certificationIds?: unknown;
-    awardedBy?: unknown;
   } | null;
   const people = Array.isArray(body?.personnelIds) ? [...new Set(body.personnelIds.map(String))] : [];
   const certifications = Array.isArray(body?.certificationIds)
     ? [...new Set(body.certificationIds.map(String))]
     : [];
-  const trainer = String(body?.awardedBy || "");
   if (
     !people.length || !certifications.length || people.length * certifications.length > 200 ||
-    [...people, ...certifications, trainer].some((value) => !UUID.test(value))
+    [...people, ...certifications].some((value) => !UUID.test(value))
   ) {
     return NextResponse.json({ error: "Invalid certification assignment" }, { status: 400 });
   }
 
   try {
+    const actor = await resolveAdminActor(auth);
+    if (!actor.personnelId) {
+      return NextResponse.json(
+        { error: "Your website account is not linked to a personnel profile" },
+        { status: 409 },
+      );
+    }
     if (backend() === "postgres") {
       await withPostgresTransaction(async (client) => {
         for (const personId of people) {
@@ -239,7 +224,7 @@ export async function POST(request: Request) {
             await client.query(
               `insert into public.personnel_certifications(personnel_id,certification_id,awarded_at,awarded_by)
                values($1,$2,now(),$3) on conflict do nothing`,
-              [personId, certificationId, trainer],
+              [personId, certificationId, actor.personnelId],
             );
           }
         }
@@ -249,7 +234,7 @@ export async function POST(request: Request) {
         personnel_id: personnelId,
         certification_id: certificationId,
         awarded_at: new Date().toISOString(),
-        awarded_by: trainer,
+        awarded_by: actor.personnelId,
       })));
       const { error } = await supabaseAdmin
         .from("personnel_certifications")

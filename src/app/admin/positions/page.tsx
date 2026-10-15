@@ -84,8 +84,6 @@ export default function PositionEditor() {
   const [personSearch, setPersonSearch] = useState("");
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
 
-  const [processedByName, setProcessedByName] = useState("Unknown");
-
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -106,7 +104,6 @@ export default function PositionEditor() {
       }
       setCanEdit(hasAppPermission(session, "admin.positions", "edit"));
 
-      setProcessedByName(session.user.displayName||session.user.username||"Unknown");
       setLoadingAuth(false);
     };
 
@@ -364,7 +361,7 @@ export default function PositionEditor() {
 
     const currentOccupant = slotOccupants.get(selectedSlotId);
     const newSlotLabel = formatSlotToBillet(selectedSlotId);
-    const response=await postOperation({action:"position",personnelId:selectedPerson.id,slotId:selectedSlotId,processedBy:processedByName,slotLabel:newSlotLabel,slotSection:selectedSlotPath?.subHeader||selectedSlotPath?.header||"N/A"});
+    const response=await postOperation({action:"position",personnelId:selectedPerson.id,slotId:selectedSlotId,slotLabel:newSlotLabel,slotSection:selectedSlotPath?.subHeader||selectedSlotPath?.header||"N/A"});
     if(!response.ok){
       setProcessing(false);
       const body=await response.json().catch(()=>null) as {error?:string}|null;setErrorMessage(body?.error||"Position update failed.");
@@ -396,7 +393,7 @@ export default function PositionEditor() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    const response=await postOperation({action:"rank",personnelId:selectedPerson.id,rankId:selectedRankId||null,changedAt:`${rankChangedAt}T12:00:00+00:00`,processedBy:processedByName});
+    const response=await postOperation({action:"rank",personnelId:selectedPerson.id,rankId:selectedRankId||null,changedAt:`${rankChangedAt}T12:00:00+00:00`});
     if(!response.ok){
       setProcessing(false);
       const body=await response.json().catch(()=>null) as {error?:string}|null;setErrorMessage(body?.error||"Rank update failed.");
@@ -457,7 +454,7 @@ export default function PositionEditor() {
 
     const oldSlotPath = resolveSlotPath(selectedPerson.slotted_position);
     const oldSlotLabel = formatSlotToBillet(selectedPerson.slotted_position);
-    const response=await postOperation({action:"unassign",personnelId:selectedPerson.id,processedBy:processedByName,slotLabel:oldSlotLabel,slotSection:oldSlotPath?.subHeader||oldSlotPath?.header||"N/A"});
+    const response=await postOperation({action:"unassign",personnelId:selectedPerson.id,slotLabel:oldSlotLabel,slotSection:oldSlotPath?.subHeader||oldSlotPath?.header||"N/A"});
     if(!response.ok){
       setProcessing(false);
       const body=await response.json().catch(()=>null) as {error?:string}|null;setErrorMessage(body?.error||"Unassign failed.");

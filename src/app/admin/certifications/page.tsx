@@ -35,8 +35,7 @@ type CertificationsResponse = {
   personnel?: Personnel[];
   ranks?: Rank[];
   certifications?: Certification[];
-  trainers?: Personnel[];
-  currentUserId?: string;
+  currentUserName?: string;
 };
 
 type CertificationLeadFamily = {
@@ -61,9 +60,6 @@ export default function ManageCertifications() {
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
   const [filteredCerts, setFilteredCerts] = useState<Certification[]>([]);
   const [loading, setLoading] = useState(false);
-  const [trainerPersonnel, setTrainerPersonnel] = useState<Personnel[]>([]);
-  const [selectedTrainer, setSelectedTrainer] = useState("");
-  const [trainerSearch, setTrainerSearch] = useState("");
   const [processedByName, setProcessedByName] = useState("Unknown");
   const [leadCertificationSearch, setLeadCertificationSearch] = useState("");
   const [leadPersonnelSearch, setLeadPersonnelSearch] = useState("");
@@ -135,12 +131,7 @@ export default function ManageCertifications() {
       setPersonnel(data.personnel || []);
       setRanks(data.ranks || []);
       setCertifications(data.certifications || []);
-      setTrainerPersonnel(data.trainers || []);
-      if ((data.trainers || []).some((trainer) => trainer.id === data.currentUserId)) {
-        setSelectedTrainer(data.currentUserId || "");
-      } else if ((data.trainers || []).length === 1) {
-        setSelectedTrainer(data.trainers?.[0].id || "");
-      }
+      if (data.currentUserName) setProcessedByName(data.currentUserName);
     });
     return () => { cancelled = true; };
   }, [fetchData, loadingAuth]);
@@ -198,16 +189,15 @@ export default function ManageCertifications() {
     if (!canEdit) return;
     if (
       selectedPeople.length === 0 ||
-      selectedCerts.length === 0 ||
-      !selectedTrainer
+      selectedCerts.length === 0
     ) {
-      alert("Please select personnel, certifications, and a trainer.");
+      alert("Please select personnel and certifications.");
       return;
     }
 
     setLoading(true);
 
-    const response=await fetch("/api/admin/certifications",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({personnelIds:selectedPeople,certificationIds:selectedCerts,awardedBy:selectedTrainer})});
+    const response=await fetch("/api/admin/certifications",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:JSON.stringify({personnelIds:selectedPeople,certificationIds:selectedCerts})});
 
     setLoading(false);
 
@@ -478,67 +468,14 @@ export default function ManageCertifications() {
               </div>
             )}
 
-            {/* TRAINER SELECTION - SHOW AFTER PERSON IS SELECTED */}
+            {/* ACTOR - DERIVED FROM THE AUTHENTICATED ACCOUNT */}
             {selectedPeople.length > 0 && (
               <div className="mb-6 p-4 rounded-xl border border-[#00ff66]/30 bg-black/30">
-                <h2 className="text-sm text-gray-400 mb-2">
-                  Select Trainer Who Is Assigning
-                </h2>
-
-                {trainerPersonnel.length === 0 ? (
-                  <p className="text-gray-400 text-sm">
-                    No trainers available.
-                  </p>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      placeholder="Search trainers..."
-                      value={trainerSearch}
-                      onChange={(e) => setTrainerSearch(e.target.value)}
-                      className="bg-black border border-[#00ff66]/30 p-3 w-full rounded-xl mb-3"
-                    />
-
-                    <div className="max-h-160 overflow-y-auto">
-                      {trainerPersonnel
-                        .filter((trainer) =>
-                          trainer.name
-                            ?.toLowerCase()
-                            .includes(trainerSearch.toLowerCase())
-                        )
-                        .map((trainer) => {
-                          const isSelected = selectedTrainer === trainer.id;
-
-                          return (
-                            <div
-                              key={trainer.id}
-                              onClick={() => {
-                                setSelectedTrainer(trainer.id);
-                                setTrainerSearch("");
-                              }}
-                              className={`p-2 rounded-lg cursor-pointer mb-2 transition ${
-                                isSelected
-                                  ? "bg-[#00ff66]/20 border border-[#00ff66]"
-                                  : "hover:bg-[#00ff66]/10"
-                              }`}
-                            >
-                              {trainer.name}
-                            </div>
-                          );
-                        })}
-
-                      {trainerPersonnel.filter((trainer) =>
-                        trainer.name
-                          ?.toLowerCase()
-                          .includes(trainerSearch.toLowerCase())
-                      ).length === 0 && (
-                        <p className="text-gray-400 text-sm">
-                          No matching trainers.
-                        </p>
-                      )}
-                    </div>
-                  </>
-                )}
+                <h2 className="mb-2 text-sm text-gray-400">Awarded by</h2>
+                <div className="border border-[#00ff66]/25 bg-[#00ff66]/5 p-3 font-semibold text-[#b9ffd2]">
+                  {processedByName}
+                </div>
+                <p className="mt-2 text-xs text-[#6f8f7d]">Automatically recorded from the signed-in account.</p>
               </div>
             )}
           </div>

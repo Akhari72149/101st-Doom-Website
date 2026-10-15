@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock3,
   Database,
+  GitCommitHorizontal,
   HardDrive,
   RefreshCw,
   RotateCcw,
@@ -57,6 +58,21 @@ type Health = {
     pages: Array<{ route: string; bytes: number; files: number; rendering: "static" | "dynamic" }>;
     unattributedBytes: number;
   } | null;
+  updateHistory: {
+    available: boolean;
+    branch: string | null;
+    currentCommit: string | null;
+    entries: Array<{
+      hash: string;
+      shortHash: string;
+      authoredAt: string;
+      author: string;
+      subject: string;
+      notes: string;
+      refs: string[];
+    }>;
+    message: string | null;
+  };
 };
 
 const fmt = (value: string | null | undefined) => value
@@ -91,6 +107,8 @@ export default function SystemHealthPage() {
   const [outboxOpen, setOutboxOpen] = useState(false);
   const [storageOpen, setStorageOpen] = useState(false);
   const [storageSearch, setStorageSearch] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
   const [workingEventId, setWorkingEventId] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [removeTarget, setRemoveTarget] = useState<OutboxIssue | null>(null);
@@ -147,11 +165,11 @@ export default function SystemHealthPage() {
   }, [load, router]);
 
   useEffect(() => {
-    if (!storageOpen) return;
+    if (!storageOpen && !historyOpen) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [storageOpen]);
+  }, [historyOpen, storageOpen]);
 
   const outbox = useMemo(
     () => Object.fromEntries((health?.discordOutbox || []).map((row) => [row.status, row])),
@@ -164,6 +182,19 @@ export default function SystemHealthPage() {
       ? (health?.storage?.pages || []).filter((page) => page.route.toLowerCase().includes(query))
       : health?.storage?.pages || [];
   }, [health?.storage?.pages, storageSearch]);
+  const updateEntries = useMemo(() => {
+    const query = historySearch.trim().toLowerCase();
+    const entries = health?.updateHistory?.entries || [];
+    if (!query) return entries;
+    return entries.filter((entry) => [
+      entry.hash,
+      entry.shortHash,
+      entry.author,
+      entry.subject,
+      entry.notes,
+      ...entry.refs,
+    ].some((value) => value.toLowerCase().includes(query)));
+  }, [health?.updateHistory?.entries, historySearch]);
   const cards = [
     {
       title: "PostgreSQL",
@@ -261,6 +292,27 @@ export default function SystemHealthPage() {
               <p className="mt-2 text-sm leading-6 text-gray-400">{card.detail}</p>
             </article>
           ))}
+
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="bg-[#020806] p-6 text-left transition hover:bg-white/[.03]"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <GitCommitHorizontal className="text-cyan-300" />
+              <ChevronDown size={18} className="-rotate-90 text-gray-400" />
+            </div>
+            <h2 className="text-lg font-bold uppercase tracking-wider">Update History</h2>
+            <p className={health?.updateHistory.available ? "mt-2 text-[#00ff66]" : "mt-2 text-amber-200"}>
+              {health?.updateHistory.available ? `${health.updateHistory.entries.length} updates recorded` : "History unavailable"}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-gray-400">
+              {health?.updateHistory.available
+                ? `${health.updateHistory.branch || "detached"} · current ${health.updateHistory.currentCommit}`
+                : health?.updateHistory.message || "Waiting for health check"}
+            </p>
+            <p className="mt-4 text-xs font-bold uppercase tracking-[.14em] text-cyan-200">Click to view release notes</p>
+          </button>
 
           <button
             type="button"
@@ -454,6 +506,65 @@ export default function SystemHealthPage() {
             </div> : <p className="p-8 text-gray-400">Run the health check again after a successful website build.</p>}
 
             <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#00ff66]/15 px-5 py-3 text-[10px] uppercase tracking-[.12em] text-gray-500 sm:px-6"><span>Measured {fmt(health?.storage?.measuredAt)}</span><span>Refreshes every five minutes</span></footer>
+          </section>
+        </div>
+      )}
+
+      {historyOpen && (
+        <div className="fixed inset-0 z-[110] flex bg-black/90 p-0 backdrop-blur-sm sm:p-4" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="history-title" className="mx-auto flex h-full w-full max-w-5xl flex-col border border-[#00ff66]/30 bg-[#020806] sm:h-[92vh]">
+            <header className="flex items-start justify-between gap-4 border-b border-[#00ff66]/20 p-5 sm:p-6">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[.18em] text-[#00ff66]">Repository record</p>
+                <h2 id="history-title" className="mt-2 text-2xl font-black uppercase">Website Update History</h2>
+                <p className="mt-2 text-sm text-gray-400">
+                  {health?.updateHistory.available
+                    ? `${health.updateHistory.entries.length} updates on ${health.updateHistory.branch || "the deployed branch"} · current ${health.updateHistory.currentCommit}`
+                    : health?.updateHistory.message || "Update history is unavailable."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setHistoryOpen(false)} className="grid h-10 w-10 shrink-0 place-items-center border border-white/15 text-gray-400 hover:border-red-300/40 hover:text-red-200" aria-label="Close update history"><X size={18} /></button>
+            </header>
+
+            <div className="border-b border-[#00ff66]/15 p-4 sm:p-5">
+              <label className="relative block w-full">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={15}/>
+                <span className="sr-only">Search update history</span>
+                <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Search update, author, note, tag, or commit" className="h-11 w-full border border-white/12 bg-black pl-10 pr-3 text-sm outline-none focus:border-[#00ff66]/55" />
+              </label>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {updateEntries.map((entry, index) => (
+                <article key={entry.hash} className="border-b border-white/8 px-5 py-5 sm:px-6">
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 grid h-9 w-9 shrink-0 place-items-center border border-cyan-300/25 bg-cyan-300/[.05] text-cyan-200">
+                      <GitCommitHorizontal size={17} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-black text-white">{entry.subject}</h3>
+                        {index === 0 && !historySearch && <span className="border border-[#00ff66]/30 bg-[#00ff66]/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[.12em] text-[#00ff66]">Current</span>}
+                        {entry.refs.map((ref) => <span key={ref} className="border border-amber-300/25 px-2 py-0.5 text-[9px] font-bold text-amber-200">{ref}</span>)}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                        <span className="font-mono text-cyan-200">{entry.shortHash}</span>
+                        <span>{fmt(entry.authoredAt)}</span>
+                        <span>{entry.author}</span>
+                      </div>
+                      {entry.notes && <p className="mt-3 whitespace-pre-wrap border-l-2 border-[#00ff66]/25 pl-3 text-sm leading-6 text-gray-300">{entry.notes}</p>}
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {health?.updateHistory.available && !updateEntries.length && <p className="p-8 text-center text-sm text-gray-500">No updates match that search.</p>}
+              {!health?.updateHistory.available && <p className="p-8 text-center text-sm text-amber-200">{health?.updateHistory.message || "Git history is not available in this deployment."}</p>}
+            </div>
+
+            <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#00ff66]/15 px-5 py-3 text-[10px] uppercase tracking-[.12em] text-gray-500 sm:px-6">
+              <span>Commit titles and notes only</span>
+              <span>{updateEntries.length} shown</span>
+            </footer>
           </section>
         </div>
       )}

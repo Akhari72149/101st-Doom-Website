@@ -5,7 +5,7 @@ import { LEGAL_CONTACT_NAME } from "@/config/legal";
 export const metadata: Metadata = {
   title: "Cookie Policy",
   description:
-    "Cookie Policy for the 101st Doom Battalion website, covering authentication, Steam linking, security, preference storage, analytics, and third-party storage.",
+    "Cookie Policy for the 101st Doom Battalion website, covering native authentication, Steam linking, restricted tools, security, and browser storage.",
 };
 
 const cookieSections: LegalSection[] = [
@@ -13,79 +13,78 @@ const cookieSections: LegalSection[] = [
     id: "overview",
     title: "1. Overview",
     paragraphs: [
-      "This Cookie Policy explains how the 101st Doom Battalion website uses cookies and similar browser storage technologies.",
-      "Only essential authentication and session storage, including the native website login session and a short-lived Steam linking cookie, are used on this website. No non-essential analytics or advertising trackers are in use.",
-    ],
-  },
-  {
-    id: "strictly-necessary",
-    title: "2. Strictly necessary storage",
-    paragraphs: [
-      "Strictly necessary storage is used to keep the website secure, maintain login sessions, protect restricted areas, and support account-linking flows.",
-      "This includes the secure session cookie used by the website login system and the short-lived HTTP-only Steam linking session cookie used during Steam account linking.",
+      "This Cookie Policy explains how the 101st Doom Battalion website uses cookies and similar browser-storage technologies.",
+      "The current site uses storage only for strictly necessary security or functionality requested by the user. It does not use advertising or behavioural tracking cookies, so it does not currently display a marketing-cookie consent banner.",
     ],
   },
   {
     id: "authentication",
-    title: "3. Website authentication session",
+    title: "2. Native website authentication",
     paragraphs: [
-      "The website uses its own account system backed by the website database. A secure session cookie allows logged-in users to remain signed in and lets the website check access to protected pages.",
-      "This cookie is necessary for account login, permission checks, and authenticated website features.",
+      "The website uses its own account and session system backed by the self-hosted PostgreSQL database. Cookies beginning with doom_native keep signed-in users authenticated and allow permission checks on protected pages.",
+      "Normal login sessions last up to eight hours unless the user signs out or the session is revoked earlier. These cookies are required for account access and protected administration features.",
     ],
   },
   {
     id: "steam",
-    title: "4. Steam linking cookie",
+    title: "3. Steam linking cookie",
     paragraphs: [
-      "The Steam linking flow uses a short-lived HTTP-only cookie. It helps match the browser session that began Steam authentication with the Steam callback returned by Steam.",
-      "This cookie is used only for the Steam linking process, is not available to client-side JavaScript, and is configured with SameSite protection.",
+      "The Steam linking flow uses the short-lived, HTTP-only doom_steam_link_session cookie to match the browser session that began Steam authentication with the callback returned by Steam.",
+      "It is used only for the requested linking process, is unavailable to client-side JavaScript, uses SameSite protection, and expires after 30 minutes.",
+    ],
+  },
+  {
+    id: "restricted-tools",
+    title: "4. Restricted tool access",
+    paragraphs: [
+      "The HTTP-only gc_shop_access cookie remembers successful access to the protected GC Shop tool for up to eight hours. It uses strict SameSite protection and is not used for tracking.",
+    ],
+  },
+  {
+    id: "browser-storage",
+    title: "5. Browser storage",
+    paragraphs: [
+      "The attendance-admin-formation value remembers an administrator's selected attendance formation on that browser until it is changed or site data is cleared.",
+      "Temporary per-tab updater values prevent duplicate deployment notices and allow the page to resume correctly after an update. These interface values do not contain passwords or authentication tokens.",
     ],
   },
   {
     id: "security",
-    title: "5. Security cookies and provider storage",
+    title: "6. Security and infrastructure storage",
     paragraphs: [
-      "Hosting, security, or proxy providers may use technical storage or security cookies where necessary to deliver the website, prevent abuse, route traffic, or protect against attacks.",
-      "Cloudflare may set strictly necessary security cookies or process request data as part of its security and performance services.",
-    ],
-  },
-  {
-    id: "preferences",
-    title: "6. Preference storage",
-    paragraphs: [
-      "The current repository review did not find a dedicated non-essential preference storage system such as theme preferences or optional tracking preferences.",
-      "If preference storage is added later, this policy will be updated to describe what is stored and how users can change it.",
+      "Hosting, security, or proxy providers may use technical storage where necessary to deliver the website, prevent abuse, route traffic, or protect against attacks.",
+      "Cloudflare may set strictly necessary security cookies or process request data as part of its security and performance services when enabled.",
     ],
   },
   {
     id: "analytics",
-    title: "7. Analytics storage",
+    title: "7. Analytics and advertising",
     paragraphs: [
-      "No Google Analytics, Plausible, PostHog, advertising tracker, or similar optional analytics script was in use at the time of making this policy.",
-      ],
+      "No Google Analytics, Plausible, PostHog, advertising tracker, or similar optional analytics script was in use when this policy was updated.",
+    ],
   },
   {
     id: "third-parties",
-    title: "8. Third-party storage and embedded content",
+    title: "8. Third-party services",
     paragraphs: [
-      "The website links to or interacts with third-party services such as Discord and Steam. Those services may set their own cookies or use their own storage when you visit their websites or interact with their systems.",
-      "The website may display external images or profile information, such as Steam profile avatars or Discord emoji images, which can involve requests to third-party servers.",
+      "The website links to or interacts with services such as Discord, Steam, GitHub, and Cloudflare. Those services may set their own cookies or storage when you visit or use their systems.",
+      "External profile images or Discord emoji images may also cause the browser to request content from a third-party server.",
     ],
   },
   {
     id: "controls",
     title: "9. Managing cookies and storage",
     paragraphs: [
-      "You can control cookies and browser storage through your browser settings. Blocking strictly necessary cookies or authentication storage may prevent login, Steam linking, or protected website features from working.",
-      "To clear a website login session, use the website logout feature where available and, if needed, clear site data in your browser.",
+      "You can delete or block cookies and browser storage through your browser settings. Blocking necessary cookies will prevent login, Steam linking, restricted tools, or protected website features from working correctly.",
+      "Clearing site data also removes saved interface preferences. If optional analytics, advertising, or other non-essential storage is introduced, the site will add an appropriate consent choice before using it.",
     ],
   },
   {
     id: "changes-contact",
     title: "10. Changes and contact",
     paragraphs: [
-      "This policy may be updated if the website adds new storage, analytics, monitoring, embedded content, or third-party integrations.",
-      "Questions about this policy can be sent to: " + LEGAL_CONTACT_NAME + ".",
+      "This policy may be updated if the website adds new storage, analytics, monitoring, embedded content, or integrations.",
+      `Questions about this policy can be sent to ${LEGAL_CONTACT_NAME} through the official unit communication channels.`,
     ],
   },
 ];
@@ -95,7 +94,7 @@ export default function CookiesPage() {
     <LegalPage
       eyebrow="Legal"
       title="Cookie Policy"
-      intro="This policy explains the cookies and browser storage used by the 101st Doom Battalion website, including essential login storage, Steam linking cookies, and third-party service storage."
+      intro="This policy explains the cookies and limited browser storage used by the 101st Doom Battalion website for native login, linked services, security, and requested functionality."
       sections={cookieSections}
     />
   );

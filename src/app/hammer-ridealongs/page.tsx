@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Search,
   Send,
+  SlidersHorizontal,
   Trash2,
   UserRoundPlus,
   X,
@@ -30,6 +31,8 @@ type Trainee = {
   cxc_test: string;
   flight: string;
   joining_hammer: boolean;
+  phase1_adjustment: number;
+  phase2_adjustment: number;
   notes: string;
   sort_order: number;
   active: boolean;
@@ -115,6 +118,12 @@ function phaseReports(reports: Ridealong[], traineeId: string, phase: 1 | 2) {
   return reports.filter((report) => report.trainee_id === traineeId && report.phase === phase);
 }
 
+function phaseTotal(trainee: Trainee, reports: Ridealong[], phase: 1 | 2) {
+  const submitted = phaseReports(reports, trainee.id, phase).length;
+  const adjustment = phase === 1 ? trainee.phase1_adjustment : trainee.phase2_adjustment;
+  return Math.max(0, submitted + adjustment);
+}
+
 function Milestone({ label, value }: { label: string; value: string | null }) {
   const statusClass = value === "Complete" ? "text-[#00ff66]" : value === "Waived" ? "text-amber-300" : value === "Not Complete" ? "text-red-300" : value ? "text-[#dcebe3]" : "text-[#536158]";
   return (
@@ -128,8 +137,8 @@ function Milestone({ label, value }: { label: string; value: string | null }) {
 }
 
 function traineeComplete(trainee: Trainee, reports: Ridealong[]) {
-  return phaseReports(reports, trainee.id, 1).length >= 2
-    && phaseReports(reports, trainee.id, 2).length >= 6
+  return phaseTotal(trainee, reports, 1) >= 2
+    && phaseTotal(trainee, reports, 2) >= 6
     && milestoneDone(trainee.ground_school)
     && milestoneDone(trainee.flight_school)
     && milestoneDone(trainee.sere)
@@ -162,6 +171,7 @@ export default function HammerRidealongTrackerPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<Trainee | null>(null);
   const [draft, setDraft] = useState<TraineeDraft | null>(null);
+  const [countDraft, setCountDraft] = useState<{ id: string; name: string; phase1Total: number; phase2Total: number; submitted1: number; submitted2: number } | null>(null);
   const [personnelSearch, setPersonnelSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -187,11 +197,11 @@ export default function HammerRidealongTrackerPage() {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    if (!selected && !draft) return;
+    if (!selected && !draft && !countDraft) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [draft, selected]);
+  }, [countDraft, draft, selected]);
 
   const visibleTrainees = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -245,6 +255,7 @@ export default function HammerRidealongTrackerPage() {
       if (!response.ok) throw new Error(body.error || "Update failed");
       setMessage(success);
       setDraft(null);
+      setCountDraft(null);
       setSelected(null);
       await load();
     } catch (caught) {
@@ -260,6 +271,19 @@ export default function HammerRidealongTrackerPage() {
       action: draft.id ? "update-trainee" : "create-trainee",
       ...draft,
     }, draft.id ? "Trainee profile updated." : "Trainee added to the tracker.");
+  }
+
+  function adjustCounts(trainee: Trainee) {
+    const reports = data?.reports || [];
+    setSelected(null);
+    setCountDraft({
+      id: trainee.id,
+      name: trainee.name,
+      phase1Total: phaseTotal(trainee, reports, 1),
+      phase2Total: phaseTotal(trainee, reports, 2),
+      submitted1: phaseReports(reports, trainee.id, 1).length,
+      submitted2: phaseReports(reports, trainee.id, 2).length,
+    });
   }
 
   const selectedReports = selected ? (data?.reports || []).filter((report) => report.trainee_id === selected.id) : [];
@@ -304,15 +328,16 @@ export default function HammerRidealongTrackerPage() {
               {['Trainee','Course start','Ground school','Phase 1','Flight school','Phase 2','SERE','CX-C test','Flight',''].map((label) => <div key={label} className="border-l border-white/10 px-3 py-3 first:border-l-0">{label}</div>)}
             </div>
             {visibleTrainees.map((trainee) => {
-              const phase1 = phaseReports(data?.reports || [], trainee.id, 1);
-              const phase2 = phaseReports(data?.reports || [], trainee.id, 2);
+              const reports = data?.reports || [];
+              const phase1 = phaseTotal(trainee, reports, 1);
+              const phase2 = phaseTotal(trainee, reports, 2);
               return <article key={trainee.id} className={`grid grid-cols-[220px_130px_150px_190px_150px_260px_120px_120px_140px_100px] border-b border-white/8 transition hover:bg-white/[.025] ${trainee.active ? "" : "opacity-50"}`}>
                 <button type="button" onClick={() => setSelected(trainee)} className="px-3 py-4 text-left"><p className="font-black text-white">{trainee.name}</p><p className="mt-1 text-[9px] uppercase tracking-[.12em] text-[#00ff66]">{trainee.active ? "Active" : "Archived"}</p></button>
                 <Milestone label="Started" value={trainee.started_course ? displayDate(trainee.started_course) : null}/>
                 <Milestone label="Instructor" value={trainee.ground_school}/>
-                <PhaseProgress current={phase1.length} target={2}/>
+                <PhaseProgress current={phase1} target={2}/>
                 <Milestone label="Instructor" value={trainee.flight_school}/>
-                <PhaseProgress current={phase2.length} target={6}/>
+                <PhaseProgress current={phase2} target={6}/>
                 <Milestone label="Status" value={trainee.sere}/>
                 <Milestone label="Status" value={trainee.cxc_test}/>
                 <Milestone label="Assignment" value={trainee.joining_hammer ? trainee.flight : "Not joining"}/>
@@ -327,8 +352,8 @@ export default function HammerRidealongTrackerPage() {
 
         {!loading && <div className="grid gap-3 p-3 lg:hidden">
           {visibleTrainees.map((trainee) => {
-            const phase1 = phaseReports(data?.reports || [], trainee.id, 1).length;
-            const phase2 = phaseReports(data?.reports || [], trainee.id, 2).length;
+            const phase1 = phaseTotal(trainee, data?.reports || [], 1);
+            const phase2 = phaseTotal(trainee, data?.reports || [], 2);
             return <button type="button" key={trainee.id} onClick={() => setSelected(trainee)} className={`border border-white/10 bg-[#03100b] p-4 text-left ${trainee.active ? "" : "opacity-50"}`}>
               <div className="flex items-start justify-between gap-3"><div><p className="font-black text-white">{trainee.name}</p><p className="mt-1 text-xs text-gray-500">{trainee.joining_hammer ? (trainee.flight || "Flight unassigned") : "Not joining Hammer"}</p></div><span className="border border-[#00ff66]/25 px-2 py-1 text-[9px] font-black uppercase text-[#00ff66]">{trainee.active ? "Active" : "Archived"}</span></div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><p className="text-gray-600">Phase 1</p><p className="mt-1 font-black text-cyan-200">{phase1}/2</p></div><div><p className="text-gray-600">Phase 2</p><p className="mt-1 font-black text-cyan-200">{phase2}/6</p></div><div><p className="text-gray-600">Course start</p><p className="mt-1 text-gray-300">{displayDate(trainee.started_course)}</p></div><div><p className="text-gray-600">CX-C test</p><p className="mt-1 text-gray-300">{trainee.cxc_test || "Pending"}</p></div></div>
@@ -347,12 +372,13 @@ export default function HammerRidealongTrackerPage() {
               ["Course start", displayDate(selected.started_course)], ["Ground school", selected.ground_school || "Pending"], ["Flight school", selected.flight_school || "Pending"], ["SERE", selected.sere || "Pending"], ["CX-C test", selected.cxc_test || "Pending"], ["Joining Hammer", selected.joining_hammer ? "Yes" : "No"], ["Flight", selected.joining_hammer ? (selected.flight || "Unassigned") : "Not applicable"],
             ].map(([label,value]) => <div key={label} className="bg-[#03100b] p-4"><p className="text-[9px] font-black uppercase tracking-[.12em] text-gray-600">{label}</p><p className={`mt-2 text-sm font-bold ${value === "Complete" ? "text-[#00ff66]" : value === "Waived" ? "text-amber-300" : value === "Not Complete" ? "text-red-300" : "text-gray-200"}`}>{value}</p></div>)}</div>
             {selected.notes && <div className="mt-4 border border-amber-300/20 bg-amber-300/[.04] p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-amber-200">Admin notes</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-300">{selected.notes}</p></div>}
+            {(selected.phase1_adjustment !== 0 || selected.phase2_adjustment !== 0) && <div className="mt-4 border border-cyan-300/20 bg-cyan-300/[.04] p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-cyan-200">Manual count adjustment</p><p className="mt-2 text-sm text-gray-300">Phase 1 {selected.phase1_adjustment >= 0 ? "+" : ""}{selected.phase1_adjustment} · Phase 2 {selected.phase2_adjustment >= 0 ? "+" : ""}{selected.phase2_adjustment}</p></div>}
             <div className="mt-6"><h3 className="text-sm font-black uppercase tracking-[.14em] text-[#00ff66]">Ridealong history</h3><div className="mt-3 grid gap-3">
               {selectedReports.map((report, index) => <article key={report.id} className="border border-white/10 bg-[#03100b] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black text-white">Phase {report.phase} Ridealong {index + 1}</p><p className="mt-1 text-xs uppercase tracking-[.1em] text-cyan-200">{report.activity.replace("-", " ")} · {report.operation_type}</p></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">{displayDate(report.occurred_on)}</span>{data?.permissions.canEdit && <button type="button" onClick={() => void action({ action: "delete-report", id: report.id }, "Ridealong report removed.")} disabled={saving} title="Remove incorrect report" className="grid h-8 w-8 place-items-center border border-red-300/25 text-red-200 hover:bg-red-300/10"><Trash2 size={14}/></button>}</div></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-gray-600">Pilot supervisor</dt><dd className="mt-1 text-gray-200">{report.pilot_supervisor}</dd></div><div><dt className="text-gray-600">Zeus</dt><dd className="mt-1 text-gray-200">{report.zeus}</dd></div></dl></article>)}
               {!selectedReports.length && <p className="border border-white/10 p-5 text-sm text-gray-500">No ridealongs have been submitted for this trainee.</p>}
             </div></div>
           </div>
-          {data?.permissions.canEdit && <footer className="flex flex-wrap justify-between gap-2 border-t border-white/10 p-4"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void action({ action: "set-active", id: selected.id, active: !selected.active }, selected.active ? "Trainee archived." : "Trainee restored.")} disabled={saving} className={`flex items-center gap-2 border px-3 py-2 text-xs font-black uppercase ${selectedComplete && selected.active ? "border-[#00ff66]/50 bg-[#00ff66]/10 text-[#00ff66]" : "border-amber-300/30 text-amber-200"}`}>{selected.active ? <Archive size={15}/> : <RotateCcw size={15}/>} {selected.active && selectedComplete ? "Archive completed trainee" : selected.active ? "Archive" : "Restore"}</button>{data.permissions.canFull && <button type="button" onClick={() => { if (window.confirm(`Permanently remove ${selected.name} and all of their ridealong reports? This cannot be undone.`)) void action({ action: "delete-trainee", id: selected.id }, "Trainee permanently removed."); }} disabled={saving} className="flex items-center gap-2 border border-red-300/30 px-3 py-2 text-xs font-black uppercase text-red-200 hover:bg-red-300/10"><Trash2 size={15}/>Remove permanently</button>}</div><button type="button" onClick={() => editTrainee(selected)} className="flex items-center gap-2 border border-[#00ff66]/40 px-4 py-2 text-xs font-black uppercase text-[#00ff66]"><Pencil size={15}/>Edit milestones</button></footer>}
+          {data?.permissions.canEdit && <footer className="flex flex-wrap justify-between gap-2 border-t border-white/10 p-4"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void action({ action: "set-active", id: selected.id, active: !selected.active }, selected.active ? "Trainee archived." : "Trainee restored.")} disabled={saving} className={`flex items-center gap-2 border px-3 py-2 text-xs font-black uppercase ${selectedComplete && selected.active ? "border-[#00ff66]/50 bg-[#00ff66]/10 text-[#00ff66]" : "border-amber-300/30 text-amber-200"}`}>{selected.active ? <Archive size={15}/> : <RotateCcw size={15}/>} {selected.active && selectedComplete ? "Archive completed trainee" : selected.active ? "Archive" : "Restore"}</button>{data.permissions.canFull && <button type="button" onClick={() => { if (window.confirm(`Permanently remove ${selected.name} and all of their ridealong reports? This cannot be undone.`)) void action({ action: "delete-trainee", id: selected.id }, "Trainee permanently removed."); }} disabled={saving} className="flex items-center gap-2 border border-red-300/30 px-3 py-2 text-xs font-black uppercase text-red-200 hover:bg-red-300/10"><Trash2 size={15}/>Remove permanently</button>}</div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => adjustCounts(selected)} className="flex items-center gap-2 border border-cyan-300/35 px-4 py-2 text-xs font-black uppercase text-cyan-200"><SlidersHorizontal size={15}/>Adjust ridealong totals</button><button type="button" onClick={() => editTrainee(selected)} className="flex items-center gap-2 border border-[#00ff66]/40 px-4 py-2 text-xs font-black uppercase text-[#00ff66]"><Pencil size={15}/>Edit milestones</button></div></footer>}
         </section>
       </div>}
 
@@ -377,6 +403,17 @@ export default function HammerRidealongTrackerPage() {
             <label className="sm:col-span-2"><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Internal notes</span><textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} rows={4} className="mt-2 w-full resize-y border border-white/15 bg-black p-3 outline-none focus:border-[#00ff66]/60"/></label>
           </div></div>
           <footer className="flex justify-end gap-2 border-t border-white/10 p-4"><button type="button" onClick={() => setDraft(null)} className="border border-white/15 px-4 py-2 text-sm text-gray-300">Cancel</button><button type="button" onClick={() => void saveDraft()} disabled={saving} className="flex items-center gap-2 border border-[#00ff66] bg-[#00ff66] px-4 py-2 text-sm font-black uppercase text-black disabled:opacity-50">{draft.id ? <CheckCircle2 size={16}/> : <FilePlus2 size={16}/>} {saving ? "Saving..." : draft.id ? "Save changes" : "Add trainee"}</button></footer>
+        </section>
+      </div>}
+
+      {countDraft && <div className="fixed inset-0 z-[115] flex bg-black/90 p-0 sm:p-4" role="presentation">
+        <section role="dialog" aria-modal="true" aria-labelledby="ridealong-count-title" className="mx-auto h-full w-full max-w-xl border border-cyan-300/30 bg-[#020806] sm:h-auto sm:self-center">
+          <header className="flex items-start justify-between gap-4 border-b border-white/10 p-5"><div><p className="text-xs font-black uppercase tracking-[.16em] text-cyan-200">Manual correction</p><h2 id="ridealong-count-title" className="mt-2 text-2xl font-black uppercase">Ridealong totals</h2><p className="mt-2 text-sm text-gray-500">{countDraft.name}</p></div><button type="button" onClick={() => setCountDraft(null)} aria-label="Close count editor" className="grid h-10 w-10 place-items-center border border-white/15 text-gray-400"><X size={18}/></button></header>
+          <div className="p-5"><p className="border border-amber-300/20 bg-amber-300/[.04] p-3 text-xs leading-5 text-amber-100">Use this only to correct totals when a form was missed or entered incorrectly. The submitted response records remain unchanged, and this correction is written to the audit log.</p><div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Phase 1 completed</span><input type="number" min={0} max={99} value={countDraft.phase1Total} onChange={(event) => setCountDraft({ ...countDraft, phase1Total: Math.max(0, Math.min(99, Number(event.target.value))) })} className="mt-2 h-12 w-full border border-white/15 bg-black px-3 text-xl font-black text-cyan-200 outline-none focus:border-cyan-300/50"/><span className="mt-2 block text-xs text-gray-600">{countDraft.submitted1} submitted form{countDraft.submitted1 === 1 ? "" : "s"}</span></label>
+            <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Phase 2 completed</span><input type="number" min={0} max={99} value={countDraft.phase2Total} onChange={(event) => setCountDraft({ ...countDraft, phase2Total: Math.max(0, Math.min(99, Number(event.target.value))) })} className="mt-2 h-12 w-full border border-white/15 bg-black px-3 text-xl font-black text-cyan-200 outline-none focus:border-cyan-300/50"/><span className="mt-2 block text-xs text-gray-600">{countDraft.submitted2} submitted form{countDraft.submitted2 === 1 ? "" : "s"}</span></label>
+          </div></div>
+          <footer className="flex justify-end gap-2 border-t border-white/10 p-4"><button type="button" onClick={() => setCountDraft(null)} className="border border-white/15 px-4 py-2 text-sm text-gray-300">Cancel</button><button type="button" disabled={saving} onClick={() => void action({ action: "set-ridealong-counts", id: countDraft.id, phase1Total: countDraft.phase1Total, phase2Total: countDraft.phase2Total }, "Ridealong totals updated and recorded in the audit log.")} className="flex items-center gap-2 border border-cyan-300 bg-cyan-300 px-4 py-2 text-sm font-black uppercase text-black disabled:opacity-50"><SlidersHorizontal size={16}/>{saving ? "Saving..." : "Save audited correction"}</button></footer>
         </section>
       </div>}
     </main>

@@ -28,6 +28,8 @@ type TraineeRow = {
   cxc_test: string;
   flight: string;
   joining_hammer: boolean;
+  phase1_adjustment: number;
+  phase2_adjustment: number;
   notes: string;
   sort_order: number;
   active: boolean;
@@ -139,7 +141,8 @@ async function readTracker(includeArchived: boolean, archivedOnly = false) {
   const pool = getPostgresPool();
   const [trainees, reports] = await Promise.all([
     pool.query<TraineeRow>(
-      `select id,personnel_id,name,started_course,ground_school,flight_school,sere,cxc_test,flight,joining_hammer,notes,
+      `select id,personnel_id,name,started_course,ground_school,flight_school,sere,cxc_test,flight,joining_hammer,
+              phase1_adjustment,phase2_adjustment,notes,
               sort_order,active,created_at,updated_at
        from public.hammer_ridealong_trainees
        where ($2 and not active) or (not $2 and (active or $1))
@@ -369,6 +372,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === "set-ridealong-counts") {
+      const id = cleanUuid(body?.id);
+      const phase1Total = Number(body?.phase1Total);
+      const phase2Total = Number(body?.phase2Total);
+      if (!id || !Number.isInteger(phase1Total) || !Number.isInteger(phase2Total)
+        || phase1Total < 0 || phase1Total > 99 || phase2Total < 0 || phase2Total > 99) {
+        return error("Enter valid Phase 1 and Phase 2 totals between 0 and 99");
+      }
+      const result = await withPostgresTransaction(async (client) => {
+        const trainee = await client.query<{ name: string; phase1_adjustment: number; phase2_adjustment: number }>(
+          `select name,phase1_adjustment,phase2_adjustment
+             from public.hammer_ridealong_trainees where id=$1 for update`, [id],
+        );
+        if (!trainee.rowCount) throw new Error("TRAINEE_NOT_FOUND");
+        const submitted = await client.query<{ phase: number; count: number }>(
+          `select phase,count(*)::integer count from public.hammer_ridealong_reports
+            where trainee_id=$1 group by phase`, [id],
+        );
+        const submitted1 = submitted.rows.find((row) => row.phase === 1)?.count || 0;
+        const submitted2 = submitted.rows.find((row) => row.phase === 2)?.count || 0;
+        const current1 = Math.max(0, submitted1 + trainee.rows[0].phase1_adjustment);
+        const current2 = Math.max(0, submitted2 + trainee.rows[0].phase2_adjustment);
+        if (current1 === phase1Total && current2 === phase2Total) return { changed: false };
+        await client.query(
+          `update public.hammer_ridealong_trainees
+              set phase1_adjustment=$2,phase2_adjustment=$3,updated_by=$4,updated_at=now()
+            where id=$1`,
+          [id, phase1Total - submitted1, phase2Total - submitted2, auth.userId],
+        );
+        await client.query(
+          `insert into public.audit_logs(user_id,action,details)
+           values($1,'HAMMER_RIDEALONG_TOTALS_ADJUSTED',$2)`,
+          [auth.userId, `Manually adjusted ${trainee.rows[0].name} ridealong totals: Phase 1 ${current1} to ${phase1Total}; Phase 2 ${current2} to ${phase2Total}. Submitted forms: Phase 1 ${submitted1}, Phase 2 ${submitted2}.`],
+        );
+        return { changed: true };
+      });
+      return NextResponse.json({ ok: true, changed: result.changed });
+    }
+
     if (action === "delete-report") {
       const id = cleanUuid(body?.id);
       if (!id) return error("Invalid ridealong report");
@@ -397,6 +439,7 @@ export async function POST(request: Request) {
     const message = caught instanceof Error ? caught.message : "";
     const code = caught && typeof caught === "object" && "code" in caught ? String(caught.code) : "";
     if (message === "PERSONNEL_NOT_ACTIVE") return error("The selected personnel profile is no longer active", 409);
+    if (message === "TRAINEE_NOT_FOUND") return error("Trainee not found", 404);
     if (code === "23505" && message.includes("hammer_ridealong_trainees_personnel_idx")) return error("That personnel profile is already on the Hammer tracker", 409);
     if (message.includes("hammer_ridealong_trainees_name_idx")) return error("A trainee with that name already exists", 409);
     console.error("[hammer-ridealongs] Admin action failed", caught);

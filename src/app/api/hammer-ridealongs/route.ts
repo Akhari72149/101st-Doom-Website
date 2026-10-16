@@ -14,9 +14,12 @@ const MAX_ATTEMPTS = 8;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const attempts = new Map<string, { count: number; resetAt: number }>();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MILESTONE_STATUSES = new Set(["Not Complete", "Complete", "Waived"]);
+const FLIGHTS = new Set(["", "Hammer 1", "Hammer 2", "Hammer 3", "Hammer 4"]);
 
 type TraineeRow = {
   id: string;
+  personnel_id: string | null;
   name: string;
   started_course: string | null;
   ground_school: string;
@@ -44,6 +47,13 @@ type ReportRow = {
   created_at: string;
 };
 
+type PersonnelOption = {
+  id: string;
+  name: string;
+  birth_number: string | null;
+  rank_name: string | null;
+};
+
 function error(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -62,6 +72,11 @@ function cleanDate(value: unknown) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
   const parsed = new Date(`${date}T00:00:00Z`);
   return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date ? "" : date;
+}
+
+function cleanMilestone(value: unknown) {
+  const status = cleanText(value, 20);
+  return MILESTONE_STATUSES.has(status) ? status : "";
 }
 
 function passwordHash() {
@@ -120,25 +135,25 @@ function verifyPassword(request: Request, supplied: string) {
   return { valid, rateLimited: false };
 }
 
-async function readTracker(includeArchived: boolean) {
+async function readTracker(includeArchived: boolean, archivedOnly = false) {
   const pool = getPostgresPool();
   const [trainees, reports] = await Promise.all([
     pool.query<TraineeRow>(
-      `select id,name,started_course,ground_school,flight_school,sere,cxc_test,flight,joining_hammer,notes,
+      `select id,personnel_id,name,started_course,ground_school,flight_school,sere,cxc_test,flight,joining_hammer,notes,
               sort_order,active,created_at,updated_at
        from public.hammer_ridealong_trainees
-       where active or $1
+       where ($2 and not active) or (not $2 and (active or $1))
        order by active desc,sort_order,lower(name)`,
-      [includeArchived],
+      [includeArchived, archivedOnly],
     ),
     pool.query<ReportRow>(
       `select reports.id,reports.trainee_id,reports.phase,reports.operation_type,reports.zeus,
               reports.pilot_supervisor,reports.activity,reports.occurred_on,reports.created_at
        from public.hammer_ridealong_reports reports
        join public.hammer_ridealong_trainees trainees on trainees.id=reports.trainee_id
-       where trainees.active or $1
+       where ($2 and not trainees.active) or (not $2 and (trainees.active or $1))
        order by reports.occurred_on,reports.created_at`,
-      [includeArchived],
+      [includeArchived, archivedOnly],
     ),
   ]);
   return { trainees: trainees.rows, reports: reports.rows };
@@ -157,14 +172,23 @@ export async function GET(request: Request) {
       requirePageAccess(request, "admin.hammer-ridealongs", "edit").catch(() => null),
       requirePageAccess(request, "admin.hammer-ridealongs", "full").catch(() => null),
     ]);
-    const includeArchived = url.searchParams.get("archived") === "1" && Boolean(edit);
-    const tracker = await readTracker(includeArchived);
+    const archivedOnly = url.searchParams.get("archive") === "1";
+    const includeArchived = !archivedOnly && url.searchParams.get("archived") === "1" && Boolean(edit);
+    const tracker = await readTracker(includeArchived, archivedOnly);
+    const personnel = edit ? await getPostgresPool().query<PersonnelOption>(
+      `select personnel.id,personnel.name,personnel.birth_number,ranks.name rank_name
+         from public.personnel personnel
+         left join public.ranks ranks on ranks.id=personnel.rank_id
+        where lower(coalesce(personnel.status,'active')) not in ('retired','removed','transferred')
+        order by lower(personnel.name)`,
+    ) : null;
     return NextResponse.json({
       ...tracker,
       trainees: tracker.trainees.map((trainee) => ({
         ...trainee,
         notes: edit ? trainee.notes : "",
       })),
+      personnel: personnel?.rows || [],
       permissions: { canEdit: Boolean(edit), canFull: Boolean(full) },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (caught) {
@@ -230,19 +254,30 @@ export async function POST(request: Request) {
 
   try {
     if (action === "create-trainee") {
-      const name = cleanText(body?.name, 100);
+      const personnelId = cleanUuid(body?.personnelId);
       const startedCourse = body?.startedCourse ? cleanDate(body.startedCourse) : null;
       const joiningHammer = body?.joiningHammer === true;
-      const flight = joiningHammer ? cleanText(body?.flight, 100) : "";
-      const sere = joiningHammer ? cleanText(body?.sere, 160) : "Waived";
-      if (!name || (body?.startedCourse && !startedCourse)) return error("Enter a valid trainee name and course date");
+      const groundSchool = cleanMilestone(body?.groundSchool) || "Not Complete";
+      const flightSchool = cleanMilestone(body?.flightSchool) || "Not Complete";
+      const cxcTest = cleanMilestone(body?.cxcTest) || "Not Complete";
+      const requestedFlight = cleanText(body?.flight, 20);
+      const flight = joiningHammer && FLIGHTS.has(requestedFlight) ? requestedFlight : "";
+      const sere = joiningHammer ? cleanMilestone(body?.sere) : "Waived";
+      if (!personnelId || (body?.startedCourse && !startedCourse) || (joiningHammer && !sere) || !FLIGHTS.has(requestedFlight)) return error("Select an active personnel profile and valid progression options");
       await withPostgresTransaction(async (client) => {
+        const personnel = await client.query<{ name: string }>(
+          `select name from public.personnel
+            where id=$1 and lower(coalesce(status,'active')) not in ('retired','removed','transferred')
+            for share`, [personnelId],
+        );
+        if (!personnel.rowCount) throw new Error("PERSONNEL_NOT_ACTIVE");
+        const name = personnel.rows[0].name;
         const next = await client.query<{ value: number }>("select coalesce(max(sort_order),-1)+1 value from public.hammer_ridealong_trainees");
         await client.query(
           `insert into public.hammer_ridealong_trainees
-            (name,started_course,joining_hammer,flight,sere,sort_order,updated_by)
-           values($1,$2,$3,$4,$5,$6,$7)`,
-          [name, startedCourse, joiningHammer, flight, sere, next.rows[0].value, auth.userId],
+            (personnel_id,name,started_course,ground_school,flight_school,sere,cxc_test,joining_hammer,flight,sort_order,updated_by)
+           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [personnelId, name, startedCourse, groundSchool, flightSchool, sere, cxcTest, joiningHammer, flight, next.rows[0].value, auth.userId],
         );
         await client.query("insert into public.audit_logs(user_id,action,details) values($1,'HAMMER_TRAINEE_CREATED',$2)", [auth.userId, `Added ${name} to the Hammer ridealong tracker`]);
       });
@@ -251,27 +286,39 @@ export async function POST(request: Request) {
 
     if (action === "update-trainee") {
       const id = cleanUuid(body?.id);
-      const name = cleanText(body?.name, 100);
+      const personnelId = cleanUuid(body?.personnelId);
       const startedCourse = body?.startedCourse ? cleanDate(body.startedCourse) : null;
       const joiningHammer = body?.joiningHammer === true;
-      if (!id || !name || (body?.startedCourse && !startedCourse)) return error("Enter valid trainee details");
+      const groundSchool = cleanMilestone(body?.groundSchool);
+      const flightSchool = cleanMilestone(body?.flightSchool);
+      const sere = joiningHammer ? cleanMilestone(body?.sere) : "Waived";
+      const cxcTest = cleanMilestone(body?.cxcTest);
+      const requestedFlight = cleanText(body?.flight, 20);
+      if (!id || !personnelId || (body?.startedCourse && !startedCourse) || !groundSchool || !flightSchool || !sere || !cxcTest || !FLIGHTS.has(requestedFlight)) return error("Select valid trainee and progression options");
+      const personnel = await getPostgresPool().query<{ name: string }>(
+        `select name from public.personnel
+          where id=$1 and lower(coalesce(status,'active')) not in ('retired','removed','transferred')`, [personnelId],
+      );
+      if (!personnel.rowCount) return error("The selected personnel profile is no longer active", 409);
+      const name = personnel.rows[0].name;
       const values = [
         id,
         name,
         startedCourse,
-        cleanText(body?.groundSchool, 160),
-        cleanText(body?.flightSchool, 160),
-        joiningHammer ? cleanText(body?.sere, 160) : "Waived",
-        cleanText(body?.cxcTest, 160),
-        joiningHammer ? cleanText(body?.flight, 100) : "",
+        groundSchool,
+        flightSchool,
+        sere,
+        cxcTest,
+        joiningHammer ? requestedFlight : "",
         String(body?.notes || "").trim().slice(0, 2000),
         auth.userId,
         joiningHammer,
+        personnelId,
       ];
       const updated = await getPostgresPool().query(
         `update public.hammer_ridealong_trainees set name=$2,started_course=$3,ground_school=$4,
                 flight_school=$5,sere=$6,cxc_test=$7,flight=$8,notes=$9,updated_by=$10,
-                joining_hammer=$11,updated_at=now()
+                joining_hammer=$11,personnel_id=$12,updated_at=now()
          where id=$1`, values,
       );
       if (!updated.rowCount) return error("Trainee not found", 404);
@@ -289,6 +336,36 @@ export async function POST(request: Request) {
       );
       if (!updated.rowCount) return error("Trainee not found", 404);
       await getPostgresPool().query("insert into public.audit_logs(user_id,action,details) values($1,$2,$3)", [auth.userId, active ? "HAMMER_TRAINEE_RESTORED" : "HAMMER_TRAINEE_ARCHIVED", `${active ? "Restored" : "Archived"} Hammer trainee: ${updated.rows[0].name}`]);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "update-report") {
+      const id = cleanUuid(body?.id);
+      const traineeId = cleanUuid(body?.traineeId);
+      const phase = Number(body?.phase);
+      const operationType = cleanText(body?.operationType, 20);
+      const zeus = cleanText(body?.zeus, 120);
+      const pilotSupervisor = cleanText(body?.pilotSupervisor, 120);
+      const activity = cleanText(body?.activity, 30);
+      const occurredOn = cleanDate(body?.occurredOn);
+      if (!id || !traineeId || ![1, 2].includes(phase) || !["mainop", "funop", "training"].includes(operationType)
+        || !zeus || !pilotSupervisor || !["ball-gunning", "flying"].includes(activity) || !occurredOn) {
+        return error("Complete every ridealong response field");
+      }
+      const updated = await getPostgresPool().query<{ name: string }>(
+        `update public.hammer_ridealong_reports reports
+            set trainee_id=trainees.id,phase=$3,operation_type=$4,zeus=$5,
+                pilot_supervisor=$6,activity=$7,occurred_on=$8
+           from public.hammer_ridealong_trainees trainees
+          where reports.id=$1 and trainees.id=$2 and trainees.active=true
+          returning trainees.name`,
+        [id, traineeId, phase, operationType, zeus, pilotSupervisor, activity, occurredOn],
+      );
+      if (!updated.rowCount) return error("Response or active trainee not found", 404);
+      await getPostgresPool().query(
+        "insert into public.audit_logs(user_id,action,details) values($1,'HAMMER_RIDEALONG_UPDATED',$2)",
+        [auth.userId, `Corrected a Phase ${phase} ridealong response for ${updated.rows[0].name}`],
+      );
       return NextResponse.json({ ok: true });
     }
 
@@ -318,6 +395,9 @@ export async function POST(request: Request) {
     return error("Unsupported action");
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "";
+    const code = caught && typeof caught === "object" && "code" in caught ? String(caught.code) : "";
+    if (message === "PERSONNEL_NOT_ACTIVE") return error("The selected personnel profile is no longer active", 409);
+    if (code === "23505" && message.includes("hammer_ridealong_trainees_personnel_idx")) return error("That personnel profile is already on the Hammer tracker", 409);
     if (message.includes("hammer_ridealong_trainees_name_idx")) return error("A trainee with that name already exists", 409);
     console.error("[hammer-ridealongs] Admin action failed", caught);
     return error("Unable to update the Hammer ridealong tracker", 500);

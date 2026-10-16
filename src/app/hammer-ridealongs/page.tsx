@@ -21,6 +21,7 @@ import { getAppAuthHeaders } from "@/lib/client-auth";
 
 type Trainee = {
   id: string;
+  personnel_id: string | null;
   name: string;
   started_course: string | null;
   ground_school: string;
@@ -51,12 +52,14 @@ type Ridealong = {
 type TrackerResponse = {
   trainees: Trainee[];
   reports: Ridealong[];
+  personnel: PersonnelOption[];
   permissions: { canEdit: boolean; canFull: boolean };
   error?: string;
 };
 
 type TraineeDraft = {
   id: string;
+  personnelId: string;
   name: string;
   startedCourse: string;
   groundSchool: string;
@@ -68,18 +71,37 @@ type TraineeDraft = {
   notes: string;
 };
 
+type PersonnelOption = {
+  id: string;
+  name: string;
+  birth_number: string | null;
+  rank_name: string | null;
+};
+
 const blankDraft: TraineeDraft = {
   id: "",
+  personnelId: "",
   name: "",
   startedCourse: "",
-  groundSchool: "",
-  flightSchool: "",
-  sere: "",
-  cxcTest: "",
+  groundSchool: "Not Complete",
+  flightSchool: "Not Complete",
+  sere: "Waived",
+  cxcTest: "Not Complete",
   flight: "",
   joiningHammer: false,
   notes: "",
 };
+
+const statusOptions = ["Not Complete", "Complete", "Waived"] as const;
+const flightOptions = ["Hammer 1", "Hammer 2", "Hammer 3", "Hammer 4"] as const;
+
+function milestoneValue(value: string) {
+  return statusOptions.includes(value as (typeof statusOptions)[number]) ? value : "Not Complete";
+}
+
+function milestoneDone(value: string) {
+  return value === "Complete" || value === "Waived";
+}
 
 function displayDate(value: string | null | undefined) {
   if (!value) return "Not recorded";
@@ -94,14 +116,24 @@ function phaseReports(reports: Ridealong[], traineeId: string, phase: 1 | 2) {
 }
 
 function Milestone({ label, value }: { label: string; value: string | null }) {
+  const statusClass = value === "Complete" ? "text-[#00ff66]" : value === "Waived" ? "text-amber-300" : value === "Not Complete" ? "text-red-300" : value ? "text-[#dcebe3]" : "text-[#536158]";
   return (
     <div className="min-w-0 border-l border-white/10 px-3 py-3 first:border-l-0">
       <p className="text-[9px] font-black uppercase tracking-[.12em] text-[#63766c]">{label}</p>
-      <p className={`mt-2 truncate text-xs font-bold ${value ? "text-[#dcebe3]" : "text-[#536158]"}`} title={value || "Not recorded"}>
+      <p className={`mt-2 truncate text-xs font-bold ${statusClass}`} title={value || "Not recorded"}>
         {value || "Pending"}
       </p>
     </div>
   );
+}
+
+function traineeComplete(trainee: Trainee, reports: Ridealong[]) {
+  return phaseReports(reports, trainee.id, 1).length >= 2
+    && phaseReports(reports, trainee.id, 2).length >= 6
+    && milestoneDone(trainee.ground_school)
+    && milestoneDone(trainee.flight_school)
+    && milestoneDone(trainee.sere)
+    && milestoneDone(trainee.cxc_test);
 }
 
 function PhaseProgress({ current, target }: { current: number; target: number }) {
@@ -130,6 +162,7 @@ export default function HammerRidealongTrackerPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<Trainee | null>(null);
   const [draft, setDraft] = useState<TraineeDraft | null>(null);
+  const [personnelSearch, setPersonnelSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (archived = showArchived) => {
@@ -168,26 +201,34 @@ export default function HammerRidealongTrackerPage() {
 
   const stats = useMemo(() => {
     const active = (data?.trainees || []).filter((trainee) => trainee.active);
-    const completed = active.filter((trainee) => phaseReports(data?.reports || [], trainee.id, 1).length >= 2
-      && phaseReports(data?.reports || [], trainee.id, 2).length >= 6
-      && trainee.ground_school && trainee.flight_school && trainee.sere && trainee.cxc_test).length;
+    const completed = active.filter((trainee) => traineeComplete(trainee, data?.reports || [])).length;
     return { active: active.length, completed, reports: data?.reports.length || 0 };
   }, [data]);
+
+  const selectedPersonnel = useMemo(() => data?.personnel.find((person) => person.id === draft?.personnelId) || null, [data?.personnel, draft?.personnelId]);
+  const personnelResults = useMemo(() => {
+    const query = personnelSearch.trim().toLowerCase();
+    if (!query || draft?.personnelId) return [];
+    return (data?.personnel || []).filter((person) => [person.name, person.birth_number || "", person.rank_name || ""]
+      .some((value) => value.toLowerCase().includes(query))).slice(0, 12);
+  }, [data?.personnel, draft?.personnelId, personnelSearch]);
 
   function editTrainee(trainee: Trainee) {
     setSelected(null);
     setDraft({
       id: trainee.id,
+      personnelId: trainee.personnel_id || "",
       name: trainee.name,
       startedCourse: trainee.started_course?.slice(0, 10) || "",
-      groundSchool: trainee.ground_school,
-      flightSchool: trainee.flight_school,
-      sere: trainee.sere,
-      cxcTest: trainee.cxc_test,
-      flight: trainee.flight,
+      groundSchool: milestoneValue(trainee.ground_school),
+      flightSchool: milestoneValue(trainee.flight_school),
+      sere: trainee.joining_hammer ? milestoneValue(trainee.sere) : "Waived",
+      cxcTest: milestoneValue(trainee.cxc_test),
+      flight: flightOptions.includes(trainee.flight as (typeof flightOptions)[number]) ? trainee.flight : "",
       joiningHammer: trainee.joining_hammer,
       notes: trainee.notes,
     });
+    setPersonnelSearch(trainee.name);
   }
 
   async function action(payload: Record<string, unknown>, success: string) {
@@ -214,7 +255,7 @@ export default function HammerRidealongTrackerPage() {
   }
 
   async function saveDraft() {
-    if (!draft?.name.trim()) return setMessage("Enter the trainee name.");
+    if (!draft?.personnelId) return setMessage("Select an active personnel profile.");
     await action({
       action: draft.id ? "update-trainee" : "create-trainee",
       ...draft,
@@ -222,6 +263,7 @@ export default function HammerRidealongTrackerPage() {
   }
 
   const selectedReports = selected ? (data?.reports || []).filter((report) => report.trainee_id === selected.id) : [];
+  const selectedComplete = selected ? traineeComplete(selected, data?.reports || []) : false;
 
   return (
     <main className="min-h-screen bg-[#020806] px-3 py-8 text-white sm:px-6 lg:px-10">
@@ -235,7 +277,9 @@ export default function HammerRidealongTrackerPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Link href="/hammer-ridealong-report" className="flex items-center gap-2 border border-cyan-300/40 bg-cyan-300/[.07] px-4 py-3 text-xs font-black uppercase tracking-[.12em] text-cyan-200 hover:bg-cyan-300/[.12]"><Send size={16}/>Submit Ridealong</Link>
-              {data?.permissions.canEdit && <button type="button" onClick={() => { setMessage(""); setDraft({ ...blankDraft }); }} className="flex items-center gap-2 border border-[#00ff66]/50 bg-[#00ff66]/10 px-4 py-3 text-xs font-black uppercase tracking-[.12em] text-[#00ff66] hover:bg-[#00ff66]/15"><UserRoundPlus size={16}/>Add Trainee</button>}
+              <Link href="/hammer-ridealongs/responses" className="flex items-center gap-2 border border-cyan-300/25 px-4 py-3 text-xs font-black uppercase tracking-[.12em] text-cyan-100 hover:bg-cyan-300/[.07]"><ClipboardList size={16}/>Responses</Link>
+              <Link href="/hammer-ridealongs/archive" className="flex items-center gap-2 border border-amber-300/35 bg-amber-300/[.05] px-4 py-3 text-xs font-black uppercase tracking-[.12em] text-amber-200 hover:bg-amber-300/[.1]"><Archive size={16}/>Archive</Link>
+              {data?.permissions.canEdit && <button type="button" onClick={() => { setMessage(""); setPersonnelSearch(""); setDraft({ ...blankDraft }); }} className="flex items-center gap-2 border border-[#00ff66]/50 bg-[#00ff66]/10 px-4 py-3 text-xs font-black uppercase tracking-[.12em] text-[#00ff66] hover:bg-[#00ff66]/15"><UserRoundPlus size={16}/>Add Trainee</button>}
             </div>
           </div>
           <div className="mt-6 grid gap-px bg-[#00ff66]/15 sm:grid-cols-3">
@@ -298,16 +342,17 @@ export default function HammerRidealongTrackerPage() {
         <section role="dialog" aria-modal="true" aria-labelledby="trainee-detail-title" className="mx-auto flex h-full w-full max-w-4xl flex-col border border-[#00ff66]/30 bg-[#020806] sm:h-[92vh]">
           <header className="flex items-start justify-between gap-4 border-b border-[#00ff66]/20 p-5"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#00ff66]">Hammer trainee record</p><h2 id="trainee-detail-title" className="mt-2 text-2xl font-black">{selected.name}</h2><p className="mt-2 text-sm text-gray-500">{selected.joining_hammer ? (selected.flight || "Flight not assigned") : "Not joining Hammer"}</p></div><button type="button" onClick={() => setSelected(null)} aria-label="Close trainee details" className="grid h-10 w-10 place-items-center border border-white/15 text-gray-400 hover:text-white"><X size={18}/></button></header>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            {selectedComplete && selected.active && <div className="mb-4 flex items-center gap-3 border border-[#00ff66]/30 bg-[#00ff66]/[.06] p-4"><CheckCircle2 className="shrink-0 text-[#00ff66]"/><div><p className="font-black uppercase text-[#00ff66]">Progression complete</p><p className="mt-1 text-xs text-[#8aa396]">All required milestones and ridealongs are complete. This record is ready to archive.</p></div></div>}
             <div className="grid gap-px bg-[#00ff66]/10 sm:grid-cols-2 lg:grid-cols-4">{[
               ["Course start", displayDate(selected.started_course)], ["Ground school", selected.ground_school || "Pending"], ["Flight school", selected.flight_school || "Pending"], ["SERE", selected.sere || "Pending"], ["CX-C test", selected.cxc_test || "Pending"], ["Joining Hammer", selected.joining_hammer ? "Yes" : "No"], ["Flight", selected.joining_hammer ? (selected.flight || "Unassigned") : "Not applicable"],
-            ].map(([label,value]) => <div key={label} className="bg-[#03100b] p-4"><p className="text-[9px] font-black uppercase tracking-[.12em] text-gray-600">{label}</p><p className="mt-2 text-sm font-bold text-gray-200">{value}</p></div>)}</div>
+            ].map(([label,value]) => <div key={label} className="bg-[#03100b] p-4"><p className="text-[9px] font-black uppercase tracking-[.12em] text-gray-600">{label}</p><p className={`mt-2 text-sm font-bold ${value === "Complete" ? "text-[#00ff66]" : value === "Waived" ? "text-amber-300" : value === "Not Complete" ? "text-red-300" : "text-gray-200"}`}>{value}</p></div>)}</div>
             {selected.notes && <div className="mt-4 border border-amber-300/20 bg-amber-300/[.04] p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-amber-200">Admin notes</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-300">{selected.notes}</p></div>}
             <div className="mt-6"><h3 className="text-sm font-black uppercase tracking-[.14em] text-[#00ff66]">Ridealong history</h3><div className="mt-3 grid gap-3">
               {selectedReports.map((report, index) => <article key={report.id} className="border border-white/10 bg-[#03100b] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black text-white">Phase {report.phase} Ridealong {index + 1}</p><p className="mt-1 text-xs uppercase tracking-[.1em] text-cyan-200">{report.activity.replace("-", " ")} · {report.operation_type}</p></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">{displayDate(report.occurred_on)}</span>{data?.permissions.canEdit && <button type="button" onClick={() => void action({ action: "delete-report", id: report.id }, "Ridealong report removed.")} disabled={saving} title="Remove incorrect report" className="grid h-8 w-8 place-items-center border border-red-300/25 text-red-200 hover:bg-red-300/10"><Trash2 size={14}/></button>}</div></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-gray-600">Pilot supervisor</dt><dd className="mt-1 text-gray-200">{report.pilot_supervisor}</dd></div><div><dt className="text-gray-600">Zeus</dt><dd className="mt-1 text-gray-200">{report.zeus}</dd></div></dl></article>)}
               {!selectedReports.length && <p className="border border-white/10 p-5 text-sm text-gray-500">No ridealongs have been submitted for this trainee.</p>}
             </div></div>
           </div>
-          {data?.permissions.canEdit && <footer className="flex flex-wrap justify-between gap-2 border-t border-white/10 p-4"><button type="button" onClick={() => void action({ action: "set-active", id: selected.id, active: !selected.active }, selected.active ? "Trainee archived." : "Trainee restored.")} disabled={saving} className="flex items-center gap-2 border border-amber-300/30 px-3 py-2 text-xs font-black uppercase text-amber-200">{selected.active ? <Archive size={15}/> : <RotateCcw size={15}/>} {selected.active ? "Archive" : "Restore"}</button><button type="button" onClick={() => editTrainee(selected)} className="flex items-center gap-2 border border-[#00ff66]/40 px-4 py-2 text-xs font-black uppercase text-[#00ff66]"><Pencil size={15}/>Edit milestones</button></footer>}
+          {data?.permissions.canEdit && <footer className="flex flex-wrap justify-between gap-2 border-t border-white/10 p-4"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void action({ action: "set-active", id: selected.id, active: !selected.active }, selected.active ? "Trainee archived." : "Trainee restored.")} disabled={saving} className={`flex items-center gap-2 border px-3 py-2 text-xs font-black uppercase ${selectedComplete && selected.active ? "border-[#00ff66]/50 bg-[#00ff66]/10 text-[#00ff66]" : "border-amber-300/30 text-amber-200"}`}>{selected.active ? <Archive size={15}/> : <RotateCcw size={15}/>} {selected.active && selectedComplete ? "Archive completed trainee" : selected.active ? "Archive" : "Restore"}</button>{data.permissions.canFull && <button type="button" onClick={() => { if (window.confirm(`Permanently remove ${selected.name} and all of their ridealong reports? This cannot be undone.`)) void action({ action: "delete-trainee", id: selected.id }, "Trainee permanently removed."); }} disabled={saving} className="flex items-center gap-2 border border-red-300/30 px-3 py-2 text-xs font-black uppercase text-red-200 hover:bg-red-300/10"><Trash2 size={15}/>Remove permanently</button>}</div><button type="button" onClick={() => editTrainee(selected)} className="flex items-center gap-2 border border-[#00ff66]/40 px-4 py-2 text-xs font-black uppercase text-[#00ff66]"><Pencil size={15}/>Edit milestones</button></footer>}
         </section>
       </div>}
 
@@ -315,14 +360,20 @@ export default function HammerRidealongTrackerPage() {
         <section role="dialog" aria-modal="true" aria-labelledby="trainee-edit-title" className="mx-auto flex h-full w-full max-w-3xl flex-col border border-[#00ff66]/30 bg-[#020806] sm:h-auto sm:max-h-[92vh]">
           <header className="flex items-start justify-between gap-4 border-b border-[#00ff66]/20 p-5"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#00ff66]">Tracker administration</p><h2 id="trainee-edit-title" className="mt-2 text-2xl font-black uppercase">{draft.id ? "Edit trainee" : "Add trainee"}</h2></div><button type="button" onClick={() => setDraft(null)} aria-label="Close editor" className="grid h-10 w-10 place-items-center border border-white/15 text-gray-400"><X size={18}/></button></header>
           <div className="min-h-0 flex-1 overflow-y-auto p-5"><div className="grid gap-4 sm:grid-cols-2">
-            <label className="sm:col-span-2"><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Trainee name *</span><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="mt-2 h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-[#00ff66]/60"/></label>
+            <div className="relative sm:col-span-2">
+              <span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Trainee profile *</span>
+              {selectedPersonnel ? <div className="mt-2 flex min-h-12 items-center justify-between gap-3 border border-[#00ff66]/35 bg-[#00ff66]/[.06] px-3">
+                <span className="min-w-0"><strong className="block truncate text-sm">{selectedPersonnel.name}</strong><span className="block truncate text-xs text-[#779184]">{[selectedPersonnel.rank_name, selectedPersonnel.birth_number].filter(Boolean).join(" · ") || "Active personnel profile"}</span></span>
+                <button type="button" onClick={() => { setDraft({ ...draft, personnelId: "", name: "" }); setPersonnelSearch(""); }} className="shrink-0 border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase text-gray-300 hover:border-[#00ff66]/30">Change</button>
+              </div> : <>
+                <div className="relative mt-2"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"/><input value={personnelSearch} onChange={(event) => { setPersonnelSearch(event.target.value); setDraft({ ...draft, personnelId: "", name: "" }); }} placeholder="Search active personnel by name, rank, or service number" autoComplete="off" className="h-12 w-full border border-white/15 bg-black pl-10 pr-3 outline-none focus:border-[#00ff66]/60"/></div>
+                {personnelSearch.trim() && <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto border border-[#00ff66]/25 bg-[#020806] shadow-[0_18px_45px_rgba(0,0,0,.85)]">{personnelResults.length ? personnelResults.map((person) => <button type="button" key={person.id} onClick={() => { setDraft({ ...draft, personnelId: person.id, name: person.name }); setPersonnelSearch(person.name); }} className="flex w-full items-center justify-between gap-3 border-b border-white/10 p-3 text-left last:border-b-0 hover:bg-[#00ff66]/[.07]"><span><strong className="block text-sm">{person.name}</strong><span className="mt-1 block text-xs text-gray-600">{person.rank_name || "Rank not set"}</span></span><span className="font-mono text-xs text-[#71877a]">{person.birth_number || "No number"}</span></button>) : <p className="p-4 text-sm text-[#78887e]">No matching active personnel.</p>}</div>}
+              </>}
+            </div>
             <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Started course</span><input type="date" value={draft.startedCourse} onChange={(event) => setDraft({ ...draft, startedCourse: event.target.value })} className="mt-2 h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-[#00ff66]/60"/></label>
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 border border-white/15 bg-black px-3 py-2"><input type="checkbox" checked={draft.joiningHammer} onChange={(event) => setDraft({ ...draft, joiningHammer: event.target.checked, flight: event.target.checked ? draft.flight : "", sere: event.target.checked && draft.sere === "Waived" ? "" : event.target.checked ? draft.sere : "Waived" })} className="h-4 w-4 accent-[#00ff66]"/><span><span className="block text-xs font-black uppercase tracking-[.12em] text-gray-300">Joining Hammer</span><span className="mt-1 block text-[10px] text-gray-600">Enables an optional flight assignment.</span></span></label>
-            {draft.joiningHammer && <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Flight assignment <span className="font-normal normal-case text-gray-600">(optional)</span></span><input value={draft.flight} onChange={(event) => setDraft({ ...draft, flight: event.target.value })} placeholder="e.g. Hammer 1" className="mt-2 h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-[#00ff66]/60"/></label>}
-            <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Ground school</span><input value={draft.groundSchool} onChange={(event) => setDraft({ ...draft, groundSchool: event.target.value })} placeholder="Instructor or completion note" className="mt-2 h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-[#00ff66]/60"/></label>
-            <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Flight school</span><input value={draft.flightSchool} onChange={(event) => setDraft({ ...draft, flightSchool: event.target.value })} placeholder="Instructor or completion note" className="mt-2 h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-[#00ff66]/60"/></label>
-            <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">SERE</span><input value={draft.joiningHammer ? draft.sere : "Waived"} onChange={(event) => setDraft({ ...draft, sere: event.target.value })} disabled={!draft.joiningHammer} placeholder="Completion status" className="mt-2 h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-[#00ff66]/60 disabled:border-amber-300/20 disabled:text-amber-200"/></label>
-            <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">CX-C test</span><input value={draft.cxcTest} onChange={(event) => setDraft({ ...draft, cxcTest: event.target.value })} placeholder="Completion status" className="mt-2 h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-[#00ff66]/60"/></label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 border border-white/15 bg-black px-3 py-2"><input type="checkbox" checked={draft.joiningHammer} onChange={(event) => setDraft({ ...draft, joiningHammer: event.target.checked, flight: event.target.checked ? draft.flight : "", sere: event.target.checked ? "Not Complete" : "Waived" })} className="h-4 w-4 accent-[#00ff66]"/><span><span className="block text-xs font-black uppercase tracking-[.12em] text-gray-300">Joining Hammer</span><span className="mt-1 block text-[10px] text-gray-600">Enables an optional flight assignment.</span></span></label>
+            {draft.joiningHammer && <label><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Flight assignment <span className="font-normal normal-case text-gray-600">(optional)</span></span><select value={draft.flight} onChange={(event) => setDraft({ ...draft, flight: event.target.value })} className="mt-2 h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-[#00ff66]/60"><option value="">Unassigned</option>{flightOptions.map((flight) => <option key={flight} value={flight}>{flight}</option>)}</select></label>}
+            {([['Ground school','groundSchool'],['Flight school','flightSchool'],['SERE','sere'],['CX-C test','cxcTest']] as const).map(([label,key]) => <label key={key}><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">{label}</span><select value={key === "sere" && !draft.joiningHammer ? "Waived" : draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} disabled={key === "sere" && !draft.joiningHammer} className={`mt-2 h-11 w-full border bg-black px-3 outline-none ${draft[key] === "Complete" ? "border-[#00ff66]/45 text-[#00ff66]" : draft[key] === "Waived" ? "border-amber-300/40 text-amber-300" : "border-red-300/35 text-red-300"}`}>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>)}
             <label className="sm:col-span-2"><span className="text-xs font-black uppercase tracking-[.12em] text-gray-400">Internal notes</span><textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} rows={4} className="mt-2 w-full resize-y border border-white/15 bg-black p-3 outline-none focus:border-[#00ff66]/60"/></label>
           </div></div>
           <footer className="flex justify-end gap-2 border-t border-white/10 p-4"><button type="button" onClick={() => setDraft(null)} className="border border-white/15 px-4 py-2 text-sm text-gray-300">Cancel</button><button type="button" onClick={() => void saveDraft()} disabled={saving} className="flex items-center gap-2 border border-[#00ff66] bg-[#00ff66] px-4 py-2 text-sm font-black uppercase text-black disabled:opacity-50">{draft.id ? <CheckCircle2 size={16}/> : <FilePlus2 size={16}/>} {saving ? "Saving..." : draft.id ? "Save changes" : "Add trainee"}</button></footer>

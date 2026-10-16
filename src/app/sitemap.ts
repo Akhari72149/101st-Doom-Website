@@ -22,6 +22,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/Tags",
     "/servers",
     "/hammer-ridealongs",
+    "/hammer-ridealongs/archive",
+    "/hammer-ridealongs/responses",
     "/Galactic-Campaign",
     "/Galactic-Campaign/operation-last-stand",
     "/Art-of-War",

@@ -21,6 +21,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/grand-orbat",
     "/Tags",
     "/servers",
+    "/hammer-ridealongs",
     "/Galactic-Campaign",
     "/Galactic-Campaign/operation-last-stand",
     "/Art-of-War",

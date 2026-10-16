@@ -38,6 +38,7 @@ const cookieSections: LegalSection[] = [
     title: "4. Restricted tool access",
     paragraphs: [
       "The HTTP-only gc_shop_access cookie remembers successful access to the protected GC Shop tool for up to eight hours. It uses strict SameSite protection and is not used for tracking.",
+      "The HTTP-only hammer_ridealong_access cookie confirms that the shared password for the Hammer ridealong report form was entered successfully. It is a signed browser-session cookie, expires internally after eight hours, and is not used for tracking.",
     ],
   },
   {

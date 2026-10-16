@@ -11,6 +11,7 @@ import {
   ExternalLink,
   HeartPulse,
   Link2,
+  Plane,
   ShieldCheck,
   SlidersHorizontal,
   X,
@@ -63,6 +64,15 @@ const panels: PanelDefinition[] = [
     route: "/admin/xp",
     group: "Personnel Configuration",
     icon: Activity,
+  },
+  {
+    id: "hammer-ridealongs",
+    title: "Hammer Ridealongs",
+    description: "Maintain aviation trainees, milestones, and submitted ridealong records.",
+    permission: "admin.hammer-ridealongs",
+    route: "/hammer-ridealongs",
+    group: "Personnel Configuration",
+    icon: Plane,
   },
   {
     id: "join-links",

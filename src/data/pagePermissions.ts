@@ -218,6 +218,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.hammer-ridealongs",
+    pagePath: "/hammer-ridealongs",
+    label: "Hammer Ridealong Tracker",
+    category: "Operations",
+    description: "Maintain Hammer trainee profiles, progression milestones, and ridealong records.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.xp",
     pagePath: "/admin/xp",
     label: "XP Management",

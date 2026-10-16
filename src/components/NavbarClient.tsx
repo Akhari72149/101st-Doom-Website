@@ -236,6 +236,11 @@ export default function NavbarClient() {
           description: "Weekly Mainop Attendance Tracking",
         },
         {
+          href: "/hammer-ridealongs",
+          label: "Hammer Ridealongs",
+          description: "View aviation trainee progression and ridealong records",
+        },
+        {
           href: "/admin/promotion-readiness",
           label: "Promotion Readiness",
           description: "Review promotion progress and outstanding requirements",
@@ -450,6 +455,13 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "logistics", "nco", "trainer"],
           category: "Operations",
         },
+        {
+          href: "/hammer-ridealongs",
+          label: "Hammer Ridealongs",
+          description: "Manage aviation trainees, milestones and ridealong records",
+          allowedRoles: [],
+          category: "Operations",
+        },
       ],
     },
   ], []);
@@ -463,6 +475,7 @@ export default function NavbarClient() {
       permissionsByPath.set(definition.pagePath, [...(permissionsByPath.get(definition.pagePath) || []), definition.key]);
     }
     const canSeeItem = (item: NavItem) => {
+      if (item.href === "/hammer-ridealongs" && !item.category) return true;
       if (item.href === "/admin/discipline") {
         return Boolean(permissions["admin.discipline"] || permissions["admin.discipline-approval"]);
       }
@@ -476,6 +489,7 @@ export default function NavbarClient() {
           "admin.uniform-guide",
           "admin.documents",
           "admin.system-health",
+          "admin.hammer-ridealongs",
         ].some((permissionKey) => Boolean(permissions[permissionKey]));
       }
       const permissionKeys = permissionsByPath.get(item.href);

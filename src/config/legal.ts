@@ -1,6 +1,6 @@
 export const LEGAL_EFFECTIVE_DATE = "14 July 2026";
-export const LEGAL_LAST_UPDATED = "15 October 2026";
-export const LEGAL_VERSION = "1.1";
+export const LEGAL_LAST_UPDATED = "16 October 2026";
+export const LEGAL_VERSION = "1.2";
 export const LEGAL_OPERATOR_NAME = "101st Doom Battalion";
 export const LEGAL_CONTACT_NAME = "CXO 72149 Akhari";
 

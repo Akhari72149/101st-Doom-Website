@@ -88,6 +88,7 @@ function passwordHash() {
 
 function accessSecret() {
   return process.env.HAMMER_RIDEALONG_SESSION_SECRET
+    || process.env.NATIVE_AUTH_SECRET
     || process.env.BETTER_AUTH_SECRET
     || process.env.AUTH_SECRET
     || (process.env.NODE_ENV === "production" ? "" : "hammer-ridealong-development-only");

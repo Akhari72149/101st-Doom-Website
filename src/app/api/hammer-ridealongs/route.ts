@@ -141,7 +141,7 @@ async function readTracker(includeArchived: boolean, archivedOnly = false) {
   const pool = getPostgresPool();
   const [trainees, reports] = await Promise.all([
     pool.query<TraineeRow>(
-      `select id,personnel_id,name,started_course,ground_school,flight_school,sere,cxc_test,flight,joining_hammer,
+      `select id,personnel_id,name,started_course::text started_course,ground_school,flight_school,sere,cxc_test,flight,joining_hammer,
               phase1_adjustment,phase2_adjustment,notes,
               sort_order,active,created_at,updated_at
        from public.hammer_ridealong_trainees
@@ -151,7 +151,7 @@ async function readTracker(includeArchived: boolean, archivedOnly = false) {
     ),
     pool.query<ReportRow>(
       `select reports.id,reports.trainee_id,reports.phase,reports.operation_type,reports.zeus,
-              reports.pilot_supervisor,reports.activity,reports.occurred_on,reports.created_at
+              reports.pilot_supervisor,reports.activity,reports.occurred_on::text occurred_on,reports.created_at
        from public.hammer_ridealong_reports reports
        join public.hammer_ridealong_trainees trainees on trainees.id=reports.trainee_id
        where ($2 and not trainees.active) or (not $2 and (trainees.active or $1))

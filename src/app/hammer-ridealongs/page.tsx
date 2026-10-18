@@ -162,6 +162,46 @@ function PhaseProgress({ current, target }: { current: number; target: number })
   );
 }
 
+function OverviewPhaseProgress({ phase, current, target }: { phase: 1 | 2; current: number; target: number }) {
+  const complete = current >= target;
+  const remaining = Math.max(0, target - current);
+  const accent = phase === 1 ? "cyan" : "green";
+  return (
+    <section className={`border p-4 ${accent === "cyan" ? "border-cyan-300/25 bg-cyan-300/[.035]" : "border-[#00ff66]/25 bg-[#00ff66]/[.035]"}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className={`text-[10px] font-black uppercase tracking-[.16em] ${accent === "cyan" ? "text-cyan-200" : "text-[#00ff66]"}`}>Phase {phase}</p>
+          <p className="mt-1 text-xs text-gray-500">Supervised ridealongs</p>
+        </div>
+        <div className="flex items-baseline gap-1 text-right">
+          <strong className={`text-3xl font-black ${complete ? "text-[#00ff66]" : accent === "cyan" ? "text-cyan-100" : "text-white"}`}>{current}</strong>
+          <span className="text-sm font-bold text-gray-600">/ {target}</span>
+        </div>
+      </div>
+      <div className="mt-4 flex gap-1.5" aria-label={`${current} of ${target} Phase ${phase} ridealongs complete`}>
+        {Array.from({ length: target }, (_, index) => <span key={index} className={`h-2 flex-1 border ${index < current ? accent === "cyan" ? "border-cyan-300 bg-cyan-300" : "border-[#00ff66] bg-[#00ff66]" : "border-white/15 bg-white/[.025]"}`}/>) }
+      </div>
+      <p className={`mt-3 text-[10px] font-black uppercase tracking-[.12em] ${complete ? "text-[#00ff66]" : "text-gray-500"}`}>{complete ? "Requirement complete" : `${remaining} ridealong${remaining === 1 ? "" : "s"} remaining`}</p>
+    </section>
+  );
+}
+
+function AdjustmentBreakdown({ phase, submitted, adjustment, effective }: { phase: 1 | 2; submitted: number; adjustment: number; effective: number }) {
+  const signedAdjustment = `${adjustment >= 0 ? "+" : ""}${adjustment}`;
+  return (
+    <div className="border border-cyan-300/15 bg-black/30 p-3">
+      <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-black uppercase tracking-[.14em] text-cyan-200">Phase {phase}</p><p className="text-[9px] font-bold uppercase tracking-[.1em] text-gray-600">Effective total</p></div>
+      <div className="mt-3 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 text-center">
+        <div><strong className="block text-xl text-gray-200">{submitted}</strong><span className="mt-1 block text-[9px] uppercase text-gray-600">Submitted</span></div>
+        <span className="text-gray-700">+</span>
+        <div><strong className={`block text-xl ${adjustment === 0 ? "text-gray-500" : "text-amber-300"}`}>{signedAdjustment}</strong><span className="mt-1 block text-[9px] uppercase text-gray-600">Correction</span></div>
+        <span className="text-gray-700">=</span>
+        <div><strong className="block text-xl text-cyan-100">{effective}</strong><span className="mt-1 block text-[9px] uppercase text-gray-600">Recorded</span></div>
+      </div>
+    </div>
+  );
+}
+
 export default function HammerRidealongTrackerPage() {
   const [data, setData] = useState<TrackerResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -288,6 +328,10 @@ export default function HammerRidealongTrackerPage() {
   }
 
   const selectedReports = selected ? (data?.reports || []).filter((report) => report.trainee_id === selected.id) : [];
+  const selectedPhase1Submitted = selectedReports.filter((report) => report.phase === 1).length;
+  const selectedPhase2Submitted = selectedReports.filter((report) => report.phase === 2).length;
+  const selectedPhase1 = selected ? phaseTotal(selected, data?.reports || [], 1) : 0;
+  const selectedPhase2 = selected ? phaseTotal(selected, data?.reports || [], 2) : 0;
   const selectedComplete = selected ? traineeComplete(selected, data?.reports || []) : false;
   const editingTrainee = draft?.id ? data?.trainees.find((trainee) => trainee.id === draft.id) || null : null;
 
@@ -333,8 +377,8 @@ export default function HammerRidealongTrackerPage() {
               const reports = data?.reports || [];
               const phase1 = phaseTotal(trainee, reports, 1);
               const phase2 = phaseTotal(trainee, reports, 2);
-              return <article key={trainee.id} className={`grid grid-cols-[220px_130px_150px_190px_150px_260px_120px_120px_140px_100px] border-b border-white/8 transition hover:bg-white/[.025] ${trainee.active ? "" : "opacity-50"}`}>
-                <button type="button" onClick={() => setSelected(trainee)} className="px-3 py-4 text-left"><p className="font-black text-white">{trainee.name}</p><p className="mt-1 text-[9px] uppercase tracking-[.12em] text-[#00ff66]">{trainee.active ? "Active" : "Archived"}</p></button>
+              return <article key={trainee.id} role="button" tabIndex={0} aria-label={`View full overview for ${trainee.name}`} onClick={() => setSelected(trainee)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setSelected(trainee); } }} className={`grid cursor-pointer grid-cols-[220px_130px_150px_190px_150px_260px_120px_120px_140px_100px] border-b border-white/8 transition hover:bg-white/[.04] focus-visible:bg-white/[.04] focus-visible:outline focus-visible:outline-1 focus-visible:outline-cyan-300/60 ${trainee.active ? "" : "opacity-50"}`}>
+                <div className="px-3 py-4 text-left"><p className="font-black text-white">{trainee.name}</p><p className="mt-1 text-[9px] uppercase tracking-[.12em] text-[#00ff66]">{trainee.active ? "Active" : "Archived"}</p></div>
                 <Milestone label="Started" value={trainee.started_course ? displayDate(trainee.started_course) : null}/>
                 <Milestone label="Instructor" value={trainee.ground_school}/>
                 <PhaseProgress current={phase1} target={2}/>
@@ -344,8 +388,8 @@ export default function HammerRidealongTrackerPage() {
                 <Milestone label="Status" value={trainee.cxc_test}/>
                 <Milestone label="Assignment" value={trainee.joining_hammer ? trainee.flight : "Not joining"}/>
                 <div className="flex items-center justify-center gap-1 border-l border-white/10 px-2">
-                  <button type="button" onClick={() => setSelected(trainee)} title="View details" className="grid h-9 w-9 place-items-center border border-white/10 text-gray-400 hover:border-cyan-300/40 hover:text-cyan-200"><Eye size={15}/></button>
-                  {data?.permissions.canEdit && <button type="button" onClick={() => editTrainee(trainee)} title="Edit trainee" className="grid h-9 w-9 place-items-center border border-white/10 text-gray-400 hover:border-[#00ff66]/40 hover:text-[#00ff66]"><Pencil size={15}/></button>}
+                  <button type="button" onClick={(event) => { event.stopPropagation(); setSelected(trainee); }} title="View details" className="grid h-9 w-9 place-items-center border border-white/10 text-gray-400 hover:border-cyan-300/40 hover:text-cyan-200"><Eye size={15}/></button>
+                  {data?.permissions.canEdit && <button type="button" onClick={(event) => { event.stopPropagation(); editTrainee(trainee); }} title="Edit trainee" className="grid h-9 w-9 place-items-center border border-white/10 text-gray-400 hover:border-[#00ff66]/40 hover:text-[#00ff66]"><Pencil size={15}/></button>}
                 </div>
               </article>;
             })}
@@ -370,11 +414,12 @@ export default function HammerRidealongTrackerPage() {
           <header className="flex items-start justify-between gap-4 border-b border-[#00ff66]/20 p-4 sm:p-5"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#00ff66]">Hammer trainee record</p><h2 id="trainee-detail-title" className="mt-1 text-2xl font-black">{selected.name}</h2><p className="mt-1 text-sm text-gray-500">{selected.joining_hammer ? (selected.flight || "Flight not assigned") : "Not joining Hammer"}</p></div><button type="button" onClick={() => setSelected(null)} aria-label="Close trainee details" className="grid h-9 w-9 place-items-center border border-white/15 text-gray-400 hover:text-white"><X size={17}/></button></header>
           <div className="min-h-0 overflow-y-auto p-4 sm:p-5">
             {selectedComplete && selected.active && <div className="mb-4 flex items-center gap-3 border border-[#00ff66]/30 bg-[#00ff66]/[.06] p-4"><CheckCircle2 className="shrink-0 text-[#00ff66]"/><div><p className="font-black uppercase text-[#00ff66]">Progression complete</p><p className="mt-1 text-xs text-[#8aa396]">All required milestones and ridealongs are complete. This record is ready to archive.</p></div></div>}
+            <div className="mb-4 grid gap-3 sm:grid-cols-2"><OverviewPhaseProgress phase={1} current={selectedPhase1} target={2}/><OverviewPhaseProgress phase={2} current={selectedPhase2} target={6}/></div>
             <div className="grid overflow-hidden border border-white/10 sm:grid-cols-2 lg:grid-cols-4">{[
               ["Course start", displayDate(selected.started_course)], ["Ground school", selected.ground_school || "Pending"], ["Flight school", selected.flight_school || "Pending"], ["SERE", selected.sere || "Pending"], ["CX-C test", selected.cxc_test || "Pending"], ["Joining Hammer", selected.joining_hammer ? "Yes" : "No"], ["Flight", selected.joining_hammer ? (selected.flight || "Unassigned") : "Not applicable"],
             ].map(([label,value]) => <div key={label} className="border-b border-r border-white/10 bg-[#03100b] p-3"><p className="text-[9px] font-black uppercase tracking-[.12em] text-gray-600">{label}</p><p className={`mt-1 text-sm font-bold ${value === "Complete" ? "text-[#00ff66]" : value === "Waived" ? "text-amber-300" : value === "Not Complete" ? "text-red-300" : "text-gray-200"}`}>{value}</p></div>)}</div>
             {selected.notes && <div className="mt-4 border border-amber-300/20 bg-amber-300/[.04] p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-amber-200">Admin notes</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-300">{selected.notes}</p></div>}
-            {(selected.phase1_adjustment !== 0 || selected.phase2_adjustment !== 0) && <div className="mt-4 border border-cyan-300/20 bg-cyan-300/[.04] p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-cyan-200">Manual count adjustment</p><p className="mt-2 text-sm text-gray-300">Phase 1 {selected.phase1_adjustment >= 0 ? "+" : ""}{selected.phase1_adjustment} · Phase 2 {selected.phase2_adjustment >= 0 ? "+" : ""}{selected.phase2_adjustment}</p></div>}
+            {(selected.phase1_adjustment !== 0 || selected.phase2_adjustment !== 0) && <section className="mt-4 border border-cyan-300/25 bg-cyan-300/[.035] p-4"><div className="flex items-start gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center border border-cyan-300/25 bg-cyan-300/[.06] text-cyan-200"><SlidersHorizontal size={16}/></div><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-200">Manual count adjustment</p><p className="mt-1 text-xs leading-5 text-gray-500">Audited corrections are combined with submitted reports to produce the progression totals above.</p></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2"><AdjustmentBreakdown phase={1} submitted={selectedPhase1Submitted} adjustment={selected.phase1_adjustment} effective={selectedPhase1}/><AdjustmentBreakdown phase={2} submitted={selectedPhase2Submitted} adjustment={selected.phase2_adjustment} effective={selectedPhase2}/></div></section>}
             <div className="mt-5"><h3 className="text-xs font-black uppercase tracking-[.14em] text-[#00ff66]">Ridealong history</h3><div className="mt-2 grid gap-2">
               {selectedReports.map((report, index) => <article key={report.id} className="border border-white/10 bg-[#03100b] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black text-white">Phase {report.phase} Ridealong {index + 1}</p><p className="mt-1 text-xs uppercase tracking-[.1em] text-cyan-200">{report.activity.replace("-", " ")} · {report.operation_type}</p></div><div className="flex items-center gap-2"><span className="text-sm text-gray-400">{displayDate(report.occurred_on)}</span>{data?.permissions.canEdit && <button type="button" onClick={() => void action({ action: "delete-report", id: report.id }, "Ridealong report removed.")} disabled={saving} title="Remove incorrect report" className="grid h-8 w-8 place-items-center border border-red-300/25 text-red-200 hover:bg-red-300/10"><Trash2 size={14}/></button>}</div></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-gray-600">Pilot supervisor</dt><dd className="mt-1 text-gray-200">{report.pilot_supervisor}</dd></div><div><dt className="text-gray-600">Zeus</dt><dd className="mt-1 text-gray-200">{report.zeus}</dd></div></dl></article>)}
               {!selectedReports.length && <p className="border border-white/10 p-5 text-sm text-gray-500">No ridealongs have been submitted for this trainee.</p>}

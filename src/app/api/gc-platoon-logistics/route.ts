@@ -8,7 +8,7 @@ export const runtime="nodejs";export const dynamic="force-dynamic";
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const COOKIE="gc_shop_access";const attempts=new Map<string,{count:number;reset:number}>();
 function backend(){const v=process.env.LOGISTICS_DATABASE_BACKEND||"supabase";if(v!=="postgres"&&v!=="supabase")throw new Error("Unknown LOGISTICS_DATABASE_BACKEND");return v;}
-function secret(){const value=process.env.BETTER_AUTH_SECRET||process.env.AUTH_SECRET;if(!value)throw new Error("AUTH_SECRET is required for shop access");return value;}
+function secret(){const value=process.env.NATIVE_AUTH_SECRET||process.env.BETTER_AUTH_SECRET||process.env.AUTH_SECRET;if(!value)throw new Error("A session secret is required for shop access");return value;}
 function sign(payload:string){return createHmac("sha256",secret()).update(payload).digest("base64url");}
 function validCookie(request:Request){const raw=request.headers.get("cookie")?.split(";").map(x=>x.trim()).find(x=>x.startsWith(`${COOKIE}=`))?.slice(COOKIE.length+1);if(!raw)return false;const [exp,sig]=raw.split(".");if(!exp||!sig||Number(exp)<Date.now())return false;const expected=Buffer.from(sign(exp)),actual=Buffer.from(sig);return expected.length===actual.length&&timingSafeEqual(expected,actual);}
 function cart(value:unknown){if(!Array.isArray(value)||!value.length||value.length>100)return null;const out:{assetId:string;quantity:number}[]=[];for(const item of value){const row=item as Record<string,unknown>,assetId=String(row.assetId||""),quantity=Number(row.quantity);if(!UUID.test(assetId)||!Number.isInteger(quantity)||quantity<1||quantity>1000)return null;out.push({assetId,quantity});}return out;}

@@ -28,9 +28,17 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
   {
     key: "admin.mod-taskboard",
     pagePath: "/admin/Mod-Taskboard",
-    label: "Mod Taskboard",
+    label: "Mod Pipeline",
     category: "Systems",
-    description: "Create and manage mod development pipeline items.",
+    description: "Access the Mod Pipeline and create, edit, move, comment on, and complete task work.",
+    legacyRoles: ["akhari"],
+  },
+  {
+    key: "admin.mod-taskboard-admin",
+    pagePath: "/admin/Mod-Taskboard/administration",
+    label: "Mod Pipeline Administration",
+    category: "Systems",
+    description: "Manage task owners, contributors, dependencies, releases, approvals, and archived pipeline records.",
     legacyRoles: ["akhari"],
   },
   {

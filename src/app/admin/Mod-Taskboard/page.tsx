@@ -1,1662 +1,256 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import {
+  Activity, Archive, ArrowLeft, Ban, Blocks, Check, ChevronRight, ExternalLink, GitBranch,
+  ImageIcon, Link2, Loader2, Plus, RefreshCw, Rocket, Search, ShieldCheck, Trash2, Upload, UserPlus, Users, X,
+} from "lucide-react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
-type Assignee = {
-  id: string;
-  name: string;
-};
+type Status="intake"|"approved"|"in_development"|"internal_review"|"testing"|"ready_for_release"|"released"|"cancelled";
+type Priority="low"|"medium"|"high"|"critical";
+type TaskType="bug"|"feature"|"asset"|"balance"|"maintenance"|"documentation";
+type Workstream="design"|"modelling"|"texturing"|"scripting"|"audio"|"documentation"|"quality"|"other";
+type View="pipeline"|"mine"|"releases"|"people"|"repositories"|"activity"|"archive";
+type DetailTab="overview"|"media"|"checklist"|"comments"|"history";
+type Assignee={id:string;name:string;active?:boolean};
+type Profile={id:string;display_name:string};
+type Release={id:string;name:string;version:string|null;status:"planned"|"testing"|"released"|"cancelled";description:string|null;target_date:string|null;released_at:string|null;task_count:number;created_by_name:string|null;approved_by_name:string|null};
+type Task={id:string;reference_number:number;title:string;description:string|null;acceptance_criteria:string|null;status:Status;priority:Priority;task_type:TaskType;workstream:Workstream;tags:string[];assigned_to:string|null;release_id:string|null;release_name:string|null;release_version:string|null;due_date:string|null;position:number;blocked:boolean;blocker_reason:string|null;stage_entered_at:string;started_at:string|null;completed_at:string|null;released_at:string|null;archived_at:string|null;archive_reason:string|null;created_at:string;updated_at:string;version:number};
+type Comment={id:string;task_id:string;content:string;created_at:string;profiles:{display_name:string}|null};
+type Event={id:string;task_id:string|null;release_id:string|null;event_type:string;summary:string;old_values:Record<string,unknown>;new_values:Record<string,unknown>;reason:string|null;created_at:string;actor_name:string|null};
+type Contributor={task_id:string;assignee_id:string;assignee_name:string};
+type Checklist={id:string;task_id:string;content:string;completed:boolean;position:number};
+type Dependency={task_id:string;depends_on_task_id:string;depends_on_reference:number;depends_on_title:string};
+type TaskLink={id:string;task_id:string;label:string;url:string};
+type Approval={id:string;task_id:string;gate:"review"|"testing"|"release";decision:"approved"|"rejected";notes:string|null;decided_at:string;decided_by_name:string|null};
+type Repository={id:string;name:string;web_url:string;default_branch:string;active:boolean;sort_order:number};
+type RepositoryLink={id:string;task_id:string;repository_id:string;repository_name:string;repository_url:string;reference_type:"issue"|"branch"|"pull_request"|"commit"|"other";reference:string;url:string|null};
+type TaskAsset={id:string;task_id:string;file_name:string;mime_type:string;byte_size:number;caption:string|null;uploaded_at:string};
+type Data={assignees:Assignee[];pipelinePeople:Assignee[];profiles:Profile[];tasks:Task[];comments:Comment[];releases:Release[];events:Event[];contributors:Contributor[];checklist:Checklist[];dependencies:Dependency[];links:TaskLink[];approvals:Approval[];repositories:Repository[];repositoryLinks:RepositoryLink[];assets:TaskAsset[]};
 
-type Profile = {
-  id: string;
-  display_name: string;
-};
-
-type TaskComment = {
-  id: string;
-  task_id: string;
-  user_id: string | null;
-  content: string;
-  created_at: string;
-  profiles?: {
-    display_name: string;
-  } | null;
-};
-
-type TaskStatus = "todo" | "in_progress" | "review" | "done";
-type TaskPriority = "low" | "medium" | "high";
-type ModTag = "Bug" | "Helmet" | "New Feature" | "Update" | "Up For Grabs";
-type ModStage =
-  | "concept"
-  | "design"
-  | "modelling"
-  | "texturing"
-  | "scripting"
-  | "testing";
-
-type Task = {
-  id: string;
-  title: string;
-  description: string | null;
-  status: TaskStatus;
-  priority: TaskPriority;
-  tags: ModTag[] | null;
-  stage: ModStage | null;
-  assigned_to: string | null;
-  created_by: string | null;
-  due_date: string | null;
-  position: number;
-  created_at: string;
-  updated_at: string;
-};
-
-type RawCommentRow = {
-  id: string;
-  task_id: string;
-  user_id: string | null;
-  content: string;
-  created_at: string;
-  profiles:
-    | {
-        display_name: string;
-      }
-    | {
-        display_name: string;
-      }[]
-    | null;
-};
-
-const columns = [
-  { key: "todo", label: "To Do" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "review", label: "Review" },
-  { key: "done", label: "Done" },
-] as const;
-
-const TAG_OPTIONS: ModTag[] = [
-  "Bug",
-  "Helmet",
-  "New Feature",
-  "Update",
-  "Up For Grabs",
+const PIPELINE:{key:Status;label:string;short:string;color:string}[]=[
+  {key:"intake",label:"Intake",short:"Intake",color:"text-sky-300"},{key:"approved",label:"Approved",short:"Approved",color:"text-cyan-300"},
+  {key:"in_development",label:"In Development",short:"Development",color:"text-blue-300"},{key:"internal_review",label:"Internal Review",short:"Review",color:"text-amber-300"},
+  {key:"testing",label:"Testing",short:"Testing",color:"text-violet-300"},{key:"ready_for_release",label:"Ready for Release",short:"Ready",color:"text-lime-300"},
+  {key:"released",label:"Released",short:"Released",color:"text-emerald-300"},
 ];
+const TYPES:TaskType[]=["bug","feature","asset","balance","maintenance","documentation"];
+const WORKSTREAMS:Workstream[]=["design","modelling","texturing","scripting","audio","documentation","quality","other"];
+const PRIORITIES:Priority[]=["low","medium","high","critical"];
+const TAGS=["Bug","Helmet","New Feature","Update","Up For Grabs"];
+const emptyData:Data={assignees:[],pipelinePeople:[],profiles:[],tasks:[],comments:[],releases:[],events:[],contributors:[],checklist:[],dependencies:[],links:[],approvals:[],repositories:[],repositoryLinks:[],assets:[]};
+const blankForm={title:"",description:"",acceptance_criteria:"",status:"intake" as Status,priority:"medium" as Priority,task_type:"maintenance" as TaskType,workstream:"other" as Workstream,tags:[] as string[],assigned_to:"",release_id:"",due_date:"",blocked:false,blocker_reason:""};
 
-const STAGE_OPTIONS: ModStage[] = [
-  "concept",
-  "design",
-  "modelling",
-  "texturing",
-  "scripting",
-  "testing",
-];
+function label(value:string){return value.replaceAll("_"," ").replace(/\b\w/g,char=>char.toUpperCase());}
+function date(value:string|null,withTime=false){if(!value)return "Not set";return new Intl.DateTimeFormat("en-GB",withTime?{dateStyle:"medium",timeStyle:"short"}:{dateStyle:"medium"}).format(new Date(value));}
+function age(value:string){const days=Math.max(0,Math.floor((Date.now()-new Date(value).getTime())/86400000));return days===0?"Today":`${days}d`;}
+function ref(task:Task){return `MOD-${String(task.reference_number).padStart(4,"0")}`;}
 
+export default function ModTaskboardPage(){
+  const router=useRouter();
+  const [data,setData]=useState<Data>(emptyData),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false);
+  const [clock,setClock]=useState(0);
+  const [canEdit,setCanEdit]=useState(false),[canAdmin,setCanAdmin]=useState(false),[userId,setUserId]=useState<string|null>(null);
+  const [view,setView]=useState<View>("pipeline"),[search,setSearch]=useState(""),[priorityFilter,setPriorityFilter]=useState("all"),[ownerFilter,setOwnerFilter]=useState("all"),[blockedOnly,setBlockedOnly]=useState(false);
+  const [selected,setSelected]=useState<string|null>(null),[detailTab,setDetailTab]=useState<DetailTab>("overview"),[editing,setEditing]=useState(false),[creating,setCreating]=useState(false);
+  const [form,setForm]=useState({...blankForm}),[dragged,setDragged]=useState<string|null>(null),[notice,setNotice]=useState<{tone:"ok"|"error";text:string}|null>(null);
+  const [comment,setComment]=useState(""),[checkItem,setCheckItem]=useState(""),[linkLabel,setLinkLabel]=useState(""),[linkUrl,setLinkUrl]=useState("");
+  const [contributor,setContributor]=useState(""),[dependency,setDependency]=useState(""),[releaseForm,setReleaseForm]=useState({name:"",version:"",target_date:"",description:""});
+  const [pendingAction,setPendingAction]=useState<{type:"move"|"archive"|"delete";task:Task;status?:Status;beforeId?:string}|null>(null);
 
-type ColumnKey = (typeof columns)[number]["key"];
-type ViewMode = "kanban" | "list";
+  const load=useCallback(async(archive:boolean)=>{
+    setLoading(true);
+    const response=await fetch(`/api/mod-taskboard${archive?"?archive=1":""}`,{cache:"no-store",headers:await getAppAuthHeaders()});
+    const body=await response.json().catch(()=>({})) as Partial<Data>&{error?:string};
+    if(!response.ok)setNotice({tone:"error",text:body.error||"Failed to load the pipeline."});
+    else setData({...emptyData,...body});
+    setClock(Date.now());
+    setLoading(false);
+  },[]);
 
-export default function ModPipelinePage() {
-  const router = useRouter();
+  useEffect(()=>{void(async()=>{const session=await getAppSession();if(!session){router.replace("/Task-Viewer");return;}const pipelineAccess=hasAppPermission(session,"admin.mod-taskboard","read"),pipelineAdmin=hasAppPermission(session,"admin.mod-taskboard-admin","read");if(!pipelineAccess){router.replace("/");return;}setCanEdit(true);setCanAdmin(pipelineAdmin);setUserId(session.user.id);await load(false);})();},[router,load]);
 
-  const [loadingAuth, setLoadingAuth] = useState(true);
-  const [canEdit, setCanEdit] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
-  const [loadingTasks, setLoadingTasks] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const [userId, setUserId] = useState<string | null>(null);
-  const [assignees, setAssignees] = useState<Assignee[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [commentsByTask, setCommentsByTask] = useState<Record<string, TaskComment[]>>({});
-
-  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | ColumnKey>("all");
-  const [filterPriority, setFilterPriority] = useState<"all" | TaskPriority>("all");
-  const [filterTag, setFilterTag] = useState<"all" | ModTag>("all");
-  const [filterStage, setFilterStage] = useState<"all" | ModStage>("all");
-  const [filterAssignedTo, setFilterAssignedTo] = useState("all");
-  const [onlyMine, setOnlyMine] = useState(false);
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<TaskPriority>("medium");
-  const [status, setStatus] = useState<ColumnKey>("todo");
-  const [selectedTags, setSelectedTags] = useState<ModTag[]>([]);
-  const [stage, setStage] = useState<ModStage>("concept");
-  const [assignedTo, setAssignedTo] = useState<string>("unassigned");
-  const [dueDate, setDueDate] = useState("");
-
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editPriority, setEditPriority] = useState<TaskPriority>("medium");
-  const [editStatus, setEditStatus] = useState<ColumnKey>("todo");
-  const [editTags, setEditTags] = useState<ModTag[]>([]);
-  const [editStage, setEditStage] = useState<ModStage>("concept");
-  const [editAssignedTo, setEditAssignedTo] = useState<string>("unassigned");
-  const [editDueDate, setEditDueDate] = useState("");
-
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [newComment, setNewComment] = useState<Record<string, string>>({});
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [showTagDropdown, setShowTagDropdown] = useState(false);
-  const [showEditTagDropdown, setShowEditTagDropdown] = useState(false);
-
-  useEffect(() => {
-    const init = async () => {
-      const session = await getAppSession();
-      if (!session) {
-        router.replace("/Task-Viewer");
-        return;
-      }
-      if (!hasAppPermission(session, "admin.mod-taskboard", "read")) {
-        router.replace("/");
-        return;
-      }
-      setCanEdit(hasAppPermission(session, "admin.mod-taskboard", "edit"));
-      setCanDelete(hasAppPermission(session, "admin.mod-taskboard", "full"));
-      setUserId(session.user.id);
-      await fetchTasks();
-      setLoadingAuth(false);
-    };
-
-    init();
-  }, [router]);
-
-  const fetchTasks = async () => {
-    setLoadingTasks(true);
-    const response = await fetch("/api/mod-taskboard", { cache: "no-store", headers: await getAppAuthHeaders() });
-    if (response.ok) {
-      const data = await response.json() as { assignees?: Assignee[]; profiles?: Profile[]; tasks?: Task[]; comments?: RawCommentRow[] };
-      const mappedTasks =
-        (data.tasks || []).map((task) => ({
-          ...task,
-          tags: Array.isArray(task.tags) ? task.tags : [],
-        }));
-      setAssignees(data.assignees || []);
-      setProfiles(data.profiles || []);
-      setTasks(mappedTasks);
-      applyComments(data.comments || []);
-    }
-    setLoadingTasks(false);
+  const request=async(method:"POST"|"PATCH"|"DELETE",payload?:Record<string,unknown>,query="")=>{
+    setSaving(true);setNotice(null);
+    const response=await fetch(`/api/mod-taskboard${query}`,{method,credentials:"same-origin",headers:{"Content-Type":"application/json",...(await getAppAuthHeaders())},body:payload?JSON.stringify(payload):undefined});
+    const body=await response.json().catch(()=>({})) as {error?:string};setSaving(false);
+    if(!response.ok){setNotice({tone:"error",text:body.error||"The change could not be saved."});return false;}
+    await load(view==="archive");return true;
   };
 
-  const applyComments = (rawComments: RawCommentRow[]) => {
-    const grouped: Record<string, TaskComment[]> = {};
-
-    const typedComments: TaskComment[] = rawComments.map((comment) => ({
-      id: comment.id,
-      task_id: comment.task_id,
-      user_id: comment.user_id,
-      content: comment.content,
-      created_at: comment.created_at,
-      profiles: Array.isArray(comment.profiles)
-        ? comment.profiles[0] ?? null
-        : comment.profiles ?? null,
-    }));
-
-    for (const comment of typedComments) {
-      if (!grouped[comment.task_id]) {
-        grouped[comment.task_id] = [];
-      }
-      grouped[comment.task_id].push(comment);
-    }
-
-    setCommentsByTask(grouped);
-  };
-
-  const fetchComments = async () => {
-    const response = await fetch("/api/mod-taskboard", { cache: "no-store", headers: await getAppAuthHeaders() });
-    if (!response.ok) return;
-    const data = await response.json() as { comments?: RawCommentRow[] };
-    applyComments(data.comments || []);
-  };
-
-  const refreshBoard = async () => {
-    setRefreshing(true);
-    await fetchTasks();
-    setRefreshing(false);
-  };
-
-  const resetCreateForm = () => {
-    setTitle("");
-    setDescription("");
-    setPriority("medium");
-    setStatus("todo");
-    setSelectedTags([]);
-    setStage("concept");
-    setAssignedTo("unassigned");
-    setDueDate("");
-  };
-
-  const getMultiSelectValues = <T extends string>(
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    return Array.from(event.target.selectedOptions).map((option) => option.value as T);
-  };
-
-  const toggleTagSelection = (tag: ModTag) => {
-  setSelectedTags((prev) =>
-    prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-  );
-};
-
-const toggleEditTagSelection = (tag: ModTag) => {
-  setEditTags((prev) =>
-    prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-  );
-};
-
-  const createTask = async () => {
-    if (!canEdit) return;
-    if (!title.trim() || !userId) return;
-
-    setSaving(true);
-
-    const columnTasks = tasks.filter((task) => task.status === status);
-    const nextPosition =
-      columnTasks.length > 0
-        ? Math.max(...columnTasks.map((task) => task.position || 0)) + 1
-        : 0;
-
-    const payload = {
-      title: title.trim(),
-      description: description.trim() || null,
-      status,
-      priority,
-      tags: selectedTags,
-      stage,
-      assigned_to: assignedTo === "unassigned" ? null : assignedTo,
-      created_by: userId,
-      due_date: dueDate ? new Date(`${dueDate}T12:00:00`).toISOString() : null,
-      position: nextPosition,
-    };
-
-    const response = await fetch("/api/mod-taskboard", { method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify(payload) });
-
-    setSaving(false);
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: string } | null;
-      alert(body?.error || "Failed to create mod task");
-      return;
-    }
-
-    resetCreateForm();
-    await fetchTasks();
-  };
-
-  const openEdit = (task: Task) => {
-    setEditingTaskId(task.id);
-    setEditTitle(task.title);
-    setEditDescription(task.description || "");
-    setEditPriority(task.priority);
-    setEditStatus(task.status);
-    setEditTags(task.tags || []);
-    setEditStage(task.stage || "concept");
-    setEditAssignedTo(task.assigned_to || "unassigned");
-    setEditDueDate(task.due_date ? new Date(task.due_date).toISOString().slice(0, 10) : "");
-  };
-
-  const saveEdit = async () => {
-    if (!canEdit) return;
-    if (!editingTaskId || !editTitle.trim()) return;
-
-    const originalTask = tasks.find((task) => task.id === editingTaskId);
-    if (!originalTask) return;
-
-    let nextPosition = originalTask.position;
-
-    if (originalTask.status !== editStatus) {
-      const columnTasks = tasks.filter(
-        (task) => task.status === editStatus && task.id !== editingTaskId
-      );
-      nextPosition =
-        columnTasks.length > 0
-          ? Math.max(...columnTasks.map((task) => task.position || 0)) + 1
-          : 0;
-    }
-
-    const response = await fetch("/api/mod-taskboard", { method: "PATCH", credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({
-        id: editingTaskId,
-        title: editTitle.trim(),
-        description: editDescription.trim() || null,
-        priority: editPriority,
-        status: editStatus,
-        tags: editTags,
-        stage: editStage,
-        assigned_to: editAssignedTo === "unassigned" ? null : editAssignedTo,
-        due_date: editDueDate ? new Date(`${editDueDate}T12:00:00`).toISOString() : null,
-        position: nextPosition,
-      }) });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: string } | null;
-      alert(body?.error || "Failed to update mod task");
-      return;
-    }
-
-    setEditingTaskId(null);
-    await fetchTasks();
-  };
-
-  const deleteTask = async (taskId: string) => {
-    if (!canDelete) return;
-    const confirmed = window.confirm("Delete this pipeline item?");
-    if (!confirmed) return;
-
-    const response = await fetch(`/api/mod-taskboard?id=${encodeURIComponent(taskId)}`, { method: "DELETE",
-      credentials: "same-origin", headers: await getAppAuthHeaders() });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: string } | null;
-      alert(body?.error || "Failed to delete mod task");
-      return;
-    }
-
-    await fetchTasks();
-  };
-
-  const moveTaskToStatus = async (taskId: string, newStatus: ColumnKey) => {
-    if (!canEdit) return;
-    const currentTask = tasks.find((task) => task.id === taskId);
-    if (!currentTask) return;
-
-    const columnTasks = tasks.filter((task) => task.status === newStatus && task.id !== taskId);
-    const nextPosition =
-      columnTasks.length > 0
-        ? Math.max(...columnTasks.map((task) => task.position || 0)) + 1
-        : 0;
-
-    const response = await fetch("/api/mod-taskboard", { method: "PATCH", credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) }, body: JSON.stringify({
-        kind: "move",
-        id: taskId,
-        status: newStatus,
-        position: nextPosition,
-      }) });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: string } | null;
-      alert(body?.error || "Failed to move mod task");
-      return;
-    }
-
-    await fetchTasks();
-  };
-
-  const addComment = async (taskId: string) => {
-    if (!canEdit) return;
-    const content = newComment[taskId]?.trim();
-    if (!content || !userId) return;
-
-    const response = await fetch("/api/mod-taskboard", { method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
-      body: JSON.stringify({ kind: "comment", taskId, content }) });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: string } | null;
-      alert(body?.error || "Failed to add comment");
-      return;
-    }
-
-    setNewComment((prev) => ({
-      ...prev,
-      [taskId]: "",
-    }));
-
-    await fetchComments();
-  };
-
-  const getAssigneeName = (id: string | null) => {
-    if (!id) return "Unassigned";
-    return assignees.find((a) => a.id === id)?.name || "Unknown";
-  };
-
-  const getPriorityStyle = (value: string) => {
-    switch (value) {
-      case "high":
-        return "text-red-300 border-red-500/30 bg-red-500/15";
-      case "medium":
-        return "text-amber-300 border-amber-500/30 bg-amber-500/15";
-      case "low":
-        return "text-sky-300 border-sky-500/30 bg-sky-500/15";
-      default:
-        return "text-[#00ff66] border-[#00ff66]/30 bg-[#00ff66]/10";
-    }
-  };
-
-  const getTagStyle = (value: ModTag) => {
-    switch (value) {
-      case "Bug":
-        return "text-red-300 border-red-500/30 bg-red-500/10";
-      case "Helmet":
-        return "text-cyan-300 border-cyan-500/30 bg-cyan-500/10";
-      case "New Feature":
-        return "text-violet-300 border-violet-500/30 bg-violet-500/10";
-      case "Update":
-        return "text-amber-300 border-amber-500/30 bg-amber-500/10";
-      case "Up For Grabs":
-        return "text-lime-300 border-lime-500/30 bg-lime-500/10";
-      default:
-        return "text-gray-300 border-white/10 bg-white/5";
-    }
-  };
-
-  const getStageStyle = (value: ModStage | null) => {
-    switch (value) {
-      case "concept":
-        return "text-fuchsia-300 border-fuchsia-500/30 bg-fuchsia-500/10";
-      case "design":
-        return "text-cyan-300 border-cyan-500/30 bg-cyan-500/10";
-      case "modelling":
-        return "text-orange-300 border-orange-500/30 bg-orange-500/10";
-      case "texturing":
-        return "text-amber-300 border-amber-500/30 bg-amber-500/10";
-      case "scripting":
-        return "text-blue-300 border-blue-500/30 bg-blue-500/10";
-      case "testing":
-        return "text-emerald-300 border-emerald-500/30 bg-emerald-500/10";
-      default:
-        return "text-gray-300 border-white/10 bg-white/5";
-    }
-  };
-
-  const getColumnStyle = (key: ColumnKey) => {
-    switch (key) {
-      case "todo":
-        return {
-          shell: "border-cyan-500/25 bg-gradient-to-b from-cyan-950/30 to-black/60",
-          header: "text-cyan-300",
-          badge: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
-          empty: "border-cyan-500/20 text-cyan-200/50",
-        };
-      case "in_progress":
-        return {
-          shell: "border-blue-500/25 bg-gradient-to-b from-blue-950/30 to-black/60",
-          header: "text-blue-300",
-          badge: "border-blue-500/30 bg-blue-500/10 text-blue-300",
-          empty: "border-blue-500/20 text-blue-200/50",
-        };
-      case "review":
-        return {
-          shell: "border-amber-500/25 bg-gradient-to-b from-amber-950/30 to-black/60",
-          header: "text-amber-300",
-          badge: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-          empty: "border-amber-500/20 text-amber-200/50",
-        };
-      case "done":
-        return {
-          shell: "border-emerald-500/25 bg-gradient-to-b from-emerald-950/30 to-black/60",
-          header: "text-emerald-300",
-          badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-          empty: "border-emerald-500/20 text-emerald-200/50",
-        };
-    }
-  };
-
-  const getTaskCardStyle = (status: ColumnKey) => {
-    switch (status) {
-      case "todo":
-        return "border-cyan-500/20 bg-gradient-to-br from-cyan-950/20 to-black/70 hover:border-cyan-400/40";
-      case "in_progress":
-        return "border-blue-500/20 bg-gradient-to-br from-blue-950/20 to-black/70 hover:border-blue-400/40";
-      case "review":
-        return "border-amber-500/20 bg-gradient-to-br from-amber-950/20 to-black/70 hover:border-amber-400/40";
-      case "done":
-        return "border-emerald-500/20 bg-gradient-to-br from-emerald-950/20 to-black/70 hover:border-emerald-400/40";
-    }
-  };
-
-  const formatDate = (value: string | null) => {
-    if (!value) return "No due date";
-    return new Date(value).toLocaleDateString();
-  };
-
-  const formatDateTime = (value: string) => {
-    return new Date(value).toLocaleString();
-  };
-
-  const isOverdue = (task: Task) => {
-    if (!task.due_date || task.status === "done") return false;
-    return new Date(task.due_date).getTime() < new Date().getTime();
-  };
-
-  const isDueToday = (task: Task) => {
-    if (!task.due_date || task.status === "done") return false;
-    const due = new Date(task.due_date);
-    const now = new Date();
-
-    return (
-      due.getFullYear() === now.getFullYear() &&
-      due.getMonth() === now.getMonth() &&
-      due.getDate() === now.getDate()
-    );
-  };
-
-  const getLatestCommentPreview = (taskId: string) => {
-    const comments = commentsByTask[taskId] || [];
-    if (comments.length === 0) return null;
-    const latest = comments[comments.length - 1];
-    return latest.content;
-  };
-
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      const search = searchTerm.trim().toLowerCase();
-      const assigneeName = getAssigneeName(task.assigned_to).toLowerCase();
-      const latestComment = getLatestCommentPreview(task.id)?.toLowerCase() || "";
-      const tagText = (task.tags || []).join(" ").toLowerCase();
-
-      const matchesSearch =
-        !search ||
-        task.title.toLowerCase().includes(search) ||
-        (task.description || "").toLowerCase().includes(search) ||
-        tagText.includes(search) ||
-        (task.stage || "").toLowerCase().includes(search) ||
-        assigneeName.includes(search) ||
-        latestComment.includes(search);
-
-      const matchesStatus = filterStatus === "all" || task.status === filterStatus;
-      const matchesPriority = filterPriority === "all" || task.priority === filterPriority;
-      const matchesTag = filterTag === "all" || (task.tags || []).includes(filterTag);
-      const matchesStage = filterStage === "all" || task.stage === filterStage;
-      const matchesAssigned =
-        filterAssignedTo === "all" ||
-        (filterAssignedTo === "unassigned" ? !task.assigned_to : task.assigned_to === filterAssignedTo);
-      const matchesMine = !onlyMine || task.assigned_to === userId;
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesPriority &&
-        matchesTag &&
-        matchesStage &&
-        matchesAssigned &&
-        matchesMine
-      );
-    });
-  }, [
-    tasks,
-    searchTerm,
-    filterStatus,
-    filterPriority,
-    filterTag,
-    filterStage,
-    filterAssignedTo,
-    onlyMine,
-    userId,
-    commentsByTask,
-  ]);
-
-  const groupedTasks = useMemo(() => {
-    return {
-      todo: filteredTasks
-        .filter((task) => task.status === "todo")
-        .sort((a, b) => a.position - b.position),
-      in_progress: filteredTasks
-        .filter((task) => task.status === "in_progress")
-        .sort((a, b) => a.position - b.position),
-      review: filteredTasks
-        .filter((task) => task.status === "review")
-        .sort((a, b) => a.position - b.position),
-      done: filteredTasks
-        .filter((task) => task.status === "done")
-        .sort((a, b) => a.position - b.position),
-    };
-  }, [filteredTasks]);
-
-  const stats = useMemo(() => {
-    const total = filteredTasks.length;
-    const overdue = filteredTasks.filter((task) => isOverdue(task)).length;
-    const dueToday = filteredTasks.filter((task) => isDueToday(task)).length;
-    const inReview = filteredTasks.filter((task) => task.status === "review").length;
-    const completed = filteredTasks.filter((task) => task.status === "done").length;
-
-    return { total, overdue, dueToday, inReview, completed };
-  }, [filteredTasks]);
-
-  const renderTaskCard = (task: Task) => {
-    const taskComments = commentsByTask[task.id] || [];
-    const isExpanded = expandedTaskId === task.id;
-    const latestCommentPreview = getLatestCommentPreview(task.id);
-    const overdue = isOverdue(task);
-    const dueToday = isDueToday(task);
-    const isCompactDoneCard = viewMode === "kanban" && task.status === "done" && !isExpanded;
-
-    if (isCompactDoneCard) {
-      return (
-        <div
-          key={task.id}
-          draggable={canEdit && viewMode === "kanban"}
-          onDragStart={() => setDraggedTaskId(task.id)}
-          className="group rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-950/35 via-black/80 to-black/70 p-3 transition hover:border-emerald-400/40 hover:bg-emerald-950/20 hover:shadow-[0_0_20px_rgba(16,185,129,0.12)] cursor-grab active:cursor-grabbing"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex items-center gap-3">
-              <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]" />
-              <h4 className="truncate text-sm font-semibold text-emerald-50">
-                {task.title}
-              </h4>
-            </div>
-
-            <button
-              onClick={() => setExpandedTaskId(task.id)}
-              className="shrink-0 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:border-violet-400/40 hover:bg-violet-500/10 hover:text-violet-300"
-            >
-              Expand
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div
-        key={task.id}
-        draggable={canEdit && viewMode === "kanban"}
-        onDragStart={() => setDraggedTaskId(task.id)}
-        className={`rounded-2xl border p-4 transition shadow-[0_0_20px_rgba(0,0,0,0.25)] ${
-          viewMode === "kanban" ? "cursor-grab active:cursor-grabbing" : ""
-        } ${getTaskCardStyle(task.status)} ${overdue ? "ring-1 ring-red-500/40" : ""}`}
-      >
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <h4 className="text-white text-base font-semibold leading-snug">
-            {task.title}
-          </h4>
-          <span
-            className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getPriorityStyle(task.priority)}`}
-          >
-            {task.priority.toUpperCase()}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-3">
-          {(task.tags || []).map((tag) => (
-            <span
-              key={tag}
-              className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getTagStyle(tag)}`}
-            >
-              {tag}
-            </span>
-          ))}
-
-          {task.stage && (
-            <span
-              className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getStageStyle(task.stage)}`}
-            >
-              {task.stage.toUpperCase()}
-            </span>
-          )}
-
-          {overdue && (
-            <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-500/30 bg-red-500/15 text-red-300">
-              Overdue
-            </span>
-          )}
-
-          {!overdue && dueToday && (
-            <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-amber-500/30 bg-amber-500/15 text-amber-300">
-              Due Today
-            </span>
-          )}
-        </div>
-
-        {task.description && (
-          <p className="text-sm text-gray-300 mb-4 whitespace-pre-wrap">
-            {task.description}
-          </p>
-        )}
-
-        <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 mb-4">
-          <div>
-            <span className="text-[#00ff66]">Assigned:</span> {getAssigneeName(task.assigned_to)}
-          </div>
-          <div>
-            <span className="text-[#00ff66]">Due:</span> {formatDate(task.due_date)}
-          </div>
-          <div>
-            <span className="text-[#00ff66]">Status:</span>{" "}
-            {columns.find((c) => c.key === task.status)?.label}
-          </div>
-          <div>
-            <span className="text-[#00ff66]">Comments:</span> {taskComments.length}
-          </div>
-        </div>
-
-        {latestCommentPreview && !isExpanded && (
-          <div className="mb-4 rounded-xl border border-white/10 bg-black/30 px-3 py-2">
-            <div className="text-[11px] uppercase tracking-wide text-violet-300 mb-1">
-              Latest Comment
-            </div>
-            <div className="text-sm text-gray-300 line-clamp-2">
-              {latestCommentPreview}
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 mb-3">
-          {task.status !== "todo" && (
-            <button
-              onClick={() => moveTaskToStatus(task.id, "todo")}
-              disabled={!canEdit}
-              className="px-3 py-1 rounded-lg border border-cyan-500/30 text-xs text-cyan-300 hover:bg-cyan-500/10"
-            >
-              To Do
-            </button>
-          )}
-
-          {task.status !== "in_progress" && (
-            <button
-              onClick={() => moveTaskToStatus(task.id, "in_progress")}
-              disabled={!canEdit}
-              className="px-3 py-1 rounded-lg border border-blue-500/30 text-xs text-blue-300 hover:bg-blue-500/10"
-            >
-              In Progress
-            </button>
-          )}
-
-          {task.status !== "review" && (
-            <button
-              onClick={() => moveTaskToStatus(task.id, "review")}
-              disabled={!canEdit}
-              className="px-3 py-1 rounded-lg border border-amber-500/30 text-xs text-amber-300 hover:bg-amber-500/10"
-            >
-              Review
-            </button>
-          )}
-
-          {task.status !== "done" && (
-            <button
-              onClick={() => moveTaskToStatus(task.id, "done")}
-              disabled={!canEdit}
-              className="px-3 py-1 rounded-lg border border-emerald-500/30 text-xs text-emerald-300 hover:bg-emerald-500/10"
-            >
-              Done
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => openEdit(task)}
-            disabled={!canEdit}
-            className="px-3 py-1 rounded-lg border border-fuchsia-500/30 text-xs text-fuchsia-300 hover:bg-fuchsia-500/10"
-          >
-            Edit
-          </button>
-
-          <button
-            onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
-            className="px-3 py-1 rounded-lg border border-violet-500/30 text-xs text-violet-300 hover:bg-violet-500/10"
-          >
-            {isExpanded ? "Collapse" : "Expand"}
-          </button>
-
-          <button
-            onClick={() => deleteTask(task.id)}
-            disabled={!canDelete}
-            className="px-3 py-1 rounded-lg border border-red-500/30 text-xs text-red-400 hover:bg-red-500/10"
-          >
-            Delete
-          </button>
-        </div>
-
-        {isExpanded && (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 p-4">
-            <div className="mb-4 text-xs text-gray-400">
-              <span className="text-[#00ff66]">Updated:</span> {formatDateTime(task.updated_at)}
-            </div>
-
-            <div className="space-y-3 mb-4 max-h-56 overflow-y-auto pr-1">
-              {taskComments.length === 0 ? (
-                <div className="text-sm text-gray-500">No comments yet</div>
-              ) : (
-                taskComments.map((comment) => (
-                  <div
-                    key={comment.id}
-                    className="rounded-xl border border-white/10 bg-black/40 p-3"
-                  >
-                    <div className="text-xs text-[#00ff66] mb-1">
-                      {comment.profiles?.display_name || "Unknown"} •{" "}
-                      {formatDateTime(comment.created_at)}
-                    </div>
-                    <div className="text-sm text-gray-300 whitespace-pre-wrap">
-                      {comment.content}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <textarea
-                value={newComment[task.id] || ""}
-                onChange={(e) =>
-                  setNewComment((prev) => ({
-                    ...prev,
-                    [task.id]: e.target.value,
-                  }))
-                }
-                rows={3}
-                placeholder="Add comment..."
-                className="w-full px-3 py-2 rounded-xl bg-black/40 border border-[#00ff66]/20 text-white focus:outline-none focus:ring-2 focus:ring-[#00ff66]/30 resize-none"
-              />
-              <button
-                onClick={() => addComment(task.id)}
-                disabled={!canEdit}
-                className="px-3 py-2 rounded-lg border border-[#00ff66]/30 text-sm text-[#00ff66] hover:bg-[#00ff66]/10"
-              >
-                Add Comment
-              </button>
-            </div>
-          </div>
-        )}
+  const selectedTask=data.tasks.find(task=>task.id===selected)||null;
+  const ownerName=(id:string|null)=>data.pipelinePeople.find(item=>item.id===id)?.name||"Unassigned";
+  const taskEvents=(id:string)=>data.events.filter(item=>item.task_id===id);
+  const taskComments=(id:string)=>data.comments.filter(item=>item.task_id===id);
+  const taskChecklist=(id:string)=>data.checklist.filter(item=>item.task_id===id);
+  const taskContributors=(id:string)=>data.contributors.filter(item=>item.task_id===id);
+  const taskDependencies=(id:string)=>data.dependencies.filter(item=>item.task_id===id);
+  const taskLinks=(id:string)=>data.links.filter(item=>item.task_id===id);
+  const taskApprovals=(id:string)=>data.approvals.filter(item=>item.task_id===id);
+  const taskRepositoryLinks=(id:string)=>data.repositoryLinks.filter(item=>item.task_id===id);
+  const taskAssets=(id:string)=>data.assets.filter(item=>item.task_id===id);
+  const currentProfileName=data.profiles.find(profile=>profile.id===userId)?.display_name?.trim().toLowerCase();
+  const currentAssigneeId=data.assignees.find(assignee=>assignee.id===userId)?.id||data.assignees.find(assignee=>assignee.name.trim().toLowerCase()===currentProfileName)?.id;
+
+  const filtered=data.tasks.filter(task=>{
+    if(view==="archive"&&!task.archived_at)return false;if(view!=="archive"&&task.archived_at)return false;
+    if(view==="mine"&&task.assigned_to!==currentAssigneeId&&!taskContributors(task.id).some(item=>item.assignee_id===currentAssigneeId))return false;
+    const term=search.trim().toLowerCase(),haystack=`${ref(task)} ${task.title} ${task.description||""} ${task.task_type} ${task.workstream} ${ownerName(task.assigned_to)}`.toLowerCase();
+    return (!term||haystack.includes(term))&&(priorityFilter==="all"||task.priority===priorityFilter)&&(ownerFilter==="all"||task.assigned_to===ownerFilter)&&(!blockedOnly||task.blocked);
+  });
+
+  const stats=useMemo(()=>({active:data.tasks.filter(t=>!t.archived_at&&t.status!=="released"&&t.status!=="cancelled").length,
+    blocked:data.tasks.filter(t=>!t.archived_at&&t.blocked).length,overdue:data.tasks.filter(t=>!t.archived_at&&t.due_date&&new Date(t.due_date)<new Date()&&!['released','cancelled'].includes(t.status)).length,
+    ready:data.tasks.filter(t=>!t.archived_at&&t.status==="ready_for_release").length,
+    stale:data.tasks.filter(t=>!t.archived_at&&!["released","cancelled"].includes(t.status)&&(clock-new Date(t.updated_at).getTime())>14*86400000).length,
+    averageAge:Math.round(data.tasks.filter(t=>!t.archived_at&&!["released","cancelled"].includes(t.status)).reduce((sum,t)=>sum+(clock-new Date(t.stage_entered_at).getTime())/86400000,0)/Math.max(1,data.tasks.filter(t=>!t.archived_at&&!["released","cancelled"].includes(t.status)).length))}),[data.tasks,clock]);
+
+  const openTask=(task:Task)=>{setSelected(task.id);setDetailTab("overview");setEditing(false);};
+  const beginEdit=(task:Task)=>{setForm({title:task.title,description:task.description||"",acceptance_criteria:task.acceptance_criteria||"",status:task.status,priority:task.priority,task_type:task.task_type,workstream:task.workstream,tags:task.tags||[],assigned_to:task.assigned_to||"",release_id:task.release_id||"",due_date:task.due_date?task.due_date.slice(0,10):"",blocked:task.blocked,blocker_reason:task.blocker_reason||""});setEditing(true);};
+  const taskPayload=(version?:number)=>({...form,assigned_to:form.assigned_to||null,release_id:form.release_id||null,due_date:form.due_date?new Date(`${form.due_date}T12:00:00`).toISOString():null,position:selectedTask?.position||0,...(version!==undefined?{id:selectedTask?.id,version}: {})});
+  const saveTask=async()=>{if(!selectedTask)return;const ok=await request("PATCH",taskPayload(selectedTask.version));if(ok){setEditing(false);setNotice({tone:"ok",text:"Task updated and recorded in its history."});}};
+  const createTask=async()=>{const ok=await request("POST",{kind:"task",...taskPayload()});if(ok){setCreating(false);setForm({...blankForm});setNotice({tone:"ok",text:"Pipeline task created."});}};
+  const moveTask=async(task:Task,status:Status,beforeId?:string)=>{if(!canEdit||task.status===status&&beforeId===task.id)return;const from=PIPELINE.findIndex(item=>item.key===task.status),to=PIPELINE.findIndex(item=>item.key===status);if(to<from||status==="cancelled"){setPendingAction({type:"move",task,status,beforeId});return;}await request("PATCH",{kind:"move",id:task.id,version:task.version,status,beforeId:beforeId||null,reason:null});};
+  const archiveTask=async(task:Task)=>{setPendingAction({type:"archive",task});};
+  const confirmPendingAction=async(reason:string)=>{if(!pendingAction)return;const {type,task,status,beforeId}=pendingAction;let ok=false;if(type==="move")ok=await request("PATCH",{kind:"move",id:task.id,version:task.version,status,beforeId:beforeId||null,reason});if(type==="archive")ok=await request("PATCH",{kind:"archive",id:task.id,version:task.version,reason});if(type==="delete")ok=await request("DELETE",undefined,`?id=${task.id}&kind=task`);if(ok){setPendingAction(null);setSelected(null);setNotice({tone:"ok",text:type==="archive"?"Task moved to the archive.":type==="delete"?"Task permanently deleted.":"Task moved and its reason was recorded."});}};
+  const restoreTask=async(task:Task)=>{if(await request("PATCH",{kind:"restore",id:task.id,version:task.version})){setSelected(null);setNotice({tone:"ok",text:"Task restored to the pipeline."});}};
+  const addSimple=async(kind:string,extra:Record<string,unknown>)=>{if(!selectedTask)return false;return request("POST",{kind,taskId:selectedTask.id,...extra});};
+  const uploadAsset=async(taskId:string,file:File,caption:string)=>{setSaving(true);setNotice(null);const formData=new FormData();formData.set("taskId",taskId);formData.set("file",file);formData.set("caption",caption);const response=await fetch("/api/mod-taskboard/assets",{method:"POST",credentials:"same-origin",headers:await getAppAuthHeaders(),body:formData});const body=await response.json().catch(()=>({})) as {error?:string};setSaving(false);if(!response.ok){setNotice({tone:"error",text:body.error||"The image could not be uploaded."});return false;}await load(view==="archive");setNotice({tone:"ok",text:"Image added to the task and recorded in its history."});return true;};
+  const removeAsset=async(id:string)=>{setSaving(true);setNotice(null);const response=await fetch(`/api/mod-taskboard/assets?id=${encodeURIComponent(id)}`,{method:"DELETE",credentials:"same-origin",headers:await getAppAuthHeaders()});const body=await response.json().catch(()=>({})) as {error?:string};setSaving(false);if(!response.ok){setNotice({tone:"error",text:body.error||"The image could not be removed."});return false;}await load(view==="archive");setNotice({tone:"ok",text:"Image removed and recorded in the task history."});return true;};
+
+  const allNav:[View,string,React.ReactNode][]=[["pipeline","Pipeline",<Blocks key="p" size={16}/>],["mine","My Work",<Users key="m" size={16}/>],["releases","Releases",<Rocket key="r" size={16}/>],["people","People",<Users key="u" size={16}/>],["repositories","Repositories",<GitBranch key="g" size={16}/>],["activity","Activity",<Activity key="a" size={16}/>],["archive","Archive",<Archive key="x" size={16}/>]];
+  const nav=allNav.filter(([key])=>!["people","repositories"].includes(key)||canAdmin);
+
+  return <main className="min-h-screen bg-[#010805] text-white">
+    <header className="border-b border-[#00ff66]/20 bg-black/80 px-4 py-4 md:px-8">
+      <div className="mx-auto flex max-w-[1900px] flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4"><button onClick={()=>router.push("/")} title="Return to dashboard" className="grid size-10 place-items-center border border-white/15 text-gray-300 hover:border-[#00ff66]/50 hover:text-[#00ff66]"><ArrowLeft size={18}/></button><div><p className="text-xs font-semibold uppercase text-[#00ff66]">Development Control</p><h1 className="text-2xl font-bold">Mod Pipeline</h1></div></div>
+        <div className="flex items-center gap-2"><button onClick={()=>void load(view==="archive")} title="Refresh" className="grid size-10 place-items-center border border-white/15 text-gray-300 hover:text-[#00ff66]"><RefreshCw className={loading?"animate-spin":""} size={17}/></button>{canEdit&&<button onClick={()=>{setForm({...blankForm});setCreating(true);}} className="flex h-10 items-center gap-2 bg-[#00ff66] px-4 font-bold text-black hover:bg-[#40ff88]"><Plus size={17}/>New Task</button>}</div>
       </div>
-    );
-  };
+    </header>
 
-  if (loadingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#001f0f_0%,#000a06_100%)] text-[#00ff66]">
-        Loading Mod Pipeline...
-      </div>
-    );
-  }
+    <div className="mx-auto max-w-[1900px] px-4 py-5 md:px-8">
+      <nav className="mb-5 flex gap-1 overflow-x-auto border-b border-white/10">{nav.map(([key,text,icon])=><button key={key} onClick={()=>{setView(key);void load(key==="archive");}} className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold ${view===key?"border-[#00ff66] text-[#00ff66]":"border-transparent text-gray-400 hover:text-white"}`}>{icon}{text}</button>)}</nav>
 
-  return (
-    <div className="min-h-screen p-6 md:p-10 bg-[radial-gradient(circle_at_top,#021b11_0%,#010b08_45%,#000000_100%)] text-white">
-      <button
-        onClick={() => router.push("/")}
-        className="mb-6 px-4 py-2 rounded-lg border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 hover:scale-105 transition"
-      >
-        ← Return to Dashboard
-      </button>
+      {notice&&<div className={`mb-4 flex items-center justify-between border px-4 py-3 text-sm ${notice.tone==="ok"?"border-[#00ff66]/35 bg-[#00ff66]/5 text-[#70ff9d]":"border-red-500/40 bg-red-950/20 text-red-300"}`}><span>{notice.text}</span><button onClick={()=>setNotice(null)}><X size={16}/></button></div>}
 
-      <div className="max-w-[1900px] mx-auto space-y-8">
-        <div className="rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg p-8 shadow-[0_0_60px_rgba(0,255,100,0.12)]">
-          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-[#00ff66] mb-2">
-                Mod Pipeline
-              </h1>
-              <p className="text-gray-400">
-                Track bugs, helmets, features and work stages for the mod.
-              </p>
-            </div>
+      {(view==="pipeline"||view==="mine"||view==="archive")&&<>
+        <section className="mb-5 grid grid-cols-2 border border-white/10 sm:grid-cols-3 xl:grid-cols-6">
+          {[["Active",stats.active,"text-white"],["Blocked",stats.blocked,"text-red-300"],["Overdue",stats.overdue,"text-amber-300"],["Ready",stats.ready,"text-lime-300"],["Stale 14d+",stats.stale,"text-orange-300"],["Avg Stage Age",`${stats.averageAge}d`,"text-cyan-300"]].map(([name,count,color],index)=><div key={String(name)} className={`px-4 py-3 ${index?"border-l border-white/10":""}`}><p className="text-[11px] font-semibold uppercase text-gray-500">{name}</p><p className={`mt-1 text-xl font-bold ${color}`}>{count}</p></div>)}
+        </section>
+        <section className="mb-5 flex flex-col gap-3 border-y border-white/10 py-4 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search reference, title, owner or workstream" className="h-11 w-full border border-white/15 bg-black pl-10 pr-3 outline-none focus:border-[#00ff66]/60"/></div>
+          <select value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value)} className="h-11 border border-white/15 bg-black px-3 text-sm"><option value="all">All priorities</option>{PRIORITIES.map(item=><option key={item}>{item}</option>)}</select>
+          <select value={ownerFilter} onChange={e=>setOwnerFilter(e.target.value)} className="h-11 border border-white/15 bg-black px-3 text-sm"><option value="all">All owners</option>{data.assignees.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
+          <label className="flex h-11 items-center gap-2 border border-white/15 px-3 text-sm text-gray-300"><input type="checkbox" checked={blockedOnly} onChange={e=>setBlockedOnly(e.target.checked)} className="accent-red-500"/><Ban size={15}/>Blocked only</label>
+        </section>
+        {loading?<div className="flex justify-center py-24 text-[#00ff66]"><Loader2 className="animate-spin"/></div>:view==="archive"?<ArchiveList tasks={filtered} openTask={openTask} ownerName={ownerName}/>:<div className="overflow-x-auto pb-4"><div className="grid min-w-[1540px] grid-cols-7 gap-3">{PIPELINE.map(column=><PipelineColumn key={column.key} column={column} tasks={filtered.filter(task=>task.status===column.key).sort((a,b)=>a.position-b.position)} ownerName={ownerName} openTask={openTask} canEdit={canEdit} dragged={dragged} setDragged={setDragged} moveTask={moveTask} checklist={data.checklist}/>)}</div></div>}
+      </>}
 
-            <div className="flex flex-wrap gap-3">
-              <div className="flex rounded-xl border border-violet-500/30 bg-black/30 p-1">
-                <button
-                  onClick={() => setViewMode("kanban")}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                    viewMode === "kanban"
-                      ? "bg-violet-500/15 text-violet-300"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  Kanban
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                    viewMode === "list"
-                      ? "bg-violet-500/15 text-violet-300"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  List
-                </button>
-              </div>
-
-              <button
-                onClick={refreshBoard}
-                disabled={refreshing || loadingTasks}
-                className="px-4 py-3 rounded-xl border border-cyan-500/40 text-cyan-300 font-semibold hover:bg-cyan-500/10 disabled:opacity-50"
-              >
-                {refreshing ? "Refreshing..." : "Refresh Pipeline"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-          <div className="rounded-2xl border border-cyan-500/25 bg-cyan-950/20 p-4">
-            <div className="text-xs uppercase tracking-wide text-cyan-300 mb-1">Total</div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
-          </div>
-
-          <div className="rounded-2xl border border-red-500/25 bg-red-950/20 p-4">
-            <div className="text-xs uppercase tracking-wide text-red-300 mb-1">Overdue</div>
-            <div className="text-2xl font-bold text-white">{stats.overdue}</div>
-          </div>
-
-          <div className="rounded-2xl border border-amber-500/25 bg-amber-950/20 p-4">
-            <div className="text-xs uppercase tracking-wide text-amber-300 mb-1">Due Today</div>
-            <div className="text-2xl font-bold text-white">{stats.dueToday}</div>
-          </div>
-
-          <div className="rounded-2xl border border-violet-500/25 bg-violet-950/20 p-4">
-            <div className="text-xs uppercase tracking-wide text-violet-300 mb-1">In Review</div>
-            <div className="text-2xl font-bold text-white">{stats.inReview}</div>
-          </div>
-
-          <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/20 p-4">
-            <div className="text-xs uppercase tracking-wide text-emerald-300 mb-1">Completed</div>
-            <div className="text-2xl font-bold text-white">{stats.completed}</div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg p-6 shadow-[0_0_40px_rgba(0,255,100,0.08)]">
-          <h2 className="text-xl font-semibold text-[#00ff66] mb-4">
-            Search & Filters
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-4">
-            <input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search pipeline items..."
-              className="px-4 py-3 rounded-xl bg-black/40 border border-cyan-500/30 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-            />
-
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as "all" | ColumnKey)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-blue-500/30 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            >
-              <option value="all">All Statuses</option>
-              <option value="todo">To Do</option>
-              <option value="in_progress">In Progress</option>
-              <option value="review">Review</option>
-              <option value="done">Done</option>
-            </select>
-
-            <select
-              value={filterPriority}
-              onChange={(e) =>
-                setFilterPriority(e.target.value as "all" | TaskPriority)
-              }
-              className="px-4 py-3 rounded-xl bg-black/40 border border-amber-500/30 text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-            >
-              <option value="all">All Priorities</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-
-            <select
-              value={filterTag}
-              onChange={(e) => setFilterTag(e.target.value as "all" | ModTag)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-fuchsia-500/30 text-white focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-            >
-              <option value="all">All Tags</option>
-              {TAG_OPTIONS.map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filterStage}
-              onChange={(e) => setFilterStage(e.target.value as "all" | ModStage)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-orange-500/30 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-            >
-              <option value="all">All Stages</option>
-              {STAGE_OPTIONS.map((stageOption) => (
-                <option key={stageOption} value={stageOption}>
-                  {stageOption}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filterAssignedTo}
-              onChange={(e) => setFilterAssignedTo(e.target.value)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-emerald-500/30 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-            >
-              <option value="all">All Assignees</option>
-              <option value="unassigned">Unassigned</option>
-              {assignees.map((assignee) => (
-                <option key={assignee.id} value={assignee.id}>
-                  {assignee.name}
-                </option>
-              ))}
-            </select>
-
-            <label className="flex items-center gap-3 px-4 py-3 rounded-xl bg-black/40 border border-violet-500/30 text-white">
-              <input
-                type="checkbox"
-                checked={onlyMine}
-                onChange={(e) => setOnlyMine(e.target.checked)}
-                className="h-4 w-4 accent-violet-500"
-              />
-              <span className="text-sm">Only my items</span>
-            </label>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              onClick={() => {
-                setSearchTerm("");
-                setFilterStatus("all");
-                setFilterPriority("all");
-                setFilterTag("all");
-                setFilterStage("all");
-                setFilterAssignedTo("all");
-                setOnlyMine(false);
-              }}
-              className="px-4 py-2 rounded-xl border border-red-500/30 text-red-300 hover:bg-red-500/10"
-            >
-              Reset Filters
-            </button>
-
-            <div className="px-4 py-2 rounded-xl border border-[#00ff66]/20 bg-[#00ff66]/5 text-sm text-gray-300">
-              Showing {filteredTasks.length} item{filteredTasks.length === 1 ? "" : "s"}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg p-6 shadow-[0_0_40px_rgba(0,255,100,0.08)]">
-          <h2 className="text-xl font-semibold text-[#00ff66] mb-4">
-            Create Pipeline Item
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Item title"
-              className="px-4 py-3 rounded-xl bg-black/40 border border-cyan-500/30 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-            />
-
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as ColumnKey)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-blue-500/30 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            >
-              <option value="todo">To Do</option>
-              <option value="in_progress">In Progress</option>
-              <option value="review">Review</option>
-              <option value="done">Done</option>
-            </select>
-
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as TaskPriority)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-amber-500/30 text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-            >
-              <option value="low">Low Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="high">High Priority</option>
-            </select>
-
-            <select
-              value={stage}
-              onChange={(e) => setStage(e.target.value as ModStage)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-orange-500/30 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-            >
-              {STAGE_OPTIONS.map((stageOption) => (
-                <option key={stageOption} value={stageOption}>
-                  {stageOption}
-                </option>
-              ))}
-            </select>
-
-<div className="relative">
-  <button
-    type="button"
-    onClick={() => setShowTagDropdown((prev) => !prev)}
-    className="w-full px-4 py-3 rounded-xl bg-black/40 border border-fuchsia-500/30 text-left text-white focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-  >
-    {selectedTags.length > 0 ? selectedTags.join(", ") : "Select tags"}
-  </button>
-
-  {showTagDropdown && (
-    <div className="absolute z-30 mt-2 w-full rounded-xl border border-fuchsia-500/30 bg-[#050505] shadow-[0_0_20px_rgba(0,0,0,0.35)] p-2">
-      <div className="space-y-1">
-        {TAG_OPTIONS.map((tag) => (
-          <label
-            key={tag}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white hover:bg-white/5 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              checked={selectedTags.includes(tag)}
-              onChange={() => toggleTagSelection(tag)}
-              className="h-4 w-4 accent-fuchsia-500"
-            />
-            <span>{tag}</span>
-          </label>
-        ))}
-      </div>
+      {view==="releases"&&<ReleasesView releases={data.releases} tasks={data.tasks} canEdit={canAdmin} saving={saving} form={releaseForm} setForm={setReleaseForm} create={async()=>{if(await request("POST",{kind:"release",...releaseForm,target_date:releaseForm.target_date||null}))setReleaseForm({name:"",version:"",target_date:"",description:""});}} update={async(release,status)=>request("PATCH",{kind:"release",id:release.id,name:release.name,version:release.version,description:release.description,status,target_date:release.target_date})}/>}
+      {view==="people"&&canAdmin&&<PipelinePeopleView people={data.pipelinePeople} saving={saving} request={request}/>}
+      {view==="repositories"&&canAdmin&&<RepositoriesView repositories={data.repositories} saving={saving} request={request}/>}
+      {view==="activity"&&<ActivityView events={data.events} tasks={data.tasks}/>}
     </div>
-  )}
-</div>
 
-            <select
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-emerald-500/30 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-            >
-              <option value="unassigned">Unassigned</option>
-              {assignees.map((assignee) => (
-                <option key={assignee.id} value={assignee.id}>
-                  {assignee.name}
-                </option>
-              ))}
-            </select>
-
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="px-4 py-3 rounded-xl bg-black/40 border border-red-500/30 text-white focus:outline-none focus:ring-2 focus:ring-red-500/40"
-            />
-
-            <button
-              onClick={createTask}
-              disabled={!canEdit || saving || !title.trim()}
-              className="px-4 py-3 rounded-xl border border-[#00ff66]/50 text-[#00ff66] font-semibold hover:bg-[#00ff66]/10 disabled:opacity-50"
-            >
-              {saving ? "Creating..." : "Create Item"}
-            </button>
-          </div>
-
-
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Item description"
-            rows={4}
-            className="mt-4 w-full px-4 py-3 rounded-xl bg-black/40 border border-[#00ff66]/30 text-white focus:outline-none focus:ring-2 focus:ring-[#00ff66]/40 resize-none"
-          />
-        </div>
-
-        {editingTaskId && (
-          <div className="rounded-3xl border border-cyan-500/30 bg-black/70 backdrop-blur-lg p-6 shadow-[0_0_40px_rgba(0,200,255,0.12)]">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-cyan-300">Edit Pipeline Item</h2>
-              <button
-                onClick={() => setEditingTaskId(null)}
-                className="px-3 py-2 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10"
-              >
-                Cancel
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Item title"
-                className="px-4 py-3 rounded-xl bg-black/40 border border-cyan-500/30 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-              />
-
-              <select
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value as ColumnKey)}
-                className="px-4 py-3 rounded-xl bg-black/40 border border-blue-500/30 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              >
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="review">Review</option>
-                <option value="done">Done</option>
-              </select>
-
-              <select
-                value={editPriority}
-                onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
-                className="px-4 py-3 rounded-xl bg-black/40 border border-amber-500/30 text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-              >
-                <option value="low">Low Priority</option>
-                <option value="medium">Medium Priority</option>
-                <option value="high">High Priority</option>
-              </select>
-
-              <select
-                value={editStage}
-                onChange={(e) => setEditStage(e.target.value as ModStage)}
-                className="px-4 py-3 rounded-xl bg-black/40 border border-orange-500/30 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-              >
-                {STAGE_OPTIONS.map((stageOption) => (
-                  <option key={stageOption} value={stageOption}>
-                    {stageOption}
-                  </option>
-                ))}
-              </select>
-
-<div className="relative">
-  <button
-    type="button"
-    onClick={() => setShowEditTagDropdown((prev) => !prev)}
-    className="w-full px-4 py-3 rounded-xl bg-black/40 border border-fuchsia-500/30 text-left text-white focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-  >
-    {editTags.length > 0 ? editTags.join(", ") : "Select tags"}
-  </button>
-
-  {showEditTagDropdown && (
-    <div className="absolute z-30 mt-2 w-full rounded-xl border border-fuchsia-500/30 bg-[#050505] shadow-[0_0_20px_rgba(0,0,0,0.35)] p-2">
-      <div className="space-y-1">
-        {TAG_OPTIONS.map((tag) => (
-          <label
-            key={tag}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white hover:bg-white/5 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              checked={editTags.includes(tag)}
-              onChange={() => toggleEditTagSelection(tag)}
-              className="h-4 w-4 accent-fuchsia-500"
-            />
-            <span>{tag}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  )}
-</div>
-
-              <select
-                value={editAssignedTo}
-                onChange={(e) => setEditAssignedTo(e.target.value)}
-                className="px-4 py-3 rounded-xl bg-black/40 border border-emerald-500/30 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-              >
-                <option value="unassigned">Unassigned</option>
-                {assignees.map((assignee) => (
-                  <option key={assignee.id} value={assignee.id}>
-                    {assignee.name}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="date"
-                value={editDueDate}
-                onChange={(e) => setEditDueDate(e.target.value)}
-                className="px-4 py-3 rounded-xl bg-black/40 border border-red-500/30 text-white focus:outline-none focus:ring-2 focus:ring-red-500/40"
-              />
-
-              <button
-                onClick={saveEdit}
-                disabled={!canEdit || !editTitle.trim()}
-                className="px-4 py-3 rounded-xl border border-cyan-500/50 text-cyan-300 font-semibold hover:bg-cyan-500/10 disabled:opacity-50"
-              >
-                Save Changes
-              </button>
-            </div>
-
-
-            <textarea
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              placeholder="Item description"
-              rows={4}
-              className="mt-4 w-full px-4 py-3 rounded-xl bg-black/40 border border-cyan-500/30 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40 resize-none"
-            />
-          </div>
-        )}
-
-        {loadingTasks ? (
-          <div className="text-center text-gray-400 py-16">Loading pipeline items...</div>
-        ) : viewMode === "kanban" ? (
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-            {columns.map((column) => {
-              const columnStyle = getColumnStyle(column.key);
-
-              return (
-                <div
-                  key={column.key}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={async () => {
-                    if (!draggedTaskId) return;
-                    await moveTaskToStatus(draggedTaskId, column.key);
-                    setDraggedTaskId(null);
-                  }}
-                  className={`rounded-3xl border backdrop-blur-lg p-4 min-h-[550px] ${columnStyle.shell}`}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className={`text-lg font-bold ${columnStyle.header}`}>
-                      {column.label}
-                    </h3>
-                    <span className={`px-2 py-1 rounded-full text-xs border ${columnStyle.badge}`}>
-                      {groupedTasks[column.key].length}
-                    </span>
-                  </div>
-
-                  <div className="space-y-4">
-                    {groupedTasks[column.key].length === 0 ? (
-                      <div
-                        className={`rounded-2xl border border-dashed bg-black/30 p-6 text-center text-sm ${columnStyle.empty}`}
-                      >
-                        Drop items here
-                      </div>
-                    ) : (
-                      groupedTasks[column.key].map((task) => renderTaskCard(task))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="rounded-3xl border border-[#00ff66]/30 bg-black/60 backdrop-blur-lg p-6 shadow-[0_0_40px_rgba(0,255,100,0.08)] overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#00ff66]/20 text-[#00ff66]">
-                  <th className="p-3">Item</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Priority</th>
-                  <th className="p-3">Tags</th>
-                  <th className="p-3">Stage</th>
-                  <th className="p-3">Assigned</th>
-                  <th className="p-3">Due</th>
-                  <th className="p-3">Comments</th>
-                  <th className="p-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTasks.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="p-10 text-center text-gray-500">
-                      No pipeline items match your filters.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredTasks
-                    .slice()
-                    .sort((a, b) => {
-                      const statusOrder =
-                        columns.findIndex((c) => c.key === a.status) -
-                        columns.findIndex((c) => c.key === b.status);
-                      if (statusOrder !== 0) return statusOrder;
-                      return a.position - b.position;
-                    })
-                    .flatMap((task) => {
-                      const commentCount = commentsByTask[task.id]?.length || 0;
-                      const overdue = isOverdue(task);
-                      const dueToday = isDueToday(task);
-                      const isExpanded = expandedTaskId === task.id;
-                      const taskComments = commentsByTask[task.id] || [];
-
-                      const rows = [
-                        <tr
-                          key={task.id}
-                          className="border-b border-white/5 hover:bg-white/5 transition"
-                        >
-                          <td className="p-3">
-                            <div className="font-semibold text-white">{task.title}</div>
-                            {task.description && (
-                              <div className="text-sm text-gray-400 mt-1 line-clamp-2">
-                                {task.description}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-3 text-sm text-gray-300">
-                            {columns.find((c) => c.key === task.status)?.label}
-                          </td>
-                          <td className="p-3">
-                            <span
-                              className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getPriorityStyle(task.priority)}`}
-                            >
-                              {task.priority.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex flex-wrap gap-2">
-                              {(task.tags || []).length > 0 ? (
-                                (task.tags || []).map((tag) => (
-                                  <span
-                                    key={tag}
-                                    className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getTagStyle(tag)}`}
-                                  >
-                                    {tag}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-gray-500 text-sm">—</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            {task.stage ? (
-                              <span
-                                className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getStageStyle(task.stage)}`}
-                              >
-                                {task.stage.toUpperCase()}
-                              </span>
-                            ) : (
-                              <span className="text-gray-500 text-sm">—</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-sm text-gray-300">
-                            {getAssigneeName(task.assigned_to)}
-                          </td>
-                          <td className="p-3 text-sm">
-                            <span
-                              className={
-                                overdue
-                                  ? "text-red-300"
-                                  : dueToday
-                                  ? "text-amber-300"
-                                  : "text-gray-300"
-                              }
-                            >
-                              {formatDate(task.due_date)}
-                            </span>
-                          </td>
-                          <td className="p-3 text-sm text-gray-300">{commentCount}</td>
-                          <td className="p-3">
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => openEdit(task)}
-                                disabled={!canEdit}
-                                className="px-3 py-1 rounded-lg border border-fuchsia-500/30 text-xs text-fuchsia-300 hover:bg-fuchsia-500/10"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() =>
-                                  setExpandedTaskId(isExpanded ? null : task.id)
-                                }
-                                className="px-3 py-1 rounded-lg border border-violet-500/30 text-xs text-violet-300 hover:bg-violet-500/10"
-                              >
-                                {isExpanded ? "Collapse" : "Expand"}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>,
-                      ];
-
-                      if (isExpanded) {
-                        rows.push(
-                          <tr
-                            key={`${task.id}-expanded`}
-                            className="border-b border-white/10 bg-white/[0.03]"
-                          >
-                            <td colSpan={9} className="p-4">
-                              <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                                <div className="mb-4 flex flex-wrap gap-2">
-                                  {(task.tags || []).map((tag) => (
-                                    <span
-                                      key={tag}
-                                      className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getTagStyle(tag)}`}
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-
-                                  {task.stage && (
-                                    <span
-                                      className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${getStageStyle(task.stage)}`}
-                                    >
-                                      {task.stage.toUpperCase()}
-                                    </span>
-                                  )}
-
-                                  {overdue && (
-                                    <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-500/30 bg-red-500/15 text-red-300">
-                                      Overdue
-                                    </span>
-                                  )}
-
-                                  {!overdue && dueToday && (
-                                    <span className="px-2 py-1 rounded-full text-[11px] font-semibold border border-amber-500/30 bg-amber-500/15 text-amber-300">
-                                      Due Today
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm text-gray-300 mb-4">
-                                  <div>
-                                    <span className="text-[#00ff66]">Assigned:</span>{" "}
-                                    {getAssigneeName(task.assigned_to)}
-                                  </div>
-                                  <div>
-                                    <span className="text-[#00ff66]">Due:</span>{" "}
-                                    {formatDate(task.due_date)}
-                                  </div>
-                                  <div>
-                                    <span className="text-[#00ff66]">Status:</span>{" "}
-                                    {columns.find((c) => c.key === task.status)?.label}
-                                  </div>
-                                  <div>
-                                    <span className="text-[#00ff66]">Updated:</span>{" "}
-                                    {formatDateTime(task.updated_at)}
-                                  </div>
-                                </div>
-
-                                {task.description && (
-                                  <div className="mb-4 rounded-xl border border-white/10 bg-black/30 p-3">
-                                    <div className="text-[11px] uppercase tracking-wide text-cyan-300 mb-1">
-                                      Description
-                                    </div>
-                                    <div className="text-sm text-gray-300 whitespace-pre-wrap">
-                                      {task.description}
-                                    </div>
-                                  </div>
-                                )}
-
-                                <div className="mb-4">
-                                  <div className="text-[11px] uppercase tracking-wide text-violet-300 mb-2">
-                                    Comments ({taskComments.length})
-                                  </div>
-
-                                  <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                                    {taskComments.length === 0 ? (
-                                      <div className="text-sm text-gray-500">No comments yet</div>
-                                    ) : (
-                                      taskComments.map((comment) => (
-                                        <div
-                                          key={comment.id}
-                                          className="rounded-xl border border-white/10 bg-black/40 p-3"
-                                        >
-                                          <div className="text-xs text-[#00ff66] mb-1">
-                                            {comment.profiles?.display_name || "Unknown"} •{" "}
-                                            {formatDateTime(comment.created_at)}
-                                          </div>
-                                          <div className="text-sm text-gray-300 whitespace-pre-wrap">
-                                            {comment.content}
-                                          </div>
-                                        </div>
-                                      ))
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <textarea
-                                    value={newComment[task.id] || ""}
-                                    onChange={(e) =>
-                                      setNewComment((prev) => ({
-                                        ...prev,
-                                        [task.id]: e.target.value,
-                                      }))
-                                    }
-                                    rows={3}
-                                    placeholder="Add comment..."
-                                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-[#00ff66]/20 text-white focus:outline-none focus:ring-2 focus:ring-[#00ff66]/30 resize-none"
-                                  />
-                                  <div className="flex flex-wrap gap-2">
-                                    <button
-                                      onClick={() => addComment(task.id)}
-                                      disabled={!canEdit}
-                                      className="px-3 py-2 rounded-lg border border-[#00ff66]/30 text-sm text-[#00ff66] hover:bg-[#00ff66]/10"
-                                    >
-                                      Add Comment
-                                    </button>
-
-                                    {task.status !== "todo" && (
-                                      <button
-                                        onClick={() => moveTaskToStatus(task.id, "todo")}
-                                        disabled={!canEdit}
-                                        className="px-3 py-2 rounded-lg border border-cyan-500/30 text-sm text-cyan-300 hover:bg-cyan-500/10"
-                                      >
-                                        To Do
-                                      </button>
-                                    )}
-
-                                    {task.status !== "in_progress" && (
-                                      <button
-                                        onClick={() => moveTaskToStatus(task.id, "in_progress")}
-                                        disabled={!canEdit}
-                                        className="px-3 py-2 rounded-lg border border-blue-500/30 text-sm text-blue-300 hover:bg-blue-500/10"
-                                      >
-                                        In Progress
-                                      </button>
-                                    )}
-
-                                    {task.status !== "review" && (
-                                      <button
-                                        onClick={() => moveTaskToStatus(task.id, "review")}
-                                        disabled={!canEdit}
-                                        className="px-3 py-2 rounded-lg border border-amber-500/30 text-sm text-amber-300 hover:bg-amber-500/10"
-                                      >
-                                        Review
-                                      </button>
-                                    )}
-
-                                    {task.status !== "done" && (
-                                      <button
-                                        onClick={() => moveTaskToStatus(task.id, "done")}
-                                        disabled={!canEdit}
-                                        className="px-3 py-2 rounded-lg border border-emerald-500/30 text-sm text-emerald-300 hover:bg-emerald-500/10"
-                                      >
-                                        Done
-                                      </button>
-                                    )}
-
-                                    <button
-                                      onClick={() => deleteTask(task.id)}
-                                      disabled={!canDelete}
-                                      className="px-3 py-2 rounded-lg border border-red-500/30 text-sm text-red-400 hover:bg-red-500/10"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return rows;
-                    })
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    {(creating||selectedTask)&&<div className="fixed inset-0 z-50 flex justify-end bg-black/75" onMouseDown={event=>{if(event.currentTarget===event.target){setCreating(false);setSelected(null);}}}>
+      <aside className="h-full w-full max-w-3xl overflow-y-auto border-l border-[#00ff66]/25 bg-[#020906] shadow-2xl">
+        {creating?<TaskForm title="Create Pipeline Task" form={form} setForm={setForm} data={data} canAdmin={canAdmin} saving={saving} close={()=>setCreating(false)} save={createTask}/>:selectedTask&&<TaskDrawer task={selectedTask} data={data} canEdit={canEdit} canAdmin={canAdmin} saving={saving} tab={detailTab} setTab={setDetailTab} editing={editing} beginEdit={()=>beginEdit(selectedTask)} cancelEdit={()=>setEditing(false)} form={form} setForm={setForm} save={saveTask} close={()=>setSelected(null)} ownerName={ownerName} comments={taskComments(selectedTask.id)} events={taskEvents(selectedTask.id)} checklist={taskChecklist(selectedTask.id)} contributors={taskContributors(selectedTask.id)} dependencies={taskDependencies(selectedTask.id)} links={taskLinks(selectedTask.id)} approvals={taskApprovals(selectedTask.id)} repositoryLinks={taskRepositoryLinks(selectedTask.id)} assets={taskAssets(selectedTask.id)} comment={comment} setComment={setComment} checkItem={checkItem} setCheckItem={setCheckItem} linkLabel={linkLabel} setLinkLabel={setLinkLabel} linkUrl={linkUrl} setLinkUrl={setLinkUrl} contributor={contributor} setContributor={setContributor} dependency={dependency} setDependency={setDependency} addSimple={addSimple} uploadAsset={uploadAsset} removeAsset={removeAsset} archive={archiveTask} restore={restoreTask} deleteTask={task=>setPendingAction({type:"delete",task})} request={request}/>}
+      </aside>
+    </div>}
+    {pendingAction&&<ActionDialog action={pendingAction} saving={saving} close={()=>setPendingAction(null)} confirm={confirmPendingAction}/>}
+  </main>;
 }
+
+function PipelineColumn({column,tasks,ownerName,openTask,canEdit,dragged,setDragged,moveTask,checklist}:{column:(typeof PIPELINE)[number];tasks:Task[];ownerName:(id:string|null)=>string;openTask:(task:Task)=>void;canEdit:boolean;dragged:string|null;setDragged:(id:string|null)=>void;moveTask:(task:Task,status:Status,beforeId?:string)=>Promise<void>;checklist:Checklist[]}){
+  return <section onDragOver={e=>e.preventDefault()} onDrop={()=>{const task=tasks.find(t=>t.id===dragged);if(task)void moveTask(task,column.key);setDragged(null);}} className="min-h-[560px] border border-white/10 bg-black/35">
+    <header className="flex items-center justify-between border-b border-white/10 px-3 py-3"><span className={`text-xs font-bold uppercase ${column.color}`}>{column.label}</span><span className="text-xs text-gray-500">{tasks.length}</span></header>
+    <div className="space-y-2 p-2">{tasks.map(task=>{const items=checklist.filter(item=>item.task_id===task.id),done=items.filter(item=>item.completed).length;return <article key={task.id} draggable={canEdit} onDragStart={()=>setDragged(task.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.stopPropagation();const source=tasks.find(t=>t.id===dragged);if(source)void moveTask(source,column.key,task.id);setDragged(null);}} onClick={()=>openTask(task)} className={`cursor-pointer border bg-[#030b08] p-3 transition hover:border-[#00ff66]/50 ${task.blocked?"border-red-500/50":"border-white/10"}`}>
+      <div className="mb-2 flex items-start justify-between gap-2"><span className="text-[10px] font-bold text-[#00ff66]">{ref(task)}</span><span className={`text-[10px] font-semibold uppercase ${task.priority==="critical"?"text-red-300":task.priority==="high"?"text-orange-300":"text-gray-500"}`}>{task.priority}</span></div>
+      <h3 className="line-clamp-2 text-sm font-semibold leading-5">{task.title}</h3>
+      <div className="mt-3 flex flex-wrap gap-1 text-[10px]"><span className="border border-white/10 px-1.5 py-1 text-gray-400">{label(task.task_type)}</span><span className="border border-white/10 px-1.5 py-1 text-gray-400">{label(task.workstream)}</span>{task.blocked&&<span className="border border-red-500/30 px-1.5 py-1 text-red-300">Blocked</span>}</div>
+      <div className="mt-3 flex items-center justify-between text-[11px] text-gray-500"><span className="truncate">{ownerName(task.assigned_to)}</span><span title="Time in current stage">{age(task.stage_entered_at)}</span></div>
+      {items.length>0&&<div className="mt-3"><div className="mb-1 flex justify-between text-[10px] text-gray-500"><span>Checklist</span><span>{done}/{items.length}</span></div><div className="h-1 bg-white/10"><div className="h-full bg-[#00ff66]" style={{width:`${done/items.length*100}%`}}/></div></div>}
+    </article>;})}{tasks.length===0&&<div className="border border-dashed border-white/10 px-3 py-8 text-center text-xs text-gray-600">Drop work here</div>}</div>
+  </section>;
+}
+
+function ArchiveList({tasks,openTask,ownerName}:{tasks:Task[];openTask:(t:Task)=>void;ownerName:(id:string|null)=>string}){return <div className="border border-white/10">{tasks.filter(t=>t.archived_at).map(task=><button key={task.id} onClick={()=>openTask(task)} className="grid w-full grid-cols-[100px_1fr_160px_150px_24px] items-center gap-3 border-b border-white/10 px-4 py-3 text-left hover:bg-white/[.03]"><span className="text-xs text-[#00ff66]">{ref(task)}</span><span className="font-semibold">{task.title}</span><span className="text-sm text-gray-400">{ownerName(task.assigned_to)}</span><span className="text-xs text-gray-500">{date(task.archived_at)}</span><ChevronRight size={15}/></button>)}{tasks.filter(t=>t.archived_at).length===0&&<p className="p-10 text-center text-gray-500">No archived tasks.</p>}</div>;}
+
+function Field({labelText,children,wide=false}:{labelText:string;children:React.ReactNode;wide?:boolean}){return <label className={wide?"md:col-span-2":""}><span className="mb-1.5 block text-[11px] font-bold uppercase text-gray-500">{labelText}</span>{children}</label>;}
+const inputClass="h-11 w-full border border-white/15 bg-black px-3 text-sm outline-none focus:border-[#00ff66]/60";
+const areaClass="w-full border border-white/15 bg-black px-3 py-3 text-sm outline-none focus:border-[#00ff66]/60";
+
+function TaskFields({form,setForm,data,canAdmin}:{form:typeof blankForm;setForm:(value:typeof blankForm)=>void;data:Data;canAdmin:boolean}){return <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+  <Field labelText="Title" wide><input className={inputClass} value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></Field>
+  <Field labelText="Workflow"><select className={inputClass} value={form.status} onChange={e=>setForm({...form,status:e.target.value as Status})}>{PIPELINE.map(item=><option key={item.key} value={item.key}>{item.label}</option>)}<option value="cancelled">Cancelled</option></select></Field>
+  <Field labelText="Priority"><select className={inputClass} value={form.priority} onChange={e=>setForm({...form,priority:e.target.value as Priority})}>{PRIORITIES.map(item=><option key={item} value={item}>{label(item)}</option>)}</select></Field>
+  <Field labelText="Task Type"><select className={inputClass} value={form.task_type} onChange={e=>setForm({...form,task_type:e.target.value as TaskType})}>{TYPES.map(item=><option key={item} value={item}>{label(item)}</option>)}</select></Field>
+  <Field labelText="Workstream"><select className={inputClass} value={form.workstream} onChange={e=>setForm({...form,workstream:e.target.value as Workstream})}>{WORKSTREAMS.map(item=><option key={item} value={item}>{label(item)}</option>)}</select></Field>
+  {canAdmin&&<Field labelText="Owner"><select className={inputClass} value={form.assigned_to} onChange={e=>setForm({...form,assigned_to:e.target.value})}><option value="">Unassigned</option>{data.assignees.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>}
+  {canAdmin&&<Field labelText="Target Release"><select className={inputClass} value={form.release_id} onChange={e=>setForm({...form,release_id:e.target.value})}><option value="">No release</option>{data.releases.filter(r=>r.status!=="cancelled").map(item=><option key={item.id} value={item.id}>{item.name}{item.version?` (${item.version})`:""}</option>)}</select></Field>}
+  <Field labelText="Due Date"><input type="date" className={inputClass} value={form.due_date} onChange={e=>setForm({...form,due_date:e.target.value})}/></Field>
+  <Field labelText="Legacy Tags"><div className="flex min-h-11 flex-wrap gap-2 border border-white/15 bg-black p-2">{TAGS.map(tag=><button type="button" key={tag} onClick={()=>setForm({...form,tags:form.tags.includes(tag)?form.tags.filter(t=>t!==tag):[...form.tags,tag]})} className={`border px-2 py-1 text-xs ${form.tags.includes(tag)?"border-[#00ff66]/50 bg-[#00ff66]/10 text-[#00ff66]":"border-white/10 text-gray-500"}`}>{tag}</button>)}</div></Field>
+  <Field labelText="Blocked"><label className="flex h-11 items-center gap-3 border border-white/15 bg-black px-3 text-sm"><input type="checkbox" checked={form.blocked} onChange={e=>setForm({...form,blocked:e.target.checked,blocker_reason:e.target.checked?form.blocker_reason:""})} className="accent-red-500"/>Task cannot progress</label></Field>
+  {form.blocked&&<Field labelText="Blocker Reason" wide><textarea className={areaClass} rows={2} value={form.blocker_reason} onChange={e=>setForm({...form,blocker_reason:e.target.value})}/></Field>}
+  <Field labelText="Description" wide><textarea className={areaClass} rows={4} value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></Field>
+  <Field labelText="Acceptance Criteria" wide><textarea className={areaClass} rows={4} placeholder="What must be true before this work can pass review?" value={form.acceptance_criteria} onChange={e=>setForm({...form,acceptance_criteria:e.target.value})}/></Field>
+  </div>;}
+
+function TaskForm({title,form,setForm,data,canAdmin,saving,close,save}:{title:string;form:typeof blankForm;setForm:(v:typeof blankForm)=>void;data:Data;canAdmin:boolean;saving:boolean;close:()=>void;save:()=>void}){return <><DrawerHead eyebrow="Pipeline Administration" title={title} close={close}/><div className="p-5 md:p-7"><TaskFields form={form} setForm={setForm} data={data} canAdmin={canAdmin}/></div><DrawerActions close={close} save={save} saving={saving}/></>;}
+function DrawerHead({eyebrow,title,close}:{eyebrow:string;title:string;close:()=>void}){return <header className="sticky top-0 z-10 flex items-start justify-between border-b border-white/10 bg-[#020906]/95 p-5 backdrop-blur md:p-7"><div><p className="text-xs font-bold uppercase text-[#00ff66]">{eyebrow}</p><h2 className="mt-1 text-2xl font-bold">{title}</h2></div><button onClick={close} className="grid size-10 place-items-center border border-white/15 text-gray-400 hover:text-white"><X/></button></header>;}
+function DrawerActions({close,save,saving}:{close:()=>void;save:()=>void;saving:boolean}){return <footer className="sticky bottom-0 flex justify-end gap-2 border-t border-white/10 bg-[#020906]/95 p-4 backdrop-blur"><button onClick={close} className="h-11 border border-white/15 px-4 text-gray-300">Cancel</button><button onClick={save} disabled={saving} className="flex h-11 items-center gap-2 bg-[#00ff66] px-5 font-bold text-black disabled:opacity-50">{saving?<Loader2 className="animate-spin" size={17}/>:<Check size={17}/>}Save Changes</button></footer>;}
+
+function TaskDrawer(props:{task:Task;data:Data;canEdit:boolean;canAdmin:boolean;saving:boolean;tab:DetailTab;setTab:(v:DetailTab)=>void;editing:boolean;beginEdit:()=>void;cancelEdit:()=>void;form:typeof blankForm;setForm:(v:typeof blankForm)=>void;save:()=>void;close:()=>void;ownerName:(id:string|null)=>string;comments:Comment[];events:Event[];checklist:Checklist[];contributors:Contributor[];dependencies:Dependency[];links:TaskLink[];approvals:Approval[];repositoryLinks:RepositoryLink[];assets:TaskAsset[];comment:string;setComment:(v:string)=>void;checkItem:string;setCheckItem:(v:string)=>void;linkLabel:string;setLinkLabel:(v:string)=>void;linkUrl:string;setLinkUrl:(v:string)=>void;contributor:string;setContributor:(v:string)=>void;dependency:string;setDependency:(v:string)=>void;addSimple:(kind:string,extra:Record<string,unknown>)=>Promise<boolean>;uploadAsset:(taskId:string,file:File,caption:string)=>Promise<boolean>;removeAsset:(id:string)=>Promise<boolean>;archive:(t:Task)=>Promise<void>;restore:(t:Task)=>Promise<void>;deleteTask:(t:Task)=>void;request:(m:"POST"|"PATCH"|"DELETE",p?:Record<string,unknown>,q?:string)=>Promise<boolean>}){
+  const {task,data,canEdit,canAdmin,saving,tab,setTab,editing,beginEdit,form,setForm,save,close,ownerName,comments,events,checklist,contributors,dependencies,links,approvals,repositoryLinks,assets}=props;
+  const [repositoryId,setRepositoryId]=useState(""),[referenceType,setReferenceType]=useState<RepositoryLink["reference_type"]>("branch"),[reference,setReference]=useState(""),[referenceUrl,setReferenceUrl]=useState("");
+  const [imageFile,setImageFile]=useState<File|null>(null),[imageCaption,setImageCaption]=useState("");
+  if(editing)return <TaskForm title={`Edit ${ref(task)}`} form={form} setForm={setForm} data={data} canAdmin={canAdmin} saving={saving} close={props.cancelEdit} save={save}/>;
+  const completed=checklist.filter(i=>i.completed).length;
+  return <><DrawerHead eyebrow={ref(task)} title={task.title} close={close}/>
+    <div className="border-b border-white/10 px-5 md:px-7"><div className="flex gap-1 overflow-x-auto">{(["overview","media","checklist","comments","history"] as DetailTab[]).map(item=><button key={item} onClick={()=>setTab(item)} className={`border-b-2 px-3 py-3 text-xs font-bold uppercase ${tab===item?"border-[#00ff66] text-[#00ff66]":"border-transparent text-gray-500"}`}>{label(item)}{item==="media"?` (${assets.length})`:item==="comments"?` (${comments.length})`:item==="checklist"?` (${completed}/${checklist.length})`:""}</button>)}</div></div>
+    <div className="min-h-[calc(100vh-210px)] p-5 md:p-7">
+      {tab==="overview"&&<div className="space-y-6">
+        {task.blocked&&<div className="border border-red-500/40 bg-red-950/20 p-4"><p className="flex items-center gap-2 font-bold text-red-300"><Ban size={17}/>Blocked</p><p className="mt-2 text-sm text-red-100/75">{task.blocker_reason}</p></div>}
+        <div className="grid grid-cols-2 border border-white/10 sm:grid-cols-4">{[["Status",label(task.status)],["Owner",ownerName(task.assigned_to)],["Stage Age",age(task.stage_entered_at)],["Due",date(task.due_date)]].map(([name,value],index)=><div key={name} className={`p-3 ${index?"border-l border-white/10":""}`}><p className="text-[10px] font-bold uppercase text-gray-600">{name}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>)}</div>
+        <TextBlock title="Description" value={task.description||"No description recorded."}/><TextBlock title="Acceptance Criteria" value={task.acceptance_criteria||"No acceptance criteria recorded."}/>
+        <section><SectionTitle icon={<Users size={16}/>} text="People"/><p className="text-sm text-gray-400">Owner: <span className="text-white">{ownerName(task.assigned_to)}</span></p><div className="mt-2 flex flex-wrap gap-2">{contributors.map(item=><span key={item.assignee_id} className="border border-cyan-500/25 px-2 py-1 text-xs text-cyan-200">{item.assignee_name}</span>)}{contributors.length===0&&<span className="text-sm text-gray-600">No additional contributors</span>}</div>{canAdmin&&<InlineSelect value={props.contributor} setValue={props.setContributor} options={data.assignees.filter(a=>!contributors.some(c=>c.assignee_id===a.id)).map(a=>[a.id,a.name])} placeholder="Add contributor" action={async()=>{if(props.contributor&&await props.addSimple("contributor",{assigneeId:props.contributor}))props.setContributor("");}}/>}</section>
+        <section><SectionTitle icon={<GitBranch size={16}/>} text="Dependencies"/><div className="space-y-2">{dependencies.map(item=><p key={item.depends_on_task_id} className="text-sm text-gray-300">MOD-{String(item.depends_on_reference).padStart(4,"0")} - {item.depends_on_title}</p>)}{dependencies.length===0&&<p className="text-sm text-gray-600">No dependencies</p>}</div>{canAdmin&&<InlineSelect value={props.dependency} setValue={props.setDependency} options={data.tasks.filter(t=>t.id!==task.id&&!dependencies.some(d=>d.depends_on_task_id===t.id)).map(t=>[t.id,`${ref(t)} - ${t.title}`])} placeholder="Link dependency" action={async()=>{if(props.dependency&&await props.addSimple("dependency",{dependsOn:props.dependency}))props.setDependency("");}}/>}</section>
+        <section><SectionTitle icon={<GitBranch size={16}/>} text="Repository Work"/><div className="space-y-2">{repositoryLinks.map(item=><div key={item.id} className="flex items-center gap-3 border border-white/10 p-3"><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase text-[#00ff66]">{item.repository_name} · {label(item.reference_type)}</p><p className="mt-1 truncate font-mono text-sm text-gray-300">{item.reference}</p></div>{item.url&&<a href={item.url} target="_blank" rel="noreferrer" title="Open repository reference" className="grid size-9 place-items-center border border-cyan-500/25 text-cyan-300"><ExternalLink size={15}/></a>}{canAdmin&&<button title="Remove repository link" onClick={()=>void props.request("DELETE",undefined,`?id=${item.id}&kind=repository_link`)} className="grid size-9 place-items-center border border-red-500/25 text-red-300"><Trash2 size={15}/></button>}</div>)}{repositoryLinks.length===0&&<p className="text-sm text-gray-600">No repository work linked</p>}</div>{canEdit&&data.repositories.some(item=>item.active)&&<div className="mt-3 grid gap-2 sm:grid-cols-2"><select className={inputClass} value={repositoryId} onChange={e=>setRepositoryId(e.target.value)}><option value="">Select repository</option>{data.repositories.filter(item=>item.active).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select><select className={inputClass} value={referenceType} onChange={e=>setReferenceType(e.target.value as RepositoryLink["reference_type"])}><option value="issue">Issue</option><option value="branch">Branch</option><option value="pull_request">Pull request</option><option value="commit">Commit</option><option value="other">Other</option></select><input className={inputClass} value={reference} onChange={e=>setReference(e.target.value)} placeholder="Issue number, branch, PR, or commit"/><input className={inputClass} value={referenceUrl} onChange={e=>setReferenceUrl(e.target.value)} placeholder="Optional direct URL"/><button disabled={!repositoryId||!reference.trim()} onClick={async()=>{if(await props.addSimple("repository_link",{repositoryId,referenceType,reference,url:referenceUrl})){setReference("");setReferenceUrl("");}}} className="h-11 bg-[#00ff66] px-4 font-bold text-black disabled:opacity-40 sm:col-span-2">Link Repository Work</button></div>}</section>
+        <section><SectionTitle icon={<Link2 size={16}/>} text="Related Links"/><div className="space-y-2">{links.map(item=><a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-cyan-300 hover:underline">{item.label}<ExternalLink size={13}/></a>)}{links.length===0&&<p className="text-sm text-gray-600">No related links</p>}</div>{canEdit&&<div className="mt-3 grid grid-cols-[1fr_1.5fr_auto] gap-2"><input className={inputClass} placeholder="Label" value={props.linkLabel} onChange={e=>props.setLinkLabel(e.target.value)}/><input className={inputClass} placeholder="https://" value={props.linkUrl} onChange={e=>props.setLinkUrl(e.target.value)}/><button title="Add link" onClick={async()=>{if(await props.addSimple("link",{label:props.linkLabel,url:props.linkUrl})){props.setLinkLabel("");props.setLinkUrl("");}}} className="grid size-11 place-items-center border border-[#00ff66]/40 text-[#00ff66]"><Plus/></button></div>}</section>
+        <section><SectionTitle icon={<ShieldCheck size={16}/>} text="Approvals"/><div className="space-y-2">{["review","testing","release"].map(gate=>{const latest=approvals.find(a=>a.gate===gate);return <div key={gate} className="flex items-center justify-between border-b border-white/10 py-2"><span className="text-sm">{label(gate)}</span><span className={`text-xs ${latest?.decision==="approved"?"text-[#00ff66]":latest?.decision==="rejected"?"text-red-300":"text-gray-600"}`}>{latest?`${label(latest.decision)} by ${latest.decided_by_name||"Unknown"}`:"Pending"}</span>{canAdmin&&<button onClick={()=>void props.addSimple("approval",{gate,decision:"approved"})} className="border border-[#00ff66]/30 px-2 py-1 text-[10px] font-bold uppercase text-[#00ff66]">Approve</button>}</div>;})}</div></section>
+      </div>}
+      {tab==="media"&&<section><div className="grid gap-3 sm:grid-cols-2">{assets.map(asset=><article key={asset.id} className="overflow-hidden border border-white/10 bg-black"><a href={`/api/mod-taskboard/assets/${asset.id}`} target="_blank" rel="noreferrer" title="Open full-size image" className="relative block aspect-video bg-[#00180d]"><Image src={`/api/mod-taskboard/assets/${asset.id}`} alt={asset.caption||asset.file_name} fill unoptimized className="object-contain"/></a><div className="flex items-start gap-3 p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{asset.caption||asset.file_name}</p><p className="mt-1 text-[11px] text-gray-600">{(asset.byte_size/1024).toFixed(0)} KB · {date(asset.uploaded_at,true)}</p></div>{canEdit&&<button disabled={saving} onClick={()=>void props.removeAsset(asset.id)} title="Remove image" className="grid size-9 shrink-0 place-items-center border border-red-500/25 text-red-300"><Trash2 size={15}/></button>}</div></article>)}{assets.length===0&&<div className="grid min-h-48 place-items-center border border-dashed border-white/15 text-center text-gray-600 sm:col-span-2"><div><ImageIcon className="mx-auto mb-2"/><p>No task images uploaded</p></div></div>}</div>{canEdit&&assets.length<12&&<div className="mt-5 border border-white/10 p-4"><SectionTitle icon={<Upload size={16}/>} text="Add Image"/><div className="grid gap-3 sm:grid-cols-[1fr_auto]"><div className="space-y-2"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setImageFile(e.target.files?.[0]||null)} className="block w-full text-sm text-gray-400 file:mr-3 file:border-0 file:bg-[#00ff66] file:px-3 file:py-2 file:font-bold file:text-black"/><input className={inputClass} value={imageCaption} onChange={e=>setImageCaption(e.target.value)} placeholder="Caption (optional)"/></div><button disabled={!imageFile||saving} onClick={async()=>{if(imageFile&&await props.uploadAsset(task.id,imageFile,imageCaption)){setImageFile(null);setImageCaption("");}}} className="h-11 self-end bg-[#00ff66] px-5 font-bold text-black disabled:opacity-40">Upload</button></div><p className="mt-2 text-xs text-gray-600">PNG, JPEG or WebP. Maximum 5 MB per image and 12 images per task.</p></div>}</section>}
+      {tab==="checklist"&&<section><div className="space-y-2">{checklist.map(item=><label key={item.id} className="flex items-center gap-3 border border-white/10 p-3"><input type="checkbox" checked={item.completed} disabled={!canEdit} onChange={()=>void props.request("PATCH",{kind:"checklist",id:item.id,completed:!item.completed})} className="size-4 accent-[#00ff66]"/><span className={item.completed?"text-gray-500 line-through":""}>{item.content}</span></label>)}</div>{canEdit&&<div className="mt-3 flex gap-2"><input className={inputClass} value={props.checkItem} onChange={e=>props.setCheckItem(e.target.value)} placeholder="Add a completion requirement"/><button onClick={async()=>{if(props.checkItem&&await props.addSimple("checklist",{content:props.checkItem}))props.setCheckItem("");}} className="grid size-11 shrink-0 place-items-center bg-[#00ff66] text-black"><Plus/></button></div>}</section>}
+      {tab==="comments"&&<section><div className="space-y-3">{comments.map(item=><article key={item.id} className="border-l-2 border-cyan-500/40 pl-3"><div className="flex justify-between text-xs"><strong>{item.profiles?.display_name||"Unknown"}</strong><span className="text-gray-600">{date(item.created_at,true)}</span></div><p className="mt-2 whitespace-pre-wrap text-sm text-gray-300">{item.content}</p></article>)}</div>{canEdit&&<div className="mt-5"><textarea className={areaClass} rows={3} value={props.comment} onChange={e=>props.setComment(e.target.value)} placeholder="Add context or a progress note"/><button onClick={async()=>{if(props.comment&&await props.addSimple("comment",{content:props.comment}))props.setComment("");}} className="mt-2 h-10 bg-cyan-400 px-4 font-bold text-black">Add Comment</button></div>}</section>}
+      {tab==="history"&&<Timeline events={events}/>}
+    </div>
+    <footer className="sticky bottom-0 flex flex-wrap justify-between gap-2 border-t border-white/10 bg-[#020906]/95 p-4 backdrop-blur"><div>{task.archived_at?canAdmin&&<button onClick={()=>void props.restore(task)} className="h-10 border border-[#00ff66]/35 px-3 text-sm text-[#00ff66]">Restore</button>:canAdmin&&<button onClick={()=>void props.archive(task)} className="flex h-10 items-center gap-2 border border-amber-500/35 px-3 text-sm text-amber-300"><Archive size={15}/>Archive</button>}{task.archived_at&&canAdmin&&<button onClick={()=>props.deleteTask(task)} className="ml-2 h-10 border border-red-500/35 px-3 text-sm text-red-300">Delete Permanently</button>}</div>{canEdit&&!task.archived_at&&<button onClick={beginEdit} className="h-10 bg-[#00ff66] px-5 font-bold text-black">Edit Task</button>}</footer>
+  </>;
+}
+
+function ActionDialog({action,saving,close,confirm}:{action:{type:"move"|"archive"|"delete";task:Task;status?:Status};saving:boolean;close:()=>void;confirm:(reason:string)=>Promise<void>}){const [reason,setReason]=useState(action.type==="archive"?(action.task.status==="cancelled"?"Cancelled":"Completed record"):"");const needsReason=action.type!=="delete";const title=action.type==="archive"?"Archive Task":action.type==="delete"?"Delete Task Permanently":"Confirm Workflow Change";return <div className="fixed inset-0 z-[70] grid place-items-center bg-black/80 p-4" onMouseDown={event=>{if(event.currentTarget===event.target&&!saving)close();}}><section className="w-full max-w-lg border border-[#00ff66]/30 bg-[#020906] shadow-2xl"><DrawerHead eyebrow={ref(action.task)} title={title} close={close}/><div className="p-5"><p className="text-sm leading-6 text-gray-300">{action.type==="delete"?"This permanently removes the task and its complete history. This cannot be undone.":action.type==="archive"?"Move this task out of the active pipeline while keeping its history available.":`Move this task back to ${label(action.status||"intake")}. The reason will be recorded in its history.`}</p>{needsReason&&<Field labelText="Reason"><textarea autoFocus rows={3} className={`${areaClass} mt-4`} value={reason} onChange={event=>setReason(event.target.value)} placeholder="Record why this change is being made"/></Field>}</div><footer className="flex justify-end gap-2 border-t border-white/10 p-4"><button disabled={saving} onClick={close} className="h-10 border border-white/15 px-4 text-sm text-gray-300">Cancel</button><button disabled={saving||(needsReason&&!reason.trim())} onClick={()=>void confirm(reason.trim())} className={`h-10 px-4 text-sm font-bold disabled:opacity-40 ${action.type==="delete"?"bg-red-500 text-white":"bg-[#00ff66] text-black"}`}>{saving?"Saving...":action.type==="delete"?"Delete Permanently":"Confirm Change"}</button></footer></section></div>;}
+
+function TextBlock({title,value}:{title:string;value:string}){return <section><h3 className="mb-2 text-xs font-bold uppercase text-gray-500">{title}</h3><p className="whitespace-pre-wrap text-sm leading-6 text-gray-300">{value}</p></section>;}
+function SectionTitle({icon,text}:{icon:React.ReactNode;text:string}){return <h3 className="mb-3 flex items-center gap-2 border-b border-white/10 pb-2 text-xs font-bold uppercase text-gray-400">{icon}{text}</h3>;}
+function InlineSelect({value,setValue,options,placeholder,action}:{value:string;setValue:(v:string)=>void;options:string[][];placeholder:string;action:()=>void}){return <div className="mt-3 flex gap-2"><select className={inputClass} value={value} onChange={e=>setValue(e.target.value)}><option value="">{placeholder}</option>{options.map(([id,text])=><option key={id} value={id}>{text}</option>)}</select><button onClick={action} title={placeholder} className="grid size-11 shrink-0 place-items-center border border-[#00ff66]/40 text-[#00ff66]"><UserPlus size={17}/></button></div>;}
+function Timeline({events}:{events:Event[]}){return <div className="space-y-0">{events.map(item=><article key={item.id} className="relative border-l border-white/15 pb-6 pl-5 last:pb-0"><span className="absolute -left-1.5 top-0 size-3 border border-[#00ff66]/60 bg-[#020906]"/><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{item.summary}</p><p className="mt-1 text-xs text-gray-500">{item.actor_name||"System"}{item.reason?` - ${item.reason}`:""}</p></div><time className="shrink-0 text-[11px] text-gray-600">{date(item.created_at,true)}</time></div>{Object.keys(item.new_values||{}).length>0&&<p className="mt-2 text-xs text-gray-600">Changed: {Object.keys(item.new_values).map(label).join(", ")}</p>}</article>)}{events.length===0&&<p className="text-sm text-gray-600">No activity recorded.</p>}</div>;}
+
+function ReleasesView({releases,tasks,canEdit,saving,form,setForm,create,update}:{releases:Release[];tasks:Task[];canEdit:boolean;saving:boolean;form:{name:string;version:string;target_date:string;description:string};setForm:(v:typeof form)=>void;create:()=>void;update:(release:Release,status:Release["status"])=>Promise<boolean>}){return <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+  {canEdit&&<section className="border border-white/10 p-5"><h2 className="font-bold text-[#00ff66]">Plan Release</h2><div className="mt-4 space-y-3"><input className={inputClass} placeholder="Release name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/><input className={inputClass} placeholder="Version, e.g. 2.4.0" value={form.version} onChange={e=>setForm({...form,version:e.target.value})}/><input type="date" className={inputClass} value={form.target_date} onChange={e=>setForm({...form,target_date:e.target.value})}/><textarea className={areaClass} rows={4} placeholder="Release objective" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/><button disabled={saving||!form.name} onClick={create} className="h-11 w-full bg-[#00ff66] font-bold text-black disabled:opacity-50">Create Release</button></div></section>}
+  <section className="border border-white/10"><header className="border-b border-white/10 px-4 py-3 text-xs font-bold uppercase text-gray-500">Release Register</header>{releases.map(release=><article key={release.id} className="grid gap-3 border-b border-white/10 p-4 md:grid-cols-[1fr_130px_160px_100px]"><div><h3 className="font-semibold">{release.name} {release.version&&<span className="text-gray-500">{release.version}</span>}</h3><p className="mt-1 text-sm text-gray-500">{release.description||"No release notes yet."}</p></div><div><p className="text-[10px] uppercase text-gray-600">Target</p><p className="text-sm">{date(release.target_date)}</p></div><div><p className="text-[10px] uppercase text-gray-600">Status</p>{canEdit?<select value={release.status} disabled={saving} onChange={event=>void update(release,event.target.value as Release["status"])} className="mt-1 h-8 w-full border border-white/15 bg-black px-2 text-xs text-[#00ff66]"><option value="planned">Planned</option><option value="testing">Testing</option><option value="released">Released</option><option value="cancelled">Cancelled</option></select>:<p className="text-sm text-[#00ff66]">{label(release.status)}</p>}</div><div><p className="text-[10px] uppercase text-gray-600">Tasks</p><p className="text-sm">{tasks.filter(t=>t.release_id===release.id).length}</p></div></article>)}{releases.length===0&&<p className="p-10 text-center text-gray-500">No releases planned.</p>}</section>
+  </div>;}
+function PipelinePeopleView({people,saving,request}:{people:Assignee[];saving:boolean;request:(m:"POST"|"PATCH"|"DELETE",p?:Record<string,unknown>,q?:string)=>Promise<boolean>}){
+  const [term,setTerm]=useState(""),[adding,setAdding]=useState(false),[addTerm,setAddTerm]=useState("");
+  const activePeople=people.filter(person=>person.active!==false);
+  const hiddenPeople=people.filter(person=>person.active===false);
+  const filtered=activePeople.filter(person=>person.name.toLowerCase().includes(term.trim().toLowerCase()));
+  const addable=hiddenPeople.filter(person=>person.name.toLowerCase().includes(addTerm.trim().toLowerCase()));
+  return <div className="mx-auto max-w-5xl"><section className="border border-white/10"><header className="flex flex-col gap-4 border-b border-white/10 p-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase text-[#00ff66]">Pipeline Administration</p><h2 className="mt-1 text-xl font-bold">Owners & Contributors</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Only the people listed here appear in task Owner and Contributor selectors. Removing someone does not disable their account or erase previous task history.</p></div><div className="flex shrink-0 items-center gap-4"><div className="text-right"><p className="text-2xl font-bold text-[#00ff66]">{activePeople.length}</p><p className="text-[10px] font-bold uppercase text-gray-600">Available people</p></div>{hiddenPeople.length>0&&<button onClick={()=>setAdding(true)} className="flex h-10 items-center gap-2 bg-[#00ff66] px-4 font-bold text-black"><Plus size={16}/>Add Person</button>}</div></header><div className="border-b border-white/10 p-4"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={16}/><input className={`${inputClass} pl-10`} value={term} onChange={event=>setTerm(event.target.value)} placeholder="Search available people"/></div></div><div className="divide-y divide-white/10">{filtered.map(person=><article key={person.id} className="flex items-center justify-between gap-4 px-5 py-4"><div><p className="font-semibold">{person.name}</p><p className="mt-1 text-xs text-[#00ff66]">Available for task assignment</p></div><button disabled={saving} onClick={()=>void request("PATCH",{kind:"assignee",id:person.id,active:false})} className="h-10 min-w-28 border border-red-500/30 px-4 text-sm font-bold text-red-300 disabled:opacity-40">Remove</button></article>)}{filtered.length===0&&<p className="p-10 text-center text-gray-600">No available people match that search.</p>}</div></section>{adding&&<div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4" onMouseDown={event=>{if(event.currentTarget===event.target)setAdding(false);}}><section className="w-full max-w-xl border border-[#00ff66]/30 bg-[#020906]"><DrawerHead eyebrow="Pipeline Administration" title="Add Person" close={()=>setAdding(false)}/><div className="p-5"><div className="relative mb-4"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={16}/><input autoFocus className={`${inputClass} pl-10`} value={addTerm} onChange={event=>setAddTerm(event.target.value)} placeholder="Search hidden website accounts"/></div><div className="max-h-[55vh] divide-y divide-white/10 overflow-y-auto border border-white/10">{addable.map(person=><div key={person.id} className="flex items-center justify-between gap-3 px-4 py-3"><span className="font-semibold">{person.name}</span><button disabled={saving} onClick={async()=>{if(await request("PATCH",{kind:"assignee",id:person.id,active:true})){setAdding(false);setAddTerm("");}}} className="h-9 border border-[#00ff66]/35 px-4 text-sm font-bold text-[#00ff66] disabled:opacity-40">Add</button></div>)}{addable.length===0&&<p className="p-8 text-center text-gray-600">No hidden accounts match that search.</p>}</div></div></section></div>}</div>;
+}
+function RepositoriesView({repositories,saving,request}:{repositories:Repository[];saving:boolean;request:(m:"POST"|"PATCH"|"DELETE",p?:Record<string,unknown>,q?:string)=>Promise<boolean>}){const [form,setForm]=useState({name:"",webUrl:"",defaultBranch:"main"});return <div className="grid gap-6 xl:grid-cols-[380px_1fr]"><section className="border border-white/10 p-5"><p className="text-xs font-bold uppercase text-[#00ff66]">Source Control</p><h2 className="mt-1 text-xl font-bold">Repository Register</h2><p className="mt-2 text-sm leading-6 text-gray-500">Configure up to five Git repositories. Tasks can then link issues, branches, pull requests, commits, or another reference.</p><div className="mt-5 space-y-3"><Field labelText="Display Name"><input className={inputClass} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Website"/></Field><Field labelText="Repository URL"><input className={inputClass} value={form.webUrl} onChange={e=>setForm({...form,webUrl:e.target.value})} placeholder="https://github.com/org/repository"/></Field><Field labelText="Default Branch"><input className={inputClass} value={form.defaultBranch} onChange={e=>setForm({...form,defaultBranch:e.target.value})} placeholder="main"/></Field><button disabled={saving||repositories.length>=5||!form.name.trim()||!form.webUrl.trim()} onClick={async()=>{if(await request("POST",{kind:"repository",...form}))setForm({name:"",webUrl:"",defaultBranch:"main"});}} className="h-11 w-full bg-[#00ff66] font-bold text-black disabled:opacity-40"><Plus className="mr-2 inline" size={16}/>Add Repository</button><p className="text-xs text-gray-600">{repositories.length}/5 configured</p></div></section><section className="border border-white/10"><header className="border-b border-white/10 px-4 py-3 text-xs font-bold uppercase text-gray-500">Configured Repositories</header>{repositories.map(repository=><RepositoryRow key={repository.id} repository={repository} saving={saving} request={request}/>)}{repositories.length===0&&<div className="p-12 text-center text-gray-600"><GitBranch className="mx-auto mb-3"/><p>No repositories configured yet.</p></div>}</section></div>;}
+function RepositoryRow({repository,saving,request}:{repository:Repository;saving:boolean;request:(m:"POST"|"PATCH"|"DELETE",p?:Record<string,unknown>,q?:string)=>Promise<boolean>}){const [editing,setEditing]=useState(false),[form,setForm]=useState({name:repository.name,webUrl:repository.web_url,defaultBranch:repository.default_branch});if(editing)return <article className="grid gap-3 border-b border-white/10 p-4 md:grid-cols-[1fr_1.5fr_160px_auto]"><input className={inputClass} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/><input className={inputClass} value={form.webUrl} onChange={e=>setForm({...form,webUrl:e.target.value})}/><input className={inputClass} value={form.defaultBranch} onChange={e=>setForm({...form,defaultBranch:e.target.value})}/><div className="flex gap-2"><button disabled={saving} onClick={async()=>{if(await request("PATCH",{kind:"repository",id:repository.id,...form,active:repository.active}))setEditing(false);}} className="h-11 bg-[#00ff66] px-4 font-bold text-black">Save</button><button onClick={()=>setEditing(false)} className="h-11 border border-white/15 px-3">Cancel</button></div></article>;return <article className="grid gap-3 border-b border-white/10 p-4 md:grid-cols-[1fr_1.5fr_160px_auto] md:items-center"><div><p className="font-semibold">{repository.name}</p><p className={`mt-1 text-xs ${repository.active?"text-[#00ff66]":"text-gray-600"}`}>{repository.active?"Active":"Inactive"}</p></div><a href={repository.web_url} target="_blank" rel="noreferrer" className="truncate text-sm text-cyan-300 hover:underline">{repository.web_url}</a><p className="font-mono text-sm text-gray-400">{repository.default_branch}</p><div className="flex gap-2"><button onClick={()=>setEditing(true)} className="h-9 border border-white/15 px-3 text-sm">Edit</button><button disabled={saving} onClick={()=>void request("PATCH",{kind:"repository",id:repository.id,name:repository.name,webUrl:repository.web_url,defaultBranch:repository.default_branch,active:!repository.active})} className={`h-9 border px-3 text-sm ${repository.active?"border-amber-500/30 text-amber-300":"border-[#00ff66]/30 text-[#00ff66]"}`}>{repository.active?"Disable":"Enable"}</button></div></article>;}
+function ActivityView({events,tasks}:{events:Event[];tasks:Task[]}){const [term,setTerm]=useState("");const filtered=events.filter(event=>`${event.summary} ${event.actor_name||""} ${tasks.find(t=>t.id===event.task_id)?.title||""}`.toLowerCase().includes(term.toLowerCase())).map(event=>{const task=tasks.find(item=>item.id===event.task_id);return task?{...event,summary:`${ref(task)} - ${event.summary}`}:event;});return <div className="mx-auto max-w-5xl"><div className="relative mb-5"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={17}/><input className={`${inputClass} pl-10`} placeholder="Search action, person or task" value={term} onChange={e=>setTerm(e.target.value)}/></div><Timeline events={filtered}/></div>;}

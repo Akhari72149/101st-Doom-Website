@@ -57,24 +57,36 @@ function changedValues(oldRow:Row,next:Row) {
 
 async function readPostgres(includeArchive:boolean) {
   const pool=getPostgresPool(),taskWhere=includeArchive?"":"where t.archived_at is null";
-  await pool.query(`insert into public.mod_pipeline_assignees(id,name)
-    select p.id,p.display_name from public.profiles p join public.app_auth_users u on u.id=p.id
-    where u.disabled=false on conflict(id) do update set name=excluded.name`);
+  await pool.query(`insert into public.mod_pipeline_assignees(id,name,active)
+    select u.id,coalesce(nullif(btrim(u."displayUsername"),''),nullif(btrim(u.name),''),nullif(btrim(u.username),''),'Unknown account'),false
+    from public.app_auth_users u where u.disabled=false
+    on conflict(id) do update set name=excluded.name`);
   const [assignees,pipelinePeople,profiles,tasks,comments,releases,events,contributors,checklist,dependencies,links,approvals,repositories,repositoryLinks,assets]=await Promise.all([
     pool.query("select a.id,a.name,a.active from public.mod_pipeline_assignees a join public.app_auth_users u on u.id=a.id and u.disabled=false where a.active=true order by a.name"),
     pool.query("select a.id,a.name,a.active from public.mod_pipeline_assignees a join public.app_auth_users u on u.id=a.id and u.disabled=false order by a.name"),
-    pool.query("select id,display_name from public.profiles order by display_name"),
+    pool.query(`select id,coalesce(nullif(btrim("displayUsername"),''),nullif(btrim(name),''),nullif(btrim(username),''),'Unknown account') display_name
+      from public.app_auth_users where disabled=false order by display_name`),
     pool.query(`select t.*,r.name release_name,r.version release_version from public.mod_pipeline_tasks t left join public.mod_pipeline_releases r on r.id=t.release_id ${taskWhere} order by t.status,t.position,t.created_at`),
-    pool.query(`select c.id,c.task_id,c.user_id,c.content,c.created_at,p.display_name from public.mod_pipeline_comments c left join public.profiles p on p.id=c.user_id order by c.created_at`),
-    pool.query(`select r.*,creator.display_name created_by_name,approver.display_name approved_by_name,count(t.id)::int task_count from public.mod_pipeline_releases r
-      left join public.profiles creator on creator.id=r.created_by left join public.profiles approver on approver.id=r.approved_by
-      left join public.mod_pipeline_tasks t on t.release_id=r.id and t.archived_at is null group by r.id,creator.display_name,approver.display_name order by r.created_at desc`),
-    pool.query(`select e.*,p.display_name actor_name from public.mod_pipeline_events e left join public.profiles p on p.id=e.actor_id order by e.created_at desc limit 1000`),
+    pool.query(`select c.id,c.task_id,c.user_id,c.content,c.created_at,
+      coalesce(nullif(btrim(p."displayUsername"),''),nullif(btrim(p.name),''),nullif(btrim(p.username),'')) display_name
+      from public.mod_pipeline_comments c left join public.app_auth_users p on p.id=c.user_id order by c.created_at`),
+    pool.query(`select r.*,
+      coalesce(nullif(btrim(creator."displayUsername"),''),nullif(btrim(creator.name),''),nullif(btrim(creator.username),'')) created_by_name,
+      coalesce(nullif(btrim(approver."displayUsername"),''),nullif(btrim(approver.name),''),nullif(btrim(approver.username),'')) approved_by_name,
+      count(t.id)::int task_count from public.mod_pipeline_releases r
+      left join public.app_auth_users creator on creator.id=r.created_by left join public.app_auth_users approver on approver.id=r.approved_by
+      left join public.mod_pipeline_tasks t on t.release_id=r.id and t.archived_at is null
+      group by r.id,creator.id,approver.id order by r.created_at desc`),
+    pool.query(`select e.*,
+      coalesce(nullif(btrim(p."displayUsername"),''),nullif(btrim(p.name),''),nullif(btrim(p.username),'')) actor_name
+      from public.mod_pipeline_events e left join public.app_auth_users p on p.id=e.actor_id order by e.created_at desc limit 1000`),
     pool.query(`select c.*,a.name assignee_name from public.mod_pipeline_contributors c join public.mod_pipeline_assignees a on a.id=c.assignee_id order by c.added_at`),
     pool.query("select * from public.mod_pipeline_checklist_items order by task_id,position,created_at"),
     pool.query(`select d.*,t.reference_number depends_on_reference,t.title depends_on_title from public.mod_pipeline_dependencies d join public.mod_pipeline_tasks t on t.id=d.depends_on_task_id order by d.created_at`),
     pool.query("select * from public.mod_pipeline_links order by created_at"),
-    pool.query(`select a.*,p.display_name decided_by_name from public.mod_pipeline_approvals a left join public.profiles p on p.id=a.decided_by order by a.decided_at desc`),
+    pool.query(`select a.*,
+      coalesce(nullif(btrim(p."displayUsername"),''),nullif(btrim(p.name),''),nullif(btrim(p.username),'')) decided_by_name
+      from public.mod_pipeline_approvals a left join public.app_auth_users p on p.id=a.decided_by order by a.decided_at desc`),
     pool.query("select * from public.mod_pipeline_repositories order by sort_order,name"),
     pool.query(`select l.*,r.name repository_name,r.web_url repository_url from public.mod_pipeline_repository_links l
       join public.mod_pipeline_repositories r on r.id=l.repository_id order by l.created_at`),

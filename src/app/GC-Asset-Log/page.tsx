@@ -17,13 +17,18 @@ type TransactionRow = {
   platoon?: {
     name: string;
   } | null;
+  counterparty_platoon_id?: string | null;
+  counterparty?: {
+    name: string;
+  } | null;
+  transfer_group_id?: string | null;
   profile?: {
     display_name: string;
   } | null;
   description: string;
 };
 
-type FilterType = "all" | "tokens" | "purchased" | "removed";
+type FilterType = "all" | "tokens" | "purchased" | "removed" | "transfers";
 
 type GroupedTransactions = {
   label: string;
@@ -78,6 +83,7 @@ export default function GCLogisticsTransactionsPage() {
     asset_name?: string | null;
     notes?: string | null;
     platoon?: { name: string } | null;
+    counterparty?: { name: string } | null;
     profile?: { display_name: string } | null;
   }) => {
     const actor = tx.profile?.display_name || "Unknown user";
@@ -96,6 +102,10 @@ export default function GCLogisticsTransactionsPage() {
         return `${actor} removed ${tx.quantity ?? 0} x ${
           tx.asset_name || "asset"
         } from ${platoonName}`;
+      case "TRANSFER_ASSET_OUT":
+        return `${actor} transferred ${tx.quantity ?? 0} x ${tx.asset_name || "asset"} from ${platoonName} to ${tx.counterparty?.name || "another platoon"}`;
+      case "TRANSFER_ASSET_IN":
+        return `${actor} transferred ${tx.quantity ?? 0} x ${tx.asset_name || "asset"} into ${platoonName} from ${tx.counterparty?.name || "another platoon"}`;
       default:
         return `${actor} performed ${tx.action} on ${platoonName}`;
     }
@@ -117,6 +127,7 @@ export default function GCLogisticsTransactionsPage() {
     const formatted: TransactionRow[] = (payload.transactions || []).map((tx: any) => {
       const platoon = Array.isArray(tx.platoon) ? tx.platoon[0] ?? null : tx.platoon;
       const profile = Array.isArray(tx.profile) ? tx.profile[0] ?? null : tx.profile;
+      const counterparty = Array.isArray(tx.counterparty) ? tx.counterparty[0] ?? null : tx.counterparty;
 
       const formattedTx: TransactionRow = {
         id: tx.id,
@@ -129,6 +140,9 @@ export default function GCLogisticsTransactionsPage() {
         created_at: tx.created_at,
         platoon_id: tx.platoon_id,
         platoon,
+        counterparty_platoon_id: tx.counterparty_platoon_id,
+        counterparty,
+        transfer_group_id: tx.transfer_group_id,
         profile,
         description: "",
       };
@@ -162,6 +176,10 @@ export default function GCLogisticsTransactionsPage() {
         return "Purchased Asset";
       case "REMOVE_ASSET":
         return "Removed Asset";
+      case "TRANSFER_ASSET_OUT":
+        return "Transferred Out";
+      case "TRANSFER_ASSET_IN":
+        return "Transferred In";
       default:
         return tx.action;
     }
@@ -173,6 +191,10 @@ export default function GCLogisticsTransactionsPage() {
         return "border-red-500 text-red-400 bg-red-500/10";
       case "BUY_ASSET":
         return "border-blue-500 text-blue-400 bg-blue-500/10";
+      case "TRANSFER_ASSET_OUT":
+        return "border-yellow-500 text-yellow-300 bg-yellow-500/10";
+      case "TRANSFER_ASSET_IN":
+        return "border-cyan-500 text-cyan-300 bg-cyan-500/10";
       default:
         return "border-[#00ff66]/30 text-[#00ff66] bg-[#00ff66]/5";
     }
@@ -184,6 +206,10 @@ export default function GCLogisticsTransactionsPage() {
         return "border-l-4 border-red-500";
       case "BUY_ASSET":
         return "border-l-4 border-blue-500";
+      case "TRANSFER_ASSET_OUT":
+        return "border-l-4 border-yellow-500";
+      case "TRANSFER_ASSET_IN":
+        return "border-l-4 border-cyan-500";
       default:
         return "border-l-4 border-[#00ff66]";
     }
@@ -195,6 +221,10 @@ export default function GCLogisticsTransactionsPage() {
         return "border-red-500/30";
       case "BUY_ASSET":
         return "border-blue-500/30";
+      case "TRANSFER_ASSET_OUT":
+        return "border-yellow-500/30";
+      case "TRANSFER_ASSET_IN":
+        return "border-cyan-500/30";
       default:
         return "border-[#00ff66]/25";
     }
@@ -208,6 +238,10 @@ export default function GCLogisticsTransactionsPage() {
         return "text-blue-400";
       case "REMOVE_ASSET":
         return "text-red-400";
+      case "TRANSFER_ASSET_OUT":
+        return "text-yellow-300";
+      case "TRANSFER_ASSET_IN":
+        return "text-cyan-300";
       default:
         return "text-gray-300";
     }
@@ -281,9 +315,11 @@ export default function GCLogisticsTransactionsPage() {
       if (filter === "tokens" && tx.action !== "ADD_TOKENS") return false;
       if (filter === "purchased" && tx.action !== "BUY_ASSET") return false;
       if (filter === "removed" && tx.action !== "REMOVE_ASSET") return false;
+      if (filter === "transfers" && !tx.action.startsWith("TRANSFER_ASSET_")) return false;
 
       const target = [
         tx.platoon?.name || "",
+        tx.counterparty?.name || "",
         tx.action || "",
         tx.asset_name || "",
         tx.profile?.display_name || "",
@@ -402,7 +438,7 @@ export default function GCLogisticsTransactionsPage() {
               Logistics Transaction History
             </h1>
             <p className="text-gray-400 mt-2 text-sm sm:text-base">
-              Full audit trail of token additions, asset purchases, and removed assets
+              Full audit trail of token additions, purchases, removals, and platoon transfers
             </p>
           </div>
 
@@ -498,6 +534,17 @@ export default function GCLogisticsTransactionsPage() {
               >
                 Assets Removed
               </button>
+
+              <button
+                onClick={() => setFilter("transfers")}
+                className={`px-4 py-2 rounded-xl border transition ${
+                  filter === "transfers"
+                    ? "border-cyan-500 bg-cyan-500/10 text-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.12)]"
+                    : "border-[#00ff66]/20 bg-black/40 text-gray-300 hover:border-cyan-500/40 hover:text-white"
+                }`}
+              >
+                Asset Transfers
+              </button>
             </div>
 
             <div className="relative flex-1">
@@ -573,7 +620,7 @@ export default function GCLogisticsTransactionsPage() {
                         const highlightVariant =
                           tx.action === "REMOVE_ASSET"
                             ? "red"
-                            : tx.action === "BUY_ASSET"
+                            : tx.action === "BUY_ASSET" || tx.action.startsWith("TRANSFER_ASSET_")
                             ? "blue"
                             : "green";
 
@@ -713,6 +760,12 @@ export default function GCLogisticsTransactionsPage() {
                                           {tx.asset_name || "-"}
                                         </span>
                                       </div>
+                                      {tx.counterparty && (
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-500">Other Platoon</span>
+                                          <span className="text-white text-right">{tx.counterparty.name}</span>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
 
@@ -739,6 +792,12 @@ export default function GCLogisticsTransactionsPage() {
                                           {tx.performed_by || "-"}
                                         </span>
                                       </div>
+                                      {tx.transfer_group_id && (
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-500">Transfer Reference</span>
+                                          <span className="text-white text-right break-all">{tx.transfer_group_id}</span>
+                                        </div>
+                                      )}
                                       <div className="flex justify-between gap-4">
                                         <span className="text-gray-500">Timestamp</span>
                                         <span className="text-white text-right">
@@ -800,7 +859,7 @@ export default function GCLogisticsTransactionsPage() {
                           const highlightVariant =
                             tx.action === "REMOVE_ASSET"
                               ? "red"
-                              : tx.action === "BUY_ASSET"
+                              : tx.action === "BUY_ASSET" || tx.action.startsWith("TRANSFER_ASSET_")
                               ? "blue"
                               : "green";
 
@@ -864,14 +923,18 @@ export default function GCLogisticsTransactionsPage() {
 
                                 <td
                                   className={`px-4 py-4 font-medium ${
-                                    tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET"
+                                    tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET" || tx.action.startsWith("TRANSFER_ASSET_")
                                       ? tx.action === "REMOVE_ASSET"
                                         ? "text-red-400"
-                                        : "text-blue-400"
+                                        : tx.action === "BUY_ASSET"
+                                        ? "text-blue-400"
+                                        : tx.action === "TRANSFER_ASSET_OUT"
+                                        ? "text-yellow-300"
+                                        : "text-cyan-300"
                                       : "text-gray-400"
                                   }`}
                                 >
-                                  {tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET"
+                                  {tx.action === "REMOVE_ASSET" || tx.action === "BUY_ASSET" || tx.action.startsWith("TRANSFER_ASSET_")
                                     ? tx.quantity ?? "-"
                                     : "-"}
                                 </td>
@@ -975,6 +1038,12 @@ export default function GCLogisticsTransactionsPage() {
                                               {tx.asset_name || "-"}
                                             </span>
                                           </div>
+                                          {tx.counterparty && (
+                                            <div>
+                                              <span className="text-gray-500">Other Platoon:</span>{" "}
+                                              <span className="text-white">{tx.counterparty.name}</span>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
 
@@ -999,6 +1068,12 @@ export default function GCLogisticsTransactionsPage() {
                                               {tx.performed_by || "-"}
                                             </span>
                                           </div>
+                                          {tx.transfer_group_id && (
+                                            <div>
+                                              <span className="text-gray-500">Transfer Reference:</span>{" "}
+                                              <span className="text-white break-all">{tx.transfer_group_id}</span>
+                                            </div>
+                                          )}
                                           <div>
                                             <span className="text-gray-500">Timestamp:</span>{" "}
                                             <span className="text-white">

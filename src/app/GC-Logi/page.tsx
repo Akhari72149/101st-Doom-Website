@@ -31,6 +31,9 @@ type Transaction = {
   asset_name?: string | null;
   performed_by?: string | null;
   notes?: string | null;
+  transfer_group_id?: string | null;
+  counterparty_platoon_id?: string | null;
+  counterparty_platoon_name?: string | null;
   created_at: string;
 };
 
@@ -55,6 +58,7 @@ export default function GCLogisticsHub() {
   const [loadingData, setLoadingData] = useState(false);
   const [processingAction, setProcessingAction] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [platoons, setPlatoons] = useState<Platoon[]>([]);
   const [activeTab, setActiveTab] = useState<"shop" | "cart" | "owned">("shop");
@@ -72,6 +76,10 @@ export default function GCLogisticsHub() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [buyQuantities, setBuyQuantities] = useState<Record<string, number>>({});
   const [removeQuantities, setRemoveQuantities] = useState<Record<string, number>>({});
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTargetId, setTransferTargetId] = useState("");
+  const [transferQuantities, setTransferQuantities] = useState<Record<string, number>>({});
+  const [transferNotes, setTransferNotes] = useState("");
 
   const clampPositiveInt = (value: number, fallback = 1) => {
     if (!Number.isFinite(value)) return fallback;
@@ -93,6 +101,8 @@ export default function GCLogisticsHub() {
     if (action === "ADD_TOKENS") return "text-[#00ff66]";
     if (action === "BUY_ASSET") return "text-cyan-400";
     if (action === "REMOVE_ASSET") return "text-red-400";
+    if (action === "TRANSFER_ASSET_OUT") return "text-yellow-400";
+    if (action === "TRANSFER_ASSET_IN") return "text-cyan-400";
     return "text-white";
   };
 
@@ -218,6 +228,11 @@ const fetchOwnedAssets = async (platoonId: string) => {
     setBuyQuantities({});
     setRemoveQuantities({});
     setAssetSearch("");
+    setTransferOpen(false);
+    setTransferTargetId("");
+    setTransferQuantities({});
+    setTransferNotes("");
+    setSuccessMessage("");
     setSelected(p);
     await loadPlatoonData(p.id);
   };
@@ -404,6 +419,73 @@ const fetchOwnedAssets = async (platoonId: string) => {
     setProcessingAction(false);
   };
 
+  const openTransfer = (owned?: OwnedAsset) => {
+    if (!selected || !canEdit) return;
+    setErrorMessage("");
+    setSuccessMessage("");
+    setTransferTargetId("");
+    setTransferNotes("");
+    setTransferQuantities(owned ? { [owned.id]: 1 } : {});
+    setTransferOpen(true);
+  };
+
+  const selectedTransferItems = useMemo(
+    () => ownedAssets
+      .filter((item) => (transferQuantities[item.id] || 0) > 0)
+      .map((item) => ({
+        ownedId: item.id,
+        quantity: Math.min(transferQuantities[item.id], item.quantity),
+        name: item.asset?.name || "Unknown Asset",
+      })),
+    [ownedAssets, transferQuantities]
+  );
+
+  const transferUnitCount = selectedTransferItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  const transferAssets = async () => {
+    if (!canEdit || !selected || processingAction) return;
+    if (!transferTargetId) {
+      setErrorMessage("Choose a destination platoon.");
+      return;
+    }
+    if (selectedTransferItems.length === 0) {
+      setErrorMessage("Select at least one asset to transfer.");
+      return;
+    }
+
+    setProcessingAction(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    const response = await fetch("/api/gc-logistics", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+      body: JSON.stringify({
+        action: "transferAssets",
+        platoonId: selected.id,
+        targetPlatoonId: transferTargetId,
+        items: selectedTransferItems.map(({ ownedId, quantity }) => ({ ownedId, quantity })),
+        notes: transferNotes,
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      setErrorMessage(body?.error || "Failed to transfer assets.");
+      setProcessingAction(false);
+      return;
+    }
+
+    const destination = platoons.find((platoon) => platoon.id === transferTargetId)?.name || "destination platoon";
+    setTransferOpen(false);
+    setTransferTargetId("");
+    setTransferQuantities({});
+    setTransferNotes("");
+    setSuccessMessage(`Transferred ${transferUnitCount} asset unit${transferUnitCount === 1 ? "" : "s"} to ${destination}.`);
+    await fetchPlatoons();
+    await loadPlatoonData(selected.id);
+    setProcessingAction(false);
+  };
+
   const filteredAssets = useMemo(() => {
     const search = assetSearch.trim().toLowerCase();
 
@@ -477,6 +559,11 @@ const fetchOwnedAssets = async (platoonId: string) => {
               {errorMessage && (
                 <div className="rounded-2xl border border-red-500/40 bg-red-500/10 text-red-300 px-5 py-4">
                   {errorMessage}
+                </div>
+              )}
+              {successMessage && (
+                <div className="border border-[#00ff66]/40 bg-[#00ff66]/10 px-5 py-4 text-[#7dffb2]">
+                  {successMessage}
                 </div>
               )}
 
@@ -814,6 +901,19 @@ const fetchOwnedAssets = async (platoonId: string) => {
 
                   {activeTab === "owned" && (
                     <div className="rounded-2xl border border-[#00ff66]/30 bg-black/50 overflow-hidden p-6">
+                      <div className="mb-5 flex flex-col gap-3 border-b border-[#00ff66]/15 pb-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-[#00ff66]">Owned Assets</h3>
+                          <p className="mt-1 text-sm text-gray-400">Move one or several assets to another platoon without changing tokens.</p>
+                        </div>
+                        <button
+                          onClick={() => openTransfer()}
+                          disabled={!canEdit || processingAction || ownedAssets.length === 0}
+                          className="h-11 border border-cyan-400/60 px-5 font-semibold text-cyan-300 transition hover:bg-cyan-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Transfer Assets
+                        </button>
+                      </div>
                       {loadingData ? (
                         <div className="text-gray-400">Loading owned assets...</div>
                       ) : ownedAssets.length === 0 ? (
@@ -869,13 +969,22 @@ const fetchOwnedAssets = async (platoonId: string) => {
                                   className="w-full bg-black border border-[#00ff66]/30 rounded-lg px-3 py-2 outline-none focus:border-[#00ff66]"
                                 />
 
-                                <button
-                                  onClick={() => removeAsset(item)}
-                                  disabled={!canEdit || processingAction}
-                                  className="w-full px-4 py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {processingAction ? "Working..." : "Remove"}
-                                </button>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => openTransfer(item)}
+                                    disabled={!canEdit || processingAction}
+                                    className="px-4 py-2 border border-cyan-400/60 text-cyan-300 hover:bg-cyan-400 hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    Transfer
+                                  </button>
+                                  <button
+                                    onClick={() => removeAsset(item)}
+                                    disabled={!canEdit || processingAction}
+                                    className="px-4 py-2 border border-red-500 text-red-400 hover:bg-red-500 hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {processingAction ? "Working..." : "Remove"}
+                                  </button>
+                                </div>
                               </div>
                             );
                           })}
@@ -1007,6 +1116,136 @@ const fetchOwnedAssets = async (platoonId: string) => {
           )}
         </div>
       </div>
+      {transferOpen && selected && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 p-4"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && !processingAction) setTransferOpen(false);
+          }}
+        >
+          <section className="flex max-h-[90vh] w-full max-w-4xl flex-col border border-cyan-400/40 bg-[#020906] shadow-[0_0_40px_rgba(34,211,238,0.12)]">
+            <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-xs font-bold uppercase text-cyan-400">Asset Transfer</p>
+                <h2 className="mt-1 text-2xl font-bold">Transfer from {selected.name}</h2>
+              </div>
+              <button
+                aria-label="Close transfer"
+                onClick={() => setTransferOpen(false)}
+                disabled={processingAction}
+                className="h-10 w-10 border border-white/15 text-xl text-gray-400 hover:border-white/40 hover:text-white disabled:opacity-40"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="overflow-y-auto p-5 sm:p-6">
+              {errorMessage && (
+                <div className="mb-5 border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-300">
+                  {errorMessage}
+                </div>
+              )}
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="border border-white/10">
+                  <div className="border-b border-white/10 px-4 py-3">
+                    <h3 className="font-bold text-[#00ff66]">Select Assets</h3>
+                    <p className="mt-1 text-sm text-gray-500">Tick each asset and set the quantity to move.</p>
+                  </div>
+                  <div className="max-h-[48vh] divide-y divide-white/10 overflow-y-auto">
+                    {ownedAssets.map((item) => {
+                      const selectedQuantity = transferQuantities[item.id] || 0;
+                      const checked = selectedQuantity > 0;
+                      return (
+                        <div key={item.id} className="grid grid-cols-[24px_minmax(0,1fr)_100px] items-center gap-3 px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => setTransferQuantities((current) => ({
+                              ...current,
+                              [item.id]: event.target.checked ? 1 : 0,
+                            }))}
+                            className="h-4 w-4 accent-cyan-400"
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold">{item.asset?.name || "Unknown Asset"}</p>
+                            <p className="text-xs text-gray-500">{item.quantity} available</p>
+                          </div>
+                          <input
+                            aria-label={`Quantity of ${item.asset?.name || "asset"}`}
+                            type="number"
+                            min={1}
+                            max={item.quantity}
+                            disabled={!checked}
+                            value={checked ? selectedQuantity : ""}
+                            onChange={(event) => setTransferQuantities((current) => ({
+                              ...current,
+                              [item.id]: Math.min(clampPositiveInt(Number(event.target.value), 1), item.quantity),
+                            }))}
+                            className="h-10 w-full border border-white/15 bg-black px-3 text-right outline-none focus:border-cyan-400 disabled:opacity-30"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-bold uppercase text-gray-400">Destination Platoon</span>
+                    <select
+                      value={transferTargetId}
+                      onChange={(event) => setTransferTargetId(event.target.value)}
+                      className="h-12 w-full border border-white/15 bg-black px-3 outline-none focus:border-cyan-400"
+                    >
+                      <option value="">Choose destination</option>
+                      {platoons.filter((platoon) => platoon.id !== selected.id).map((platoon) => (
+                        <option key={platoon.id} value={platoon.id}>{platoon.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-bold uppercase text-gray-400">Transfer Note (optional)</span>
+                    <textarea
+                      value={transferNotes}
+                      onChange={(event) => setTransferNotes(event.target.value.slice(0, 1000))}
+                      rows={4}
+                      placeholder="Reason or operation reference"
+                      className="w-full resize-none border border-white/15 bg-black p-3 outline-none focus:border-cyan-400"
+                    />
+                  </label>
+
+                  <div className="border border-cyan-400/25 bg-cyan-400/[0.04] p-4">
+                    <p className="text-xs font-bold uppercase text-cyan-400">Transfer Summary</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div className="flex justify-between gap-3"><span className="text-gray-500">Asset types</span><strong>{selectedTransferItems.length}</strong></div>
+                      <div className="flex justify-between gap-3"><span className="text-gray-500">Total units</span><strong>{transferUnitCount}</strong></div>
+                      <div className="flex justify-between gap-3"><span className="text-gray-500">Tokens charged</span><strong>0</strong></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <footer className="flex flex-col-reverse gap-3 border-t border-white/10 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <button
+                onClick={() => setTransferOpen(false)}
+                disabled={processingAction}
+                className="h-11 border border-white/20 px-5 text-gray-300 hover:border-white/40 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={transferAssets}
+                disabled={processingAction || !transferTargetId || selectedTransferItems.length === 0}
+                className="h-11 bg-cyan-400 px-6 font-bold text-black hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {processingAction ? "Transferring..." : `Transfer ${transferUnitCount || ""} Asset${transferUnitCount === 1 ? "" : "s"}`}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

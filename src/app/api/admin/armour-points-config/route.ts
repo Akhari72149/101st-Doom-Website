@@ -20,7 +20,7 @@ export async function GET(request: Request) {
           points::integer,unrestricted,equivalent_rank,track
         from public.armour_progression_rank_points where active=true
         order by sort_order,case track when 'standard' then 0 when 'alias' then 1 else 2 end,rank_key`),
-      pool.query(`select id,name,category,point_cost,rank_requirement,active,sort_order
+      pool.query(`select id,name,category,point_cost,rank_requirement,description,active,sort_order
         from public.armour_customisation_items order by sort_order,name`),
     ]);
     const configuredValues = Object.fromEntries(rankResult.rows
@@ -69,12 +69,15 @@ export async function PATCH(request: Request) {
         const itemId = String(body?.itemId || "");
         const pointCost = Number(body?.pointCost);
         const requirement = String(body?.rankRequirement || "").trim();
-        if (!UUID.test(itemId) || !Number.isInteger(pointCost) || pointCost < 0 || pointCost > 100000 || !requirements.has(requirement)) throw new Error("INVALID");
+        const description = String(body?.description || "").trim();
+        if (!UUID.test(itemId) || !Number.isInteger(pointCost) || pointCost < 0 || pointCost > 100000 || !requirements.has(requirement) || description.length > 1000) throw new Error("INVALID");
         const item = await client.query<{ name: string }>(`update public.armour_customisation_items
-          set point_cost=$2,rank_requirement=$3,updated_at=now() where id=$1 returning name`, [itemId, pointCost, requirement || null]);
+          set point_cost=$2,rank_requirement=$3,description=$4,updated_at=now() where id=$1 returning name`,
+        [itemId, pointCost, requirement || null, description || null]);
         if (!item.rowCount) throw new Error("NOT_FOUND");
         await client.query(`insert into public.audit_logs(user_id,action,details)
-          values($1,'ARMOUR_CATALOGUE_CONFIGURED',$2)`, [auth.userId, `${item.rows[0].name}: ${pointCost} points; requirement ${requirement || "none"}.`]);
+          values($1,'ARMOUR_CATALOGUE_CONFIGURED',$2)`,
+        [auth.userId, `${item.rows[0].name}: ${pointCost} points; requirement ${requirement || "none"}; description ${description || "none"}.`]);
         return;
       }
       throw new Error("INVALID");

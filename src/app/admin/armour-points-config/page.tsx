@@ -6,7 +6,7 @@ import { Check, Coins, Loader2, Search, Settings2, ShieldCheck, Tags } from "luc
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type RankConfig = { id: string; name: string; rank_level: number; configured: boolean; points: number; cumulative_points: number; unrestricted: boolean; equivalent_rank: string | null; track: "standard" | "pilot" | "alias" };
-type ItemConfig = { id: string; name: string; category: string; point_cost: number; rank_requirement: string | null; active: boolean; sort_order: number };
+type ItemConfig = { id: string; name: string; category: string; point_cost: number; rank_requirement: string | null; description: string | null; active: boolean; sort_order: number };
 type Tab = "ranks" | "catalogue";
 
 const rankRequirements = ["", "CST+", "VCT+", "CTS+", "CP+", "CS+", "CSM+", "SSM+", "Clone 2nd Lieutenant+", "Authorised command ranks"];
@@ -16,7 +16,7 @@ export default function ArmourPointsConfigPage() {
   const [ranks, setRanks] = useState<RankConfig[]>([]);
   const [items, setItems] = useState<ItemConfig[]>([]);
   const [rankDrafts, setRankDrafts] = useState<Record<string, { points: number; unrestricted: boolean }>>({});
-  const [itemDrafts, setItemDrafts] = useState<Record<string, { pointCost: number; rankRequirement: string }>>({});
+  const [itemDrafts, setItemDrafts] = useState<Record<string, { pointCost: number; rankRequirement: string; description: string }>>({});
   const [tab, setTab] = useState<Tab>("ranks");
   const [query, setQuery] = useState("");
   const [access, setAccess] = useState("none");
@@ -34,7 +34,7 @@ export default function ArmourPointsConfigPage() {
     setRanks(nextRanks);
     setItems(nextItems);
     setRankDrafts(Object.fromEntries(nextRanks.map((rank) => [rank.id, { points: rank.points, unrestricted: rank.unrestricted }])));
-    setItemDrafts(Object.fromEntries(nextItems.map((item) => [item.id, { pointCost: item.point_cost, rankRequirement: item.rank_requirement || "" }])));
+    setItemDrafts(Object.fromEntries(nextItems.map((item) => [item.id, { pointCost: item.point_cost, rankRequirement: item.rank_requirement || "", description: item.description || "" }])));
   }, []);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function ArmourPointsConfigPage() {
 
   const term = query.trim().toLowerCase();
   const visibleRanks = useMemo(() => ranks.filter((rank) => !term || rank.name.toLowerCase().includes(term)), [ranks, term]);
-  const visibleItems = useMemo(() => items.filter((item) => !term || `${item.name} ${item.category} ${item.rank_requirement || ""}`.toLowerCase().includes(term)), [items, term]);
+  const visibleItems = useMemo(() => items.filter((item) => !term || `${item.name} ${item.category} ${item.rank_requirement || ""} ${item.description || ""}`.toLowerCase().includes(term)), [items, term]);
   const canEdit = access === "edit" || access === "full";
 
   if (loading) return <main className="min-h-screen bg-[#020806] p-10 text-[#00ff66]">Loading armour points configuration...</main>;
@@ -101,14 +101,15 @@ export default function ArmourPointsConfigPage() {
           </article>; })}
         </div>
       </section> : <section className="py-5">
-        <div className="mb-4"><h2 className="text-lg font-black uppercase">Catalogue costs and requirements</h2><p className="mt-1 text-sm text-[#789082]">A zero-point item is treated as a rank entitlement. Paid items require both the configured rank and sufficient points.</p></div>
+        <div className="mb-4"><h2 className="text-lg font-black uppercase">Catalogue costs, requirements and notes</h2><p className="mt-1 text-sm text-[#789082]">A zero-point item is treated as a rank entitlement. Descriptions are published directly on the public Armour Points catalogue.</p></div>
         <div className="border border-white/10">
-          <div className="hidden grid-cols-[minmax(220px,1fr)_150px_240px_110px] border-b border-white/10 bg-white/[.025] px-4 py-3 text-xs font-black uppercase text-[#60776b] md:grid"><span>Customisation</span><span>Point cost</span><span>Rank requirement</span><span></span></div>
-          {visibleItems.map((item) => { const draft = itemDrafts[item.id] || { pointCost: item.point_cost, rankRequirement: item.rank_requirement || "" }; const dirty = draft.pointCost !== item.point_cost || draft.rankRequirement !== (item.rank_requirement || ""); return <article key={item.id} className="grid gap-4 border-b border-white/8 px-4 py-4 last:border-b-0 md:grid-cols-[minmax(220px,1fr)_150px_240px_110px] md:items-center">
+          <div className="hidden grid-cols-[minmax(170px,.8fr)_minmax(260px,1.4fr)_120px_220px_100px] gap-4 border-b border-white/10 bg-white/[.025] px-4 py-3 text-xs font-black uppercase text-[#60776b] md:grid"><span>Customisation</span><span>Published note</span><span>Point cost</span><span>Rank requirement</span><span></span></div>
+          {visibleItems.map((item) => { const draft = itemDrafts[item.id] || { pointCost: item.point_cost, rankRequirement: item.rank_requirement || "", description: item.description || "" }; const dirty = draft.pointCost !== item.point_cost || draft.rankRequirement !== (item.rank_requirement || "") || draft.description !== (item.description || ""); return <article key={item.id} className="grid gap-4 border-b border-white/8 px-4 py-4 last:border-b-0 md:grid-cols-[minmax(170px,.8fr)_minmax(260px,1.4fr)_120px_220px_100px] md:items-start">
             <div><strong>{item.name}</strong><p className="mt-1 text-xs text-[#60776b]">{item.category}</p></div>
+            <label><span className="mb-1 block text-[10px] font-black uppercase text-[#60776b] md:hidden">Published note</span><textarea value={draft.description} maxLength={1000} rows={3} disabled={!canEdit} onChange={(event) => setItemDrafts((current) => ({ ...current, [item.id]: { ...draft, description: event.target.value } }))} placeholder="Describe this customisation" className="min-h-20 w-full resize-y border border-white/15 bg-black px-3 py-2 text-sm leading-5 outline-none focus:border-[#00ff66]/60 disabled:opacity-60"/><span className="mt-1 block text-right text-[10px] text-[#60776b]">{draft.description.length}/1000</span></label>
             <label><span className="mb-1 block text-[10px] font-black uppercase text-[#60776b] md:hidden">Point cost</span><input type="number" min={0} max={100000} value={draft.pointCost} disabled={!canEdit} onChange={(event) => setItemDrafts((current) => ({ ...current, [item.id]: { ...draft, pointCost: Math.max(0, Number(event.target.value) || 0) } }))} className="h-10 w-full border border-white/15 bg-black px-3 disabled:opacity-60"/></label>
             <label><span className="mb-1 block text-[10px] font-black uppercase text-[#60776b] md:hidden">Rank requirement</span><select value={draft.rankRequirement} disabled={!canEdit} onChange={(event) => setItemDrafts((current) => ({ ...current, [item.id]: { ...draft, rankRequirement: event.target.value } }))} className="h-10 w-full border border-white/15 bg-black px-3 disabled:opacity-60">{rankRequirements.map((requirement) => <option key={requirement || "none"} value={requirement}>{requirement || "No rank requirement"}</option>)}</select></label>
-            <button type="button" disabled={!canEdit || !dirty || Boolean(savingId)} onClick={() => void save({ action: "item", itemId: item.id, pointCost: draft.pointCost, rankRequirement: draft.rankRequirement }, item.id)} className="flex h-10 items-center justify-center gap-2 border border-[#00ff66]/40 text-xs font-black uppercase text-[#00ff66] disabled:cursor-not-allowed disabled:opacity-30">{savingId === item.id ? <Loader2 className="animate-spin" size={15}/> : <Check size={15}/>} Save</button>
+            <button type="button" disabled={!canEdit || !dirty || Boolean(savingId)} onClick={() => void save({ action: "item", itemId: item.id, pointCost: draft.pointCost, rankRequirement: draft.rankRequirement, description: draft.description }, item.id)} className="flex h-10 items-center justify-center gap-2 border border-[#00ff66]/40 text-xs font-black uppercase text-[#00ff66] disabled:cursor-not-allowed disabled:opacity-30">{savingId === item.id ? <Loader2 className="animate-spin" size={15}/> : <Check size={15}/>} Save</button>
           </article>; })}
         </div>
       </section>}

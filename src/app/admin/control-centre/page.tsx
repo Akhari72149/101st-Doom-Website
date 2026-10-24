@@ -66,6 +66,15 @@ const panels: PanelDefinition[] = [
     icon: Activity,
   },
   {
+    id: "armour-points-config",
+    title: "Armour Points Configuration",
+    description: "Set cumulative rank totals, catalogue costs, and rank requirements.",
+    permission: "admin.armour-points-config",
+    route: "/admin/armour-points-config",
+    group: "Personnel Configuration",
+    icon: SlidersHorizontal,
+  },
+  {
     id: "hammer-ridealongs",
     title: "Hammer Ridealongs",
     description: "Maintain aviation trainees, milestones, and submitted ridealong records.",

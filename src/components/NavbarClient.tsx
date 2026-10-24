@@ -183,6 +183,11 @@ export default function NavbarClient() {
           description: "View your personnel record and details",
         },
         {
+          href: "/armour-points",
+          label: "Armour Points",
+          description: "Review customisation points, history and available options",
+        },
+        {
           href: "/roster",
           label: "Slotted Roster",
           description: "View assigned positions across the unit",
@@ -485,6 +490,8 @@ export default function NavbarClient() {
           "admin.ranks",
           "admin.certifications",
           "admin.xp",
+          "admin.armour-points",
+          "admin.armour-points-config",
           "admin.join-links",
           "admin.uniform-guide",
           "admin.documents",

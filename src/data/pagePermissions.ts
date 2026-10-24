@@ -242,6 +242,22 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.armour-points",
+    pagePath: "/armour-points",
+    label: "Armour Point Transactions",
+    category: "Personnel Admin",
+    description: "Award, spend, and correct armour customisation points with a permanent audit trail.",
+    legacyRoles: [],
+  },
+  {
+    key: "admin.armour-points-config",
+    pagePath: "/admin/armour-points-config",
+    label: "Armour Points Configuration",
+    category: "Personnel Admin",
+    description: "Configure cumulative rank allocations and catalogue costs and rank requirements.",
+    legacyRoles: [],
+  },
+  {
     key: "gc.asset-log",
     pagePath: "/GC-Asset-Log",
     label: "GC Asset Log",

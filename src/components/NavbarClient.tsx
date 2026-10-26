@@ -493,6 +493,7 @@ export default function NavbarClient() {
     }
     const canSeeItem = (item: NavItem) => {
       if (item.href === "/hammer-ridealongs" && !item.category) return true;
+      if (item.href === "/admin/promotion-readiness") return true;
       if (item.href === "/admin/discipline") {
         return Boolean(permissions["admin.discipline"] || permissions["admin.discipline-approval"]);
       }

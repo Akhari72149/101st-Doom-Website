@@ -124,8 +124,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!requestHasSameOrigin(request)) return jsonError("Invalid request origin", 403);
-  const auth = await requirePageAccess(request, "admin.operation-counts", "edit").catch(() => null);
-  if (!auth) return jsonError("Operation Count edit permission required", 403);
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const personnelId = cleanText(body?.personnelId, 80);

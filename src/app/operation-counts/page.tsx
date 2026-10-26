@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ClipboardList, Flag, Search, ShieldCheck, Target, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, ClipboardList, Flag, Plus, Search, ShieldCheck, Target, Users } from "lucide-react";
 import { getAppAuthHeaders } from "@/lib/client-auth";
+import { OperationCountFormModal } from "@/components/OperationCountFormModal";
 
 type Progress = {
   id: string;
@@ -25,25 +26,25 @@ export default function OperationCountsPage() {
   const [rank, setRank] = useState<"all" | "CR" | "CR-C">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [showForm, setShowForm] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const response = await fetch("/api/operation-counts", { cache: "no-store", credentials: "same-origin", headers: await getAppAuthHeaders() });
-        const body = await response.json() as { personnel?: Progress[]; canViewResponses?: boolean; error?: string };
-        if (!response.ok) throw new Error(body.error || "Unable to load operation counts");
-        if (!active) return;
-        setPersonnel(body.personnel || []);
-        setCanViewResponses(Boolean(body.canViewResponses));
-      } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : "Unable to load operation counts");
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch("/api/operation-counts", { cache: "no-store", credentials: "same-origin", headers: await getAppAuthHeaders() });
+      const body = await response.json() as { personnel?: Progress[]; canViewResponses?: boolean; error?: string };
+      if (!response.ok) throw new Error(body.error || "Unable to load operation counts");
+      setPersonnel(body.personnel || []);
+      setCanViewResponses(Boolean(body.canViewResponses));
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load operation counts");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { void load(); }, [load]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -68,6 +69,7 @@ export default function OperationCountsPage() {
               <p className="mt-4 max-w-3xl text-sm leading-6 text-[#8ba095]">CR and CR-C personnel need four credited operations, including at least one Main Operation. Up to three Fun Ops or eligible CR-C course credits can contribute.</p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => { setSuccess(""); setShowForm(true); }} className="flex items-center gap-2 border border-[#00ff66] bg-[#00ff66] px-4 py-3 text-xs font-black uppercase text-black hover:bg-[#8dffb7]"><Plus size={16}/>Submit operation</button>
               {canViewResponses && <Link href="/operation-counts/responses" className="flex items-center gap-2 border border-cyan-300/35 px-4 py-3 text-xs font-black uppercase text-cyan-200 hover:bg-cyan-300/[.08]"><ClipboardList size={16}/>Responses</Link>}
             </div>
           </div>
@@ -83,6 +85,8 @@ export default function OperationCountsPage() {
           <div className="grid grid-cols-3 gap-1" aria-label="Filter by rank">{(["all","CR","CR-C"] as const).map((value) => <button key={value} type="button" onClick={() => setRank(value)} className={`min-w-20 border px-4 py-3 text-xs font-black uppercase ${rank === value ? "border-[#00ff66] bg-[#00ff66]/10 text-[#00ff66]" : "border-white/10 text-gray-500 hover:text-white"}`}>{value === "all" ? "All" : value}</button>)}</div>
         </section>
 
+        {success && <div className="mt-5 flex items-center gap-3 border border-[#00ff66]/30 bg-[#00ff66]/10 p-4 text-[#b8ffcf]"><CheckCircle2 size={19}/><p className="text-sm">{success}</p></div>}
+
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           {loading && <p className="col-span-full border border-white/10 p-12 text-center text-xs font-black uppercase tracking-[.14em] text-gray-600">Loading progression...</p>}
           {error && <p className="col-span-full border border-red-300/25 bg-red-300/10 p-4 text-sm text-red-100">{error}</p>}
@@ -90,6 +94,17 @@ export default function OperationCountsPage() {
           {!loading && !error && !filtered.length && <p className="col-span-full border border-white/10 p-12 text-center text-sm text-gray-500">No CR or CR-C personnel match this search.</p>}
         </div>
       </div>
+      {showForm && (
+        <OperationCountFormModal
+          personnel={personnel}
+          onClose={() => setShowForm(false)}
+          onSaved={async (name) => {
+            setShowForm(false);
+            setSuccess(`Operation count submitted for ${name}.`);
+            await load();
+          }}
+        />
+      )}
     </main>
   );
 }

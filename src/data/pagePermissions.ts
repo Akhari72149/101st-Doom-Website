@@ -58,6 +58,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["admin", "nco", "di"],
   },
   {
+    key: "admin.promotion-readiness",
+    pagePath: "/admin/promotion-readiness",
+    label: "Promotion Readiness Actions",
+    category: "Personnel Admin",
+    description: "Promote personnel who have met all published automatic promotion requirements.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.ranks",
     pagePath: "/admin/ranks",
     label: "Rank Management",

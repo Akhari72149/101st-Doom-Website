@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getPostgresPool } from "@/lib/postgres/pool";
+import { resolveAdminActor } from "@/lib/admin-actor";
+import { broadcastWebsiteAction } from "@/lib/broadcastWebsiteAction";
+import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
+import { resolvePromotionLeadership } from "@/lib/promotion-leadership";
+import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +27,8 @@ type PersonnelRow = {
   id: string;
   name: string;
   birth_number: string;
+  rank_id: string | null;
+  discord_id: string | null;
   slotted_position: string | null;
   current_rank: string | null;
   tig_days: number;
@@ -98,12 +104,14 @@ const terminalRanks = new Set([
 ]);
 
 const normalize = (value: string | null | undefined) => (value || "").trim().toUpperCase();
+const ATTENDANCE_START = "2026-08-01";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function criterion(key: string, label: string, current: string, target: string, state: CriterionState) {
   return { key, label, current, target, state };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const pool = getPostgresPool();
     const [personnelResult, ranksResult, windowResult] = await Promise.all([
@@ -115,7 +123,19 @@ export async function GET() {
                  count(*) filter (where status = 'Y' and lower(coalesce(type, '')) = 'mainop')::integer main_ops_attended,
                  count(*) filter (where status = 'N' and lower(coalesce(type, '')) = 'mainop')::integer main_ops_missed
             from public.attendance_records
+           where coalesce(cycle_end_date, created_at::date) >= date '${ATTENDANCE_START}'
            group by personnel_id
+        ), operation_counts as (
+          select submissions.personnel_id,
+                 count(*) filter (where submissions.attendance_type='mainop')::integer main_ops,
+                 least(3,count(*) filter (where submissions.attendance_type<>'mainop'))::integer non_main_credits
+            from public.operation_count_submissions submissions
+            join public.personnel current_personnel on current_personnel.id=submissions.personnel_id
+            join public.ranks current_rank on current_rank.id=current_personnel.rank_id
+           where submissions.occurred_on >= date '${ATTENDANCE_START}'
+             and ((upper(current_rank.name)='CR' and submissions.rank_stage='CR')
+               or (upper(current_rank.name)='CR-C' and submissions.rank_stage in ('CR','CR-C')))
+           group by submissions.personnel_id
         ), ct_dates as (
           select history.personnel_id, min(history.changed_at) ct_effective_at
             from public.rank_history history
@@ -123,7 +143,8 @@ export async function GET() {
            where upper(history_rank.name) = 'CT'
            group by history.personnel_id
         )
-        select personnel.id, personnel.name, personnel.birth_number, personnel.slotted_position,
+        select personnel.id, personnel.name, personnel.birth_number, personnel.rank_id,
+               personnel.discord_id, personnel.slotted_position,
                ranks.name current_rank,
                greatest(0, floor(extract(epoch from (now() - coalesce(
                  personnel.rank_effective_at,
@@ -133,26 +154,33 @@ export async function GET() {
                case when ct_dates.ct_effective_at is null then null else
                  greatest(0, floor(extract(epoch from (now() - ct_dates.ct_effective_at)) / 86400))::integer
                end days_from_ct,
-               coalesce(attendance.attended, 0)::integer attended,
+               case when upper(coalesce(ranks.name,'')) in ('CR','CR-C')
+                    then coalesce(operation_counts.main_ops,0)+coalesce(operation_counts.non_main_credits,0)
+                    else coalesce(attendance.attended,0) end::integer attended,
                coalesce(attendance.missed, 0)::integer missed,
-               coalesce(attendance.main_ops_attended, 0)::integer main_ops_attended,
+               case when upper(coalesce(ranks.name,'')) in ('CR','CR-C')
+                    then coalesce(operation_counts.main_ops,0)
+                    else coalesce(attendance.main_ops_attended,0) end::integer main_ops_attended,
                coalesce(attendance.main_ops_missed, 0)::integer main_ops_missed
           from public.personnel personnel
           left join public.ranks ranks on ranks.id = personnel.rank_id
           left join attendance on attendance.personnel_id = personnel.id
+          left join operation_counts on operation_counts.personnel_id=personnel.id
           left join ct_dates on ct_dates.personnel_id = personnel.id
          where lower(coalesce(personnel.status, 'active')) not in ('retired', 'removed', 'transferred')
          order by personnel.name
       `),
-      pool.query<{ name: string }>("select name from public.ranks where is_active = true order by rank_level, name"),
+      pool.query<{ id: string; name: string }>("select id,name from public.ranks where is_active = true order by rank_level, name"),
       pool.query<{ first_record: string | null; last_record: string | null; periods: number }>(`
-        select min(created_at) first_record, max(created_at) last_record,
+        select min(coalesce(cycle_end_date,created_at::date)) first_record,
+               max(coalesce(cycle_end_date,created_at::date)) last_record,
                count(distinct (attendance_month, week_number, type))::integer periods
           from public.attendance_records
+         where coalesce(cycle_end_date, created_at::date) >= date '${ATTENDANCE_START}'
       `),
     ]);
 
-    const configuredRanks = new Set(ranksResult.rows.map((row) => normalize(row.name)));
+    const configuredRanksByName = new Map(ranksResult.rows.map((row) => [normalize(row.name), row]));
     const people = personnelResult.rows.map((person) => {
       const rule = rules.find((candidate) => candidate.from.some((name) => normalize(name) === normalize(person.current_rank)));
       const consideredAttendance = person.main_ops_attended + person.main_ops_missed;
@@ -167,6 +195,7 @@ export async function GET() {
             ...person,
             attendancePercentage,
             targetRank: null,
+            targetRankId: null,
             targetConfigured: true,
             status: "terminal",
             criteria: [],
@@ -188,6 +217,7 @@ export async function GET() {
           ...person,
           attendancePercentage,
           targetRank: null,
+          targetRankId: null,
           targetConfigured: false,
           status: "setup-required",
           criteria: [],
@@ -230,7 +260,9 @@ export async function GET() {
       const hasBlocker = criteria.some((item) => item.state === "not-met" || item.state === "unavailable");
       const hasManualReview = criteria.some((item) => item.state === "review");
       const targetNames = [rule.target, ...(rule.targetAliases || [])];
-      const targetConfigured = targetNames.some((name) => configuredRanks.has(normalize(name)));
+      const configuredTarget = targetNames.map((name) => configuredRanksByName.get(normalize(name))).find(Boolean);
+      const targetConfigured = Boolean(configuredTarget);
+      const targetRankId = configuredTarget?.id || null;
       const setupIssues: SetupIssue[] = targetConfigured ? [] : [{
         key: `target:${normalize(rule.target)}`,
         label: `Create or activate ${rule.target}`,
@@ -241,7 +273,8 @@ export async function GET() {
       return {
         ...person,
         attendancePercentage,
-        targetRank: rule.target,
+        targetRank: configuredTarget?.name || rule.target,
+        targetRankId,
         targetConfigured,
         status,
         criteria,
@@ -270,15 +303,145 @@ export async function GET() {
       right.affected - left.affected || left.label.localeCompare(right.label)
     );
 
+    const canPromote = Boolean(await requirePageAccess(request, "admin.promotion-readiness", "edit").catch(() => null));
+    const readyPeople = people.filter((person) => person.status === "ready" && person.rank_id && person.targetRankId);
+    if (readyPeople.length) {
+      const occupants = (await pool.query<{ slotted_position: string | null; discord_id: string | null }>(
+        `select slotted_position,discord_id from public.personnel
+          where lower(coalesce(status,'active')) not in ('retired','removed','transferred')`,
+      )).rows;
+      for (const person of readyPeople) {
+        await pool.query(
+          "select public.enqueue_promotion_ready_notification($1,$2,$3,$4::jsonb)",
+          [person.id, person.rank_id, person.targetRankId, JSON.stringify({
+            targetPersonnelId: person.id,
+            discordId: person.discord_id,
+            personnelName: person.name,
+            oldRankName: person.current_rank || "Unranked",
+            rankName: person.targetRank,
+            leadershipDiscordIds: resolvePromotionLeadership(person.slotted_position, occupants),
+          })],
+        );
+      }
+    }
+
     return NextResponse.json({
       people,
       summary,
       setupIssues,
-      attendanceWindow: windowResult.rows[0] || { first_record: null, last_record: null, periods: 0 },
+      canPromote,
+      attendanceWindow: {
+        ...(windowResult.rows[0] || { first_record: null, last_record: null, periods: 0 }),
+        startsAt: ATTENDANCE_START,
+      },
       calculatedAt: new Date().toISOString(),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[promotion-readiness] Read failed", error);
     return NextResponse.json({ error: "Failed to calculate promotion readiness" }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  if (!requestHasSameOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+  const auth = await requirePageAccess(request, "admin.promotion-readiness", "edit").catch(() => null);
+  if (!auth) return NextResponse.json({ error: "Promotion permission is required" }, { status: 403 });
+  const body = await request.json().catch(() => null) as { personnelId?: string } | null;
+  const personnelId = String(body?.personnelId || "");
+  if (!UUID.test(personnelId)) return NextResponse.json({ error: "Invalid personnel record" }, { status: 400 });
+
+  try {
+    const actor = await resolveAdminActor(auth);
+    const notification = await withPostgresTransaction(async (client) => {
+      const result = await client.query<PersonnelRow>(`
+        with attendance as (
+          select personnel_id,
+                 count(*) filter (where status='Y')::integer attended,
+                 count(*) filter (where status='N')::integer missed,
+                 count(*) filter (where status='Y' and lower(coalesce(type,''))='mainop')::integer main_ops_attended,
+                 count(*) filter (where status='N' and lower(coalesce(type,''))='mainop')::integer main_ops_missed
+            from public.attendance_records
+           where personnel_id=$1 and coalesce(cycle_end_date,created_at::date)>=date '${ATTENDANCE_START}'
+           group by personnel_id
+        ), operation_counts as (
+          select submissions.personnel_id,
+                 count(*) filter (where submissions.attendance_type='mainop')::integer main_ops,
+                 least(3,count(*) filter (where submissions.attendance_type<>'mainop'))::integer non_main_credits
+            from public.operation_count_submissions submissions
+           where submissions.personnel_id=$1 and submissions.occurred_on>=date '${ATTENDANCE_START}'
+             and ((submissions.rank_stage='CR' and exists(select 1 from public.personnel p join public.ranks r on r.id=p.rank_id where p.id=$1 and upper(r.name)='CR'))
+               or (submissions.rank_stage in ('CR','CR-C') and exists(select 1 from public.personnel p join public.ranks r on r.id=p.rank_id where p.id=$1 and upper(r.name)='CR-C')))
+           group by submissions.personnel_id
+        ), ct_dates as (
+          select history.personnel_id,min(history.changed_at) ct_effective_at
+            from public.rank_history history join public.ranks history_rank on history_rank.id=history.new_rank_id
+           where history.personnel_id=$1 and upper(history_rank.name)='CT' group by history.personnel_id
+        )
+        select personnel.id,personnel.name,personnel.birth_number,personnel.rank_id,personnel.discord_id,
+               personnel.slotted_position,ranks.name current_rank,
+               greatest(0,floor(extract(epoch from (now()-coalesce(personnel.rank_effective_at,personnel.created_at at time zone 'UTC')))/86400))::integer tig_days,
+               greatest(0,floor(extract(epoch from (now()-personnel.created_at at time zone 'UTC'))/86400))::integer service_days,
+               case when ct_dates.ct_effective_at is null then null else greatest(0,floor(extract(epoch from (now()-ct_dates.ct_effective_at))/86400))::integer end days_from_ct,
+               case when upper(coalesce(ranks.name,'')) in ('CR','CR-C') then coalesce(operation_counts.main_ops,0)+coalesce(operation_counts.non_main_credits,0) else coalesce(attendance.attended,0) end::integer attended,
+               coalesce(attendance.missed,0)::integer missed,
+               case when upper(coalesce(ranks.name,'')) in ('CR','CR-C') then coalesce(operation_counts.main_ops,0) else coalesce(attendance.main_ops_attended,0) end::integer main_ops_attended,
+               coalesce(attendance.main_ops_missed,0)::integer main_ops_missed
+          from public.personnel personnel left join public.ranks ranks on ranks.id=personnel.rank_id
+          left join attendance on attendance.personnel_id=personnel.id left join ct_dates on ct_dates.personnel_id=personnel.id
+          left join operation_counts on operation_counts.personnel_id=personnel.id
+         where personnel.id=$1 for update of personnel`, [personnelId]);
+      const person = result.rows[0];
+      if (!person || !person.rank_id) throw new Error("NOT_FOUND");
+      const rule = rules.find((candidate) => candidate.from.some((name) => normalize(name) === normalize(person.current_rank)));
+      if (!rule || rule.manual?.length) throw new Error("NOT_READY");
+      const accountable = person.main_ops_attended + person.main_ops_missed;
+      const attendance = accountable ? (person.main_ops_attended / accountable) * 100 : null;
+      const alphaPilot = /(?:^|[-_\s])(?:alpha|\d+a)(?:$|[-_\s])/i.test(person.slotted_position || "");
+      const ready = (rule.minimumTigDays === undefined || person.tig_days >= rule.minimumTigDays)
+        && (rule.minimumAttendance === undefined || (attendance !== null && attendance >= rule.minimumAttendance))
+        && (rule.minimumServiceDays === undefined || person.service_days >= rule.minimumServiceDays)
+        && (rule.minimumDaysFromCt === undefined || (person.days_from_ct !== null && person.days_from_ct >= rule.minimumDaysFromCt))
+        && (rule.minimumAttendances === undefined || person.attended >= rule.minimumAttendances)
+        && (rule.minimumMainOps === undefined || person.main_ops_attended >= rule.minimumMainOps)
+        && (!rule.requiresSlot || Boolean(person.slotted_position))
+        && (!rule.requiresAlphaPilotSlot || alphaPilot);
+      if (!ready) throw new Error("NOT_READY");
+      const targetNames = [rule.target, ...(rule.targetAliases || [])].map(normalize);
+      const target = await client.query<{ id: string; name: string }>(
+        `select id,name from public.ranks where is_active=true and upper(btrim(name))=any($1::text[])
+         order by array_position($1::text[],upper(btrim(name))) limit 1`, [targetNames]);
+      if (!target.rows[0]) throw new Error("TARGET_MISSING");
+      const promotedAt = new Date();
+      await client.query("update public.personnel set rank_id=$2,rank_effective_at=$3 where id=$1", [person.id, target.rows[0].id, promotedAt]);
+      await client.query(
+        "insert into public.rank_history(personnel_id,discord_id,old_rank_id,new_rank_id,changed_at) values($1,$2,$3,$4,$5)",
+        [person.id, person.discord_id || "", person.rank_id, target.rows[0].id, promotedAt],
+      );
+      await client.query("select public.enqueue_rank_role_sync($1,$2,$3)", [person.id, person.rank_id, target.rows[0].id]);
+      await client.query(
+        "insert into public.audit_logs(user_id,target_personnel_id,action,old_rank_id,target_rank_id,details,processed_by) values($1,$2,'RANK_CHANGED',$3,$4,$5,$6)",
+        [auth.userId, person.id, person.rank_id, target.rows[0].id, `Promoted from Promotion Readiness by ${actor.displayName}`, actor.personnelId],
+      );
+      return {
+        action: "RANK_CHANGED",
+        target_personnel_id: person.id,
+        personnelName: person.name,
+        personnelDiscordId: person.discord_id,
+        processedBy: actor.displayName,
+        oldRankName: person.current_rank || "Unranked",
+        rankName: target.rows[0].name,
+      };
+    });
+    await broadcastWebsiteAction(notification);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "NOT_FOUND") return NextResponse.json({ error: "Personnel record was not found" }, { status: 404 });
+    if (message === "NOT_READY") return NextResponse.json({ error: "This person no longer meets every automatic requirement" }, { status: 409 });
+    if (message === "TARGET_MISSING") return NextResponse.json({ error: "The target rank is not active" }, { status: 409 });
+    console.error("[promotion-readiness] Promotion failed", error);
+    return NextResponse.json({ error: "Failed to complete promotion" }, { status: 500 });
   }
 }

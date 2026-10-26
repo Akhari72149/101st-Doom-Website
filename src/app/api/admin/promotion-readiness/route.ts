@@ -20,6 +20,7 @@ type PromotionRule = {
   minimumMainOps?: number;
   requiresSlot?: boolean;
   requiresAlphaPilotSlot?: boolean;
+  approvalPermission?: "company";
   manual?: string[];
 };
 
@@ -57,7 +58,7 @@ const rules: PromotionRule[] = [
   { from: ["PFC", "CT/PFC"], target: "CST", minimumTigDays: 125, minimumAttendance: 50, minimumDaysFromCt: 365, requiresSlot: true },
   { from: ["CST"], target: "CVT", targetAliases: ["VCT"], minimumTigDays: 100, minimumAttendance: 70, minimumServiceDays: 465, requiresSlot: true },
   { from: ["CVT", "VCT"], target: "CSP", minimumTigDays: 120, minimumAttendance: 80, requiresSlot: true, manual: ["Company approval"] },
-  { from: ["CSP"], target: "CTS", minimumTigDays: 145, minimumAttendance: 90, requiresSlot: true, manual: ["Company approval"] },
+  { from: ["CSP"], target: "CTS", minimumTigDays: 145, minimumAttendance: 90, requiresSlot: true, approvalPermission: "company" },
   { from: ["CTS"], target: "LCP", requiresSlot: true, manual: ["Appointment to a Corporal NCO billet"] },
   { from: ["LCP"], target: "CP", manual: ["Corporals Course completion"] },
   { from: ["CP"], target: "CSC", targetAliases: ["CPS"], minimumTigDays: 100, minimumAttendance: 50, requiresSlot: true },
@@ -77,7 +78,7 @@ const rules: PromotionRule[] = [
   { from: ["CX"], target: "CSX", minimumTigDays: 150, minimumAttendance: 75, requiresSlot: true, manual: ["VTOL qualification", "Platoon approval"] },
   { from: ["CSX"], target: "CVX", minimumTigDays: 120, minimumAttendance: 80, requiresSlot: true, manual: ["Platoon approval"] },
   { from: ["CVX", "CX-V"], target: "CXX", targetAliases: ["CX-X"], minimumTigDays: 125, minimumAttendance: 80, requiresSlot: true },
-  { from: ["CXX", "CX-X"], target: "CXT", targetAliases: ["CX-T"], minimumTigDays: 180, minimumAttendance: 90, requiresSlot: true },
+  { from: ["CXX", "CX-X"], target: "CXT", targetAliases: ["CX-T"], minimumTigDays: 180, minimumAttendance: 90, requiresSlot: true, approvalPermission: "company" },
   { from: ["CXT", "CX-T"], target: "CXP", targetAliases: ["CX-P"], requiresAlphaPilotSlot: true, manual: ["Corporals Course completion"] },
   { from: ["CXP", "CX-P"], target: "CXS", manual: ["Sergeants Course completion"] },
   { from: ["CXS"], target: "CXSS", minimumTigDays: 125, minimumAttendance: 75, requiresSlot: true },
@@ -114,7 +115,7 @@ function criterion(key: string, label: string, current: string, target: string, 
 export async function GET(request: Request) {
   try {
     const pool = getPostgresPool();
-    const [personnelResult, ranksResult, windowResult] = await Promise.all([
+    const [personnelResult, ranksResult, windowResult, announcementResult] = await Promise.all([
       pool.query<PersonnelRow>(`
         with attendance as (
           select personnel_id,
@@ -132,8 +133,7 @@ export async function GET(request: Request) {
             from public.operation_count_submissions submissions
             join public.personnel current_personnel on current_personnel.id=submissions.personnel_id
             join public.ranks current_rank on current_rank.id=current_personnel.rank_id
-           where submissions.occurred_on >= date '${ATTENDANCE_START}'
-             and ((upper(current_rank.name)='CR' and submissions.rank_stage='CR')
+           where ((upper(current_rank.name)='CR' and submissions.rank_stage='CR')
                or (upper(current_rank.name)='CR-C' and submissions.rank_stage in ('CR','CR-C')))
            group by submissions.personnel_id
         ), ct_dates as (
@@ -178,6 +178,16 @@ export async function GET(request: Request) {
           from public.attendance_records
          where coalesce(cycle_end_date, created_at::date) >= date '${ATTENDANCE_START}'
       `),
+      pool.query<{ announcements_enabled: boolean; pending_announcements: number }>(`
+        select settings.announcements_enabled,
+               count(outbox.id)::integer pending_announcements
+          from public.promotion_announcement_settings settings
+          left join public.discord_role_outbox outbox
+            on outbox.event_type = 'PROMOTION_READY'
+           and outbox.status in ('pending','processing')
+         where settings.singleton = true
+         group by settings.announcements_enabled
+      `),
     ]);
 
     const configuredRanksByName = new Map(ranksResult.rows.map((row) => [normalize(row.name), row]));
@@ -197,6 +207,7 @@ export async function GET(request: Request) {
             targetRank: null,
             targetRankId: null,
             targetConfigured: true,
+            approvalPermission: null,
             status: "terminal",
             criteria: [],
             setupIssues: [],
@@ -219,6 +230,7 @@ export async function GET(request: Request) {
           targetRank: null,
           targetRankId: null,
           targetConfigured: false,
+          approvalPermission: null,
           status: "setup-required",
           criteria: [],
           setupIssues,
@@ -241,10 +253,10 @@ export async function GET(request: Request) {
         criteria.push(criterion("ct-service", "Time since CT", person.days_from_ct === null ? "CT date unavailable" : `${person.days_from_ct} days`, `${rule.minimumDaysFromCt} days`, state));
       }
       if (rule.minimumAttendances !== undefined) {
-        criteria.push(criterion("operations", "Operations attended", `${person.attended}`, `${rule.minimumAttendances}`, person.attended >= rule.minimumAttendances ? "met" : "not-met"));
+        criteria.push(criterion("operations", "Operation-count credits", `${person.attended} / ${rule.minimumAttendances}`, `${rule.minimumAttendances} total; maximum 3 non-MainOps`, person.attended >= rule.minimumAttendances ? "met" : "not-met"));
       }
       if (rule.minimumMainOps !== undefined) {
-        criteria.push(criterion("main-ops", "Main Operations attended", `${person.main_ops_attended}`, `${rule.minimumMainOps}`, person.main_ops_attended >= rule.minimumMainOps ? "met" : "not-met"));
+        criteria.push(criterion("main-ops", "MainOp count", `${person.main_ops_attended}`, `${rule.minimumMainOps} required`, person.main_ops_attended >= rule.minimumMainOps ? "met" : "not-met"));
       }
       if (rule.requiresSlot) {
         criteria.push(criterion("slot", "Slotted member", person.slotted_position || "Not slotted", "Required", person.slotted_position ? "met" : "not-met"));
@@ -255,6 +267,9 @@ export async function GET(request: Request) {
       }
       for (const [index, requirement] of (rule.manual || []).entries()) {
         criteria.push(criterion(`manual-${index}`, requirement, "Requires review", "Command confirmation", "review"));
+      }
+      if (rule.approvalPermission === "company") {
+        criteria.push(criterion("company-approval", "Company approval", "Pending approval", "Company authorised", "review"));
       }
 
       const hasBlocker = criteria.some((item) => item.state === "not-met" || item.state === "unavailable");
@@ -277,6 +292,7 @@ export async function GET(request: Request) {
         targetRankId,
         targetConfigured,
         status,
+        approvalPermission: rule.approvalPermission || null,
         criteria,
         setupIssues,
       };
@@ -303,7 +319,10 @@ export async function GET(request: Request) {
       right.affected - left.affected || left.label.localeCompare(right.label)
     );
 
-    const canPromote = Boolean(await requirePageAccess(request, "admin.promotion-readiness", "edit").catch(() => null));
+    const [canPromote, canCompanyApprove] = await Promise.all([
+      requirePageAccess(request, "admin.promotion-readiness", "edit").then(Boolean).catch(() => false),
+      requirePageAccess(request, "admin.promotion-readiness-company-approval", "edit").then(Boolean).catch(() => false),
+    ]);
     const readyPeople = people.filter((person) => person.status === "ready" && person.rank_id && person.targetRankId);
     if (readyPeople.length) {
       const occupants = (await pool.query<{ slotted_position: string | null; discord_id: string | null }>(
@@ -326,10 +345,19 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      people,
+      people: people.map((person) => ({
+        ...person,
+        canPromote: person.approvalPermission === "company"
+          ? canCompanyApprove && person.status === "review"
+          : canPromote && person.status === "ready",
+      })),
       summary,
       setupIssues,
       canPromote,
+      announcementControl: {
+        enabled: announcementResult.rows[0]?.announcements_enabled ?? false,
+        pending: announcementResult.rows[0]?.pending_announcements ?? 0,
+      },
       attendanceWindow: {
         ...(windowResult.rows[0] || { first_record: null, last_record: null, periods: 0 }),
         startsAt: ATTENDANCE_START,
@@ -346,9 +374,41 @@ export async function POST(request: Request) {
   if (!requestHasSameOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
-  const auth = await requirePageAccess(request, "admin.promotion-readiness", "edit").catch(() => null);
+  const [standardAuth, companyAuth] = await Promise.all([
+    requirePageAccess(request, "admin.promotion-readiness", "edit").catch(() => null),
+    requirePageAccess(request, "admin.promotion-readiness-company-approval", "edit").catch(() => null),
+  ]);
+  const auth = standardAuth || companyAuth;
   if (!auth) return NextResponse.json({ error: "Promotion permission is required" }, { status: 403 });
-  const body = await request.json().catch(() => null) as { personnelId?: string } | null;
+  const body = await request.json().catch(() => null) as {
+    personnelId?: string;
+    action?: string;
+    enabled?: unknown;
+  } | null;
+  if (body?.action === "set-announcements") {
+    if (!standardAuth) {
+      return NextResponse.json({ error: "Promotion action permission is required" }, { status: 403 });
+    }
+    if (typeof body.enabled !== "boolean") {
+      return NextResponse.json({ error: "Select a valid announcement state" }, { status: 400 });
+    }
+    try {
+      const updated = await getPostgresPool().query<{ announcements_enabled: boolean }>(`
+        update public.promotion_announcement_settings
+           set announcements_enabled=$1,updated_at=now(),updated_by=$2
+         where singleton=true
+         returning announcements_enabled
+      `, [body.enabled, auth.userId]);
+      if (!updated.rows[0]) throw new Error("SETTING_MISSING");
+      return NextResponse.json({
+        ok: true,
+        announcementsEnabled: updated.rows[0].announcements_enabled,
+      });
+    } catch (error) {
+      console.error("[promotion-readiness] Announcement control failed", error);
+      return NextResponse.json({ error: "Failed to update promotion announcements" }, { status: 500 });
+    }
+  }
   const personnelId = String(body?.personnelId || "");
   if (!UUID.test(personnelId)) return NextResponse.json({ error: "Invalid personnel record" }, { status: 400 });
 
@@ -370,7 +430,7 @@ export async function POST(request: Request) {
                  count(*) filter (where submissions.attendance_type='mainop')::integer main_ops,
                  least(3,count(*) filter (where submissions.attendance_type<>'mainop'))::integer non_main_credits
             from public.operation_count_submissions submissions
-           where submissions.personnel_id=$1 and submissions.occurred_on>=date '${ATTENDANCE_START}'
+           where submissions.personnel_id=$1
              and ((submissions.rank_stage='CR' and exists(select 1 from public.personnel p join public.ranks r on r.id=p.rank_id where p.id=$1 and upper(r.name)='CR'))
                or (submissions.rank_stage in ('CR','CR-C') and exists(select 1 from public.personnel p join public.ranks r on r.id=p.rank_id where p.id=$1 and upper(r.name)='CR-C')))
            group by submissions.personnel_id
@@ -396,6 +456,9 @@ export async function POST(request: Request) {
       if (!person || !person.rank_id) throw new Error("NOT_FOUND");
       const rule = rules.find((candidate) => candidate.from.some((name) => normalize(name) === normalize(person.current_rank)));
       if (!rule || rule.manual?.length) throw new Error("NOT_READY");
+      if (rule.approvalPermission === "company" ? !companyAuth : !standardAuth) {
+        throw new Error("FORBIDDEN");
+      }
       const accountable = person.main_ops_attended + person.main_ops_missed;
       const attendance = accountable ? (person.main_ops_attended / accountable) * 100 : null;
       const alphaPilot = /(?:^|[-_\s])(?:alpha|\d+a)(?:$|[-_\s])/i.test(person.slotted_position || "");
@@ -439,6 +502,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message === "NOT_FOUND") return NextResponse.json({ error: "Personnel record was not found" }, { status: 404 });
+    if (message === "FORBIDDEN") return NextResponse.json({ error: "The required promotion approval permission is missing" }, { status: 403 });
     if (message === "NOT_READY") return NextResponse.json({ error: "This person no longer meets every automatic requirement" }, { status: 409 });
     if (message === "TARGET_MISSING") return NextResponse.json({ error: "The target rank is not active" }, { status: 409 });
     console.error("[promotion-readiness] Promotion failed", error);

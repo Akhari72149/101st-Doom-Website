@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
+  Bell,
+  BellOff,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
@@ -49,6 +51,8 @@ type Person = {
   targetRank: string | null;
   targetRankId: string | null;
   targetConfigured: boolean;
+  approvalPermission: "company" | null;
+  canPromote: boolean;
   status: ReadinessStatus;
   criteria: Criterion[];
   setupIssues: SetupIssue[];
@@ -59,6 +63,7 @@ type ResponseBody = {
   summary: { ready: number; review: number; inProgress: number; needsSetup: number; terminal: number };
   setupIssues: Array<SetupIssue & { affected: number }>;
   canPromote: boolean;
+  announcementControl: { enabled: boolean; pending: number };
   attendanceWindow: { first_record: string | null; last_record: string | null; periods: number; startsAt: string };
   calculatedAt: string;
 };
@@ -99,6 +104,7 @@ export default function PromotionReadinessPage() {
   const [rank, setRank] = useState("all");
   const [view, setView] = useState<"ready" | "all">("ready");
   const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [updatingAnnouncements, setUpdatingAnnouncements] = useState(false);
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
@@ -139,6 +145,28 @@ export default function PromotionReadinessPage() {
     }
   }, [load]);
 
+  const setAnnouncements = useCallback(async (enabled: boolean) => {
+    const pending = data?.announcementControl.pending || 0;
+    if (enabled && pending > 0 && !window.confirm(`Enable announcements and release ${pending} stored promotion message${pending === 1 ? "" : "s"}?`)) return;
+    setUpdatingAnnouncements(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/promotion-readiness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set-announcements", enabled }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Failed to update announcements");
+      setNotice(enabled ? "Promotion announcements are now live." : "Promotion announcements are paused; new messages will be stored.");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to update announcements");
+    } finally {
+      setUpdatingAnnouncements(false);
+    }
+  }, [data, load]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -147,7 +175,7 @@ export default function PromotionReadinessPage() {
   const people = useMemo(() => {
     const query = search.trim().toLowerCase();
     return (data?.people || []).filter((person) => {
-      if (view === "ready" && person.status !== "ready") return false;
+      if (view === "ready" && person.status !== "ready" && !person.canPromote) return false;
       if (status !== "all" && person.status !== status) return false;
       if (rank !== "all" && (person.current_rank || "Unranked") !== rank) return false;
       if (!query) return true;
@@ -190,9 +218,35 @@ export default function PromotionReadinessPage() {
           Attendance is calculated from <strong className="text-cyan-200">MainOps from 1 August 2026 onwards</strong> as Y / (Y + N); Excused and LOA records are excluded. Course completion and command approval always require human confirmation.
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#00ff66]/15 px-5 py-4 sm:px-7">
+          <div className="flex items-center gap-3">
+            <span className={`grid h-10 w-10 place-items-center border ${data?.announcementControl.enabled ? "border-[#00ff66]/35 bg-[#00ff66]/10 text-[#00ff66]" : "border-amber-300/35 bg-amber-300/10 text-amber-200"}`}>
+              {data?.announcementControl.enabled ? <Bell size={18} /> : <BellOff size={18} />}
+            </span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-white">Discord Promotion Announcements</p>
+              <p className={`mt-1 text-sm ${data?.announcementControl.enabled ? "text-[#00ff66]" : "text-amber-200"}`}>
+                {data?.announcementControl.enabled ? "Live" : "Paused"}
+                {Boolean(data?.announcementControl.pending) && ` · ${data?.announcementControl.pending} stored`}
+              </p>
+            </div>
+          </div>
+          {data?.canPromote && (
+            <button
+              type="button"
+              onClick={() => void setAnnouncements(!data.announcementControl.enabled)}
+              disabled={updatingAnnouncements}
+              className={`inline-flex min-h-11 items-center gap-2 border px-4 text-xs font-black uppercase tracking-[0.12em] transition disabled:cursor-wait disabled:opacity-50 ${data.announcementControl.enabled ? "border-amber-300/40 text-amber-200 hover:bg-amber-300/10" : "border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10"}`}
+            >
+              {updatingAnnouncements ? <RefreshCw size={16} className="animate-spin" /> : data.announcementControl.enabled ? <BellOff size={16} /> : <Bell size={16} />}
+              {updatingAnnouncements ? "Updating" : data.announcementControl.enabled ? "Pause" : "Enable"}
+            </button>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 border-b border-[#00ff66]/20">
           <button onClick={() => { setView("ready"); setStatus("all"); }} className={`min-h-14 border-r border-[#00ff66]/20 px-4 text-sm font-black uppercase tracking-[0.12em] ${view === "ready" ? "bg-[#00ff66]/10 text-[#00ff66]" : "text-[#81958a] hover:bg-white/[0.03]"}`}>
-            Ready to Promote <span className="ml-2 text-xs">{data?.summary.ready || 0}</span>
+            Ready to Promote <span className="ml-2 text-xs">{data?.people.filter((person) => person.status === "ready" || person.canPromote).length || 0}</span>
           </button>
           <button onClick={() => setView("all")} className={`min-h-14 px-4 text-sm font-black uppercase tracking-[0.12em] ${view === "all" ? "bg-[#00ff66]/10 text-[#00ff66]" : "text-[#81958a] hover:bg-white/[0.03]"}`}>
             All Personnel
@@ -273,6 +327,7 @@ export default function PromotionReadinessPage() {
             <div className="grid min-h-80 place-items-center text-[#00ff66]"><RefreshCw className="animate-spin" /></div>
           ) : people.length ? people.map((person) => {
             const detail = statusDetails[person.status];
+            const usesOperationCounts = ["CR", "CR-C"].includes((person.current_rank || "").toUpperCase());
             return (
               <article key={person.id} className="p-5 sm:p-6">
                 <div className="grid gap-5 xl:grid-cols-[minmax(220px,0.8fr)_minmax(280px,1.1fr)_minmax(380px,1.4fr)] xl:items-center">
@@ -294,7 +349,7 @@ export default function PromotionReadinessPage() {
 
                   <div className="grid grid-cols-3 gap-px bg-white/10">
                     <div className="bg-[#020806] p-3"><p className="text-[10px] uppercase tracking-[0.14em] text-[#657b6f]">TIG</p><p className="mt-1 font-bold">{person.tig_days}d</p></div>
-                    <div className="bg-[#020806] p-3"><p className="text-[10px] uppercase tracking-[0.14em] text-[#657b6f]">Attendance</p><p className="mt-1 font-bold">{person.attendancePercentage === null ? "N/A" : `${person.attendancePercentage}%`}</p></div>
+                    <div className="bg-[#020806] p-3"><p className="text-[10px] uppercase tracking-[0.14em] text-[#657b6f]">{usesOperationCounts ? "Op credits" : "Attendance"}</p><p className="mt-1 font-bold">{usesOperationCounts ? `${person.attended}/4` : person.attendancePercentage === null ? "N/A" : `${person.attendancePercentage}%`}</p></div>
                     <div className="bg-[#020806] p-3"><p className="text-[10px] uppercase tracking-[0.14em] text-[#657b6f]">Service</p><p className="mt-1 font-bold">{person.service_days}d</p></div>
                   </div>
                 </div>
@@ -303,14 +358,14 @@ export default function PromotionReadinessPage() {
                   <span className={`inline-flex items-center gap-2 border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] ${detail.className}`}>
                     <detail.icon size={15} />{detail.label}
                   </span>
-                  {person.status === "ready" && data?.canPromote && (
+                  {person.canPromote && (
                     <button
                       onClick={() => void promote(person)}
                       disabled={promotingId !== null}
                       className="inline-flex min-h-11 items-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/10 px-4 text-xs font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-wait disabled:opacity-50"
                     >
                       {promotingId === person.id ? <RefreshCw size={16} className="animate-spin" /> : <Rocket size={16} />}
-                      {promotingId === person.id ? "Promoting" : "Promote"}
+                      {promotingId === person.id ? "Promoting" : person.approvalPermission === "company" ? "Approve & Promote" : "Promote"}
                     </button>
                   )}
                   {person.setupIssues.length > 0 && (

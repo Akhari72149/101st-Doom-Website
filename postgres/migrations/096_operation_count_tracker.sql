@@ -29,7 +29,7 @@ insert into public.app_page_permissions
   (permission_key, page_path, label, category, description)
 values
   ('admin.operation-counts', '/operation-counts/responses', 'Operation Count Responses', 'Operations',
-   'Review and record CR and CR-C operation counts and credited progression records.')
+   'View submitted CR and CR-C operation-count forms and their credited progression records.')
 on conflict (permission_key) do update
 set page_path=excluded.page_path,
     label=excluded.label,

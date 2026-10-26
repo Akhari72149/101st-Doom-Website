@@ -66,6 +66,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.promotion-readiness-company-approval",
+    pagePath: "/admin/promotion-readiness/company-approval",
+    label: "Promotion Readiness Company Approval",
+    category: "Personnel Admin",
+    description: "Approve and complete promotions into CTS or CXT after all automatic requirements are met.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.ranks",
     pagePath: "/admin/ranks",
     label: "Rank Management",

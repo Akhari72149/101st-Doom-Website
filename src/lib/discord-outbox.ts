@@ -60,6 +60,14 @@ export async function claimDiscordOutbox(workerValue: unknown, limitValue: unkno
         select id
         from public.discord_role_outbox
         where status = 'pending' and available_at <= now()
+          and (
+            event_type <> 'PROMOTION_READY'
+            or coalesce((
+              select announcements_enabled
+              from public.promotion_announcement_settings
+              where singleton = true
+            ), false)
+          )
         order by available_at, created_at
         for update skip locked
         limit $1

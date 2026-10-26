@@ -106,6 +106,7 @@ const terminalRanks = new Set([
 
 const normalize = (value: string | null | undefined) => (value || "").trim().toUpperCase();
 const ATTENDANCE_START = "2026-08-01";
+const RECRUIT_PROMOTION_ROLE_ID = "704516430531395634";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function criterion(key: string, label: string, current: string, target: string, state: CriterionState) {
@@ -338,7 +339,12 @@ export async function GET(request: Request) {
             personnelName: person.name,
             oldRankName: person.current_rank || "Unranked",
             rankName: person.targetRank,
-            leadershipDiscordIds: resolvePromotionLeadership(person.slotted_position, occupants),
+            leadershipDiscordIds: ["CR", "CR-C"].includes(normalize(person.current_rank || ""))
+              ? []
+              : resolvePromotionLeadership(person.slotted_position, occupants),
+            leadershipRoleIds: ["CR", "CR-C"].includes(normalize(person.current_rank || ""))
+              ? [RECRUIT_PROMOTION_ROLE_ID]
+              : [],
           })],
         );
       }

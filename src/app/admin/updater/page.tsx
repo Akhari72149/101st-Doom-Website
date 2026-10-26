@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowDownToLine,
   ArrowRight,
   CheckCircle2,
   Clock3,
@@ -71,6 +72,7 @@ export default function UpdaterPage() {
   const [installing, setInstalling] = useState(false);
   const [status, setStatus] = useState<UpdaterStatus | null>(null);
   const [error, setError] = useState("");
+  const [autoScroll, setAutoScroll] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
 
   const loadStatus = useCallback(async (force = false) => {
@@ -144,9 +146,23 @@ export default function UpdaterPage() {
   }, [installing, jobStatus, loadLiveStatus]);
 
   useEffect(() => {
+    if (!autoScroll) return;
     const log = logRef.current;
     if (log) log.scrollTop = log.scrollHeight;
-  }, [status?.job?.log]);
+  }, [autoScroll, status?.job?.log]);
+
+  function toggleAutoScroll() {
+    setAutoScroll((current) => {
+      const enabled = !current;
+      if (enabled) {
+        window.requestAnimationFrame(() => {
+          const log = logRef.current;
+          if (log) log.scrollTop = log.scrollHeight;
+        });
+      }
+      return enabled;
+    });
+  }
 
   async function installUpdate() {
     if (!status?.canInstall || installing) return;
@@ -279,11 +295,21 @@ export default function UpdaterPage() {
 
           {status?.job && (
             <section className="mt-6 overflow-hidden border border-[#00ff66]/20 bg-[#010503]">
-              <header className="flex items-center justify-between gap-4 border-b border-[#00ff66]/15 bg-[#03110b]/80 px-4 py-3">
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#00ff66]/15 bg-[#03110b]/80 px-4 py-3">
                 <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#00ff66]">
                   <TerminalSquare size={16} /> Deployment Log
                 </div>
-                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#698075]">Live · last 20 KB</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#698075]">Live · last 20 KB</span>
+                  <button
+                    type="button"
+                    aria-pressed={autoScroll}
+                    onClick={toggleAutoScroll}
+                    className={`inline-flex min-h-9 items-center gap-2 border px-3 text-[10px] font-black uppercase tracking-[0.12em] transition ${autoScroll ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-200" : "border-white/15 text-gray-400 hover:border-[#00ff66]/30 hover:text-[#00ff66]"}`}
+                  >
+                    <ArrowDownToLine size={14} /> Auto-scroll: {autoScroll ? "On" : "Off"}
+                  </button>
+                </div>
               </header>
               <pre ref={logRef} aria-live="polite" className="max-h-80 min-h-40 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-6 text-[#9ed9b5] scrollbar-thin">
                 {status.job.log || `[${status.job.stage}] ${status.job.message || "Waiting for updater output..."}`}

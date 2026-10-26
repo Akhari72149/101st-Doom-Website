@@ -234,6 +234,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.operation-counts",
+    pagePath: "/operation-counts/responses",
+    label: "Operation Count Responses",
+    category: "Operations",
+    description: "Review and record CR and CR-C operation counts and credited progression records.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.xp",
     pagePath: "/admin/xp",
     label: "XP Management",

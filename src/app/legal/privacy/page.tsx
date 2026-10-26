@@ -76,8 +76,8 @@ const privacySections: LegalSection[] = [
     id: "attendance",
     title: "9. Attendance management",
     paragraphs: [
-      "Attendance records may include event attendance, non-attendance, excuses, weekly summaries, Discord attendance responses, timestamps, and staff-entered corrections.",
-      "Attendance information is used for operational planning, unit administration, event role assignment, historical review, and related community management.",
+      "Attendance records may include event attendance, non-attendance, excuses, weekly summaries, Discord attendance responses, recruit operation-count forms, training credits, timestamps, and staff-entered corrections.",
+      "Attendance information is used for operational planning, promotion progression, unit administration, event role assignment, historical review, and related community management.",
     ],
   },
   {

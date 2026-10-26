@@ -8,6 +8,7 @@ import {
   BadgeCheck,
   BookOpenCheck,
   BookOpenText,
+  ClipboardList,
   ExternalLink,
   HeartPulse,
   Link2,
@@ -82,6 +83,15 @@ const panels: PanelDefinition[] = [
     route: "/hammer-ridealongs",
     group: "Personnel Configuration",
     icon: Plane,
+  },
+  {
+    id: "operation-counts",
+    title: "Operation Count Responses",
+    description: "Review and record CR and CR-C progression operations and credited counts.",
+    permission: "admin.operation-counts",
+    route: "/operation-counts/responses",
+    group: "Personnel Configuration",
+    icon: ClipboardList,
   },
   {
     id: "join-links",

@@ -188,6 +188,11 @@ export default function NavbarClient() {
           description: "Review customisation points, history and available options",
         },
         {
+          href: "/operation-counts",
+          label: "Operation Counts",
+          description: "Track CR and CR-C promotion operation requirements",
+        },
+        {
           href: "/roster",
           label: "Slotted Roster",
           description: "View assigned positions across the unit",
@@ -467,6 +472,13 @@ export default function NavbarClient() {
           allowedRoles: [],
           category: "Operations",
         },
+        {
+          href: "/operation-counts/responses",
+          label: "Operation Count Responses",
+          description: "Review and record CR and CR-C operation counts",
+          allowedRoles: [],
+          category: "Operations",
+        },
       ],
     },
   ], []);
@@ -497,6 +509,7 @@ export default function NavbarClient() {
           "admin.documents",
           "admin.system-health",
           "admin.hammer-ridealongs",
+          "admin.operation-counts",
         ].some((permissionKey) => Boolean(permissions[permissionKey]));
       }
       const permissionKeys = permissionsByPath.get(item.href);

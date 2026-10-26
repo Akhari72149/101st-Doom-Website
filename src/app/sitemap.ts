@@ -21,6 +21,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/grand-orbat",
     "/Tags",
     "/servers",
+    "/operation-counts",
     "/hammer-ridealongs",
     "/hammer-ridealongs/archive",
     "/hammer-ridealongs/responses",

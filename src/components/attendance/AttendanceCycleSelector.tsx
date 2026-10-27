@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarRange, LocateFixed } from "lucide-react";
-import { attendanceCyclesForMonth, attendanceMonths, attendanceYears, currentAttendancePeriod } from "@/lib/attendance-periods";
+import { accountableAttendanceMonths, attendanceCyclesForMonth, attendanceYears, currentAttendancePeriod } from "@/lib/attendance-periods";
 
 type AttendanceCycleSelectorProps = {
   month: string;
@@ -21,6 +21,7 @@ export default function AttendanceCycleSelector({
   onYearChange,
 }: AttendanceCycleSelectorProps) {
   const cycles = attendanceCyclesForMonth(month, year);
+  const availableMonths = accountableAttendanceMonths(year);
   const current = currentAttendancePeriod();
   const isCurrent = current.year === year && current.month === month && current.week === week;
 
@@ -31,8 +32,11 @@ export default function AttendanceCycleSelector({
   }
 
   function changeYear(nextYear: number) {
-    const nextCycles = attendanceCyclesForMonth(month, nextYear);
+    const nextMonths = accountableAttendanceMonths(nextYear);
+    const nextMonth = nextMonths.includes(month) ? month : nextMonths[0];
+    const nextCycles = attendanceCyclesForMonth(nextMonth, nextYear);
     onYearChange(nextYear);
+    onMonthChange(nextMonth);
     onWeekChange(nextCycles[0]?.week ?? 1);
   }
 
@@ -70,7 +74,7 @@ export default function AttendanceCycleSelector({
             onChange={(event) => changeMonth(event.target.value)}
             className="h-12 w-full border border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70"
           >
-            {attendanceMonths.map((item) => <option key={item}>{item}</option>)}
+            {availableMonths.map((item) => <option key={item}>{item}</option>)}
           </select>
           </label>
           <label className="block">

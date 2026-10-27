@@ -12,6 +12,10 @@ import {
   XCircle,
 } from "lucide-react";
 import {
+  accountableAttendanceMonths,
+  ATTENDANCE_ACCOUNTING_START_MONTH,
+  ATTENDANCE_ACCOUNTING_START_WEEK,
+  ATTENDANCE_ACCOUNTING_START_YEAR,
   attendanceCycleEndDate,
   attendanceCyclesForMonth,
   attendanceMonths as months,
@@ -109,9 +113,9 @@ export default function AttendancePersonReview({ heading = "Person attendance re
   const defaultPeriod = getDefaultPeriod();
   const [query, setQuery] = useState("");
   const [eventType, setEventType] = useState<"All" | "Training" | "MainOp">("MainOp");
-  const [startMonth, setStartMonth] = useState("January");
-  const [startWeek, setStartWeek] = useState(1);
-  const [startYear, setStartYear] = useState(2026);
+  const [startMonth, setStartMonth] = useState(ATTENDANCE_ACCOUNTING_START_MONTH);
+  const [startWeek, setStartWeek] = useState(ATTENDANCE_ACCOUNTING_START_WEEK);
+  const [startYear, setStartYear] = useState(ATTENDANCE_ACCOUNTING_START_YEAR);
   const [endMonth, setEndMonth] = useState(defaultPeriod.month);
   const [endWeek, setEndWeek] = useState(defaultPeriod.week);
   const [endYear, setEndYear] = useState(defaultPeriod.year);
@@ -226,7 +230,7 @@ export default function AttendancePersonReview({ heading = "Person attendance re
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#00ff66]/60">Attendance history</p>
             <h2 className="mt-1 text-xl font-black text-white">{heading}</h2>
-            <p className="mt-2 text-sm leading-6 text-[#8eae99]">Search by name, rank, or position, then review accountable attendance and individual records.</p>
+            <p className="mt-2 text-sm leading-6 text-[#8eae99]">Search by name, rank, or position. Accountable attendance is calculated from Main Operations on or after 1 August 2026.</p>
           </div>
         </div>
       </header>
@@ -261,7 +265,7 @@ export default function AttendancePersonReview({ heading = "Person attendance re
         <div className="px-6 py-16 text-center">
           <UserSearch className="mx-auto h-8 w-8 text-[#00ff66]/45" />
           <p className="mt-4 font-bold text-white">Search for a member to begin</p>
-          <p className="mt-2 text-sm text-[#789383]">The default review covers Main Operations from January to the current week.</p>
+          <p className="mt-2 text-sm text-[#789383]">The default review covers accountable Main Operations from 1 August 2026 to the current week.</p>
         </div>
       ) : !loading && people.length === 0 && !error ? (
         <div className="px-6 py-16 text-center"><p className="font-bold text-white">No matching attendance records</p><p className="mt-2 text-sm text-[#789383]">Check the name or expand the selected period.</p></div>
@@ -317,6 +321,7 @@ export default function AttendancePersonReview({ heading = "Person attendance re
 
 function PeriodControl({ label, month, week, year, onMonth, onWeek, onYear }: { label: string; month: string; week: number; year: number; onMonth: (value: string) => void; onWeek: (value: number) => void; onYear: (value: number) => void }) {
   const cycles = attendanceCyclesForMonth(month, year);
+  const availableMonths = accountableAttendanceMonths(year);
 
   function changeMonth(nextMonth: string) {
     const nextCycles = attendanceCyclesForMonth(nextMonth, year);
@@ -328,8 +333,8 @@ function PeriodControl({ label, month, week, year, onMonth, onWeek, onYear }: { 
     <fieldset>
       <legend className="mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[#789383]">{label}</legend>
       <div className="grid grid-cols-[0.8fr_86px_1.2fr]">
-        <select value={month} onChange={(event) => changeMonth(event.target.value)} aria-label={`${label} closing month`} className="h-11 min-w-0 border border-r-0 border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">{months.map((item) => <option key={item}>{item}</option>)}</select>
-        <select value={year} onChange={(event) => { const nextYear = Number(event.target.value); onYear(nextYear); onWeek(attendanceCyclesForMonth(month, nextYear)[0]?.week ?? 1); }} aria-label={`${label} year`} className="h-11 min-w-0 border border-r-0 border-[#00ff66]/25 bg-[#06100a] px-2 text-sm text-white outline-none focus:border-[#00ff66]/70">{attendanceYears().map((item) => <option key={item}>{item}</option>)}</select>
+        <select value={month} onChange={(event) => changeMonth(event.target.value)} aria-label={`${label} closing month`} className="h-11 min-w-0 border border-r-0 border-[#00ff66]/25 bg-[#06100a] px-3 text-sm text-white outline-none focus:border-[#00ff66]/70">{availableMonths.map((item) => <option key={item}>{item}</option>)}</select>
+        <select value={year} onChange={(event) => { const nextYear = Number(event.target.value); const nextMonths = accountableAttendanceMonths(nextYear); const nextMonth = nextMonths.includes(month) ? month : nextMonths[0]; onYear(nextYear); onMonth(nextMonth); onWeek(attendanceCyclesForMonth(nextMonth, nextYear)[0]?.week ?? 1); }} aria-label={`${label} year`} className="h-11 min-w-0 border border-r-0 border-[#00ff66]/25 bg-[#06100a] px-2 text-sm text-white outline-none focus:border-[#00ff66]/70">{attendanceYears().map((item) => <option key={item}>{item}</option>)}</select>
         <select value={week} onChange={(event) => onWeek(Number(event.target.value))} aria-label={`${label} attendance cycle`} className="h-11 min-w-0 border border-[#00ff66]/25 bg-[#06100a] px-2 text-sm text-white outline-none focus:border-[#00ff66]/70">{cycles.map((item) => <option key={item.week} value={item.week}>{item.compactLabel}</option>)}</select>
       </div>
     </fieldset>

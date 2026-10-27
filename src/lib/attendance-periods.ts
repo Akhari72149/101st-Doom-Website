@@ -15,6 +15,11 @@ export const attendanceMonths: string[] = [
 
 export const attendanceWeeks = [1, 2, 3, 4, 5] as const;
 
+export const ATTENDANCE_ACCOUNTING_START = "2026-08-01";
+export const ATTENDANCE_ACCOUNTING_START_YEAR = 2026;
+export const ATTENDANCE_ACCOUNTING_START_MONTH = "August";
+export const ATTENDANCE_ACCOUNTING_START_WEEK = 1;
+
 export type AttendanceCycle = {
   week: number;
   startDate: string;
@@ -67,8 +72,14 @@ export function attendanceCyclesForMonth(month: string, year = new Date().getFul
 }
 
 export function attendanceYears(currentYear = new Date().getFullYear()) {
-  const firstYear = 2026;
+  const firstYear = ATTENDANCE_ACCOUNTING_START_YEAR;
   return Array.from({ length: Math.max(1, currentYear - firstYear + 1) }, (_, index) => currentYear - index);
+}
+
+export function accountableAttendanceMonths(year: number) {
+  if (year > ATTENDANCE_ACCOUNTING_START_YEAR) return attendanceMonths;
+  if (year < ATTENDANCE_ACCOUNTING_START_YEAR) return [];
+  return attendanceMonths.slice(attendanceMonths.indexOf(ATTENDANCE_ACCOUNTING_START_MONTH));
 }
 
 export function currentAttendancePeriod(today = new Date()) {

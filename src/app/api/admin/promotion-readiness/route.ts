@@ -4,6 +4,7 @@ import { broadcastWebsiteAction } from "@/lib/broadcastWebsiteAction";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { resolvePromotionLeadership } from "@/lib/promotion-leadership";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
+import { ATTENDANCE_ACCOUNTING_START } from "@/lib/attendance-periods";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,7 +106,6 @@ const terminalRanks = new Set([
 ]);
 
 const normalize = (value: string | null | undefined) => (value || "").trim().toUpperCase();
-const ATTENDANCE_START = "2026-08-01";
 const RECRUIT_PROMOTION_ROLE_ID = "704516430531395634";
 const DEFAULT_PROMOTION_FALLBACK_ROLE_ID = "813525376906821642";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -126,7 +126,7 @@ export async function GET(request: Request) {
                  count(*) filter (where status = 'Y' and lower(coalesce(type, '')) = 'mainop')::integer main_ops_attended,
                  count(*) filter (where status = 'N' and lower(coalesce(type, '')) = 'mainop')::integer main_ops_missed
             from public.attendance_records
-           where coalesce(cycle_end_date, created_at::date) >= date '${ATTENDANCE_START}'
+           where coalesce(cycle_end_date, created_at::date) >= date '${ATTENDANCE_ACCOUNTING_START}'
            group by personnel_id
         ), operation_counts as (
           select submissions.personnel_id,
@@ -178,7 +178,7 @@ export async function GET(request: Request) {
                max(coalesce(cycle_end_date,created_at::date)) last_record,
                count(distinct (attendance_month, week_number, type))::integer periods
           from public.attendance_records
-         where coalesce(cycle_end_date, created_at::date) >= date '${ATTENDANCE_START}'
+          where coalesce(cycle_end_date, created_at::date) >= date '${ATTENDANCE_ACCOUNTING_START}'
       `),
       pool.query<{ announcements_enabled: boolean; pending_announcements: number }>(`
         select settings.announcements_enabled,
@@ -394,7 +394,7 @@ export async function GET(request: Request) {
       announcementIssues,
       attendanceWindow: {
         ...(windowResult.rows[0] || { first_record: null, last_record: null, periods: 0 }),
-        startsAt: ATTENDANCE_START,
+        startsAt: ATTENDANCE_ACCOUNTING_START,
       },
       calculatedAt: new Date().toISOString(),
     }, { headers: { "Cache-Control": "no-store" } });
@@ -457,7 +457,7 @@ export async function POST(request: Request) {
                  count(*) filter (where status='Y' and lower(coalesce(type,''))='mainop')::integer main_ops_attended,
                  count(*) filter (where status='N' and lower(coalesce(type,''))='mainop')::integer main_ops_missed
             from public.attendance_records
-           where personnel_id=$1 and coalesce(cycle_end_date,created_at::date)>=date '${ATTENDANCE_START}'
+           where personnel_id=$1 and coalesce(cycle_end_date,created_at::date)>=date '${ATTENDANCE_ACCOUNTING_START}'
            group by personnel_id
         ), operation_counts as (
           select submissions.personnel_id,

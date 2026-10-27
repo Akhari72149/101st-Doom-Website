@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { ATTENDANCE_ACCOUNTING_START } from "@/lib/attendance-periods";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,11 +53,16 @@ function parseRead(request: Request) {
   return { mode, type, months, month: null, week: null, cycleStart, cycleEnd };
 }
 
-const selectColumns = `id,type,status,attendance_month,week_number,
+const selectColumns = `id,type,status,attendance_month,week_number,cycle_end_date,
   personnel:personnel_id(id,name,slotted_position,ranks:rank_id(name))`;
 
 async function readSupabase(input: NonNullable<ReturnType<typeof parseRead>>) {
   let query = supabaseAdmin.from("attendance_records").select(selectColumns).in("attendance_month", input.months);
+  const cycleStart = input.cycleStart && input.cycleStart > ATTENDANCE_ACCOUNTING_START
+    ? input.cycleStart
+    : ATTENDANCE_ACCOUNTING_START;
+  query = query.gte("cycle_end_date", cycleStart);
+  if (input.mode === "individual" && input.cycleEnd) query = query.lte("cycle_end_date", input.cycleEnd);
   if (input.type !== "All") query = query.eq("type", input.type);
   if (input.month) query = query.eq("attendance_month", input.month).eq("week_number", input.week!);
   const { data, error } = await query.limit(input.mode === "individual" ? 5000 : 1000);
@@ -68,8 +74,8 @@ async function readPostgres(input: NonNullable<ReturnType<typeof parseRead>>) {
   const values: unknown[] = [];
   const where: string[] = [];
   if (input.cycleStart && input.cycleEnd) {
-    values.push(input.cycleStart, input.cycleEnd);
-    where.push(`a.cycle_end_date between $1::date and $2::date`);
+    values.push(input.cycleStart < ATTENDANCE_ACCOUNTING_START ? ATTENDANCE_ACCOUNTING_START : input.cycleStart, input.cycleEnd);
+    where.push(`coalesce(a.cycle_end_date, a.created_at::date) between $1::date and $2::date`);
   } else if (input.cycleEnd) {
     values.push(input.cycleEnd);
     where.push(`a.cycle_end_date = $1::date`);
@@ -77,6 +83,8 @@ async function readPostgres(input: NonNullable<ReturnType<typeof parseRead>>) {
     values.push(input.months);
     where.push(`a.attendance_month = any($1::text[])`);
   }
+  values.push(ATTENDANCE_ACCOUNTING_START);
+  where.push(`coalesce(a.cycle_end_date, a.created_at::date) >= $${values.length}::date`);
   if (input.type !== "All") {
     values.push(input.type);
     where.push(`a.type = $${values.length}`);

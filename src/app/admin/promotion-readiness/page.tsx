@@ -16,6 +16,7 @@ import {
   TriangleAlert,
   UserCheck,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -58,12 +59,25 @@ type Person = {
   setupIssues: SetupIssue[];
 };
 
+type AnnouncementIssue = {
+  id: string;
+  status: "pending" | "processing" | "dead";
+  attempt_count: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  personnel_name: string;
+  old_rank_name: string;
+  new_rank_name: string;
+};
+
 type ResponseBody = {
   people: Person[];
   summary: { ready: number; review: number; inProgress: number; needsSetup: number; terminal: number };
   setupIssues: Array<SetupIssue & { affected: number }>;
   canPromote: boolean;
   announcementControl: { enabled: boolean; pending: number };
+  announcementIssues: AnnouncementIssue[];
   attendanceWindow: { first_record: string | null; last_record: string | null; periods: number; startsAt: string };
   calculatedAt: string;
 };
@@ -79,6 +93,20 @@ const statusDetails = {
 function formatDate(value: string | null) {
   if (!value) return "No records";
   return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(value));
+}
+
+function issueMessage(issue: AnnouncementIssue) {
+  if (issue.last_error) return issue.last_error;
+  if (issue.status === "processing") return "The bot has claimed this message and is currently delivering it.";
+  if (issue.status === "dead") return "Delivery stopped after the maximum number of attempts.";
+  const waitingSeconds = Math.max(0, Math.floor((Date.now() - new Date(issue.created_at).getTime()) / 1000));
+  return waitingSeconds > 30
+    ? "The bot has not collected this message. Check that the bot service and Discord outbox connection are running."
+    : "Waiting for the bot worker to collect this message.";
 }
 
 function criterionStyle(state: CriterionState) {
@@ -105,6 +133,7 @@ export default function PromotionReadinessPage() {
   const [view, setView] = useState<"ready" | "all">("ready");
   const [promotingId, setPromotingId] = useState<string | null>(null);
   const [updatingAnnouncements, setUpdatingAnnouncements] = useState(false);
+  const [showAnnouncementIssues, setShowAnnouncementIssues] = useState(false);
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
@@ -232,15 +261,25 @@ export default function PromotionReadinessPage() {
             </div>
           </div>
           {data?.canPromote && (
-            <button
-              type="button"
-              onClick={() => void setAnnouncements(!data.announcementControl.enabled)}
-              disabled={updatingAnnouncements}
-              className={`inline-flex min-h-11 items-center gap-2 border px-4 text-xs font-black uppercase tracking-[0.12em] transition disabled:cursor-wait disabled:opacity-50 ${data.announcementControl.enabled ? "border-amber-300/40 text-amber-200 hover:bg-amber-300/10" : "border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10"}`}
-            >
-              {updatingAnnouncements ? <RefreshCw size={16} className="animate-spin" /> : data.announcementControl.enabled ? <BellOff size={16} /> : <Bell size={16} />}
-              {updatingAnnouncements ? "Updating" : data.announcementControl.enabled ? "Pause" : "Enable"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAnnouncementIssues(true)}
+                className="inline-flex min-h-11 items-center gap-2 border border-cyan-300/35 px-4 text-xs font-black uppercase tracking-[0.12em] text-cyan-200 transition hover:bg-cyan-300/10"
+              >
+                <TriangleAlert size={16} /> Delivery Issues
+                {data.announcementIssues.length > 0 && <span className="border border-cyan-300/30 bg-cyan-300/10 px-1.5 py-0.5 text-[10px]">{data.announcementIssues.length}</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => void setAnnouncements(!data.announcementControl.enabled)}
+                disabled={updatingAnnouncements}
+                className={`inline-flex min-h-11 items-center gap-2 border px-4 text-xs font-black uppercase tracking-[0.12em] transition disabled:cursor-wait disabled:opacity-50 ${data.announcementControl.enabled ? "border-amber-300/40 text-amber-200 hover:bg-amber-300/10" : "border-[#00ff66]/40 text-[#00ff66] hover:bg-[#00ff66]/10"}`}
+              >
+                {updatingAnnouncements ? <RefreshCw size={16} className="animate-spin" /> : data.announcementControl.enabled ? <BellOff size={16} /> : <Bell size={16} />}
+                {updatingAnnouncements ? "Updating" : data.announcementControl.enabled ? "Pause" : "Enable"}
+              </button>
+            </div>
           )}
         </div>
 
@@ -416,6 +455,58 @@ export default function PromotionReadinessPage() {
           <span>Calculated {data ? formatDate(data.calculatedAt) : "Not yet"}</span>
         </footer>
       </section>
+
+      {showAnnouncementIssues && data?.canPromote && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="promotion-delivery-title">
+          <section className="flex max-h-[85vh] w-full max-w-4xl flex-col border border-cyan-300/30 bg-[#020806] shadow-[0_0_60px_rgba(34,211,238,0.12)]">
+            <header className="flex items-start justify-between gap-4 border-b border-cyan-300/20 px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">Discord Delivery Monitor</p>
+                <h2 id="promotion-delivery-title" className="mt-1 text-xl font-black uppercase">Promotion Message Issues</h2>
+                <p className="mt-2 text-sm text-[#8ba397]">Pending, processing, or failed messages are shown here. Completed messages disappear automatically.</p>
+              </div>
+              <button type="button" onClick={() => setShowAnnouncementIssues(false)} className="grid h-10 w-10 shrink-0 place-items-center border border-white/15 text-gray-400 transition hover:border-white/30 hover:text-white" aria-label="Close delivery issues">
+                <X size={19} />
+              </button>
+            </header>
+
+            <div className="overflow-y-auto p-5 sm:p-6">
+              {data.announcementIssues.length ? (
+                <div className="space-y-3">
+                  {data.announcementIssues.map((issue) => (
+                    <article key={issue.id} className={`border p-4 ${issue.status === "dead" ? "border-red-300/30 bg-red-300/[0.06]" : issue.status === "processing" ? "border-cyan-300/30 bg-cyan-300/[0.06]" : "border-amber-300/25 bg-amber-300/[0.04]"}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-black text-white">{issue.personnel_name}</p>
+                          <p className="mt-1 text-sm text-[#91a79b]">{issue.old_rank_name} <ArrowRight className="mx-1 inline" size={14} /> {issue.new_rank_name}</p>
+                        </div>
+                        <span className={`border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${issue.status === "dead" ? "border-red-300/35 text-red-200" : issue.status === "processing" ? "border-cyan-300/35 text-cyan-200" : "border-amber-300/35 text-amber-200"}`}>{issue.status}</span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-gray-300">{issueMessage(issue)}</p>
+                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[#63786d]">
+                        <span>Attempts {issue.attempt_count}/5</span>
+                        <span>Queued {formatDateTime(issue.created_at)}</span>
+                        <span>Updated {formatDateTime(issue.updated_at)}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid min-h-44 place-items-center border border-[#00ff66]/20 bg-[#00ff66]/5 text-center">
+                  <div><CheckCircle2 className="mx-auto text-[#00ff66]" size={28} /><p className="mt-3 font-black uppercase text-[#00ff66]">No delivery issues</p><p className="mt-1 text-sm text-[#81958a]">There are no unsent promotion messages.</p></div>
+                </div>
+              )}
+            </div>
+
+            <footer className="flex justify-end gap-3 border-t border-cyan-300/15 px-5 py-4 sm:px-6">
+              <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex min-h-10 items-center gap-2 border border-cyan-300/30 px-4 text-xs font-black uppercase tracking-[0.12em] text-cyan-200 disabled:opacity-50">
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
+              </button>
+              <button type="button" onClick={() => setShowAnnouncementIssues(false)} className="min-h-10 border border-white/15 px-4 text-xs font-black uppercase tracking-[0.12em] text-white">Close</button>
+            </footer>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

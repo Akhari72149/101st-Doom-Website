@@ -107,6 +107,7 @@ const terminalRanks = new Set([
 const normalize = (value: string | null | undefined) => (value || "").trim().toUpperCase();
 const ATTENDANCE_START = "2026-08-01";
 const RECRUIT_PROMOTION_ROLE_ID = "704516430531395634";
+const DEFAULT_PROMOTION_FALLBACK_ROLE_ID = "813525376906821642";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function criterion(key: string, label: string, current: string, target: string, state: CriterionState) {
@@ -331,6 +332,10 @@ export async function GET(request: Request) {
           where lower(coalesce(status,'active')) not in ('retired','removed','transferred')`,
       )).rows;
       for (const person of readyPeople) {
+        const recruitPromotion = ["CR", "CR-C"].includes(normalize(person.current_rank || ""));
+        const leadershipDiscordIds = recruitPromotion
+          ? []
+          : resolvePromotionLeadership(person.slotted_position, occupants);
         await pool.query(
           "select public.enqueue_promotion_ready_notification($1,$2,$3,$4::jsonb)",
           [person.id, person.rank_id, person.targetRankId, JSON.stringify({
@@ -339,16 +344,38 @@ export async function GET(request: Request) {
             personnelName: person.name,
             oldRankName: person.current_rank || "Unranked",
             rankName: person.targetRank,
-            leadershipDiscordIds: ["CR", "CR-C"].includes(normalize(person.current_rank || ""))
-              ? []
-              : resolvePromotionLeadership(person.slotted_position, occupants),
-            leadershipRoleIds: ["CR", "CR-C"].includes(normalize(person.current_rank || ""))
+            leadershipDiscordIds,
+            leadershipRoleIds: recruitPromotion
               ? [RECRUIT_PROMOTION_ROLE_ID]
-              : [],
+              : leadershipDiscordIds.length ? [] : [DEFAULT_PROMOTION_FALLBACK_ROLE_ID],
           })],
         );
       }
     }
+
+    const announcementIssues = canPromote
+      ? (await pool.query<{
+          id: string;
+          status: "pending" | "processing" | "dead";
+          attempt_count: number;
+          last_error: string | null;
+          created_at: string;
+          updated_at: string;
+          personnel_name: string;
+          old_rank_name: string;
+          new_rank_name: string;
+        }>(`
+          select id,status,attempt_count,last_error,created_at,updated_at,
+                 coalesce(payload->>'personnelName','Unknown Member') personnel_name,
+                 coalesce(payload->>'oldRankName','Unknown') old_rank_name,
+                 coalesce(payload->>'rankName','Unknown') new_rank_name
+            from public.discord_role_outbox
+           where event_type='PROMOTION_READY'
+             and status in ('pending','processing','dead')
+           order by case status when 'dead' then 0 when 'processing' then 1 else 2 end,
+                    created_at
+        `)).rows
+      : [];
 
     return NextResponse.json({
       people: people.map((person) => ({
@@ -364,6 +391,7 @@ export async function GET(request: Request) {
         enabled: announcementResult.rows[0]?.announcements_enabled ?? false,
         pending: announcementResult.rows[0]?.pending_announcements ?? 0,
       },
+      announcementIssues,
       attendanceWindow: {
         ...(windowResult.rows[0] || { first_record: null, last_record: null, periods: 0 }),
         startsAt: ATTENDANCE_START,

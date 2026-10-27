@@ -2,7 +2,6 @@
 
 const DISCORD_ID_PATTERN = /^\d{17,20}$/;
 const USER_INIT_ROLES = Object.freeze([
-  "446025365496922142",
   "848579852712804383",
   "848594325695758407",
   "848607945825845309",
@@ -95,6 +94,21 @@ function createDiscordOutboxWorker({
     if (event.eventType === "USER_ROLE_INIT") {
       if (member.roles.cache.has(NO_ROLES_TAG_ID)) {
         await member.roles.remove(NO_ROLES_TAG_ID);
+      }
+      if (payload.reactivation === true || payload.reconcileRank === true) {
+        const targetRankRoleId = payload.rankRoleId
+          ? requireDiscordId(payload.rankRoleId, "rankRoleId")
+          : null;
+        const knownRankRoleIds = Array.isArray(payload.rankRoleIds)
+          ? payload.rankRoleIds.map((roleId) => requireDiscordId(roleId, "rankRoleIds"))
+          : [];
+        const staleRankRoles = knownRankRoleIds.filter((roleId) =>
+          roleId !== targetRankRoleId && member.roles.cache.has(roleId)
+        );
+        if (staleRankRoles.length) await member.roles.remove(staleRankRoles);
+        if (targetRankRoleId && !member.roles.cache.has(targetRankRoleId)) {
+          await member.roles.add(targetRankRoleId);
+        }
       }
       const missing = USER_INIT_ROLES.filter((roleId) => !member.roles.cache.has(roleId));
       if (missing.length) await member.roles.add(missing);

@@ -51,6 +51,7 @@ function uniqueRoleMatch(
 export function resolvePromotionLeadership(
   slottedPosition: string | null,
   occupants: Occupant[],
+  promotedDiscordId?: string | null,
 ) {
   const memberSlot = slots.find((slot) => slot.slotId === slottedPosition);
   if (!memberSlot) return [];
@@ -75,5 +76,7 @@ export function resolvePromotionLeadership(
 
   return [...new Set([squadLead, platoonLead]
     .map((slot) => slot ? occupantBySlot.get(slot.slotId) : null)
-    .filter((discordId): discordId is string => Boolean(discordId)))];
+    .filter((discordId): discordId is string =>
+      Boolean(discordId) && discordId !== promotedDiscordId,
+    ))];
 }

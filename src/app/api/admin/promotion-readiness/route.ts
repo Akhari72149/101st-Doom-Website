@@ -325,7 +325,11 @@ export async function GET(request: Request) {
       requirePageAccess(request, "admin.promotion-readiness", "edit").then(Boolean).catch(() => false),
       requirePageAccess(request, "admin.promotion-readiness-company-approval", "edit").then(Boolean).catch(() => false),
     ]);
-    const readyPeople = people.filter((person) => person.status === "ready" && person.rank_id && person.targetRankId);
+    const readyPeople = people.filter((person) =>
+      (person.status === "ready" || (person.status === "review" && person.approvalPermission === "company"))
+      && person.rank_id
+      && person.targetRankId,
+    );
     if (readyPeople.length) {
       const occupants = (await pool.query<{ slotted_position: string | null; discord_id: string | null }>(
         `select slotted_position,discord_id from public.personnel
@@ -333,9 +337,10 @@ export async function GET(request: Request) {
       )).rows;
       for (const person of readyPeople) {
         const recruitPromotion = ["CR", "CR-C"].includes(normalize(person.current_rank || ""));
+        const companyApprovalRequired = person.approvalPermission === "company";
         const leadershipDiscordIds = recruitPromotion
           ? []
-          : resolvePromotionLeadership(person.slotted_position, occupants);
+          : resolvePromotionLeadership(person.slotted_position, occupants, person.discord_id);
         await pool.query(
           "select public.enqueue_promotion_ready_notification($1,$2,$3,$4::jsonb)",
           [person.id, person.rank_id, person.targetRankId, JSON.stringify({
@@ -344,10 +349,15 @@ export async function GET(request: Request) {
             personnelName: person.name,
             oldRankName: person.current_rank || "Unranked",
             rankName: person.targetRank,
+            tigDays: person.tig_days,
+            attendancePercentage: person.attendancePercentage,
+            companyApprovalRequired,
             leadershipDiscordIds,
             leadershipRoleIds: recruitPromotion
               ? [RECRUIT_PROMOTION_ROLE_ID]
-              : leadershipDiscordIds.length ? [] : [DEFAULT_PROMOTION_FALLBACK_ROLE_ID],
+              : companyApprovalRequired || !leadershipDiscordIds.length
+                ? [DEFAULT_PROMOTION_FALLBACK_ROLE_ID]
+                : [],
           })],
         );
       }

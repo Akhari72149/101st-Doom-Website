@@ -53,6 +53,12 @@ type Person = {
   targetRankId: string | null;
   targetConfigured: boolean;
   approvalPermission: "company" | null;
+  companyApproval: {
+    id: string;
+    approved_by_name: string;
+    approved_at: string;
+  } | null;
+  canApprove: boolean;
   canPromote: boolean;
   status: ReadinessStatus;
   criteria: Criterion[];
@@ -132,6 +138,7 @@ export default function PromotionReadinessPage() {
   const [rank, setRank] = useState("all");
   const [view, setView] = useState<"ready" | "all">("ready");
   const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [updatingAnnouncements, setUpdatingAnnouncements] = useState(false);
   const [showAnnouncementIssues, setShowAnnouncementIssues] = useState(false);
   const [notice, setNotice] = useState("");
@@ -174,6 +181,27 @@ export default function PromotionReadinessPage() {
     }
   }, [load]);
 
+  const approveCompanyPromotion = useCallback(async (person: Person) => {
+    if (!window.confirm(`Record company approval for ${person.name} to progress from ${person.current_rank || "Unranked"} to ${person.targetRank}?`)) return;
+    setApprovingId(person.id);
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/promotion-readiness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve-company", personnelId: person.id }),
+      });
+      const body = await response.json() as { error?: string; processedBy?: string };
+      if (!response.ok) throw new Error(body.error || "Company approval failed");
+      setNotice(`${person.name}'s promotion was approved by ${body.processedBy || "Company"}. A promotion administrator can now complete it.`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Company approval failed");
+    } finally {
+      setApprovingId(null);
+    }
+  }, [load]);
+
   const setAnnouncements = useCallback(async (enabled: boolean) => {
     const pending = data?.announcementControl.pending || 0;
     if (enabled && pending > 0 && !window.confirm(`Enable announcements and release ${pending} stored promotion message${pending === 1 ? "" : "s"}?`)) return;
@@ -204,7 +232,7 @@ export default function PromotionReadinessPage() {
   const people = useMemo(() => {
     const query = search.trim().toLowerCase();
     return (data?.people || []).filter((person) => {
-      if (view === "ready" && person.status !== "ready" && !person.canPromote) return false;
+      if (view === "ready" && person.status !== "ready" && !person.canPromote && !person.canApprove) return false;
       if (status !== "all" && person.status !== status) return false;
       if (rank !== "all" && (person.current_rank || "Unranked") !== rank) return false;
       if (!query) return true;
@@ -397,16 +425,33 @@ export default function PromotionReadinessPage() {
                   <span className={`inline-flex items-center gap-2 border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] ${detail.className}`}>
                     <detail.icon size={15} />{detail.label}
                   </span>
-                  {person.canPromote && (
-                    <button
-                      onClick={() => void promote(person)}
-                      disabled={promotingId !== null}
-                      className="inline-flex min-h-11 items-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/10 px-4 text-xs font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-wait disabled:opacity-50"
-                    >
-                      {promotingId === person.id ? <RefreshCw size={16} className="animate-spin" /> : <Rocket size={16} />}
-                      {promotingId === person.id ? "Promoting" : person.approvalPermission === "company" ? "Approve & Promote" : "Promote"}
-                    </button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {person.companyApproval && (
+                      <span className="border border-cyan-300/30 bg-cyan-300/[0.07] px-3 py-2 text-xs text-cyan-100">
+                        Company approved by <strong>{person.companyApproval.approved_by_name}</strong> · {formatDateTime(person.companyApproval.approved_at)}
+                      </span>
+                    )}
+                    {person.canApprove && (
+                      <button
+                        onClick={() => void approveCompanyPromotion(person)}
+                        disabled={approvingId !== null || promotingId !== null}
+                        className="inline-flex min-h-11 items-center gap-2 border border-cyan-300/45 bg-cyan-300/10 px-4 text-xs font-black uppercase tracking-[0.12em] text-cyan-200 transition hover:bg-cyan-300/20 disabled:cursor-wait disabled:opacity-50"
+                      >
+                        {approvingId === person.id ? <RefreshCw size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                        {approvingId === person.id ? "Approving" : "Company Approve"}
+                      </button>
+                    )}
+                    {person.canPromote && (
+                      <button
+                        onClick={() => void promote(person)}
+                        disabled={promotingId !== null || approvingId !== null}
+                        className="inline-flex min-h-11 items-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/10 px-4 text-xs font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-wait disabled:opacity-50"
+                      >
+                        {promotingId === person.id ? <RefreshCw size={16} className="animate-spin" /> : <Rocket size={16} />}
+                        {promotingId === person.id ? "Promoting" : "Promote"}
+                      </button>
+                    )}
+                  </div>
                   {person.setupIssues.length > 0 && (
                     <div className="w-full border-l-2 border-red-300/40 bg-red-300/[0.04] px-4 py-3 text-sm text-red-100">
                       <strong className="mr-2 uppercase tracking-[0.1em]">Setup:</strong>

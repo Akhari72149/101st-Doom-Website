@@ -50,6 +50,15 @@ type SetupIssue = {
   detail: string;
 };
 
+type CompanyApprovalRow = {
+  id: string;
+  personnel_id: string;
+  from_rank_id: string;
+  to_rank_id: string;
+  approved_by_name: string;
+  approved_at: string;
+};
+
 const rules: PromotionRule[] = [
   { from: ["CR", "Clone Recruit"], target: "CR-C", minimumAttendances: 4, minimumMainOps: 1 },
   { from: ["CR-C", "Clone Cadet"], target: "CT", minimumAttendances: 4, minimumMainOps: 1, manual: ["BCT completion"] },
@@ -117,7 +126,7 @@ function criterion(key: string, label: string, current: string, target: string, 
 export async function GET(request: Request) {
   try {
     const pool = getPostgresPool();
-    const [personnelResult, ranksResult, windowResult, announcementResult] = await Promise.all([
+    const [personnelResult, ranksResult, windowResult, announcementResult, companyApprovalsResult] = await Promise.all([
       pool.query<PersonnelRow>(`
         with attendance as (
           select personnel_id,
@@ -190,9 +199,18 @@ export async function GET(request: Request) {
          where settings.singleton = true
          group by settings.announcements_enabled
       `),
+      pool.query<CompanyApprovalRow>(`
+        select id,personnel_id,from_rank_id,to_rank_id,approved_by_name,approved_at
+          from public.promotion_company_approvals
+         where consumed_at is null
+      `),
     ]);
 
     const configuredRanksByName = new Map(ranksResult.rows.map((row) => [normalize(row.name), row]));
+    const companyApprovals = new Map(companyApprovalsResult.rows.map((approval) => [
+      `${approval.personnel_id}:${approval.from_rank_id}:${approval.to_rank_id}`,
+      approval,
+    ]));
     const people = personnelResult.rows.map((person) => {
       const rule = rules.find((candidate) => candidate.from.some((name) => normalize(name) === normalize(person.current_rank)));
       const consideredAttendance = person.main_ops_attended + person.main_ops_missed;
@@ -210,6 +228,7 @@ export async function GET(request: Request) {
             targetRankId: null,
             targetConfigured: true,
             approvalPermission: null,
+            companyApproval: null,
             status: "terminal",
             criteria: [],
             setupIssues: [],
@@ -233,12 +252,20 @@ export async function GET(request: Request) {
           targetRankId: null,
           targetConfigured: false,
           approvalPermission: null,
+          companyApproval: null,
           status: "setup-required",
           criteria: [],
           setupIssues,
         };
       }
 
+      const targetNames = [rule.target, ...(rule.targetAliases || [])];
+      const configuredTarget = targetNames.map((name) => configuredRanksByName.get(normalize(name))).find(Boolean);
+      const targetConfigured = Boolean(configuredTarget);
+      const targetRankId = configuredTarget?.id || null;
+      const companyApproval = person.rank_id && targetRankId
+        ? companyApprovals.get(`${person.id}:${person.rank_id}:${targetRankId}`) || null
+        : null;
       const criteria = [];
       if (rule.minimumTigDays !== undefined) {
         criteria.push(criterion("tig", "Time in grade", `${person.tig_days} days`, `${rule.minimumTigDays} days`, person.tig_days >= rule.minimumTigDays ? "met" : "not-met"));
@@ -271,15 +298,19 @@ export async function GET(request: Request) {
         criteria.push(criterion(`manual-${index}`, requirement, "Requires review", "Command confirmation", "review"));
       }
       if (rule.approvalPermission === "company") {
-        criteria.push(criterion("company-approval", "Company approval", "Pending approval", "Company authorised", "review"));
+        criteria.push(criterion(
+          "company-approval",
+          "Company approval",
+          companyApproval
+            ? `Approved by ${companyApproval.approved_by_name}`
+            : "Pending approval",
+          "Company authorised",
+          companyApproval ? "met" : "review",
+        ));
       }
 
       const hasBlocker = criteria.some((item) => item.state === "not-met" || item.state === "unavailable");
       const hasManualReview = criteria.some((item) => item.state === "review");
-      const targetNames = [rule.target, ...(rule.targetAliases || [])];
-      const configuredTarget = targetNames.map((name) => configuredRanksByName.get(normalize(name))).find(Boolean);
-      const targetConfigured = Boolean(configuredTarget);
-      const targetRankId = configuredTarget?.id || null;
       const setupIssues: SetupIssue[] = targetConfigured ? [] : [{
         key: `target:${normalize(rule.target)}`,
         label: `Create or activate ${rule.target}`,
@@ -295,6 +326,7 @@ export async function GET(request: Request) {
         targetConfigured,
         status,
         approvalPermission: rule.approvalPermission || null,
+        companyApproval,
         criteria,
         setupIssues,
       };
@@ -390,9 +422,11 @@ export async function GET(request: Request) {
     return NextResponse.json({
       people: people.map((person) => ({
         ...person,
-        canPromote: person.approvalPermission === "company"
-          ? canCompanyApprove && person.status === "review"
-          : canPromote && person.status === "ready",
+        canApprove: person.approvalPermission === "company"
+          && canCompanyApprove
+          && person.status === "review"
+          && !person.companyApproval,
+        canPromote: canPromote && person.status === "ready",
       })),
       summary,
       setupIssues,
@@ -422,8 +456,6 @@ export async function POST(request: Request) {
     requirePageAccess(request, "admin.promotion-readiness", "edit").catch(() => null),
     requirePageAccess(request, "admin.promotion-readiness-company-approval", "edit").catch(() => null),
   ]);
-  const auth = standardAuth || companyAuth;
-  if (!auth) return NextResponse.json({ error: "Promotion permission is required" }, { status: 403 });
   const body = await request.json().catch(() => null) as {
     personnelId?: string;
     action?: string;
@@ -442,7 +474,7 @@ export async function POST(request: Request) {
            set announcements_enabled=$1,updated_at=now(),updated_by=$2
          where singleton=true
          returning announcements_enabled
-      `, [body.enabled, auth.userId]);
+      `, [body.enabled, standardAuth.userId]);
       if (!updated.rows[0]) throw new Error("SETTING_MISSING");
       return NextResponse.json({
         ok: true,
@@ -452,6 +484,18 @@ export async function POST(request: Request) {
       console.error("[promotion-readiness] Announcement control failed", error);
       return NextResponse.json({ error: "Failed to update promotion announcements" }, { status: 500 });
     }
+  }
+  const action = body?.action || "promote";
+  if (action !== "promote" && action !== "approve-company") {
+    return NextResponse.json({ error: "Invalid promotion action" }, { status: 400 });
+  }
+  const auth = action === "approve-company" ? companyAuth : standardAuth;
+  if (!auth) {
+    return NextResponse.json({
+      error: action === "approve-company"
+        ? "Company promotion approval permission is required"
+        : "Promotion action permission is required",
+    }, { status: 403 });
   }
   const personnelId = String(body?.personnelId || "");
   if (!UUID.test(personnelId)) return NextResponse.json({ error: "Invalid personnel record" }, { status: 400 });
@@ -500,9 +544,6 @@ export async function POST(request: Request) {
       if (!person || !person.rank_id) throw new Error("NOT_FOUND");
       const rule = rules.find((candidate) => candidate.from.some((name) => normalize(name) === normalize(person.current_rank)));
       if (!rule || rule.manual?.length) throw new Error("NOT_READY");
-      if (rule.approvalPermission === "company" ? !companyAuth : !standardAuth) {
-        throw new Error("FORBIDDEN");
-      }
       const accountable = person.main_ops_attended + person.main_ops_missed;
       const attendance = accountable ? (person.main_ops_attended / accountable) * 100 : null;
       const alphaPilot = /(?:^|[-_\s])(?:alpha|\d+a)(?:$|[-_\s])/i.test(person.slotted_position || "");
@@ -520,6 +561,42 @@ export async function POST(request: Request) {
         `select id,name from public.ranks where is_active=true and upper(btrim(name))=any($1::text[])
          order by array_position($1::text[],upper(btrim(name))) limit 1`, [targetNames]);
       if (!target.rows[0]) throw new Error("TARGET_MISSING");
+      if (action === "approve-company") {
+        if (rule.approvalPermission !== "company") throw new Error("APPROVAL_NOT_REQUIRED");
+        const approved = await client.query<{ id: string; approved_at: string }>(`
+          insert into public.promotion_company_approvals
+            (personnel_id,from_rank_id,to_rank_id,approved_by_user_id,approved_by_personnel_id,approved_by_name)
+          values($1,$2,$3,$4,$5,$6)
+          on conflict (personnel_id,from_rank_id,to_rank_id) where consumed_at is null do nothing
+          returning id,approved_at
+        `, [person.id, person.rank_id, target.rows[0].id, auth.userId, actor.personnelId, actor.displayName]);
+        if (!approved.rows[0]) throw new Error("ALREADY_APPROVED");
+        await client.query(
+          `insert into public.audit_logs
+             (user_id,target_personnel_id,action,old_rank_id,target_rank_id,details,processed_by)
+           values($1,$2,'PROMOTION_COMPANY_APPROVED',$3,$4,$5,$6)`,
+          [auth.userId, person.id, person.rank_id, target.rows[0].id, `Company promotion approval recorded by ${actor.displayName}`, actor.personnelId],
+        );
+        return {
+          action: "PROMOTION_COMPANY_APPROVED",
+          target_personnel_id: person.id,
+          personnelName: person.name,
+          processedBy: actor.displayName,
+          oldRankName: person.current_rank || "Unranked",
+          rankName: target.rows[0].name,
+        };
+      }
+      const companyApproval = rule.approvalPermission === "company"
+        ? (await client.query<{ id: string; approved_by_name: string }>(`
+            select id,approved_by_name
+              from public.promotion_company_approvals
+             where personnel_id=$1 and from_rank_id=$2 and to_rank_id=$3 and consumed_at is null
+             for update
+          `, [person.id, person.rank_id, target.rows[0].id])).rows[0]
+        : null;
+      if (rule.approvalPermission === "company" && !companyApproval) {
+        throw new Error("COMPANY_APPROVAL_REQUIRED");
+      }
       const promotedAt = new Date();
       await client.query("update public.personnel set rank_id=$2,rank_effective_at=$3 where id=$1", [person.id, target.rows[0].id, promotedAt]);
       await client.query(
@@ -527,9 +604,22 @@ export async function POST(request: Request) {
         [person.id, person.discord_id || "", person.rank_id, target.rows[0].id, promotedAt],
       );
       await client.query("select public.enqueue_rank_role_sync($1,$2,$3)", [person.id, person.rank_id, target.rows[0].id]);
+      if (companyApproval) {
+        await client.query(
+          "update public.promotion_company_approvals set consumed_at=$2,consumed_by_user_id=$3 where id=$1",
+          [companyApproval.id, promotedAt, auth.userId],
+        );
+      }
       await client.query(
         "insert into public.audit_logs(user_id,target_personnel_id,action,old_rank_id,target_rank_id,details,processed_by) values($1,$2,'RANK_CHANGED',$3,$4,$5,$6)",
-        [auth.userId, person.id, person.rank_id, target.rows[0].id, `Promoted from Promotion Readiness by ${actor.displayName}`, actor.personnelId],
+        [
+          auth.userId,
+          person.id,
+          person.rank_id,
+          target.rows[0].id,
+          `Promoted from Promotion Readiness by ${actor.displayName}${companyApproval ? ` after company approval by ${companyApproval.approved_by_name}` : ""}`,
+          actor.personnelId,
+        ],
       );
       return {
         action: "RANK_CHANGED",
@@ -541,14 +631,16 @@ export async function POST(request: Request) {
         rankName: target.rows[0].name,
       };
     });
-    await broadcastWebsiteAction(notification);
-    return NextResponse.json({ ok: true });
+    if (notification.action === "RANK_CHANGED") await broadcastWebsiteAction(notification);
+    return NextResponse.json({ ok: true, action: notification.action, processedBy: notification.processedBy });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message === "NOT_FOUND") return NextResponse.json({ error: "Personnel record was not found" }, { status: 404 });
-    if (message === "FORBIDDEN") return NextResponse.json({ error: "The required promotion approval permission is missing" }, { status: 403 });
     if (message === "NOT_READY") return NextResponse.json({ error: "This person no longer meets every automatic requirement" }, { status: 409 });
     if (message === "TARGET_MISSING") return NextResponse.json({ error: "The target rank is not active" }, { status: 409 });
+    if (message === "APPROVAL_NOT_REQUIRED") return NextResponse.json({ error: "This promotion does not require company approval" }, { status: 409 });
+    if (message === "ALREADY_APPROVED") return NextResponse.json({ error: "Company approval has already been recorded" }, { status: 409 });
+    if (message === "COMPANY_APPROVAL_REQUIRED") return NextResponse.json({ error: "Company approval must be recorded before this promotion" }, { status: 409 });
     console.error("[promotion-readiness] Promotion failed", error);
     return NextResponse.json({ error: "Failed to complete promotion" }, { status: 500 });
   }

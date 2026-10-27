@@ -34,6 +34,16 @@ type WebsiteAccount = { id: string; username: string | null; displayName: string
 type SteamLink = { steamId: string; displayName: string | null; profileUrl: string; linkedAt: string };
 type HistoryEntry = { id: string; action: string; details: string | null; created_at: string; actor: string };
 type DisciplinaryNote = { reference: string; kind: "warning" | "da"; summary: string; status: string; detachmentBan: boolean };
+type RoleRepairStatus = {
+  requestedAt: string;
+  updatedAt: string | null;
+  total: number;
+  pending: number;
+  processing: number;
+  succeeded: number;
+  dead: number;
+  lastError: string | null;
+};
 
 type Personnel = {
   id: string;
@@ -53,6 +63,7 @@ type Personnel = {
   website_account: WebsiteAccount | null;
   recent_history: HistoryEntry[];
   disciplinary_notes: DisciplinaryNote[];
+  role_repair_status: RoleRepairStatus | null;
 };
 
 type ViewMode = "active" | "inactive";
@@ -71,6 +82,15 @@ function formatDateTime(value: string | null | undefined) {
 
 function actionLabel(action: string) {
   return action.toLowerCase().replace(/^personnel_/, "").replaceAll("_", " ");
+}
+
+function roleRepairLabel(repair: RoleRepairStatus) {
+  if (repair.dead > 0) return { label: "Delivery failed", tone: "border-red-300/30 bg-red-300/[0.06] text-red-200" };
+  if (repair.total > 0 && repair.succeeded === repair.total) return { label: "Delivery complete", tone: "border-[#00ff66]/30 bg-[#00ff66]/[0.06] text-[#00ff66]" };
+  if (repair.processing > 0) return { label: "Bot processing", tone: "border-cyan-300/30 bg-cyan-300/[0.06] text-cyan-200" };
+  const age = Date.now() - new Date(repair.requestedAt).getTime();
+  if (repair.pending > 0 && age > 30_000) return { label: "Waiting for bot", tone: "border-amber-300/30 bg-amber-300/[0.06] text-amber-200" };
+  return { label: "Queued", tone: "border-cyan-300/30 bg-cyan-300/[0.06] text-cyan-200" };
 }
 
 export default function PersonnelProfilesAdminPage() {
@@ -235,6 +255,7 @@ export default function PersonnelProfilesAdminPage() {
     if (!window.confirm(`Reassign every website-managed Discord role for ${selected.name}? This will queue their current rank, slot, and certification roles.`)) return;
     const result = await runAction({ action: "reassign-discord-roles", personnelId: selected.id });
     if (!result) return;
+    await loadPersonnel(view, query);
     setStatus(`${result.discordEventsQueued || 0} Discord role update${result.discordEventsQueued === 1 ? "" : "s"} queued for ${selected.name}.`);
   }
 
@@ -404,6 +425,34 @@ export default function PersonnelProfilesAdminPage() {
                   </div>
                   {!canEdit && <p className="mt-4 border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-amber-100">View access only. Edit permission is required to change profile details.</p>}
                   {view === "inactive" && canEdit && !canReactivate && <p className="mt-4 border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-amber-100">Full permission is required to reactivate a profile.</p>}
+                  {view === "active" && selected.role_repair_status && (() => {
+                    const repair = selected.role_repair_status;
+                    const state = roleRepairLabel(repair);
+                    return (
+                      <div className={`mt-4 border p-4 ${state.tone}`}>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.14em]">{state.label}</p>
+                            <p className="mt-1 text-xs text-[#8da397]">Requested {formatDateTime(repair.requestedAt)}</p>
+                          </div>
+                          <button type="button" onClick={() => void loadPersonnel(view, query)} disabled={loading}
+                            className="inline-flex min-h-9 items-center gap-2 border border-current/30 px-3 text-[10px] font-black uppercase tracking-[0.12em] disabled:opacity-50">
+                            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh Delivery
+                          </button>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-[#9bb0a4]">
+                          <span>{repair.succeeded}/{repair.total} completed</span>
+                          <span>{repair.pending} pending</span>
+                          <span>{repair.processing} processing</span>
+                          <span>{repair.dead} failed</span>
+                        </div>
+                        {repair.lastError && <p className="mt-3 border-t border-current/20 pt-3 text-sm leading-6 text-red-100">{repair.lastError}</p>}
+                        {!repair.lastError && repair.pending > 0 && state.label === "Waiting for bot" && (
+                          <p className="mt-3 border-t border-current/20 pt-3 text-sm leading-6 text-amber-100">The website queued the roles, but the bot has not collected them. Check the bot service and its Discord outbox connection.</p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="border-t border-[#00ff66]/15 p-6">

@@ -133,7 +133,32 @@ export async function GET(request: Request) {
                    and cases.status in ('active','appealed')
                    and (cases.case_kind='da' or cases.expires_at>now())),
                 '[]'::jsonb
-              ) as disciplinary_notes
+              ) as disciplinary_notes,
+              (select jsonb_build_object(
+                  'requestedAt', repair.created_at,
+                  'updatedAt', max(outbox.updated_at),
+                  'total', count(outbox.id)::integer,
+                  'pending', count(outbox.id) filter (where outbox.status='pending')::integer,
+                  'processing', count(outbox.id) filter (where outbox.status='processing')::integer,
+                  'succeeded', count(outbox.id) filter (where outbox.status='succeeded')::integer,
+                  'dead', count(outbox.id) filter (where outbox.status='dead')::integer,
+                  'lastError', (array_agg(outbox.last_error order by outbox.updated_at desc)
+                    filter (where outbox.last_error is not null))[1]
+                )
+               from lateral (
+                 select audit.created_at
+                 from public.audit_logs audit
+                 where audit.target_personnel_id=personnel.id
+                   and audit.action='DISCORD_ROLES_REASSIGNED'
+                 order by audit.created_at desc
+                 limit 1
+               ) repair
+               left join public.discord_role_outbox outbox
+                 on outbox.payload->>'discordId'=personnel.discord_id
+                and outbox.event_type=any(array['USER_ROLE_INIT','CERT_ROLE_SYNC','SLOT_ROLE_SYNC'])
+                and outbox.created_at>=repair.created_at-interval '1 second'
+                and outbox.created_at<repair.created_at+interval '2 minutes'
+               group by repair.created_at) as role_repair_status
        from public.personnel personnel
        left join public.ranks ranks on ranks.id = personnel.rank_id
        where ($1 = '' or personnel.name ilike '%' || $1 || '%')

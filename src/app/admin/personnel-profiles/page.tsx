@@ -13,6 +13,7 @@ import {
   Loader2,
   Monitor,
   RefreshCw,
+  RotateCw,
   RotateCcw,
   Search,
   ShieldCheck,
@@ -166,13 +167,13 @@ export default function PersonnelProfilesAdminPage() {
       headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
       body: JSON.stringify(payload),
     });
-    const body = await response.json().catch(() => null) as { error?: string } | null;
+    const body = await response.json().catch(() => null) as { error?: string; discordEventsQueued?: number } | null;
     setSaving(false);
     if (!response.ok) {
       setStatus(body?.error || "Failed to update personnel profile");
       return false;
     }
-    return true;
+    return body || {};
   }
 
   async function saveJoinDate() {
@@ -227,6 +228,14 @@ export default function PersonnelProfilesAdminPage() {
       await loadPersonnel(view, query);
       setStatus(reservist ? `${selected.name} moved into reserves.` : `${selected.name} returned from reserves.`);
     }
+  }
+
+  async function reassignDiscordRoles() {
+    if (!selected || !canEdit || !selected.discord_id || view === "inactive") return;
+    if (!window.confirm(`Reassign every website-managed Discord role for ${selected.name}? This will queue their current rank, slot, and certification roles.`)) return;
+    const result = await runAction({ action: "reassign-discord-roles", personnelId: selected.id });
+    if (!result) return;
+    setStatus(`${result.discordEventsQueued || 0} Discord role update${result.discordEventsQueued === 1 ? "" : "s"} queued for ${selected.name}.`);
   }
 
   if (loadingAuth) {
@@ -380,10 +389,16 @@ export default function PersonnelProfilesAdminPage() {
                       <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#00ff66]/70">Certifications / Discord Tags</p>
                       <p className="mt-2 text-sm text-[#8ca497]">{selected.certification_count} currently assigned</p>
                     </div>
-                    {view === "inactive" && (
+                    {view === "inactive" ? (
                       <button type="button" onClick={() => openReactivation(selected)} disabled={!canReactivate || saving}
                         className="inline-flex min-h-12 items-center justify-center gap-2 border border-[#00ff66]/40 bg-[#00ff66]/15 px-5 text-xs font-black uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/25 disabled:cursor-not-allowed disabled:opacity-40">
                         <RotateCcw className="h-4 w-4" /> Reactivate Profile
+                      </button>
+                    ) : (
+                      <button type="button" onClick={reassignDiscordRoles} disabled={!canEdit || saving || !selected.discord_id}
+                        className="inline-flex min-h-12 items-center justify-center gap-2 border border-cyan-300/40 bg-cyan-300/10 px-5 text-xs font-black uppercase tracking-[0.14em] text-cyan-200 transition hover:bg-cyan-300/20 disabled:cursor-not-allowed disabled:opacity-40"
+                        title={selected.discord_id ? "Queue the current rank, slot, and certification roles" : "Link a Discord account first"}>
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />} Reassign All Discord Roles
                       </button>
                     )}
                   </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
+import { structure } from "@/data/structure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +11,21 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const INACTIVE_STATUSES = ["removed", "retired", "transferred"];
 
-type PersonnelAction = "update-join-date" | "unlink-discord" | "reactivate" | "set-reservist";
+type PersonnelAction = "update-join-date" | "unlink-discord" | "reactivate" | "set-reservist" | "reassign-discord-roles";
+
+function slotRoleIds(slotId: string | null) {
+  if (!slotId) return [];
+  for (const section of structure) {
+    for (const child of section.children || []) {
+      for (const role of child.roles || []) {
+        if (role.slotId === slotId) {
+          return (role.discordRoleIds || []).filter((id) => /^\d{16,22}$/.test(id));
+        }
+      }
+    }
+  }
+  return [];
+}
 
 function isRealDate(value: string) {
   if (!DATE.test(value)) return false;
@@ -93,7 +108,8 @@ export async function GET(request: Request) {
                      and audit.action = any(array[
                        'JOIN_DATE_UPDATED','DISCORD_UNLINKED','PERSONNEL_REMOVED',
                        'PERSONNEL_RETIRED','PERSONNEL_TRANSFERRED','PERSONNEL_REACTIVATED',
-                       'PERSONNEL_RESERVIST_STARTED','PERSONNEL_RESERVIST_ENDED','RANK_CHANGED'
+                       'PERSONNEL_RESERVIST_STARTED','PERSONNEL_RESERVIST_ENDED','RANK_CHANGED',
+                       'DISCORD_ROLES_REASSIGNED'
                      ])
                    order by audit.created_at desc nulls last
                    limit 12
@@ -155,7 +171,7 @@ export async function POST(request: Request) {
   } | null;
   const action = body?.action;
   const personnelId = String(body?.personnelId || "");
-  const validActions: PersonnelAction[] = ["update-join-date", "unlink-discord", "reactivate", "set-reservist"];
+  const validActions: PersonnelAction[] = ["update-join-date", "unlink-discord", "reactivate", "set-reservist", "reassign-discord-roles"];
 
   if (!action || !validActions.includes(action)) {
     return NextResponse.json({ error: "Invalid personnel action" }, { status: 400 });
@@ -235,6 +251,33 @@ export async function POST(request: Request) {
           ],
         );
         return { reservistSince: reservist ? new Date().toISOString() : null };
+      }
+
+      if (action === "reassign-discord-roles") {
+        if (INACTIVE_STATUSES.includes((current.status || "").toLowerCase())) throw new Error("INACTIVE_PROFILE");
+        if (!current.discord_id.trim()) throw new Error("NOT_LINKED");
+
+        const baseRoles = await client.query<{ queued_count: number }>(
+          "select public.enqueue_personnel_reactivation($1) as queued_count",
+          [personnelId],
+        );
+        const currentSlotRoles = slotRoleIds(current.slotted_position);
+        const slotResult = await client.query<{ queued_id: string | null }>(
+          "select public.enqueue_slot_role_sync($1,$2,$3,$4,$5,$6) as queued_id",
+          [personnelId, current.slotted_position, null, !current.slotted_position, currentSlotRoles, []],
+        );
+        const slotQueued = slotResult.rows[0]?.queued_id ? 1 : 0;
+        const queuedCount = Number(baseRoles.rows[0]?.queued_count || 0) + slotQueued;
+        await client.query(
+          `insert into public.audit_logs(user_id,target_personnel_id,action,details)
+           values($1,$2,'DISCORD_ROLES_REASSIGNED',$3)`,
+          [
+            auth.userId,
+            personnelId,
+            `Queued ${queuedCount} Discord role repair event(s) for current rank, slot, and certifications`,
+          ],
+        );
+        return { discordEventsQueued: queuedCount };
       }
 
       const status = (current.status || "").toLowerCase();

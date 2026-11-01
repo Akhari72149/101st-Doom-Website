@@ -119,12 +119,22 @@ export async function POST(request:Request) {
     const result=await withPostgresTransaction(async client=>{
       if(kind==="task") {
         const parsed=parseTask(body);if(!parsed||(parsed.blocked&&!parsed.blocker_reason))throw new Error("INVALID_TASK");
+        const templateName=cleanText(body?.template_name,120)||null;
+        const templateChecklist=Array.isArray(body?.template_checklist)
+          ? body.template_checklist.map(item=>cleanText(item,500)).filter(Boolean)
+          : [];
+        if(templateChecklist.length>20)throw new Error("INVALID_TEMPLATE");
         const input={...parsed,assigned_to:adminAuth?parsed.assigned_to:null,release_id:adminAuth?parsed.release_id:null};
         const inserted=await client.query(`insert into public.mod_pipeline_tasks
           (title,description,acceptance_criteria,status,priority,task_type,workstream,tags,assigned_to,created_by,due_date,position,blocked,blocker_reason,release_id,stage_entered_at)
           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now()) returning *`,
           [input.title,input.description,input.acceptance_criteria,input.status,input.priority,input.task_type,input.workstream,input.tags,input.assigned_to,actorId,input.due_date,input.position,input.blocked,input.blocker_reason,input.release_id]);
-        await event(client,actorId,{taskId:inserted.rows[0].id,type:"task_created",summary:`Created MOD-${String(inserted.rows[0].reference_number).padStart(4,"0")}`,newValues:inserted.rows[0]});return inserted.rows[0];
+        if(templateChecklist.length) {
+          for(const [position,content] of templateChecklist.entries()) {
+            await client.query("insert into public.mod_pipeline_checklist_items(task_id,content,position,created_by) values($1,$2,$3,$4)",[inserted.rows[0].id,content,position,actorId]);
+          }
+        }
+        await event(client,actorId,{taskId:inserted.rows[0].id,type:"task_created",summary:`Created MOD-${String(inserted.rows[0].reference_number).padStart(4,"0")}`,newValues:{...inserted.rows[0],template:templateName,checklist_items:templateChecklist.length}});return inserted.rows[0];
       }
       const taskId=cleanText(body?.taskId,50);if(!["release","repository"].includes(kind)&&!UUID.test(taskId))throw new Error("INVALID_TASK");
       if(kind==="comment") {const content=cleanText(body?.content,4000);if(!content)throw new Error("INVALID_COMMENT");const inserted=await client.query("insert into public.mod_pipeline_comments(task_id,user_id,content) values($1,$2,$3) returning *",[taskId,actorId,content]);await event(client,actorId,{taskId,type:"comment_added",summary:"Added a comment"});return inserted.rows[0];}

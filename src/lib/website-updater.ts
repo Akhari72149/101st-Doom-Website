@@ -25,14 +25,27 @@ export type CommitSummary = {
   committedAt: string | null;
 };
 
-function githubHeaders(): HeadersInit {
+function githubHeaders(includeToken = true): HeadersInit {
   const headers: HeadersInit = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "101st-Doom-Website-Updater",
   };
-  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  if (includeToken && process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   return headers;
+}
+
+async function fetchGitHub(url: string) {
+  const request = (includeToken: boolean) => fetch(url, {
+    headers: githubHeaders(includeToken),
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
+  const response = await request(true);
+  if (process.env.GITHUB_TOKEN && (response.status === 401 || response.status === 403)) {
+    return request(false);
+  }
+  return response;
 }
 
 export async function getInstalledRelease(): Promise<CommitDetails & { branch: string; clean: boolean }> {
@@ -61,9 +74,8 @@ export async function getInstalledRelease(): Promise<CommitDetails & { branch: s
 }
 
 async function getRemoteVersion(sha: string) {
-  const response = await fetch(
+  const response = await fetchGitHub(
     `https://api.github.com/repos/${OWNER}/${REPOSITORY}/contents/src/lib/site-version.ts?ref=${sha}`,
-    { headers: githubHeaders(), cache: "no-store", signal: AbortSignal.timeout(10_000) },
   );
   if (!response.ok) return "Unknown";
   const body = await response.json() as { content?: string; encoding?: string };
@@ -76,9 +88,8 @@ export async function getAvailableRelease(force = false): Promise<CommitDetails>
   if (!force && availableCache && availableCache.expiresAt > Date.now()) {
     return availableCache.release;
   }
-  const response = await fetch(
+  const response = await fetchGitHub(
     `https://api.github.com/repos/${OWNER}/${REPOSITORY}/commits/main`,
-    { headers: githubHeaders(), cache: "no-store", signal: AbortSignal.timeout(10_000) },
   );
   if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`);
   const body = await response.json() as {
@@ -103,9 +114,8 @@ export async function getPendingCommits(baseSha: string, force = false): Promise
   if (!force && pendingCache?.baseSha === baseSha && pendingCache.expiresAt > Date.now()) {
     return pendingCache.commits;
   }
-  const response = await fetch(
+  const response = await fetchGitHub(
     `https://api.github.com/repos/${OWNER}/${REPOSITORY}/compare/${baseSha}...main`,
-    { headers: githubHeaders(), cache: "no-store", signal: AbortSignal.timeout(10_000) },
   );
   if (!response.ok) throw new Error(`GitHub comparison returned HTTP ${response.status}`);
   const body = await response.json() as {

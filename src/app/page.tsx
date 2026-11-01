@@ -53,6 +53,85 @@ type WeeklyEvent = {
   minute: number;
 };
 
+const MAIN_OPERATION_TIME_ZONE = "America/New_York";
+const easternDateParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: MAIN_OPERATION_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function zonedParts(date: Date) {
+  const values = Object.fromEntries(
+    easternDateParts.formatToParts(date)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  return {
+    year: values.year,
+    month: values.month,
+    day: values.day,
+    hour: values.hour,
+    minute: values.minute,
+    second: values.second,
+  };
+}
+
+function zonedLocalToUtc(year: number, month: number, day: number, hour: number, minute: number) {
+  const localAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+  const initial = new Date(localAsUtc);
+  const initialParts = zonedParts(initial);
+  const initialOffset = Date.UTC(
+    initialParts.year,
+    initialParts.month - 1,
+    initialParts.day,
+    initialParts.hour,
+    initialParts.minute,
+    initialParts.second,
+  ) - initial.getTime();
+  const candidate = new Date(localAsUtc - initialOffset);
+  const candidateParts = zonedParts(candidate);
+  const correctedOffset = Date.UTC(
+    candidateParts.year,
+    candidateParts.month - 1,
+    candidateParts.day,
+    candidateParts.hour,
+    candidateParts.minute,
+    candidateParts.second,
+  ) - candidate.getTime();
+  return new Date(localAsUtc - correctedOffset);
+}
+
+function getNextEasternOccurrence(day: number, hour: number, minute: number) {
+  const now = new Date();
+  const easternNow = zonedParts(now);
+  const localDate = new Date(Date.UTC(easternNow.year, easternNow.month - 1, easternNow.day));
+  localDate.setUTCDate(localDate.getUTCDate() + ((day - localDate.getUTCDay() + 7) % 7));
+
+  let result = zonedLocalToUtc(
+    localDate.getUTCFullYear(),
+    localDate.getUTCMonth() + 1,
+    localDate.getUTCDate(),
+    hour,
+    minute,
+  );
+  if (result < now) {
+    localDate.setUTCDate(localDate.getUTCDate() + 7);
+    result = zonedLocalToUtc(
+      localDate.getUTCFullYear(),
+      localDate.getUTCMonth() + 1,
+      localDate.getUTCDate(),
+      hour,
+      minute,
+    );
+  }
+  return result;
+}
+
 type AuditHighlight = {
   id: string;
   action: string | null;
@@ -138,10 +217,10 @@ export default function HomePage() {
   ];
 
   const weeklyEvents: WeeklyEvent[] = [
-    { name: "Tomahawk 1", day: 0, hour: 19, minute: 0 },
-    { name: "Claymore 2", day: 5, hour: 23, minute: 0 },
-    { name: "Broadsword 3", day: 0, hour: 1, minute: 0 },
-    { name: "Dagger", day: 6, hour: 22, minute: 0 },
+    { name: "Tomahawk 1", day: 0, hour: 15, minute: 0 },
+    { name: "Claymore 2", day: 5, hour: 19, minute: 0 },
+    { name: "Broadsword 3", day: 6, hour: 21, minute: 0 },
+    { name: "Dagger", day: 6, hour: 18, minute: 0 },
   ];
 
   useEffect(() => {
@@ -209,24 +288,6 @@ export default function HomePage() {
       a.getMonth() === b.getMonth() &&
       a.getDate() === b.getDate()
     );
-  };
-
-  const getNextOccurrence = (day: number, hour: number, minute: number) => {
-    const now = new Date();
-    const result = new Date();
-
-    result.setUTCHours(hour, minute, 0, 0);
-
-    const currentDay = result.getUTCDay();
-    const diff = (day - currentDay + 7) % 7;
-
-    result.setUTCDate(result.getUTCDate() + diff);
-
-    if (result < now) {
-      result.setUTCDate(result.getUTCDate() + 7);
-    }
-
-    return result;
   };
 
   const getRelativeCountdown = (targetDate: Date) => {
@@ -1477,7 +1538,7 @@ export default function HomePage() {
               <div className="p-4">
                 <div className="space-y-3">
                   {weeklyEvents.map((event) => {
-                    const nextOccurrence = getNextOccurrence(
+                    const nextOccurrence = getNextEasternOccurrence(
                       event.day,
                       event.hour,
                       event.minute,

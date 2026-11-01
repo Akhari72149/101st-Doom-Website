@@ -444,37 +444,39 @@ export default function PromotionReadinessPage() {
         </div>
 
         <section className="border-b border-[#00ff66]/15 p-5 sm:p-7">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_190px_190px_190px_190px_190px]">
-            <label className="relative">
+          <div className="space-y-3">
+            <label className="relative block">
               <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#5f7669]" size={18} />
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search personnel, service number, rank, or slot" className="min-h-12 w-full border border-white/15 bg-[#020806] pl-12 pr-4 outline-none focus:border-[#00ff66]/60" />
             </label>
-            <select value={status} onChange={(event) => setStatus(event.target.value as ReadinessStatus | "all")} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
-              <option value="all">All readiness states</option>
-              <option value="ready">Ready</option>
-              <option value="review">Command review</option>
-              <option value="in-progress">In progress</option>
-              <option value="setup-required">Setup required</option>
-              <option value="terminal">Final rank</option>
-            </select>
-            <select value={rank} onChange={(event) => setRank(event.target.value)} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
-              <option value="all">All current ranks</option>
-              {ranks.map((rankName) => <option key={rankName} value={rankName}>{rankName}</option>)}
-            </select>
-            <select value={formation} onChange={(event) => { setFormation(event.target.value); setUnit("all"); }} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
-              <option value="all">All formations</option>
-              {formations.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
-            <select value={unit} onChange={(event) => setUnit(event.target.value)} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
-              <option value="all">All units</option>
-              {units.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
-            <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
-              <option value="closest">Closest to ready</option>
-              <option value="name">Name</option>
-              <option value="tig">Highest TIG</option>
-              <option value="attendance">Highest attendance</option>
-            </select>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <select aria-label="Readiness state" value={status} onChange={(event) => setStatus(event.target.value as ReadinessStatus | "all")} className="min-h-12 min-w-0 w-full border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
+                <option value="all">All readiness states</option>
+                <option value="ready">Ready</option>
+                <option value="review">Command review</option>
+                <option value="in-progress">In progress</option>
+                <option value="setup-required">Setup required</option>
+                <option value="terminal">Final rank</option>
+              </select>
+              <select aria-label="Current rank" value={rank} onChange={(event) => setRank(event.target.value)} className="min-h-12 min-w-0 w-full border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
+                <option value="all">All current ranks</option>
+                {ranks.map((rankName) => <option key={rankName} value={rankName}>{rankName}</option>)}
+              </select>
+              <select aria-label="Formation" value={formation} onChange={(event) => { setFormation(event.target.value); setUnit("all"); }} className="min-h-12 min-w-0 w-full border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
+                <option value="all">All formations</option>
+                {formations.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+              <select aria-label="Unit" value={unit} onChange={(event) => setUnit(event.target.value)} className="min-h-12 min-w-0 w-full border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
+                <option value="all">All units</option>
+                {units.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+              <select aria-label="Sort personnel" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} className="min-h-12 min-w-0 w-full border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60 sm:col-span-2 xl:col-span-1">
+                <option value="closest">Closest to ready</option>
+                <option value="name">Name</option>
+                <option value="tig">Highest TIG</option>
+                <option value="attendance">Highest attendance</option>
+              </select>
+            </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-[0.12em] text-[#71877a]">
             <span>{people.length} of {data?.people.length || 0} active personnel shown</span>

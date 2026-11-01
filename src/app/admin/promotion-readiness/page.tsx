@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Bell,
   BellOff,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
@@ -29,6 +30,17 @@ type Criterion = {
   current: string;
   target: string;
   state: CriterionState;
+  manual?: boolean;
+  remaining?: string;
+  projectedAt?: string;
+  canConfirm?: boolean;
+  canRevoke?: boolean;
+  confirmation?: {
+    confirmed_by_name: string;
+    confirmed_at: string;
+    notes: string | null;
+    evidence_url: string | null;
+  } | null;
 };
 
 type SetupIssue = {
@@ -59,7 +71,22 @@ type Person = {
     approved_at: string;
   } | null;
   canApprove: boolean;
+  canRevokeApproval: boolean;
   canPromote: boolean;
+  formation: string;
+  unit: string;
+  formationRole: string | null;
+  nextBlocker: { label: string; detail: string; state: CriterionState } | null;
+  unmetCount: number;
+  readinessScore: number;
+  projectedEligibility: string | null;
+  promotionPreview: {
+    currentRoleId: string | null;
+    targetRoleId: string | null;
+    roleChange: "none" | "replace";
+    notificationRoute: string;
+    notificationRecipients: number;
+  };
   status: ReadinessStatus;
   criteria: Criterion[];
   setupIssues: SetupIssue[];
@@ -82,6 +109,7 @@ type ResponseBody = {
   summary: { ready: number; review: number; inProgress: number; needsSetup: number; terminal: number };
   setupIssues: Array<SetupIssue & { affected: number }>;
   canPromote: boolean;
+  canCompanyApprove: boolean;
   announcementControl: { enabled: boolean; pending: number };
   announcementIssues: AnnouncementIssue[];
   attendanceWindow: { first_record: string | null; last_record: string | null; periods: number; startsAt: string };
@@ -136,12 +164,22 @@ export default function PromotionReadinessPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ReadinessStatus | "all">("all");
   const [rank, setRank] = useState("all");
-  const [view, setView] = useState<"ready" | "all">("ready");
+  const [formation, setFormation] = useState("all");
+  const [unit, setUnit] = useState("all");
+  const [sort, setSort] = useState<"closest" | "name" | "tig" | "attendance">("closest");
+  const [view, setView] = useState<"ready" | "approvals" | "all">("ready");
   const [promotingId, setPromotingId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [updatingAnnouncements, setUpdatingAnnouncements] = useState(false);
   const [showAnnouncementIssues, setShowAnnouncementIssues] = useState(false);
   const [notice, setNotice] = useState("");
+  const [promotionPreview, setPromotionPreview] = useState<Person | null>(null);
+  const [requirementTarget, setRequirementTarget] = useState<{ person: Person; criterion: Criterion; mode: "confirm" | "revoke" } | null>(null);
+  const [requirementNotes, setRequirementNotes] = useState("");
+  const [requirementEvidence, setRequirementEvidence] = useState("");
+  const [approvalRevokeTarget, setApprovalRevokeTarget] = useState<Person | null>(null);
+  const [revokeReason, setRevokeReason] = useState("");
+  const [workflowSaving, setWorkflowSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,7 +199,6 @@ export default function PromotionReadinessPage() {
   }, []);
 
   const promote = useCallback(async (person: Person) => {
-    if (!window.confirm(`Promote ${person.name} from ${person.current_rank || "Unranked"} to ${person.targetRank}?`)) return;
     setPromotingId(person.id);
     setNotice("");
     try {
@@ -173,6 +210,7 @@ export default function PromotionReadinessPage() {
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error || "Promotion failed");
       setNotice(`${person.name} was promoted to ${person.targetRank}.`);
+       setPromotionPreview(null);
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Promotion failed");
@@ -180,6 +218,60 @@ export default function PromotionReadinessPage() {
       setPromotingId(null);
     }
   }, [load]);
+
+  const updateRequirement = useCallback(async () => {
+    if (!requirementTarget) return;
+    setWorkflowSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/promotion-readiness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: requirementTarget.mode === "confirm" ? "confirm-requirement" : "revoke-requirement",
+          personnelId: requirementTarget.person.id,
+          criterionKey: requirementTarget.criterion.key,
+          notes: requirementNotes,
+          evidenceUrl: requirementEvidence,
+          reason: requirementNotes,
+        }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Failed to update requirement");
+      setNotice(`${requirementTarget.criterion.label} ${requirementTarget.mode === "confirm" ? "confirmed" : "reopened"} for ${requirementTarget.person.name}.`);
+      setRequirementTarget(null);
+      setRequirementNotes("");
+      setRequirementEvidence("");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to update requirement");
+    } finally {
+      setWorkflowSaving(false);
+    }
+  }, [load, requirementEvidence, requirementNotes, requirementTarget]);
+
+  const revokeCompanyApproval = useCallback(async () => {
+    if (!approvalRevokeTarget) return;
+    setWorkflowSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/promotion-readiness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "revoke-company", personnelId: approvalRevokeTarget.id, reason: revokeReason }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Failed to revoke company approval");
+      setNotice(`${approvalRevokeTarget.name}'s company approval was revoked.`);
+      setApprovalRevokeTarget(null);
+      setRevokeReason("");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to revoke company approval");
+    } finally {
+      setWorkflowSaving(false);
+    }
+  }, [approvalRevokeTarget, load, revokeReason]);
 
   const approveCompanyPromotion = useCallback(async (person: Person) => {
     if (!window.confirm(`Record company approval for ${person.name} to progress from ${person.current_rank || "Unranked"} to ${person.targetRank}?`)) return;
@@ -229,17 +321,33 @@ export default function PromotionReadinessPage() {
   }, [load]);
 
   const ranks = useMemo(() => [...new Set((data?.people || []).map((person) => person.current_rank || "Unranked"))].sort(), [data]);
+  const formations = useMemo(() => [...new Set((data?.people || []).map((person) => person.formation || "Unslotted"))].sort(), [data]);
+  const units = useMemo(() => [...new Set((data?.people || [])
+    .filter((person) => formation === "all" || (person.formation || "Unslotted") === formation)
+    .map((person) => person.unit || "Unslotted"))].sort(), [data, formation]);
   const people = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const statusOrder: Record<ReadinessStatus, number> = { ready: 0, review: 1, "in-progress": 2, "setup-required": 3, terminal: 4 };
     return (data?.people || []).filter((person) => {
       if (view === "ready" && person.status !== "ready" && !person.canPromote && !person.canApprove) return false;
+      if (view === "approvals" && person.approvalPermission !== "company") return false;
       if (status !== "all" && person.status !== status) return false;
       if (rank !== "all" && (person.current_rank || "Unranked") !== rank) return false;
+      if (formation !== "all" && (person.formation || "Unslotted") !== formation) return false;
+      if (unit !== "all" && (person.unit || "Unslotted") !== unit) return false;
       if (!query) return true;
       return [person.name, person.birth_number, person.current_rank, person.targetRank, person.slotted_position]
         .some((value) => (value || "").toLowerCase().includes(query));
+    }).sort((left, right) => {
+      if (sort === "name") return left.name.localeCompare(right.name);
+      if (sort === "tig") return right.tig_days - left.tig_days || left.name.localeCompare(right.name);
+      if (sort === "attendance") return (right.attendancePercentage ?? -1) - (left.attendancePercentage ?? -1) || left.name.localeCompare(right.name);
+      return statusOrder[left.status] - statusOrder[right.status]
+        || (left.unmetCount ?? 999) - (right.unmetCount ?? 999)
+        || String(left.projectedEligibility || "9999").localeCompare(String(right.projectedEligibility || "9999"))
+        || left.name.localeCompare(right.name);
     });
-  }, [data, rank, search, status, view]);
+  }, [data, formation, rank, search, sort, status, unit, view]);
 
   const summaries = [
     { status: "ready" as const, label: "Ready", value: data?.summary.ready || 0, icon: CheckCircle2, color: "text-[#00ff66]" },
@@ -311,9 +419,12 @@ export default function PromotionReadinessPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 border-b border-[#00ff66]/20">
+        <div className="grid grid-cols-3 border-b border-[#00ff66]/20">
           <button onClick={() => { setView("ready"); setStatus("all"); }} className={`min-h-14 border-r border-[#00ff66]/20 px-4 text-sm font-black uppercase tracking-[0.12em] ${view === "ready" ? "bg-[#00ff66]/10 text-[#00ff66]" : "text-[#81958a] hover:bg-white/[0.03]"}`}>
             Ready to Promote <span className="ml-2 text-xs">{data?.people.filter((person) => person.status === "ready" || person.canPromote).length || 0}</span>
+          </button>
+          <button onClick={() => { setView("approvals"); setStatus("all"); }} className={`min-h-14 border-r border-[#00ff66]/20 px-4 text-sm font-black uppercase tracking-[0.12em] ${view === "approvals" ? "bg-cyan-300/10 text-cyan-200" : "text-[#81958a] hover:bg-white/[0.03]"}`}>
+            Company Queue <span className="ml-2 text-xs">{data?.people.filter((person) => person.approvalPermission === "company").length || 0}</span>
           </button>
           <button onClick={() => setView("all")} className={`min-h-14 px-4 text-sm font-black uppercase tracking-[0.12em] ${view === "all" ? "bg-[#00ff66]/10 text-[#00ff66]" : "text-[#81958a] hover:bg-white/[0.03]"}`}>
             All Personnel
@@ -333,7 +444,7 @@ export default function PromotionReadinessPage() {
         </div>
 
         <section className="border-b border-[#00ff66]/15 p-5 sm:p-7">
-          <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_190px_190px_190px_190px_190px]">
             <label className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#5f7669]" size={18} />
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search personnel, service number, rank, or slot" className="min-h-12 w-full border border-white/15 bg-[#020806] pl-12 pr-4 outline-none focus:border-[#00ff66]/60" />
@@ -349,6 +460,20 @@ export default function PromotionReadinessPage() {
             <select value={rank} onChange={(event) => setRank(event.target.value)} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
               <option value="all">All current ranks</option>
               {ranks.map((rankName) => <option key={rankName} value={rankName}>{rankName}</option>)}
+            </select>
+            <select value={formation} onChange={(event) => { setFormation(event.target.value); setUnit("all"); }} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
+              <option value="all">All formations</option>
+              {formations.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+            <select value={unit} onChange={(event) => setUnit(event.target.value)} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
+              <option value="all">All units</option>
+              {units.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+            <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} className="min-h-12 border border-white/15 bg-[#020806] px-4 outline-none focus:border-[#00ff66]/60">
+              <option value="closest">Closest to ready</option>
+              <option value="name">Name</option>
+              <option value="tig">Highest TIG</option>
+              <option value="attendance">Highest attendance</option>
             </select>
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-[0.12em] text-[#71877a]">
@@ -425,6 +550,21 @@ export default function PromotionReadinessPage() {
                   <span className={`inline-flex items-center gap-2 border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] ${detail.className}`}>
                     <detail.icon size={15} />{detail.label}
                   </span>
+                  <div className="flex min-w-0 flex-1 flex-wrap gap-2 text-xs">
+                    {person.nextBlocker && (
+                      <span className="border border-amber-300/25 bg-amber-300/[0.05] px-3 py-2 text-amber-100">
+                        <strong className="uppercase tracking-[0.1em]">Next:</strong> {person.nextBlocker.detail}
+                      </span>
+                    )}
+                    {person.projectedEligibility && person.status !== "ready" && (
+                      <span className="inline-flex items-center gap-2 border border-cyan-300/25 bg-cyan-300/[0.05] px-3 py-2 text-cyan-100">
+                        <CalendarClock size={14} /> Projected {formatDate(person.projectedEligibility)}
+                      </span>
+                    )}
+                    {person.criteria?.length > 0 && (
+                      <span className="border border-white/15 px-3 py-2 text-white/65">{person.readinessScore}% requirements complete</span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-3">
                     {person.companyApproval && (
                       <span className="border border-cyan-300/30 bg-cyan-300/[0.07] px-3 py-2 text-xs text-cyan-100">
@@ -441,14 +581,22 @@ export default function PromotionReadinessPage() {
                         {approvingId === person.id ? "Approving" : "Company Approve"}
                       </button>
                     )}
+                    {person.canRevokeApproval && (
+                      <button
+                        onClick={() => { setApprovalRevokeTarget(person); setRevokeReason(""); }}
+                        className="inline-flex min-h-11 items-center gap-2 border border-red-300/35 px-4 text-xs font-black uppercase tracking-[0.12em] text-red-200 hover:bg-red-300/10"
+                      >
+                        <XCircle size={16} /> Revoke Approval
+                      </button>
+                    )}
                     {person.canPromote && (
                       <button
-                        onClick={() => void promote(person)}
+                        onClick={() => setPromotionPreview(person)}
                         disabled={promotingId !== null || approvingId !== null}
                         className="inline-flex min-h-11 items-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/10 px-4 text-xs font-black uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-wait disabled:opacity-50"
                       >
                         {promotingId === person.id ? <RefreshCw size={16} className="animate-spin" /> : <Rocket size={16} />}
-                        {promotingId === person.id ? "Promoting" : "Promote"}
+                        {promotingId === person.id ? "Promoting" : "Review & Promote"}
                       </button>
                     )}
                   </div>
@@ -467,9 +615,26 @@ export default function PromotionReadinessPage() {
                       {person.criteria.length ? person.criteria.map((item) => (
                         <div key={item.key} className={`flex items-start gap-3 border p-3 ${criterionStyle(item.state)}`}>
                           <span className="mt-0.5 shrink-0"><CriterionIcon state={item.state} /></span>
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold uppercase tracking-[0.12em]">{item.label}</p>
                             <p className="mt-1 text-xs text-white/65">{item.current} · target {item.target}</p>
+                            {item.remaining && <p className="mt-2 text-xs font-bold text-current">{item.remaining}</p>}
+                            {item.confirmation && (
+                              <div className="mt-2 text-xs leading-5 text-white/60">
+                                <p>{formatDateTime(item.confirmation.confirmed_at)}</p>
+                                {item.confirmation.notes && <p>{item.confirmation.notes}</p>}
+                                {item.confirmation.evidence_url && <a href={item.confirmation.evidence_url} target="_blank" rel="noreferrer" className="text-cyan-200 underline">Open evidence</a>}
+                              </div>
+                            )}
+                            {(item.canConfirm || item.canRevoke) && (
+                              <button
+                                type="button"
+                                onClick={() => { setRequirementTarget({ person, criterion: item, mode: item.canConfirm ? "confirm" : "revoke" }); setRequirementNotes(""); setRequirementEvidence(""); }}
+                                className="mt-3 min-h-9 border border-current/35 px-3 text-[10px] font-black uppercase tracking-[0.12em] hover:bg-white/[0.05]"
+                              >
+                                {item.canConfirm ? "Confirm Requirement" : "Revoke Confirmation"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )) : person.status === "terminal" ? (
@@ -500,6 +665,56 @@ export default function PromotionReadinessPage() {
           <span>Calculated {data ? formatDate(data.calculatedAt) : "Not yet"}</span>
         </footer>
       </section>
+
+      {promotionPreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true">
+          <section className="w-full max-w-2xl border border-[#00ff66]/30 bg-[#020806] shadow-[0_0_60px_rgba(0,255,102,0.12)]">
+            <header className="flex items-start justify-between gap-4 border-b border-[#00ff66]/20 p-5">
+              <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#00ff66]">Promotion Preview</p><h2 className="mt-1 text-2xl font-black">{promotionPreview.name}</h2></div>
+              <button onClick={() => setPromotionPreview(null)} className="grid h-10 w-10 place-items-center border border-white/15" aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="grid gap-px bg-white/10 sm:grid-cols-2">
+              <div className="bg-[#020806] p-5"><p className="text-xs uppercase tracking-[0.14em] text-[#6e8377]">Rank change</p><p className="mt-2 font-black">{promotionPreview.current_rank} <ArrowRight className="mx-2 inline text-[#00ff66]" size={16} /> {promotionPreview.targetRank}</p></div>
+              <div className="bg-[#020806] p-5"><p className="text-xs uppercase tracking-[0.14em] text-[#6e8377]">Effective date</p><p className="mt-2 font-black">{formatDate(new Date().toISOString())}</p><p className="mt-1 text-xs text-white/50">TIG resets from this date</p></div>
+              <div className="bg-[#020806] p-5"><p className="text-xs uppercase tracking-[0.14em] text-[#6e8377]">Discord rank role</p><p className="mt-2 text-sm">{promotionPreview.promotionPreview.roleChange === "none" ? "Shared role retained; no remove/re-add" : "Current role replaced with target rank role"}</p></div>
+              <div className="bg-[#020806] p-5"><p className="text-xs uppercase tracking-[0.14em] text-[#6e8377]">Notification route</p><p className="mt-2 text-sm">{promotionPreview.promotionPreview.notificationRoute}</p><p className="mt-1 text-xs text-white/50">{promotionPreview.promotionPreview.notificationRecipients} recipient target{promotionPreview.promotionPreview.notificationRecipients === 1 ? "" : "s"}</p></div>
+            </div>
+            {promotionPreview.companyApproval && <div className="border-t border-cyan-300/20 bg-cyan-300/[0.05] p-4 text-sm text-cyan-100">Company approval recorded by <strong>{promotionPreview.companyApproval.approved_by_name}</strong> on {formatDateTime(promotionPreview.companyApproval.approved_at)}.</div>}
+            <footer className="flex justify-end gap-3 border-t border-[#00ff66]/20 p-5">
+              <button onClick={() => setPromotionPreview(null)} className="min-h-11 border border-white/15 px-5 text-sm font-bold">Cancel</button>
+              <button onClick={() => void promote(promotionPreview)} disabled={promotingId !== null} className="inline-flex min-h-11 items-center gap-2 bg-[#00ff66] px-5 text-sm font-black uppercase text-black disabled:opacity-50">
+                {promotingId ? <RefreshCw size={16} className="animate-spin" /> : <Rocket size={16} />} Confirm Promotion
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {requirementTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true">
+          <section className="w-full max-w-xl border border-cyan-300/30 bg-[#020806]">
+            <header className="flex items-start justify-between border-b border-cyan-300/20 p-5">
+              <div><p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Manual Requirement</p><h2 className="mt-1 text-xl font-black">{requirementTarget.criterion.label}</h2><p className="mt-1 text-sm text-white/55">{requirementTarget.person.name} · {requirementTarget.person.current_rank} to {requirementTarget.person.targetRank}</p></div>
+              <button onClick={() => setRequirementTarget(null)} className="grid h-10 w-10 place-items-center border border-white/15" aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="space-y-4 p-5">
+              <label className="block"><span className="text-xs font-bold uppercase tracking-[0.12em] text-[#8da095]">{requirementTarget.mode === "confirm" ? "Notes" : "Reason for revocation"}</span><textarea value={requirementNotes} onChange={(event) => setRequirementNotes(event.target.value)} rows={4} className="mt-2 w-full border border-white/15 bg-black p-3 outline-none focus:border-cyan-300/50" /></label>
+              {requirementTarget.mode === "confirm" && <label className="block"><span className="text-xs font-bold uppercase tracking-[0.12em] text-[#8da095]">Evidence link (optional)</span><input value={requirementEvidence} onChange={(event) => setRequirementEvidence(event.target.value)} placeholder="https://..." className="mt-2 min-h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-cyan-300/50" /></label>}
+            </div>
+            <footer className="flex justify-end gap-3 border-t border-cyan-300/20 p-5"><button onClick={() => setRequirementTarget(null)} className="min-h-11 border border-white/15 px-5">Cancel</button><button onClick={() => void updateRequirement()} disabled={workflowSaving || (requirementTarget.mode === "revoke" && !requirementNotes.trim())} className="min-h-11 bg-cyan-300 px-5 font-black uppercase text-black disabled:opacity-40">{workflowSaving ? "Saving" : requirementTarget.mode === "confirm" ? "Confirm" : "Revoke"}</button></footer>
+          </section>
+        </div>
+      )}
+
+      {approvalRevokeTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true">
+          <section className="w-full max-w-lg border border-red-300/30 bg-[#020806] p-5">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-red-200">Revoke Company Approval</p><h2 className="mt-2 text-xl font-black">{approvalRevokeTarget.name}</h2>
+            <label className="mt-5 block"><span className="text-xs uppercase tracking-[0.12em] text-[#8da095]">Reason</span><textarea value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} rows={4} className="mt-2 w-full border border-white/15 bg-black p-3 outline-none focus:border-red-300/50" /></label>
+            <div className="mt-5 flex justify-end gap-3"><button onClick={() => setApprovalRevokeTarget(null)} className="min-h-11 border border-white/15 px-5">Cancel</button><button onClick={() => void revokeCompanyApproval()} disabled={!revokeReason.trim() || workflowSaving} className="min-h-11 bg-red-300 px-5 font-black uppercase text-black disabled:opacity-40">Revoke Approval</button></div>
+          </section>
+        </div>
+      )}
 
       {showAnnouncementIssues && data?.canPromote && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="promotion-delivery-title">

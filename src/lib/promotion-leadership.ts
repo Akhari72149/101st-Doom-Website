@@ -80,3 +80,8 @@ export function resolvePromotionLeadership(
       Boolean(discordId) && discordId !== promotedDiscordId,
     ))];
 }
+
+export function resolvePromotionFormation(slottedPosition: string | null) {
+  const slot = slots.find((candidate) => candidate.slotId === slottedPosition);
+  return slot ? { formation: slot.header, unit: slot.subHeader, role: slot.role } : null;
+}

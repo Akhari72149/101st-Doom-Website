@@ -74,24 +74,32 @@ export default function UpdaterPage() {
   const [error, setError] = useState("");
   const [autoScroll, setAutoScroll] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
+  const finalRefreshQueuedRef = useRef(false);
 
   const loadStatus = useCallback(async (force = false) => {
     setLoading(true);
-    try {
-      const response = await fetch(`/api/admin/updater${force ? "?refresh=1" : ""}`, {
-        cache: "no-store",
-        headers: await getAppAuthHeaders(),
-      });
-      const body = await response.json().catch(() => null) as UpdaterStatus & { error?: string } | null;
-      if (!response.ok || !body) throw new Error(body?.error || "Unable to load updater status");
-      setStatus(body);
-      setError("");
-      if (!body.job || !["pending", "running"].includes(body.job.status)) setInstalling(false);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to load updater status");
-    } finally {
-      setLoading(false);
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 1_500));
+        const response = await fetch(`/api/admin/updater${force ? "?refresh=1" : ""}`, {
+          cache: "no-store",
+          headers: await getAppAuthHeaders(),
+        });
+        const body = await response.json().catch(() => null) as UpdaterStatus & { error?: string } | null;
+        if (!response.ok || !body) throw new Error(body?.error || "The updater is still restarting");
+        setStatus(body);
+        setError("");
+        finalRefreshQueuedRef.current = false;
+        if (!body.job || !["pending", "running"].includes(body.job.status)) setInstalling(false);
+        setLoading(false);
+        return;
+      } catch (requestError) {
+        lastError = requestError;
+      }
     }
+    setError(lastError instanceof Error ? lastError.message : "Unable to load updater status");
+    setLoading(false);
   }, []);
 
   const loadLiveStatus = useCallback(async () => {
@@ -119,12 +127,18 @@ export default function UpdaterPage() {
             },
           }
         : current);
-      if (!body.active) setInstalling(false);
+      if (!body.active) {
+        setInstalling(false);
+        if (!finalRefreshQueuedRef.current) {
+          finalRefreshQueuedRef.current = true;
+          window.setTimeout(() => void loadStatus(true), 1_500);
+        }
+      }
     } catch {
       // The external updater serves this endpoint while Next.js changes over.
       // Keep the last known stage visible during the brief port handoff.
     }
-  }, []);
+  }, [loadStatus]);
 
   useEffect(() => {
     void (async () => {

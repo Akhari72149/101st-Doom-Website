@@ -267,10 +267,10 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
   },
   {
     key: "admin.armour-points",
-    pagePath: "/armour-points",
+    pagePath: "/admin/armour-points",
     label: "Armour Point Transactions",
     category: "Personnel Admin",
-    description: "Award, spend, and correct armour customisation points with a permanent audit trail.",
+    description: "Use transaction controls on the public armour points page to award, spend, and correct points with a permanent audit trail.",
     legacyRoles: [],
   },
   {

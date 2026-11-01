@@ -29,6 +29,7 @@ export default function ArmourPointsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
   const [transactionAccess, setTransactionAccess] = useState("none");
+  const [accessChecked, setAccessChecked] = useState(false);
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [transactionMode, setTransactionMode] = useState<TransactionMode>("spend");
   const [purchaseSelections, setPurchaseSelections] = useState<Record<string, number>>({});
@@ -60,7 +61,7 @@ export default function ArmourPointsPage() {
       if (session && hasAppPermission(session, "admin.armour-points", "edit")) {
         setTransactionAccess(session.permissions["admin.armour-points"] || "none");
       }
-    }).catch(() => undefined);
+    }).catch(() => undefined).finally(() => setAccessChecked(true));
   }, []);
 
   useEffect(() => {
@@ -193,7 +194,7 @@ export default function ArmourPointsPage() {
         {!selected ? <section className="mt-6 grid min-h-[480px] place-items-center border border-dashed border-[#00ff66]/20 bg-black/35 px-6 text-center"><div className="max-w-md"><span className="mx-auto grid h-16 w-16 place-items-center border border-[#00ff66]/25 bg-[#00ff66]/5 text-[#00ff66]"><Search size={27} /></span><h2 className="mt-5 text-xl font-black uppercase">Find a personnel profile</h2><p className="mt-2 text-sm leading-6 text-[#789082]">Use the personnel search above. Every active roster profile is available, whether or not they have a website login.</p></div></section> :
           <div className={`transition-opacity ${detailLoading ? "opacity-55" : ""}`}>
             <section className="mt-6 border border-[#00ff66]/25 bg-black/55">
-              <div className="flex flex-col justify-between gap-4 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-center sm:px-7"><div><p className="text-xs font-black uppercase text-[#00ff66]">Points account</p><h2 className="mt-1 text-2xl font-black">{selected.name}</h2><p className="mt-1 text-sm text-[#789082]">{selected.rank_name || "No rank assigned"} · {selected.birth_number}</p></div><div className="flex flex-wrap items-center gap-3">{!selected.rank_configured && <span className="border border-yellow-400/30 bg-yellow-400/5 px-3 py-2 text-xs text-yellow-200">Rank allocation needs configuring</span>}{transactionAccess !== "none" && <button type="button" onClick={openTransactions} className="flex h-11 items-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/8 px-4 text-sm font-black uppercase text-[#00ff66] transition hover:bg-[#00ff66] hover:text-black"><Coins size={17} /> Transactions</button>}</div></div>
+              <div className="flex flex-col justify-between gap-4 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-center sm:px-7"><div><p className="text-xs font-black uppercase text-[#00ff66]">Points account</p><h2 className="mt-1 text-2xl font-black">{selected.name}</h2><p className="mt-1 text-sm text-[#789082]">{selected.rank_name || "No rank assigned"} · {selected.birth_number}</p></div><div className="flex flex-wrap items-center gap-3">{!selected.rank_configured && <span className="border border-yellow-400/30 bg-yellow-400/5 px-3 py-2 text-xs text-yellow-200">Rank allocation needs configuring</span>}{accessChecked && transactionAccess === "none" && <span className="flex h-11 items-center gap-2 border border-white/10 bg-white/[0.025] px-4 text-xs font-black uppercase text-[#789082]"><LockKeyhole size={15} /> View only</span>}{transactionAccess !== "none" && <button type="button" onClick={openTransactions} className="flex h-11 items-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/8 px-4 text-sm font-black uppercase text-[#00ff66] transition hover:bg-[#00ff66] hover:text-black"><Coins size={17} /> Transactions</button>}</div></div>
               <div className="grid md:grid-cols-[1.35fr_1fr_1fr_1fr]">
                 <div className="border-b border-white/10 bg-[#00ff66]/7 p-5 md:border-b-0 md:border-r md:p-6"><div className="flex items-center gap-2 text-xs font-black uppercase text-[#00ff66]"><WalletCards size={16} /> Available balance</div><p className="mt-3 text-4xl font-black text-[#00ff66] sm:text-5xl">{selected.unrestricted ? "UNLIMITED" : selected.balance}</p><p className="mt-2 text-xs text-[#789082]">{selected.unrestricted ? "Full access account" : `${availableCount} point options currently affordable`}</p></div>
                 <SummaryMetric label="Rank allocation" value={selected.unrestricted ? "Unlimited" : selected.rank_points} tone="cyan" /><SummaryMetric label="Additional awards" value={`+${earned}`} tone="green" /><SummaryMetric label="Points spent" value={`-${spent}`} tone="red" />

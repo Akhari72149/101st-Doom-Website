@@ -155,6 +155,11 @@ export default function NavbarClient() {
           description: "Important files, policies and paperwork",
         },
         {
+          href: "/uniform-guide",
+          label: "Uniform Guide",
+          description: "Approved uniforms, equipment and restricted items",
+        },
+        {
           href: "/recognition",
           label: "Recognition",
           description: "Celebrate promotions, qualifications and medals",

@@ -26,6 +26,7 @@
 /.tools/
 /.migration-private/
 /.runtime-data/
+/.ultron/
 
 # debug
 npm-debug.log*

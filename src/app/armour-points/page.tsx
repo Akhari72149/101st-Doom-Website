@@ -1,17 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { CheckCircle2, ChevronDown, Coins, History, Loader2, LockKeyhole, Minus, MinusCircle, Plus, PlusCircle, Search, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, UserRoundSearch, WalletCards, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, Coins, History, Info, Loader2, LockKeyhole, Minus, MinusCircle, Plus, PlusCircle, Search, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, UserRoundSearch, WalletCards, X } from "lucide-react";
 import { meetsArmourRankRequirement } from "@/data/armourPoints";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
 
 type Person = { id: string; name: string; birth_number: string; rank_name: string | null; rank_configured: boolean; rank_points: number; rank_breakdown: Array<{ rank_name: string; points: number }>; ledger_points: number; balance: number; unrestricted: boolean };
 type Item = { id: string; name: string; category: string; point_cost: number; rank_requirement: string | null; description: string | null };
 type Source = { id: string; name: string; category: string; points: number };
-type Entry = { id: string; entry_type: string; points_delta: number; source_label: string; quantity: number; notes: string | null; item_name: string | null; recorded_by: string; created_at: string };
+type Entry = { id: string; entry_type: string; points_delta: number; source_label: string; catalog_item_id: string | null; quantity: number; notes: string | null; item_name: string | null; recorded_by: string; created_at: string };
 type View = "catalogue" | "history";
 type CatalogueFilter = "all" | "available" | "points" | "rank";
+type HistoryFilter = "all" | "rank" | "award" | "spend" | "adjustment";
 type TransactionMode = "spend" | "award" | "adjust";
+type OwnedItem = { quantity: number; lastPurchasedAt: string };
 
 const formatDate = (value: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(value));
 
@@ -25,11 +27,15 @@ export default function ArmourPointsPage() {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [view, setView] = useState<View>("catalogue");
   const [catalogueFilter, setCatalogueFilter] = useState<CatalogueFilter>("all");
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+  const [historyDateFrom, setHistoryDateFrom] = useState("");
+  const [historyDateTo, setHistoryDateTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
   const [transactionAccess, setTransactionAccess] = useState("none");
   const [accessChecked, setAccessChecked] = useState(false);
+  const [calculationOpen, setCalculationOpen] = useState(false);
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [transactionMode, setTransactionMode] = useState<TransactionMode>("spend");
   const [purchaseSelections, setPurchaseSelections] = useState<Record<string, number>>({});
@@ -65,18 +71,25 @@ export default function ArmourPointsPage() {
   }, []);
 
   useEffect(() => {
-    if (!transactionOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setTransactionOpen(false); };
+    if (!transactionOpen && !calculationOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (transactionOpen) setTransactionOpen(false);
+      else setCalculationOpen(false);
+    };
     document.addEventListener("keydown", onKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKeyDown); document.body.style.overflow = previousOverflow; };
-  }, [transactionOpen]);
+  }, [calculationOpen, transactionOpen]);
 
   const selectPerson = async (person: Person) => {
     setSelectedId(person.id);
     setQuery("");
     setSelectorOpen(false);
+    setHistoryFilter("all");
+    setHistoryDateFrom("");
+    setHistoryDateTo("");
     setDetailLoading(true);
     setError("");
     try { await load(person.id); } catch (reason) { setError(reason instanceof Error ? reason.message : "Failed to load account"); }
@@ -90,6 +103,15 @@ export default function ArmourPointsPage() {
   const selected = people.find((person) => person.id === selectedId) || null;
   const spent = history.filter((entry) => entry.points_delta < 0).reduce((total, entry) => total + Math.abs(entry.points_delta), 0);
   const earned = history.filter((entry) => entry.points_delta > 0).reduce((total, entry) => total + entry.points_delta, 0);
+  const ownedItems = useMemo(() => history.reduce<Record<string, OwnedItem>>((owned, entry) => {
+    if (entry.entry_type !== "spend" || !entry.catalog_item_id) return owned;
+    const current = owned[entry.catalog_item_id];
+    owned[entry.catalog_item_id] = {
+      quantity: (current?.quantity || 0) + Number(entry.quantity || 1),
+      lastPurchasedAt: !current || new Date(entry.created_at) > new Date(current.lastPurchasedAt) ? entry.created_at : current.lastPurchasedAt,
+    };
+    return owned;
+  }, {}), [history]);
   const availableCount = selected ? items.filter((item) => item.point_cost > 0 && meetsArmourRankRequirement(selected.rank_name, item.rank_requirement, selected.unrestricted) && (selected.unrestricted || item.point_cost <= selected.balance)).length : 0;
   const selectedSource = sources.find((source) => source.id === sourceId);
   const purchaseItems = selected ? items.filter((item) => item.point_cost > 0) : [];
@@ -107,6 +129,40 @@ export default function ArmourPointsPage() {
       return true;
     });
   }, [catalogueFilter, items, selected]);
+  const catalogueSections = useMemo(() => {
+    if (!selected) return [];
+    if (catalogueFilter !== "all") {
+      const labels: Record<Exclude<CatalogueFilter, "all">, [string, string]> = {
+        available: ["Available now", "Options this profile can currently afford and is ranked to use."],
+        points: ["Point shop", "All customisations purchased using armour points."],
+        rank: ["Rank unlocks", "Customisations granted by reaching the required rank."],
+      };
+      const [title, description] = labels[catalogueFilter];
+      return [{ key: catalogueFilter, title, description, items: filteredItems }];
+    }
+    const groups = [
+      { key: "available", title: "Available now", description: "Rank and point requirements are met.", items: [] as Item[] },
+      { key: "points", title: "More points required", description: "The rank requirement is met, but more points are needed.", items: [] as Item[] },
+      { key: "rank-required", title: "Higher rank required", description: "These options unlock later in the progression route.", items: [] as Item[] },
+      { key: "rank", title: "Rank unlocks", description: "Customisations granted directly by rank rather than purchased with points.", items: [] as Item[] },
+    ];
+    for (const item of items) {
+      if (item.point_cost === 0) groups[3].items.push(item);
+      else if (!meetsArmourRankRequirement(selected.rank_name, item.rank_requirement, selected.unrestricted)) groups[2].items.push(item);
+      else if (selected.unrestricted || item.point_cost <= selected.balance) groups[0].items.push(item);
+      else groups[1].items.push(item);
+    }
+    return groups.filter((group) => group.items.length > 0);
+  }, [catalogueFilter, filteredItems, items, selected]);
+  const filteredHistory = useMemo(() => history.filter((entry) => {
+    if (historyFilter !== "all" && historyFilter !== "rank" && entry.entry_type !== historyFilter) return false;
+    if (historyFilter === "rank") return false;
+    const entryDate = entry.created_at.slice(0, 10);
+    if (historyDateFrom && entryDate < historyDateFrom) return false;
+    if (historyDateTo && entryDate > historyDateTo) return false;
+    return true;
+  }), [history, historyDateFrom, historyDateTo, historyFilter]);
+  const showRankHistory = (historyFilter === "all" || historyFilter === "rank") && !historyDateFrom && !historyDateTo;
 
   const openTransactions = () => {
     setTransactionMode("spend");
@@ -194,7 +250,15 @@ export default function ArmourPointsPage() {
         {!selected ? <section className="mt-6 grid min-h-[480px] place-items-center border border-dashed border-[#00ff66]/20 bg-black/35 px-6 text-center"><div className="max-w-md"><span className="mx-auto grid h-16 w-16 place-items-center border border-[#00ff66]/25 bg-[#00ff66]/5 text-[#00ff66]"><Search size={27} /></span><h2 className="mt-5 text-xl font-black uppercase">Find a personnel profile</h2><p className="mt-2 text-sm leading-6 text-[#789082]">Use the personnel search above. Every active roster profile is available, whether or not they have a website login.</p></div></section> :
           <div className={`transition-opacity ${detailLoading ? "opacity-55" : ""}`}>
             <section className="mt-6 border border-[#00ff66]/25 bg-black/55">
-              <div className="flex flex-col justify-between gap-4 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-center sm:px-7"><div><p className="text-xs font-black uppercase text-[#00ff66]">Points account</p><h2 className="mt-1 text-2xl font-black">{selected.name}</h2><p className="mt-1 text-sm text-[#789082]">{selected.rank_name || "No rank assigned"} · {selected.birth_number}</p></div><div className="flex flex-wrap items-center gap-3">{!selected.rank_configured && <span className="border border-yellow-400/30 bg-yellow-400/5 px-3 py-2 text-xs text-yellow-200">Rank allocation needs configuring</span>}{accessChecked && transactionAccess === "none" && <span className="flex h-11 items-center gap-2 border border-white/10 bg-white/[0.025] px-4 text-xs font-black uppercase text-[#789082]"><LockKeyhole size={15} /> View only</span>}{transactionAccess !== "none" && <button type="button" onClick={openTransactions} className="flex h-11 items-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/8 px-4 text-sm font-black uppercase text-[#00ff66] transition hover:bg-[#00ff66] hover:text-black"><Coins size={17} /> Transactions</button>}</div></div>
+              <div className="flex flex-col justify-between gap-4 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-center sm:px-7">
+                <div><p className="text-xs font-black uppercase text-[#00ff66]">Points account</p><h2 className="mt-1 text-2xl font-black">{selected.name}</h2><p className="mt-1 text-sm text-[#789082]">{selected.rank_name || "No rank assigned"} · {selected.birth_number}</p></div>
+                <div className="flex flex-wrap items-center gap-3">
+                  {!selected.rank_configured && <span className="border border-yellow-400/30 bg-yellow-400/5 px-3 py-2 text-xs text-yellow-200">Rank allocation needs configuring</span>}
+                  <button type="button" onClick={() => setCalculationOpen(true)} className="flex h-11 items-center gap-2 border border-cyan-300/30 bg-cyan-300/5 px-4 text-xs font-black uppercase text-cyan-200 transition hover:border-cyan-300/60 hover:text-white"><Info size={16} /> How calculated</button>
+                  {accessChecked && transactionAccess === "none" && <span className="flex h-11 items-center gap-2 border border-white/10 bg-white/[0.025] px-4 text-xs font-black uppercase text-[#789082]"><LockKeyhole size={15} /> View only</span>}
+                  {transactionAccess !== "none" && <button type="button" onClick={openTransactions} className="flex h-11 items-center gap-2 border border-[#00ff66]/45 bg-[#00ff66]/8 px-4 text-sm font-black uppercase text-[#00ff66] transition hover:bg-[#00ff66] hover:text-black"><Coins size={17} /> Transactions</button>}
+                </div>
+              </div>
               <div className="grid md:grid-cols-[1.35fr_1fr_1fr_1fr]">
                 <div className="border-b border-white/10 bg-[#00ff66]/7 p-5 md:border-b-0 md:border-r md:p-6"><div className="flex items-center gap-2 text-xs font-black uppercase text-[#00ff66]"><WalletCards size={16} /> Available balance</div><p className="mt-3 text-4xl font-black text-[#00ff66] sm:text-5xl">{selected.unrestricted ? "UNLIMITED" : selected.balance}</p><p className="mt-2 text-xs text-[#789082]">{selected.unrestricted ? "Full access account" : `${availableCount} point options currently affordable`}</p></div>
                 <SummaryMetric label="Rank allocation" value={selected.unrestricted ? "Unlimited" : selected.rank_points} tone="cyan" /><SummaryMetric label="Additional awards" value={`+${earned}`} tone="green" /><SummaryMetric label="Points spent" value={`-${spent}`} tone="red" />
@@ -204,15 +268,34 @@ export default function ArmourPointsPage() {
             <div className="mt-6 flex border-b border-[#00ff66]/25" role="tablist" aria-label="Armour points views"><ViewTab active={view === "catalogue"} icon={<ShoppingBag size={17} />} label="Customisations" count={items.length} onClick={() => setView("catalogue")} /><ViewTab active={view === "history"} icon={<History size={17} />} label="Point history" count={history.length + selected.rank_breakdown.length} onClick={() => setView("history")} /></div>
 
             {view === "catalogue" ? <section className="py-6">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-black uppercase text-[#00ff66]">Customisation catalogue</p><h3 className="mt-1 text-xl font-black uppercase">Choose how to use your points</h3></div><div className="flex flex-wrap gap-2" aria-label="Catalogue filters"><FilterButton active={catalogueFilter === "all"} label="All" onClick={() => setCatalogueFilter("all")} /><FilterButton active={catalogueFilter === "available"} label="Affordable" onClick={() => setCatalogueFilter("available")} /><FilterButton active={catalogueFilter === "points"} label="Point shop" onClick={() => setCatalogueFilter("points")} /><FilterButton active={catalogueFilter === "rank"} label="Rank unlocks" onClick={() => setCatalogueFilter("rank")} /></div></div>
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filteredItems.map((item) => {
-                const isRankUnlock = item.point_cost === 0; const rankEligible = meetsArmourRankRequirement(selected.rank_name, item.rank_requirement, selected.unrestricted); const affordable = rankEligible && (selected.unrestricted || item.point_cost <= selected.balance); const pointsNeeded = Math.max(0, item.point_cost - selected.balance);
-                return <article key={item.id} className="flex min-h-44 flex-col border border-white/10 bg-black/45 p-5 transition hover:border-[#00ff66]/35"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-xs font-black uppercase text-[#60776b]">{item.category}</p><h4 className="mt-1 text-lg font-bold leading-6">{item.name}</h4></div><span className={`shrink-0 border px-2.5 py-1 text-xs font-black ${isRankUnlock ? "border-cyan-300/25 bg-cyan-300/5 text-cyan-300" : affordable ? "border-[#00ff66]/30 bg-[#00ff66]/5 text-[#00ff66]" : "border-white/10 text-[#60776b]"}`}>{isRankUnlock ? "RANK" : `${item.point_cost} PTS`}</span></div>{item.description && <p className="mt-3 text-sm leading-5 text-[#789082]">{item.description}</p>}<div className="mt-auto flex items-center gap-2 border-t border-white/8 pt-4 text-xs">{!rankEligible ? <><LockKeyhole size={15} className="text-red-300" /><span className="text-red-200">Requires {item.rank_requirement}</span></> : isRankUnlock ? <><ShieldCheck size={15} className="text-cyan-300" /><span className="text-cyan-200">Unlocked by {item.rank_requirement || "rank"}</span></> : affordable ? <><CheckCircle2 size={15} className="text-[#00ff66]" /><span className="text-[#9ab3a6]">Rank and points requirements met</span></> : <><LockKeyhole size={15} className="text-yellow-300" /><span className="text-yellow-200">{pointsNeeded} more {pointsNeeded === 1 ? "point" : "points"} needed</span></>}</div></article>;
-              })}</div>{!filteredItems.length && <div className="mt-5 border border-dashed border-white/15 px-5 py-12 text-center text-sm text-[#789082]">No customisations match this filter.</div>}
-            </section> : <section className="py-6"><div><p className="text-xs font-black uppercase text-[#00ff66]">Account record</p><h3 className="mt-1 text-xl font-black uppercase">Where the points came from</h3><p className="mt-2 text-sm text-[#789082]">Every completed rank on the current progression route contributes its award. Other awards, purchases, and corrections are retained permanently below.</p></div><div className="mt-5 border border-white/10 bg-black/45">{selected.rank_breakdown.map((entry) => <HistoryRow key={`rank-${entry.rank_name}`} title={entry.rank_name} detail="Rank progression award" value={`+${entry.points}`} positive />)}{selected.unrestricted && <HistoryRow title={selected.rank_name || "Current rank"} detail="Current rank grants unrestricted armour points" value="Unlimited" positive />}{history.map((entry) => <HistoryRow key={entry.id} title={entry.source_label} detail={`${entry.quantity > 1 ? `${entry.quantity} entries · ` : ""}${formatDate(entry.created_at)}${entry.notes ? ` · ${entry.notes}` : ""}`} value={`${entry.points_delta > 0 ? "+" : ""}${entry.points_delta}`} positive={entry.points_delta >= 0} />)}{!history.length && <div className="border-t border-white/10 px-5 py-8 text-center"><Sparkles className="mx-auto text-[#00ff66]/45" size={22} /><p className="mt-3 text-sm text-[#789082]">No additional awards, purchases, or corrections recorded yet.</p></div>}</div></section>}
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-black uppercase text-[#00ff66]">Customisation catalogue</p><h3 className="mt-1 text-xl font-black uppercase">Choose how to use your points</h3></div><div className="flex flex-wrap gap-2" aria-label="Catalogue filters"><FilterButton active={catalogueFilter === "all"} label="Grouped view" onClick={() => setCatalogueFilter("all")} /><FilterButton active={catalogueFilter === "available"} label="Affordable" onClick={() => setCatalogueFilter("available")} /><FilterButton active={catalogueFilter === "points"} label="Point shop" onClick={() => setCatalogueFilter("points")} /><FilterButton active={catalogueFilter === "rank"} label="Rank unlocks" onClick={() => setCatalogueFilter("rank")} /></div></div>
+              {catalogueSections.map((section) => <div key={section.key} className="mt-7 first:mt-5"><div className="flex items-end justify-between gap-4 border-b border-white/10 pb-3"><div><h4 className="font-black uppercase text-white">{section.title}</h4><p className="mt-1 text-xs leading-5 text-[#789082]">{section.description}</p></div><span className="shrink-0 text-xs font-black text-[#60776b]">{section.items.length}</span></div><div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{section.items.map((item) => <CatalogueCard key={item.id} item={item} person={selected} owned={ownedItems[item.id]} />)}</div></div>)}
+              {!catalogueSections.length && <div className="mt-5 border border-dashed border-white/15 px-5 py-12 text-center text-sm text-[#789082]">No customisations match this filter.</div>}
+            </section> : <section className="py-6">
+              <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><p className="text-xs font-black uppercase text-[#00ff66]">Account record</p><h3 className="mt-1 text-xl font-black uppercase">Where the points came from</h3><p className="mt-2 max-w-2xl text-sm text-[#789082]">Filter rank awards, additional awards, purchases, and corrections without changing the permanent record.</p></div><div className="flex flex-wrap gap-2" aria-label="History type filters"><FilterButton active={historyFilter === "all"} label="All" onClick={() => setHistoryFilter("all")} /><FilterButton active={historyFilter === "rank"} label="Ranks" onClick={() => setHistoryFilter("rank")} /><FilterButton active={historyFilter === "award"} label="Awards" onClick={() => setHistoryFilter("award")} /><FilterButton active={historyFilter === "spend"} label="Purchases" onClick={() => setHistoryFilter("spend")} /><FilterButton active={historyFilter === "adjustment"} label="Corrections" onClick={() => setHistoryFilter("adjustment")} /></div></div>
+              <div className="mt-5 grid gap-3 border border-white/10 bg-black/35 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><label><span className="mb-2 block text-[10px] font-black uppercase text-[#60776b]">From date</span><input type="date" value={historyDateFrom} onChange={(event) => setHistoryDateFrom(event.target.value)} className="h-11 w-full border border-white/12 bg-black px-3 text-sm outline-none focus:border-[#00ff66]/45" /></label><label><span className="mb-2 block text-[10px] font-black uppercase text-[#60776b]">To date</span><input type="date" value={historyDateTo} onChange={(event) => setHistoryDateTo(event.target.value)} className="h-11 w-full border border-white/12 bg-black px-3 text-sm outline-none focus:border-[#00ff66]/45" /></label><button type="button" onClick={() => { setHistoryDateFrom(""); setHistoryDateTo(""); }} disabled={!historyDateFrom && !historyDateTo} className="h-11 border border-white/12 px-4 text-xs font-black uppercase text-[#789082] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-35">Clear dates</button></div>
+              <div className="mt-4 border border-white/10 bg-black/45">
+                {showRankHistory && selected.rank_breakdown.map((entry) => <HistoryRow key={`rank-${entry.rank_name}`} title={entry.rank_name} detail="Rank progression award" value={`+${entry.points}`} positive />)}
+                {showRankHistory && selected.unrestricted && <HistoryRow title={selected.rank_name || "Current rank"} detail="Current rank grants unrestricted armour points" value="Unlimited" positive />}
+                {filteredHistory.map((entry) => <HistoryRow key={entry.id} title={entry.source_label} detail={`${entry.quantity > 1 ? `${entry.quantity} entries · ` : ""}${formatDate(entry.created_at)}${entry.notes ? ` · ${entry.notes}` : ""}`} value={`${entry.points_delta > 0 ? "+" : ""}${entry.points_delta}`} positive={entry.points_delta >= 0} />)}
+                {!filteredHistory.length && (!showRankHistory || (!selected.rank_breakdown.length && !selected.unrestricted)) && <div className="px-5 py-10 text-center"><Sparkles className="mx-auto text-[#00ff66]/45" size={22} /><p className="mt-3 text-sm text-[#789082]">No history records match these filters.</p></div>}
+              </div>
+            </section>}
             <p className="flex items-center gap-2 border-t border-white/10 py-5 text-xs text-[#60776b]"><ShieldCheck size={15} /> Every award, purchase, and correction is retained in the account history.</p>
           </div>}
       </div>
+      {calculationOpen && selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="armour-calculation-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setCalculationOpen(false); }}>
+        <section className="flex max-h-[88vh] w-full max-w-2xl flex-col border border-cyan-300/35 bg-[#020806] shadow-2xl shadow-black">
+          <header className="flex items-start justify-between gap-4 border-b border-cyan-300/20 p-5 sm:p-6"><div><p className="text-xs font-black uppercase text-cyan-300">{selected.name} · {selected.birth_number}</p><h2 id="armour-calculation-title" className="mt-1 text-2xl font-black uppercase">Points calculation</h2><p className="mt-2 text-sm leading-6 text-[#789082]">The current balance combines cumulative rank awards with every additional ledger entry.</p></div><button type="button" onClick={() => setCalculationOpen(false)} aria-label="Close calculation" className="grid h-10 w-10 shrink-0 place-items-center border border-white/15 text-[#789082] transition hover:border-cyan-300/45 hover:text-white"><X size={19} /></button></header>
+          <div className="overflow-y-auto p-5 sm:p-6">
+            <div className="grid border-l border-t border-white/10 sm:grid-cols-3"><CalculationMetric label="Rank allocation" value={selected.unrestricted ? "Unlimited" : `+${selected.rank_points}`} tone="cyan" /><CalculationMetric label="Additional credits" value={`+${earned}`} tone="green" /><CalculationMetric label="Deductions" value={`-${spent}`} tone="red" /></div>
+            <div className="mt-5 flex flex-col justify-between gap-3 border border-[#00ff66]/25 bg-[#00ff66]/5 p-4 sm:flex-row sm:items-center"><div><p className="text-xs font-black uppercase text-[#789082]">Current available balance</p><p className="mt-1 text-xs text-[#60776b]">Rank allocation + credits - deductions</p></div><strong className="text-3xl text-[#00ff66]">{selected.unrestricted ? "Unlimited" : selected.balance}</strong></div>
+            <div className="mt-6"><div className="flex items-end justify-between gap-4 border-b border-white/10 pb-3"><div><p className="text-xs font-black uppercase text-cyan-300">Rank progression</p><h3 className="mt-1 font-black uppercase">Included rank awards</h3></div><span className="text-xs font-black text-[#60776b]">{selected.rank_breakdown.length}</span></div><div className="divide-y divide-white/8">{selected.rank_breakdown.map((entry) => <div key={entry.rank_name} className="flex items-center justify-between gap-4 py-3 text-sm"><span className="text-[#9ab3a6]">{entry.rank_name}</span><strong className="text-cyan-300">+{entry.points}</strong></div>)}{!selected.rank_breakdown.length && <p className="py-6 text-center text-sm text-[#789082]">No configured rank awards are included.</p>}</div></div>
+            <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-[#60776b]">Additional credits and deductions are listed individually under Point history. Rank points are cumulative and follow the configured progression route.</p>
+          </div>
+          <footer className="flex justify-end border-t border-white/10 p-5"><button type="button" onClick={() => setCalculationOpen(false)} className="h-11 border border-white/15 px-5 text-sm font-black uppercase text-[#9ab3a6] transition hover:text-white">Close</button></footer>
+        </section>
+      </div>}
       {transactionOpen && selected && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="armour-transaction-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setTransactionOpen(false); }}>
         <section className="flex max-h-[92vh] w-full max-w-5xl flex-col border border-[#00ff66]/35 bg-[#020806] shadow-2xl shadow-black">
           <header className="flex items-start justify-between gap-4 border-b border-[#00ff66]/20 p-5 sm:p-6"><div><p className="text-xs font-black uppercase text-[#00ff66]">{selected.name} · {selected.birth_number}</p><h2 id="armour-transaction-title" className="mt-1 text-2xl font-black uppercase">Armour point transaction</h2><p className="mt-2 text-sm text-[#789082]">Available balance: <strong className="text-[#00ff66]">{selected.unrestricted ? "Unlimited" : selected.balance}</strong></p></div><button type="button" onClick={() => setTransactionOpen(false)} aria-label="Close transactions" className="grid h-10 w-10 shrink-0 place-items-center border border-white/15 text-[#789082] transition hover:border-[#00ff66]/45 hover:text-white"><X size={19} /></button></header>
@@ -253,6 +336,26 @@ function ViewTab({ active, icon, label, count, onClick }: { active: boolean; ico
 
 function FilterButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return <button type="button" onClick={onClick} className={`border px-3 py-2 text-xs font-black uppercase transition ${active ? "border-[#00ff66] bg-[#00ff66] text-black" : "border-white/15 text-[#8ba395] hover:border-[#00ff66]/45 hover:text-white"}`}>{label}</button>;
+}
+
+function CatalogueCard({ item, person, owned }: { item: Item; person: Person; owned?: OwnedItem }) {
+  const isRankUnlock = item.point_cost === 0;
+  const rankEligible = meetsArmourRankRequirement(person.rank_name, item.rank_requirement, person.unrestricted);
+  const affordable = rankEligible && (person.unrestricted || item.point_cost <= person.balance);
+  const pointsNeeded = Math.max(0, item.point_cost - person.balance);
+  const progress = item.point_cost > 0 ? Math.max(0, Math.min(100, person.unrestricted ? 100 : (person.balance / item.point_cost) * 100)) : 100;
+  return <article className="flex min-h-48 flex-col border border-white/10 bg-black/45 p-5 transition hover:border-[#00ff66]/35">
+    <div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-xs font-black uppercase text-[#60776b]">{item.category}</p><h5 className="mt-1 text-lg font-bold leading-6">{item.name}</h5></div><div className="flex shrink-0 flex-col items-end gap-2"><span className={`border px-2.5 py-1 text-xs font-black ${isRankUnlock ? "border-cyan-300/25 bg-cyan-300/5 text-cyan-300" : affordable ? "border-[#00ff66]/30 bg-[#00ff66]/5 text-[#00ff66]" : "border-white/10 text-[#60776b]"}`}>{isRankUnlock ? "RANK" : `${item.point_cost} PTS`}</span>{owned && <span className="border border-yellow-300/30 bg-yellow-300/5 px-2 py-1 text-[10px] font-black uppercase text-yellow-200">Owned{owned.quantity > 1 ? ` x${owned.quantity}` : ""}</span>}</div></div>
+    {item.description && <p className="mt-3 text-sm leading-5 text-[#789082]">{item.description}</p>}
+    {owned && <p className="mt-3 text-xs text-yellow-100/70">Last purchased {formatDate(owned.lastPurchasedAt)}</p>}
+    {rankEligible && !isRankUnlock && !affordable && <div className="mt-4"><div className="mb-1.5 flex justify-between gap-3 text-[10px] font-black uppercase text-[#60776b]"><span>{Math.max(0, person.balance)} / {item.point_cost} points</span><span>{Math.round(progress)}%</span></div><div className="h-1.5 overflow-hidden bg-white/8"><div className="h-full bg-yellow-300 transition-[width]" style={{ width: `${progress}%` }} /></div></div>}
+    <div className="mt-auto flex items-center gap-2 border-t border-white/8 pt-4 text-xs">{!rankEligible ? <><LockKeyhole size={15} className="text-red-300" /><span className="text-red-200">Requires {item.rank_requirement}</span></> : isRankUnlock ? <><ShieldCheck size={15} className="text-cyan-300" /><span className="text-cyan-200">Unlocked by {item.rank_requirement || "rank"}</span></> : affordable ? <><CheckCircle2 size={15} className="text-[#00ff66]" /><span className="text-[#9ab3a6]">Rank and points requirements met</span></> : <><LockKeyhole size={15} className="text-yellow-300" /><span className="text-yellow-200">{pointsNeeded} more {pointsNeeded === 1 ? "point" : "points"} needed</span></>}</div>
+  </article>;
+}
+
+function CalculationMetric({ label, value, tone }: { label: string; value: string; tone: "cyan" | "green" | "red" }) {
+  const colour = tone === "cyan" ? "text-cyan-300" : tone === "green" ? "text-[#00ff66]" : "text-red-300";
+  return <div className="border-b border-r border-white/10 p-4"><p className="text-[10px] font-black uppercase text-[#60776b]">{label}</p><strong className={`mt-2 block text-xl ${colour}`}>{value}</strong></div>;
 }
 
 function HistoryRow({ title, detail, value, positive }: { title: string; detail: string; value: string; positive: boolean }) {

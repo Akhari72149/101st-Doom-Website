@@ -40,7 +40,7 @@ export async function GET(request: Request) {
       pool.query(`select id,name,category,points from public.armour_point_sources
         where active=true order by sort_order,name`),
       personnelId
-        ? pool.query(`select l.id,l.entry_type,l.points_delta,l.source_label,l.quantity,l.notes,l.created_at,
+        ? pool.query(`select l.id,l.entry_type,l.points_delta,l.source_label,l.catalog_item_id,l.quantity,l.notes,l.created_at,
             item.name item_name,coalesce(nullif(btrim(u."displayUsername"),''),nullif(btrim(u.name),''),u.username,'System') recorded_by
           from public.armour_point_ledger l
           left join public.armour_customisation_items item on item.id=l.catalog_item_id

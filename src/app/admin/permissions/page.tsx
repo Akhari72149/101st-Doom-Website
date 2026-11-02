@@ -172,6 +172,9 @@ export default function AdminPermissionsPage() {
   const [credentialsCopied, setCredentialsCopied] = useState(false);
   const [createError, setCreateError] = useState("");
   const [showPermissionReview, setShowPermissionReview] = useState(false);
+  const [permissionQuery, setPermissionQuery] = useState("");
+  const [permissionCategory, setPermissionCategory] = useState("Personnel Admin");
+  const [permissionOnlyGranted, setPermissionOnlyGranted] = useState(false);
   const [roleTagAccount, setRoleTagAccount] = useState<Account | null>(null);
   const [draftRoleTags, setDraftRoleTags] = useState<string[]>([]);
 
@@ -189,6 +192,19 @@ export default function AdminPermissionsPage() {
       entries,
     }));
   }, [definitions]);
+  const permissionCategories = useMemo(() => groupedDefinitions.map((group) => group.category), [groupedDefinitions]);
+  const visiblePermissionGroups = useMemo(() => {
+    const term = permissionQuery.trim().toLowerCase();
+    return groupedDefinitions.flatMap((group) => {
+      if (!term && permissionCategory !== "all" && group.category !== permissionCategory) return [];
+      const entries = group.entries.filter((definition) => {
+        if (permissionOnlyGranted && (draftPermissions[definition.key] || "none") === "none") return false;
+        if (!term) return true;
+        return `${definition.label} ${definition.pagePath} ${definition.description} ${definition.key}`.toLowerCase().includes(term);
+      });
+      return entries.length ? [{ ...group, entries }] : [];
+    });
+  }, [draftPermissions, groupedDefinitions, permissionCategory, permissionOnlyGranted, permissionQuery]);
 
   const filteredAccounts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -304,6 +320,9 @@ export default function AdminPermissionsPage() {
   function openPermissionModal(account: Account) {
     setSelectedAccount(account);
     setDraftPermissions({ ...(account.permissions || {}) });
+    setPermissionQuery("");
+    setPermissionCategory("Personnel Admin");
+    setPermissionOnlyGranted(false);
     setStatus(null);
   }
 
@@ -962,29 +981,22 @@ export default function AdminPermissionsPage() {
             <div
               tabIndex={0}
               aria-label="Screen permission list"
-              className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-3 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#00ff66]/60 sm:p-5"
+              className="min-h-0 flex-1 overscroll-contain overflow-y-auto outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#00ff66]/60"
             >
-              <div className="overflow-hidden border border-[#00ff66]/15 bg-black/45">
-                <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-[#00ff66]/15 bg-[#06110d] px-3 py-3 sm:grid-cols-[minmax(220px,1fr)_auto] sm:px-4">
-                  <div className="text-xs font-bold uppercase tracking-[0.22em] text-gray-300">
-                    Screen Permissions
-                  </div>
-                  <div className="hidden grid-cols-4 gap-2 sm:grid">
-                    {editableLevels.map((option) => (
-                      <div
-                        key={option}
-                        className={`min-w-24 border px-3 py-2 text-center text-xs font-bold uppercase tracking-[0.12em] ${accessClass(option)}`}
-                      >
-                        {accessLabel(option)}
-                      </div>
-                    ))}
-                  </div>
+              <div className="sticky top-0 z-20 border-b border-[#00ff66]/15 bg-[#04100b] p-3 sm:p-4">
+                <div className="grid gap-2 lg:grid-cols-[minmax(260px,1fr)_220px_auto]">
+                  <label className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={16}/><input value={permissionQuery} onChange={(event)=>setPermissionQuery(event.target.value)} placeholder="Search permissions" className="h-10 w-full border border-white/15 bg-black pl-10 pr-3 text-sm outline-none focus:border-[#00ff66]/50"/></label>
+                  <select value={permissionCategory} onChange={(event)=>setPermissionCategory(event.target.value)} disabled={Boolean(permissionQuery.trim())} className="h-10 border border-white/15 bg-black px-3 text-sm text-gray-300 disabled:opacity-45"><option value="all">All categories</option>{permissionCategories.map((category)=><option key={category} value={category}>{category}</option>)}</select>
+                  <label className="flex h-10 items-center gap-2 border border-white/15 px-3 text-xs font-bold uppercase text-gray-400"><input type="checkbox" checked={permissionOnlyGranted} onChange={(event)=>setPermissionOnlyGranted(event.target.checked)} className="accent-[#00ff66]"/>Granted only</label>
                 </div>
+                <div className="mt-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-[.14em] text-gray-600"><span>{visiblePermissionGroups.reduce((total,group)=>total+group.entries.length,0)} permissions shown</span><span>{permissionCategory==="all"||permissionQuery.trim()?"All matching categories":permissionCategory}</span></div>
+              </div>
 
-                {groupedDefinitions.map((group) => (
+              <div className="m-3 overflow-hidden border border-[#00ff66]/15 bg-black/45 sm:m-4">
+                {visiblePermissionGroups.map((group) => (
                   <div key={group.category}>
-                    <div className="border-b border-[#00ff66]/10 bg-[#00ff66]/[0.035] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#00ff66]/80">
-                      {group.category}
+                    <div className="flex items-center justify-between border-b border-[#00ff66]/10 bg-[#00ff66]/[0.035] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#00ff66]/80">
+                      <span>{group.category}</span><span className="text-gray-600">{group.entries.length}</span>
                     </div>
 
                     {group.entries.map((definition) => {
@@ -993,20 +1005,14 @@ export default function AdminPermissionsPage() {
                       return (
                         <div
                           key={definition.key}
-                          className="grid gap-3 border-b border-[#00ff66]/10 px-3 py-3 transition last:border-b-0 hover:bg-[#00ff66]/[0.03] sm:grid-cols-[minmax(220px,1fr)_auto] sm:items-center sm:px-4"
+                          className="grid gap-3 border-b border-[#00ff66]/10 px-3 py-2.5 transition last:border-b-0 hover:bg-[#00ff66]/[0.03] lg:grid-cols-[minmax(250px,1fr)_auto] lg:items-center sm:px-4"
                         >
                           <div className="min-w-0">
-                            <div className="font-semibold text-white">{definition.label}</div>
-                            <div className="mt-1 text-xs text-gray-500">{definition.pagePath}</div>
-                            <p className="mt-1 text-xs leading-5 text-gray-400">{definition.description}</p>
-                            {selectedAccount.permissionMeta?.[definition.key] && (
-                              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-gray-600">
-                                Granted by {selectedAccount.permissionMeta[definition.key].grantedBy} · {formatDate(selectedAccount.permissionMeta[definition.key].updatedAt || undefined)}
-                              </p>
-                            )}
+                            <div className="flex min-w-0 items-center gap-2"><span className="truncate text-sm font-semibold text-white">{definition.label}</span><span className={`shrink-0 border px-1.5 py-0.5 text-[9px] font-bold uppercase ${accessClass(currentLevel)}`}>{accessLabel(currentLevel)}</span></div>
+                            <details className="mt-1 text-xs text-gray-600"><summary className="cursor-pointer truncate hover:text-gray-400">{definition.pagePath}</summary><p className="mt-1 max-w-2xl leading-5 text-gray-400">{definition.description}</p>{selectedAccount.permissionMeta?.[definition.key]&&<p className="mt-1 text-[10px] uppercase tracking-[0.1em] text-gray-600">Granted by {selectedAccount.permissionMeta[definition.key].grantedBy} · {formatDate(selectedAccount.permissionMeta[definition.key].updatedAt || undefined)}</p>}</details>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div className="grid grid-cols-4 gap-1.5">
                             {editableLevels.map((option) => {
                               const selected = currentLevel === option;
 
@@ -1021,7 +1027,7 @@ export default function AdminPermissionsPage() {
                                     }))
                                   }
                                   disabled={!canSetPermission(definition, option)}
-                                  className={`min-w-0 border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.08em] transition sm:min-w-24 sm:px-3 sm:text-xs sm:tracking-[0.12em] ${
+                                  className={`min-w-0 border px-2 py-2 text-[9px] font-bold uppercase tracking-[0.06em] transition sm:min-w-20 sm:text-[10px] ${
                                     selected
                                       ? `${accessClass(option)} shadow-[0_0_18px_rgba(0,255,102,0.08)]`
                                       : "border-white/10 bg-white/[0.02] text-gray-600 hover:border-[#00ff66]/30 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-35"
@@ -1037,6 +1043,7 @@ export default function AdminPermissionsPage() {
                     })}
                   </div>
                 ))}
+                {visiblePermissionGroups.length===0&&<div className="p-12 text-center"><Search className="mx-auto text-gray-700"/><p className="mt-3 text-sm text-gray-500">No permissions match these filters.</p></div>}
               </div>
             </div>
 

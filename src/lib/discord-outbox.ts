@@ -132,7 +132,7 @@ export async function completeDiscordOutbox(
         insert into public.personnel_certifications(personnel_id, certification_id, awarded_at)
         select $1, id, now()
         from public.certifications
-        where cert_id = any($2::text[])
+        where is_active=true and cert_id = any($2::text[])
         on conflict (personnel_id, certification_id) do nothing
       `, [personnelId, roleIds]);
     }

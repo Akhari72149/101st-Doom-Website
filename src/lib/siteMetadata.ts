@@ -7,6 +7,7 @@ type RouteMetadata = {
 
 export const siteRouteMetadata = {
   "/admin/certifications": { title: "Certification Management", description: "Assign certifications, manage certification leads, and review personnel qualification records." },
+  "/admin/certification-catalogue": { title: "Certification Catalogue", description: "Create, edit, activate, and retire certification definitions and their Discord roles." },
   "/admin/control-centre": { title: "Admin Control Centre", description: "Access routine personnel configuration, public content, XP, and system health tools from one workspace." },
   "/admin/create": { title: "Personnel Intake", description: "Create and onboard new personnel records for the 101st Doom Battalion." },
   "/admin/discipline": { title: "Discipline Management", description: "Issue, review, approve, and appeal official warnings and disciplinary actions." },

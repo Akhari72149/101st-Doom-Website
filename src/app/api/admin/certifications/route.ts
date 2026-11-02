@@ -58,6 +58,7 @@ export async function GET(request: Request) {
              lead.name lead_name, lead.rank_id lead_rank_id
            from public.certifications c
            left join public.personnel lead on lead.id = c.lead_personnel_id
+           where c.is_active=true
            order by c.name`,
         ),
       ]);
@@ -219,6 +220,11 @@ export async function POST(request: Request) {
     }
     if (backend() === "postgres") {
       await withPostgresTransaction(async (client) => {
+        const available = await client.query<{ count: number }>(
+          "select count(*)::int count from public.certifications where id=any($1::uuid[]) and is_active=true",
+          [certifications],
+        );
+        if (available.rows[0].count !== certifications.length) throw new Error("UNAVAILABLE_CERTIFICATION");
         for (const personId of people) {
           for (const certificationId of certifications) {
             await client.query(
@@ -243,6 +249,9 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAVAILABLE_CERTIFICATION") {
+      return NextResponse.json({ error: "One or more selected certifications are no longer available" }, { status: 409 });
+    }
     console.error("[admin-certs] Assign failed", error);
     return NextResponse.json({ error: "Failed to assign certifications" }, { status: 500 });
   }

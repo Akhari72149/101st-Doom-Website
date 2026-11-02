@@ -507,6 +507,7 @@ export default function NavbarClient() {
           "admin.rank-corrections",
           "admin.ranks",
           "admin.certifications",
+          "admin.certification-catalogue",
           "admin.xp",
           "admin.armour-points",
           "admin.armour-points-config",

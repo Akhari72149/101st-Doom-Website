@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       if (mode === "search") {
         if (query.length < 1) return NextResponse.json({ certifications: [] });
         const result = await pool.query(
-          "select id, name from public.certifications where name ilike $1 order by name limit 50",
+          "select id, name from public.certifications where is_active=true and name ilike $1 order by name limit 50",
           [`%${query}%`],
         );
         return NextResponse.json({ certifications: result.rows });

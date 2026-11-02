@@ -106,6 +106,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: ["admin", "nco", "trainer"],
   },
   {
+    key: "admin.certification-catalogue",
+    pagePath: "/admin/certification-catalogue",
+    label: "Certification Catalogue",
+    category: "Personnel Admin",
+    description: "Create, edit, activate, and retire certification definitions and their Discord roles.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.medals",
     pagePath: "/admin/medals",
     label: "Medals",

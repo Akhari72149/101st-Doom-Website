@@ -58,6 +58,15 @@ const panels: PanelDefinition[] = [
     icon: BadgeCheck,
   },
   {
+    id: "certification-catalogue",
+    title: "Certification Catalogue",
+    description: "Create, edit, activate, and retire certification definitions and Discord roles.",
+    permission: "admin.certification-catalogue",
+    route: "/admin/certification-catalogue",
+    group: "Personnel Configuration",
+    icon: BadgeCheck,
+  },
+  {
     id: "xp-corrections",
     title: "XP Corrections",
     description: "Apply audited XP adjustments and review recent corrections.",

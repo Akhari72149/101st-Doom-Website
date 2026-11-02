@@ -66,8 +66,8 @@ async function readPostgres(includeArchive:boolean) {
     from public.app_auth_users u where u.disabled=false
     on conflict(id) do update set name=excluded.name`);
   const [assignees,pipelinePeople,profiles,tasks,comments,releases,events,contributors,checklist,dependencies,links,approvals,repositories,repositoryLinks,assets]=await Promise.all([
-    pool.query("select a.id,a.name,a.active from public.mod_pipeline_assignees a join public.app_auth_users u on u.id=a.id and u.disabled=false where a.active=true order by a.name"),
-    pool.query("select a.id,a.name,a.active from public.mod_pipeline_assignees a join public.app_auth_users u on u.id=a.id and u.disabled=false order by a.name"),
+    pool.query("select a.id,a.name,a.active,a.specialties from public.mod_pipeline_assignees a join public.app_auth_users u on u.id=a.id and u.disabled=false where a.active=true order by a.name"),
+    pool.query("select a.id,a.name,a.active,a.specialties from public.mod_pipeline_assignees a join public.app_auth_users u on u.id=a.id and u.disabled=false order by a.name"),
     pool.query(`select id,coalesce(nullif(btrim("displayUsername"),''),nullif(btrim(name),''),nullif(btrim(username),''),'Unknown account') display_name
       from public.app_auth_users where disabled=false order by display_name`),
     pool.query(`select t.*,r.name release_name,r.version release_version from public.mod_pipeline_tasks t left join public.mod_pipeline_releases r on r.id=t.release_id ${taskWhere} order by t.status,t.position,t.created_at`),

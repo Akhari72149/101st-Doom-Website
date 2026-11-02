@@ -11,8 +11,9 @@ const ADMIN_KEY = "admin.mod-taskboard-admin";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUSES = ["intake","approved","in_development","internal_review","testing","ready_for_release","released","cancelled"] as const;
 const PRIORITIES = ["low","medium","high","critical"] as const;
-const TYPES = ["bug","feature","asset","balance","maintenance","documentation"] as const;
+const TYPES = ["bug","feature","asset","balance","maintenance","documentation","up_for_grabs"] as const;
 const WORKSTREAMS = ["design","modelling","texturing","scripting","audio","documentation","quality","other"] as const;
+const MOD_TARGETS = new Set(["dba_core","dba_republic","dba_cis","dba_imperial","dba_independant","101st_aux"]);
 const TAGS = new Set(["Bug","Helmet","New Feature","Update","Up For Grabs"]);
 const STATUS_SET = new Set<string>(STATUSES);
 const PRIORITY_SET = new Set<string>(PRIORITIES);
@@ -32,11 +33,11 @@ function parseTask(value: unknown) {
   const body=value as Row|null;
   const title=cleanText(body?.title,200),status=cleanText(body?.status,40),priority=cleanText(body?.priority,20);
   const taskType=cleanText(body?.task_type,30),workstream=cleanText(body?.workstream,30);
-  const tags=Array.isArray(body?.tags)?body.tags.map(String):[],dueDate=parseDate(body?.due_date);
+  const tags=Array.isArray(body?.tags)?body.tags.map(String):[],modTargets=Array.isArray(body?.mod_targets)?body.mod_targets.map(String):[],dueDate=parseDate(body?.due_date);
   if(!title||!STATUS_SET.has(status)||!PRIORITY_SET.has(priority)||!TYPE_SET.has(taskType)||!WORKSTREAM_SET.has(workstream)
-    ||dueDate===undefined||tags.length>5||tags.some(tag=>!TAGS.has(tag))) return null;
+    ||dueDate===undefined||tags.length>5||tags.some(tag=>!TAGS.has(tag))||modTargets.length>6||new Set(modTargets).size!==modTargets.length||modTargets.some(target=>!MOD_TARGETS.has(target))) return null;
   return {title,description:cleanText(body?.description,10000)||null,acceptance_criteria:cleanText(body?.acceptance_criteria,10000)||null,
-    status,priority,task_type:taskType,workstream,tags,assigned_to:nullableUuid(body?.assigned_to),release_id:nullableUuid(body?.release_id),
+    status,priority,task_type:taskType,workstream,tags,mod_targets:modTargets,assigned_to:taskType==="up_for_grabs"?null:nullableUuid(body?.assigned_to),release_id:nullableUuid(body?.release_id),
     due_date:dueDate,position:Number.isInteger(Number(body?.position))?Math.max(0,Math.min(100000,Number(body?.position))):0,
     blocked:body?.blocked===true,blocker_reason:body?.blocked===true?cleanText(body?.blocker_reason,2000):null};
 }
@@ -126,9 +127,9 @@ export async function POST(request:Request) {
         if(templateChecklist.length>20)throw new Error("INVALID_TEMPLATE");
         const input={...parsed,assigned_to:adminAuth?parsed.assigned_to:null,release_id:adminAuth?parsed.release_id:null};
         const inserted=await client.query(`insert into public.mod_pipeline_tasks
-          (title,description,acceptance_criteria,status,priority,task_type,workstream,tags,assigned_to,created_by,due_date,position,blocked,blocker_reason,release_id,stage_entered_at)
-          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now()) returning *`,
-          [input.title,input.description,input.acceptance_criteria,input.status,input.priority,input.task_type,input.workstream,input.tags,input.assigned_to,actorId,input.due_date,input.position,input.blocked,input.blocker_reason,input.release_id]);
+          (title,description,acceptance_criteria,status,priority,task_type,workstream,tags,mod_targets,assigned_to,created_by,due_date,position,blocked,blocker_reason,release_id,stage_entered_at)
+          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now()) returning *`,
+          [input.title,input.description,input.acceptance_criteria,input.status,input.priority,input.task_type,input.workstream,input.tags,input.mod_targets,input.assigned_to,actorId,input.due_date,input.position,input.blocked,input.blocker_reason,input.release_id]);
         if(templateChecklist.length) {
           for(const [position,content] of templateChecklist.entries()) {
             await client.query("insert into public.mod_pipeline_checklist_items(task_id,content,position,created_by) values($1,$2,$3,$4)",[inserted.rows[0].id,content,position,actorId]);
@@ -205,7 +206,7 @@ export async function PATCH(request:Request) {
       if(input.status==="ready_for_release"&&old.status!=="ready_for_release"){const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='testing' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("TEST_APPROVAL_REQUIRED");}
       if(input.status==="released"){if(!input.release_id)throw new Error("RELEASE_REQUIRED");const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='release' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("APPROVAL_REQUIRED");}
       const now=new Date().toISOString(),next={...input,stage_entered_at:input.status!==old.status?now:old.stage_entered_at,started_at:!old.started_at&&!["intake","approved"].includes(input.status)?now:old.started_at,completed_at:input.status==="ready_for_release"&&!old.completed_at?now:old.completed_at,released_at:input.status==="released"&&!old.released_at?now:old.released_at};
-      const changed=await client.query(`update public.mod_pipeline_tasks set title=$2,description=$3,acceptance_criteria=$4,status=$5,priority=$6,task_type=$7,workstream=$8,tags=$9,assigned_to=$10,due_date=$11,position=$12,blocked=$13,blocker_reason=$14,release_id=$15,stage_entered_at=$16,started_at=$17,completed_at=$18,released_at=$19,version=version+1,updated_at=now() where id=$1 returning *`,[id,next.title,next.description,next.acceptance_criteria,next.status,next.priority,next.task_type,next.workstream,next.tags,next.assigned_to,next.due_date,next.position,next.blocked,next.blocker_reason,next.release_id,next.stage_entered_at,next.started_at,next.completed_at,next.released_at]);
+      const changed=await client.query(`update public.mod_pipeline_tasks set title=$2,description=$3,acceptance_criteria=$4,status=$5,priority=$6,task_type=$7,workstream=$8,tags=$9,mod_targets=$10,assigned_to=$11,due_date=$12,position=$13,blocked=$14,blocker_reason=$15,release_id=$16,stage_entered_at=$17,started_at=$18,completed_at=$19,released_at=$20,version=version+1,updated_at=now() where id=$1 returning *`,[id,next.title,next.description,next.acceptance_criteria,next.status,next.priority,next.task_type,next.workstream,next.tags,next.mod_targets,next.assigned_to,next.due_date,next.position,next.blocked,next.blocker_reason,next.release_id,next.stage_entered_at,next.started_at,next.completed_at,next.released_at]);
       const diff=changedValues(old,next),statusChanged=old.status!==next.status;await event(client,actorId,{taskId:id,type:statusChanged?"status_changed":"task_updated",summary:statusChanged?`Moved from ${old.status} to ${next.status}`:"Updated task details",...diff,reason:cleanText(body?.reason,1000)||null});return changed.rows[0];
     });return NextResponse.json({ok:true,result});
   } catch(error){const message=error instanceof Error?error.message:"";if(message==="ADMIN_REQUIRED")return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});if(message==="NOT_FOUND")return NextResponse.json({error:"Record not found"},{status:404});if(message==="VERSION_CONFLICT")return NextResponse.json({error:"This task changed while you were editing it. Refresh and try again."},{status:409});if(message==="REASON_REQUIRED")return NextResponse.json({error:"Give a reason when moving work backwards or cancelling it."},{status:400});if(message==="REVIEW_APPROVAL_REQUIRED")return NextResponse.json({error:"Internal review approval is required before testing."},{status:400});if(message==="TEST_APPROVAL_REQUIRED")return NextResponse.json({error:"Testing approval is required before release readiness."},{status:400});if(message==="RELEASE_REQUIRED")return NextResponse.json({error:"Select a release before marking this task released."},{status:400});if(message==="APPROVAL_REQUIRED")return NextResponse.json({error:"Release approval is required before this task can be released."},{status:400});if(message.startsWith("INVALID_"))return NextResponse.json({error:"Invalid pipeline data"},{status:400});console.error("[mod-taskboard] Update failed",error);return NextResponse.json({error:"Failed to update pipeline"},{status:500});}

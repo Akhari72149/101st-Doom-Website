@@ -119,7 +119,7 @@ export async function POST(request:Request) {
   if(!actorId)return NextResponse.json({error:"Forbidden"},{status:403});
   const body=await request.json().catch(()=>null) as Row|null,kind=cleanText(body?.kind||"task",40);
   try {
-    if(["contributor","dependency","approval","release","repository"].includes(kind)&&!adminAuth)return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});
+    if(["contributor","dependency","release","repository"].includes(kind)&&!adminAuth)return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});
     const result=await withPostgresTransaction(async client=>{
       if(kind==="task") {
         const parsed=parseTask(body);if(!parsed||(parsed.blocked&&!parsed.blocker_reason))throw new Error("INVALID_TASK");
@@ -202,7 +202,7 @@ export async function PATCH(request:Request) {
         await event(client,actorId,{taskId:id,type:old.status===status?"task_reordered":"status_changed",summary:old.status===status?`Reordered within ${status}`:`Moved from ${old.status} to ${status}`,oldValues:{status:old.status,position:old.position},newValues:{status,position:targetPosition},reason});
         return changed.rows[0];
       }
-      if(kind==="archive"||kind==="restore"){if(!adminAuth)throw new Error("ADMIN_REQUIRED");const archive=kind==="archive",reason=cleanText(body?.reason,1000)||null;const changed=await client.query("update public.mod_pipeline_tasks set archived_at=case when $2 then now() else null end,archived_by=case when $2 then $3::uuid else null end,archive_reason=case when $2 then $4::text else null end,version=version+1,updated_at=now() where id=$1 returning *",[id,archive,actorId,reason]);await event(client,actorId,{taskId:id,type:archive?"task_archived":"task_restored",summary:archive?"Archived task":"Restored task",reason});return changed.rows[0];}
+      if(kind==="archive"||kind==="restore"){const archive=kind==="archive",reason=cleanText(body?.reason,1000)||null;const changed=await client.query("update public.mod_pipeline_tasks set archived_at=case when $2 then now() else null end,archived_by=case when $2 then $3::uuid else null end,archive_reason=case when $2 then $4::text else null end,version=version+1,updated_at=now() where id=$1 returning *",[id,archive,actorId,reason]);await event(client,actorId,{taskId:id,type:archive?"task_archived":"task_restored",summary:archive?"Archived task":"Restored task",reason});return changed.rows[0];}
       const parsed=parseTask(body);if(!parsed||(parsed.blocked&&!parsed.blocker_reason))throw new Error("INVALID_TASK");
       const input={...parsed,assigned_to:adminAuth?parsed.assigned_to:old.assigned_to as string|null,release_id:adminAuth?parsed.release_id:old.release_id as string|null};
       if(input.status==="testing"&&old.status!=="testing"){const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='review' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("REVIEW_APPROVAL_REQUIRED");}

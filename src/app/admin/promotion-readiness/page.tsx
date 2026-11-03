@@ -135,7 +135,12 @@ function formatDateTime(value: string) {
 
 function issueMessage(issue: AnnouncementIssue) {
   if (issue.last_error) return issue.last_error;
-  if (issue.status === "processing") return "The bot has claimed this message and is currently delivering it.";
+  if (issue.status === "processing") {
+    const processingSeconds = Math.max(0, Math.floor((Date.now() - new Date(issue.updated_at).getTime()) / 1000));
+    if (processingSeconds >= 300) return "The bot's delivery claim has expired without a completion or failure response. It will be returned to the queue when the worker next polls; restart the bot if it remains here.";
+    if (processingSeconds >= 60) return "Delivery is taking longer than expected. The bot may be waiting on Discord; the claim will expire and retry after five minutes.";
+    return "The bot has claimed this message and is currently delivering it.";
+  }
   if (issue.status === "dead") return "Delivery stopped after the maximum number of attempts.";
   const waitingSeconds = Math.max(0, Math.floor((Date.now() - new Date(issue.created_at).getTime()) / 1000));
   return waitingSeconds > 30
@@ -735,14 +740,16 @@ export default function PromotionReadinessPage() {
             <div className="overflow-y-auto p-5 sm:p-6">
               {data.announcementIssues.length ? (
                 <div className="space-y-3">
-                  {data.announcementIssues.map((issue) => (
-                    <article key={issue.id} className={`border p-4 ${issue.status === "dead" ? "border-red-300/30 bg-red-300/[0.06]" : issue.status === "processing" ? "border-cyan-300/30 bg-cyan-300/[0.06]" : "border-amber-300/25 bg-amber-300/[0.04]"}`}>
+                  {data.announcementIssues.map((issue) => {
+                    const stalled = issue.status === "processing" && Date.now() - new Date(issue.updated_at).getTime() >= 300_000;
+                    return (
+                    <article key={issue.id} className={`border p-4 ${issue.status === "dead" ? "border-red-300/30 bg-red-300/[0.06]" : stalled ? "border-amber-300/35 bg-amber-300/[0.06]" : issue.status === "processing" ? "border-cyan-300/30 bg-cyan-300/[0.06]" : "border-amber-300/25 bg-amber-300/[0.04]"}`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="font-black text-white">{issue.personnel_name}</p>
                           <p className="mt-1 text-sm text-[#91a79b]">{issue.old_rank_name} <ArrowRight className="mx-1 inline" size={14} /> {issue.new_rank_name}</p>
                         </div>
-                        <span className={`border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${issue.status === "dead" ? "border-red-300/35 text-red-200" : issue.status === "processing" ? "border-cyan-300/35 text-cyan-200" : "border-amber-300/35 text-amber-200"}`}>{issue.status}</span>
+                        <span className={`border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${issue.status === "dead" ? "border-red-300/35 text-red-200" : stalled ? "border-amber-300/35 text-amber-200" : issue.status === "processing" ? "border-cyan-300/35 text-cyan-200" : "border-amber-300/35 text-amber-200"}`}>{stalled ? "stalled" : issue.status}</span>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-gray-300">{issueMessage(issue)}</p>
                       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[#63786d]">
@@ -751,7 +758,8 @@ export default function PromotionReadinessPage() {
                         <span>Updated {formatDateTime(issue.updated_at)}</span>
                       </div>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="grid min-h-44 place-items-center border border-[#00ff66]/20 bg-[#00ff66]/5 text-center">

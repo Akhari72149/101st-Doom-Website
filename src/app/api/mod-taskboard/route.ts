@@ -13,7 +13,7 @@ const STATUSES = ["intake","approved","in_development","internal_review","testin
 const PRIORITIES = ["low","medium","high","critical"] as const;
 const TYPES = ["bug","feature","asset","balance","maintenance","documentation","up_for_grabs"] as const;
 const WORKSTREAMS = ["design","modelling","texturing","scripting","audio","documentation","quality","other"] as const;
-const MOD_TARGETS = new Set(["dba_core","dba_republic","dba_cis","dba_imperial","dba_independant","101st_aux"]);
+const MOD_TARGETS = new Set(["dba_core","dba_republic","dba_cis","dba_imperial","dba_independant","101st_aux","musical_archives"]);
 const PIPELINE_SPECIALTIES = new Set(["armour_artist","texture_artist","model_artist","script_artist","testing_team","animation_artist"]);
 const TAGS = new Set(["Bug","Helmet","New Feature","Update","Up For Grabs"]);
 const STATUS_SET = new Set<string>(STATUSES);
@@ -30,6 +30,14 @@ async function requirePipelineAccess(request:Request,adminOnly=false) {
   return requirePageAccess(request,adminOnly?ADMIN_KEY:KEY,"read").catch(()=>null);
 }
 
+async function isAkhariAccount(userId:string) {
+  const result=await getPostgresPool().query<{allowed:boolean}>(
+    "select lower(username)='akhari' allowed from public.app_auth_users where id=$1",
+    [userId],
+  );
+  return result.rows[0]?.allowed===true;
+}
+
 function parseTask(value: unknown) {
   const body=value as Row|null;
   const title=cleanText(body?.title,200),status=cleanText(body?.status,40),priority=cleanText(body?.priority,20);
@@ -38,7 +46,7 @@ function parseTask(value: unknown) {
   const taskType=taskTypes[0],workstream=cleanText(body?.workstream,30);
   const tags=Array.isArray(body?.tags)?body.tags.map(String):[],modTargets=Array.isArray(body?.mod_targets)?body.mod_targets.map(String):[],dueDate=parseDate(body?.due_date);
   if(!title||!STATUS_SET.has(status)||!PRIORITY_SET.has(priority)||taskTypes.length>7||new Set(taskTypes).size!==taskTypes.length||taskTypes.some(type=>!TYPE_SET.has(type))||!WORKSTREAM_SET.has(workstream)
-    ||dueDate===undefined||tags.length>5||tags.some(tag=>!TAGS.has(tag))||modTargets.length>6||new Set(modTargets).size!==modTargets.length||modTargets.some(target=>!MOD_TARGETS.has(target))) return null;
+    ||dueDate===undefined||tags.length>5||tags.some(tag=>!TAGS.has(tag))||modTargets.length>7||new Set(modTargets).size!==modTargets.length||modTargets.some(target=>!MOD_TARGETS.has(target))) return null;
   return {title,description:cleanText(body?.description,10000)||null,acceptance_criteria:cleanText(body?.acceptance_criteria,10000)||null,
     status,priority,task_type:taskType,task_types:taskTypes,workstream,tags,mod_targets:modTargets,assigned_to:taskTypes.includes("up_for_grabs")?null:nullableUuid(body?.assigned_to),release_id:nullableUuid(body?.release_id),
     due_date:dueDate,position:Number.isInteger(Number(body?.position))?Math.max(0,Math.min(100000,Number(body?.position))):0,
@@ -123,6 +131,7 @@ export async function POST(request:Request) {
     const result=await withPostgresTransaction(async client=>{
       if(kind==="task") {
         const parsed=parseTask(body);if(!parsed||(parsed.blocked&&!parsed.blocker_reason))throw new Error("INVALID_TASK");
+        if(parsed.mod_targets.includes("musical_archives")&&!(await isAkhariAccount(actorId)))throw new Error("PROTECTED_MOD_TARGET");
         const templateName=cleanText(body?.template_name,120)||null;
         const templateChecklist=Array.isArray(body?.template_checklist)
           ? body.template_checklist.map(item=>cleanText(item,500)).filter(Boolean)
@@ -152,7 +161,7 @@ export async function POST(request:Request) {
       if(kind==="repository") {const name=cleanText(body?.name,120),webUrl=cleanText(body?.webUrl,500).replace(/\/$/,""),defaultBranch=cleanText(body?.defaultBranch,200)||"main";let parsed:URL;try{parsed=new URL(webUrl);}catch{throw new Error("INVALID_REPOSITORY");}if(!name||!["http:","https:"].includes(parsed.protocol))throw new Error("INVALID_REPOSITORY");const count=await client.query<{count:number}>("select count(*)::int count from public.mod_pipeline_repositories",[]);if(count.rows[0].count>=5)throw new Error("REPOSITORY_LIMIT");const inserted=await client.query("insert into public.mod_pipeline_repositories(name,web_url,default_branch,sort_order,created_by) values($1,$2,$3,$4,$5) returning *",[name,webUrl,defaultBranch,count.rows[0].count,actorId]);await client.query("insert into public.audit_logs(user_id,action,details) values($1,'MOD_PIPELINE_REPOSITORY_CREATED',$2)",[actorId,`Added pipeline repository ${name} (${webUrl})`]);return inserted.rows[0];}
       throw new Error("INVALID_ACTION");
     });return NextResponse.json({ok:true,result},{status:201});
-  } catch(error){const message=error instanceof Error?error.message:"";if(message==="REPOSITORY_LIMIT")return NextResponse.json({error:"The pipeline supports up to five repositories."},{status:409});if((error as {code?:string})?.code==="23505")return NextResponse.json({error:"That repository or task reference is already linked."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:message.slice(8).toLowerCase().replaceAll("_"," ")},{status:400});console.error("[mod-taskboard] Create failed",error);return NextResponse.json({error:"Failed to save pipeline item"},{status:500});}
+  } catch(error){const message=error instanceof Error?error.message:"";if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="REPOSITORY_LIMIT")return NextResponse.json({error:"The pipeline supports up to five repositories."},{status:409});if((error as {code?:string})?.code==="23505")return NextResponse.json({error:"That repository or task reference is already linked."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:message.slice(8).toLowerCase().replaceAll("_"," ")},{status:400});console.error("[mod-taskboard] Create failed",error);return NextResponse.json({error:"Failed to save pipeline item"},{status:500});}
 }
 
 export async function PATCH(request:Request) {
@@ -204,6 +213,8 @@ export async function PATCH(request:Request) {
       }
       if(kind==="archive"||kind==="restore"){const archive=kind==="archive",reason=cleanText(body?.reason,1000)||null;const changed=await client.query("update public.mod_pipeline_tasks set archived_at=case when $2 then now() else null end,archived_by=case when $2 then $3::uuid else null end,archive_reason=case when $2 then $4::text else null end,version=version+1,updated_at=now() where id=$1 returning *",[id,archive,actorId,reason]);await event(client,actorId,{taskId:id,type:archive?"task_archived":"task_restored",summary:archive?"Archived task":"Restored task",reason});return changed.rows[0];}
       const parsed=parseTask(body);if(!parsed||(parsed.blocked&&!parsed.blocker_reason))throw new Error("INVALID_TASK");
+      const addsMusicalArchives=parsed.mod_targets.includes("musical_archives")&&!(Array.isArray(old.mod_targets)&&old.mod_targets.includes("musical_archives"));
+      if(addsMusicalArchives&&!(await isAkhariAccount(actorId)))throw new Error("PROTECTED_MOD_TARGET");
       const input={...parsed,assigned_to:adminAuth?parsed.assigned_to:old.assigned_to as string|null,release_id:adminAuth?parsed.release_id:old.release_id as string|null};
       if(input.status==="testing"&&old.status!=="testing"){const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='review' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("REVIEW_APPROVAL_REQUIRED");}
       if(input.status==="ready_for_release"&&old.status!=="ready_for_release"){const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='testing' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("TEST_APPROVAL_REQUIRED");}
@@ -212,7 +223,7 @@ export async function PATCH(request:Request) {
       const changed=await client.query(`update public.mod_pipeline_tasks set title=$2,description=$3,acceptance_criteria=$4,status=$5,priority=$6,task_type=$7,task_types=$8,workstream=$9,tags=$10,mod_targets=$11,assigned_to=$12,due_date=$13,position=$14,blocked=$15,blocker_reason=$16,release_id=$17,stage_entered_at=$18,started_at=$19,completed_at=$20,released_at=$21,version=version+1,updated_at=now() where id=$1 returning *`,[id,next.title,next.description,next.acceptance_criteria,next.status,next.priority,next.task_type,next.task_types,next.workstream,next.tags,next.mod_targets,next.assigned_to,next.due_date,next.position,next.blocked,next.blocker_reason,next.release_id,next.stage_entered_at,next.started_at,next.completed_at,next.released_at]);
       const diff=changedValues(old,next),statusChanged=old.status!==next.status;await event(client,actorId,{taskId:id,type:statusChanged?"status_changed":"task_updated",summary:statusChanged?`Moved from ${old.status} to ${next.status}`:"Updated task details",...diff,reason:cleanText(body?.reason,1000)||null});return changed.rows[0];
     });return NextResponse.json({ok:true,result});
-  } catch(error){const message=error instanceof Error?error.message:"";if(message==="ADMIN_REQUIRED")return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});if(message==="NOT_FOUND")return NextResponse.json({error:"Record not found"},{status:404});if(message==="VERSION_CONFLICT")return NextResponse.json({error:"This task changed while you were editing it. Refresh and try again."},{status:409});if(message==="REASON_REQUIRED")return NextResponse.json({error:"Give a reason when moving work backwards or cancelling it."},{status:400});if(message==="REVIEW_APPROVAL_REQUIRED")return NextResponse.json({error:"Internal review approval is required before testing."},{status:400});if(message==="TEST_APPROVAL_REQUIRED")return NextResponse.json({error:"Testing approval is required before release readiness."},{status:400});if(message==="RELEASE_REQUIRED")return NextResponse.json({error:"Select a release before marking this task released."},{status:400});if(message==="APPROVAL_REQUIRED")return NextResponse.json({error:"Release approval is required before this task can be released."},{status:400});if(message.startsWith("INVALID_"))return NextResponse.json({error:"Invalid pipeline data"},{status:400});console.error("[mod-taskboard] Update failed",error);return NextResponse.json({error:"Failed to update pipeline"},{status:500});}
+  } catch(error){const message=error instanceof Error?error.message:"";if(message==="ADMIN_REQUIRED")return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="NOT_FOUND")return NextResponse.json({error:"Record not found"},{status:404});if(message==="VERSION_CONFLICT")return NextResponse.json({error:"This task changed while you were editing it. Refresh and try again."},{status:409});if(message==="REASON_REQUIRED")return NextResponse.json({error:"Give a reason when moving work backwards or cancelling it."},{status:400});if(message==="REVIEW_APPROVAL_REQUIRED")return NextResponse.json({error:"Internal review approval is required before testing."},{status:400});if(message==="TEST_APPROVAL_REQUIRED")return NextResponse.json({error:"Testing approval is required before release readiness."},{status:400});if(message==="RELEASE_REQUIRED")return NextResponse.json({error:"Select a release before marking this task released."},{status:400});if(message==="APPROVAL_REQUIRED")return NextResponse.json({error:"Release approval is required before this task can be released."},{status:400});if(message.startsWith("INVALID_"))return NextResponse.json({error:"Invalid pipeline data"},{status:400});console.error("[mod-taskboard] Update failed",error);return NextResponse.json({error:"Failed to update pipeline"},{status:500});}
 }
 
 export async function DELETE(request:Request) {

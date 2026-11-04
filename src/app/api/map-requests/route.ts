@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   try {
     const [requests, canManage] = await Promise.all([
       getPostgresPool().query(
-        `select requests.id,requests.unit_name,requests.map_url,requests.workshop_id,requests.entry_type,
+        `select requests.id,requests.unit_name,requests.map_name,requests.map_url,requests.workshop_id,requests.entry_type,
                 requests.added_to_server,requests.requested_at,requests.added_at,requests.pre_approved_at,
                 coalesce(nullif(btrim(users."displayUsername"),''),nullif(btrim(users.name),''),nullif(btrim(users.username),'')) added_by_name,
                 coalesce(nullif(btrim(approvers."displayUsername"),''),nullif(btrim(approvers.name),''),nullif(btrim(approvers.username),'')) pre_approved_by_name
@@ -56,7 +56,9 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const entryType = body?.entryType === "pre_approved" ? "pre_approved" : "request";
   const unitName = cleanText(body?.unitName, 120);
+  const mapName = cleanText(body?.mapName, 160);
   const link = workshopLink(body?.mapUrl);
+  if (!mapName) return jsonError("Enter the map name");
   if (!link) return jsonError("Enter a valid Steam Workshop map link");
 
   if (entryType === "pre_approved") {
@@ -66,14 +68,14 @@ export async function POST(request: Request) {
       const inserted = await withPostgresTransaction(async (client) => {
         const result = await client.query(
           `insert into public.map_requests
-             (unit_name,map_url,workshop_id,acknowledgement_accepted,entry_type,pre_approved_at,pre_approved_by)
-           values('Pre-approved map',$1,$2,true,'pre_approved',now(),$3::uuid)
-           returning id,unit_name,map_url,workshop_id,entry_type,added_to_server,requested_at,added_at,pre_approved_at`,
-          [link.url, link.workshopId, auth.userId],
+             (unit_name,map_name,map_url,workshop_id,acknowledgement_accepted,entry_type,pre_approved_at,pre_approved_by)
+           values('Pre-approved map',$1,$2,$3,true,'pre_approved',now(),$4::uuid)
+           returning id,unit_name,map_name,map_url,workshop_id,entry_type,added_to_server,requested_at,added_at,pre_approved_at`,
+          [mapName, link.url, link.workshopId, auth.userId],
         );
         await client.query(
           "insert into public.audit_logs(user_id,action,details) values($1,'MAP_PREAPPROVED_ADDED',$2)",
-          [auth.userId, `Added Workshop map ${link.workshopId} to the pre-approved register.`],
+          [auth.userId, `Added ${mapName} (${link.workshopId}) to the pre-approved register.`],
         );
         return result.rows[0];
       });
@@ -90,9 +92,9 @@ export async function POST(request: Request) {
 
   try {
     const inserted = await getPostgresPool().query(
-      `insert into public.map_requests(unit_name,map_url,workshop_id,acknowledgement_accepted,entry_type)
-       values($1,$2,$3,true,'request') returning id,unit_name,map_url,workshop_id,entry_type,added_to_server,requested_at,added_at`,
-      [unitName, link.url, link.workshopId],
+      `insert into public.map_requests(unit_name,map_name,map_url,workshop_id,acknowledgement_accepted,entry_type)
+       values($1,$2,$3,$4,true,'request') returning id,unit_name,map_name,map_url,workshop_id,entry_type,added_to_server,requested_at,added_at`,
+      [unitName, mapName, link.url, link.workshopId],
     );
     return NextResponse.json({ ok: true, request: inserted.rows[0] }, { status: 201 });
   } catch (caught) {

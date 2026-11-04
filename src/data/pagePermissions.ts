@@ -266,6 +266,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.map-requests",
+    pagePath: "/map-requests",
+    label: "Map Request Management",
+    category: "Operations",
+    description: "Review public Workshop map requests and record whether each map has been added to the server.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.xp",
     pagePath: "/admin/xp",
     label: "XP Management",

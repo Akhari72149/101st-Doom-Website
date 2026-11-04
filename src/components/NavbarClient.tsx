@@ -17,6 +17,7 @@ import {
   Home,
   Menu,
   Newspaper,
+  Search,
   Shield,
   User,
   Users,
@@ -43,6 +44,7 @@ type NavItem = {
   description?: string;
   allowedRoles?: Role[];
   category?: string;
+  menuVisible?: boolean;
 };
 
 type NavGroup = {
@@ -65,6 +67,8 @@ export default function NavbarClient() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
+  const [pageFinderOpen, setPageFinderOpen] = useState(false);
+  const [pageFinderQuery, setPageFinderQuery] = useState("");
 
   /* ================= AUTH ================= */
 
@@ -112,6 +116,18 @@ export default function NavbarClient() {
     };
   }, [permissions]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPageFinderOpen((open) => !open);
+      }
+      if (event.key === "Escape") setPageFinderOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleLogout = async () => {
     await signOutOfApp();
     setUser(null);
@@ -140,24 +156,9 @@ export default function NavbarClient() {
           description: "Recruitment steps and entry guidance",
         },
         {
-          href: "/certs",
-          label: "What We Offer",
-          description: "Training, qualifications and opportunities",
-        },
-        {
-          href: "/rank-structure",
-          label: "Rank Structure",
-          description: "Progression routes and promotion requirements",
-        },
-        {
           href: "/documents",
           label: "Documents & Forms",
           description: "Important files, policies and paperwork",
-        },
-        {
-          href: "/uniform-guide",
-          label: "Uniform Guide",
-          description: "Approved uniforms, equipment and restricted items",
         },
         {
           href: "/recognition",
@@ -168,11 +169,6 @@ export default function NavbarClient() {
           href: "/faq",
           label: "FAQ",
           description: "Common questions and quick answers",
-        },
-        {
-          href: "/audit",
-          label: "Audit Log",
-          description: "Review logged system and personnel actions",
         },
       ],
     },
@@ -193,9 +189,14 @@ export default function NavbarClient() {
           description: "Review customisation points, history and available options",
         },
         {
-          href: "/operation-counts",
-          label: "Operation Counts",
-          description: "Track CR and CR-C promotion operation requirements",
+          href: "/rank-structure",
+          label: "Rank Structure",
+          description: "Progression routes and promotion requirements",
+        },
+        {
+          href: "/uniform-guide",
+          label: "Uniform Guide",
+          description: "Approved uniforms, equipment and restricted items",
         },
         {
           href: "/roster",
@@ -236,16 +237,6 @@ export default function NavbarClient() {
           description: "Reserve and manage training or event time",
         },
         {
-          href: "/Galactic-Campaign/operation-last-stand",
-          label: "Operation Last Stand",
-          description: "Live Altis survival campaign progress",
-        },
-        {
-          href: "/Art-of-War",
-          label: "Art of War",
-          description: "Operational archive and doctrine reference",
-        },
-        {
           href: "/weekly-attendance",
           label: "Weekly Attendance",
           description: "Weekly Mainop Attendance Tracking",
@@ -259,6 +250,21 @@ export default function NavbarClient() {
           href: "/admin/promotion-readiness",
           label: "Promotion Readiness",
           description: "Review promotion progress and outstanding requirements",
+        },
+        {
+          href: "/map-requests",
+          label: "Map Requests",
+          description: "Request Workshop maps and check server availability",
+        },
+        {
+          href: "/operation-counts",
+          label: "Operation Counts",
+          description: "Track CR and CR-C promotion operation requirements",
+        },
+        {
+          href: "/Randomiser",
+          label: "Side Operation Signup",
+          description: "Manage signups and side-operation selection",
         },
       ],
     },
@@ -279,14 +285,37 @@ export default function NavbarClient() {
           description: "Campaign news and narrative updates",
         },
         {
+          href: "/Galactic-Campaign/operation-last-stand",
+          label: "Operation Last Stand",
+          description: "Live Altis survival campaign progress",
+        },
+        {
           href: "/GC-Platoon-Logi",
           label: "GC Platoon Logistics",
           description: "Platoon assets, tokens and campaign support",
         },
+      ],
+    },
+    {
+      label: "Resources",
+      icon: FileText,
+      description: "Training references, doctrine and public records",
+      columns: 1,
+      items: [
         {
-          href: "/Randomiser",
-          label: "Side Operation Signup",
-          description: "Manage signups and side-op randomisation",
+          href: "/certs",
+          label: "Training & Certifications",
+          description: "Training, qualifications and opportunities",
+        },
+        {
+          href: "/Art-of-War",
+          label: "Art of War",
+          description: "Operational archive and doctrine reference",
+        },
+        {
+          href: "/audit",
+          label: "Audit Log",
+          description: "Review logged system and personnel actions",
         },
       ],
     },
@@ -336,6 +365,7 @@ export default function NavbarClient() {
           description: "Create new user and personnel accounts",
           allowedRoles: ["admin", "recruiter"],
           category: "Personnel Admin",
+          menuVisible: false,
         },
         {
           href: "/admin/discord-announcemets",
@@ -343,6 +373,7 @@ export default function NavbarClient() {
           description: "Create bot announcements and pings",
           allowedRoles: ["admin", "Akhari"],
           category: "Systems",
+          menuVisible: false,
         },
         {
           href: "/admin/Mod-Taskboard",
@@ -357,6 +388,7 @@ export default function NavbarClient() {
           description: "Manage rank progressions and assignments",
           allowedRoles: ["admin", "nco", "di"],
           category: "Personnel Admin",
+          menuVisible: false,
         },
         {
           href: "/admin/personnel-profiles",
@@ -364,6 +396,7 @@ export default function NavbarClient() {
           description: "Manage join dates, Discord links and reactivations",
           allowedRoles: [],
           category: "Personnel Admin",
+          menuVisible: false,
         },
         {
           href: "/admin/certifications",
@@ -371,6 +404,7 @@ export default function NavbarClient() {
           description: "Award and manage certifications",
           allowedRoles: ["admin", "nco", "trainer"],
           category: "Personnel Admin",
+          menuVisible: false,
         },
         {
           href: "/admin/weekly-attendance",
@@ -378,6 +412,7 @@ export default function NavbarClient() {
           description: "Manage weekly attendance records",
           allowedRoles: ["admin", "nco"],
           category: "Records",
+          menuVisible: false,
         },
         {
           href: "/admin/discord-attendance",
@@ -392,6 +427,7 @@ export default function NavbarClient() {
           description: "Award medals shown on personnel profiles",
           allowedRoles: ["Akhari", "nco", "admin"],
           category: "Personnel Admin",
+          menuVisible: false,
         },
         {
           href: "/admin/removal",
@@ -399,6 +435,7 @@ export default function NavbarClient() {
           description: "Remove or retire personnel records",
           allowedRoles: ["nco", "admin"],
           category: "Records",
+          menuVisible: false,
         },
         {
           href: "/admin/removal-log",
@@ -406,6 +443,7 @@ export default function NavbarClient() {
           description: "Review account and personnel removals",
           allowedRoles: ["recruiter", "nco", "admin"],
           category: "Records",
+          menuVisible: false,
         },
         {
           href: "/admin/discipline",
@@ -420,6 +458,7 @@ export default function NavbarClient() {
           description: "Track campaign asset purchases",
           allowedRoles: ["Akhari", "logistics"],
           category: "Logistics",
+          menuVisible: false,
         },
         {
           href: "/GC-Logi",
@@ -427,6 +466,7 @@ export default function NavbarClient() {
           description: "Campaign logistics and distribution tools",
           allowedRoles: ["Akhari", "logistics", "admin"],
           category: "Logistics",
+          menuVisible: false,
         },
         {
           href: "/CIS-Logi",
@@ -434,6 +474,7 @@ export default function NavbarClient() {
           description: "Manage CIS logistics actions and inventory",
           allowedRoles: ["logistics", "Akhari"],
           category: "Logistics",
+          menuVisible: false,
         },
         {
           href: "/admin/server-control",
@@ -476,6 +517,7 @@ export default function NavbarClient() {
           description: "Manage aviation trainees, milestones and ridealong records",
           allowedRoles: [],
           category: "Operations",
+          menuVisible: false,
         },
         {
           href: "/operation-counts/responses",
@@ -483,6 +525,7 @@ export default function NavbarClient() {
           description: "Review and record CR and CR-C operation counts",
           allowedRoles: [],
           category: "Operations",
+          menuVisible: false,
         },
       ],
     },
@@ -499,25 +542,12 @@ export default function NavbarClient() {
     const canSeeItem = (item: NavItem) => {
       if (item.href === "/hammer-ridealongs" && !item.category) return true;
       if (item.href === "/admin/promotion-readiness") return true;
+      if (item.href === "/map-requests") return true;
       if (item.href === "/admin/discipline") {
         return Boolean(permissions["admin.discipline"] || permissions["admin.discipline-approval"]);
       }
       if (item.href === "/admin/control-centre") {
-        return [
-          "admin.rank-corrections",
-          "admin.ranks",
-          "admin.certifications",
-          "admin.certification-catalogue",
-          "admin.xp",
-          "admin.armour-points",
-          "admin.armour-points-config",
-          "admin.join-links",
-          "admin.uniform-guide",
-          "admin.documents",
-          "admin.system-health",
-          "admin.hammer-ridealongs",
-          "admin.operation-counts",
-        ].some((permissionKey) => Boolean(permissions[permissionKey]));
+        return pagePermissionDefinitions.some((definition) => Boolean(permissions[definition.key]));
       }
       const permissionKeys = permissionsByPath.get(item.href);
       if (permissionKeys) return permissionKeys.some((permissionKey) => Boolean(permissions[permissionKey]));
@@ -526,28 +556,62 @@ export default function NavbarClient() {
     return navGroups
       .map((group) => ({
         ...group,
-        items: group.items.filter(canSeeItem),
+        items: group.items.filter(canSeeItem).filter((item) => item.menuVisible !== false),
       }))
       .filter((group) => group.items.length > 0);
   }, [navGroups, permissions, roles]);
+
+  const pageFinderItems = useMemo(() => {
+    const normalizedRoles = new Set(roles.map((role) => role.toLowerCase()));
+    const permissionsByPath = new Map<string, string[]>();
+    for (const definition of pagePermissionDefinitions) {
+      permissionsByPath.set(definition.pagePath, [...(permissionsByPath.get(definition.pagePath) || []), definition.key]);
+    }
+    const canSee = (item: NavItem) => {
+      if (item.href === "/admin/promotion-readiness") return true;
+      if (item.href === "/map-requests") return true;
+      if (item.href === "/admin/discipline") return Boolean(permissions["admin.discipline"] || permissions["admin.discipline-approval"]);
+      if (item.href === "/admin/control-centre") return pagePermissionDefinitions.some((definition) => Boolean(permissions[definition.key]));
+      const permissionKeys = permissionsByPath.get(item.href);
+      if (permissionKeys) return permissionKeys.some((key) => Boolean(permissions[key]));
+      return !item.allowedRoles || item.allowedRoles.length === 0 || item.allowedRoles.some((role) => normalizedRoles.has(role.toLowerCase()));
+    };
+    const unique = new Map<string, NavItem & { section: string }>();
+    for (const group of navGroups) {
+      for (const item of group.items) {
+        if (canSee(item) && !unique.has(item.href)) unique.set(item.href, { ...item, section: group.label });
+      }
+    }
+    const query = pageFinderQuery.trim().toLowerCase();
+    return [...unique.values()]
+      .filter((item) => !query || `${item.label} ${item.description || ""} ${item.section}`.toLowerCase().includes(query))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [navGroups, pageFinderQuery, permissions, roles]);
 
   const getItemIcon = (groupLabel: string) => {
     if (groupLabel === "Public") return <FileText size={14} />;
     if (groupLabel === "Personnel") return <User size={14} />;
     if (groupLabel === "Operations") return <ClipboardList size={14} />;
     if (groupLabel === "Campaign") return <Newspaper size={14} />;
+    if (groupLabel === "Resources") return <BookOpen size={14} />;
     if (groupLabel === "Tools") return <Hammer size={14} />;
     if (groupLabel === "Admin") return <Cog size={14} />;
     return <FileText size={14} />;
   };
 
-  const adminSections = ["Personnel Admin", "Records", "Operations", "Logistics", "Systems"];
+  const adminSections = ["Systems", "Records", "Operations", "Personnel Admin", "Logistics"];
 
   const getAdminSections = (items: NavItem[]) =>
     adminSections
       .map((section) => ({
         section,
-        items: items.filter((item) => item.category === section),
+        items: items
+          .filter((item) => item.category === section)
+          .sort((a, b) => {
+            if (a.href === "/admin/control-centre") return -1;
+            if (b.href === "/admin/control-centre") return 1;
+            return a.label.localeCompare(b.label);
+          }),
       }))
       .filter((section) => section.items.length > 0);
 
@@ -628,7 +692,7 @@ export default function NavbarClient() {
                   <div
                     className={`max-h-[calc(100dvh-88px)] overscroll-contain overflow-y-auto border border-[#00ff66]/30 border-t-[#00ff66]/70 bg-[#010503] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.85)] ${
                       group.label === "Admin"
-                        ? "w-[min(980px,calc(100vw-2rem))]"
+                        ? "w-[min(760px,calc(100vw-2rem))]"
                         : group.columns === 2
                           ? "w-[700px]"
                           : "w-[360px]"
@@ -647,7 +711,7 @@ export default function NavbarClient() {
                     </div>
 
                     {group.label === "Admin" ? (
-                      <div className="columns-4 gap-4">
+                      <div className="columns-2 gap-4">
                         {getAdminSections(group.items).map((section) => (
                           <div
                             key={section.section}
@@ -731,6 +795,15 @@ export default function NavbarClient() {
         <div className="flex items-center gap-3 sm:gap-4">
           <button
             type="button"
+            onClick={() => setPageFinderOpen(true)}
+            title="Find a page (Ctrl+K)"
+            aria-label="Find a page"
+            className="grid min-h-10 min-w-10 place-items-center border border-[#00ff66]/30 bg-[#00ff66]/5 text-[#00ff66] transition hover:border-[#00ff66]/60 hover:bg-[#00ff66]/10"
+          >
+            <Search size={18} />
+          </button>
+          <button
+            type="button"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-navigation"
             aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
@@ -792,6 +865,45 @@ export default function NavbarClient() {
           )}
         </div>
       </div>
+
+      {pageFinderOpen && (
+        <div className="fixed inset-0 z-[200] flex items-start justify-center bg-black/85 px-4 pt-[8vh] backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="page-finder-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setPageFinderOpen(false); }}>
+          <section className="flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden border border-[#00ff66]/40 bg-[#020806] shadow-[0_0_70px_rgba(0,255,102,0.12)]">
+            <header className="flex items-center justify-between border-b border-[#00ff66]/20 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#00ff66]/70">Navigation</p>
+                <h2 id="page-finder-title" className="mt-1 text-xl font-black uppercase text-white">Find a page</h2>
+              </div>
+              <button type="button" onClick={() => setPageFinderOpen(false)} title="Close" className="grid h-10 w-10 place-items-center border border-white/15 text-gray-300 transition hover:border-red-400/50 hover:text-red-300"><X size={18} /></button>
+            </header>
+            <div className="border-b border-[#00ff66]/15 p-4">
+              <label className="flex items-center gap-3 border border-[#00ff66]/30 bg-black px-4 py-3 focus-within:border-[#00ff66]/70">
+                <Search size={18} className="shrink-0 text-[#00ff66]" />
+                <input autoFocus value={pageFinderQuery} onChange={(event) => setPageFinderQuery(event.target.value)} placeholder="Search pages, tools or sections" className="min-w-0 flex-1 bg-transparent text-base text-white outline-none placeholder:text-[#688074]" />
+                <span className="hidden border border-white/10 px-2 py-1 text-[10px] uppercase text-gray-500 sm:inline">Esc</span>
+              </label>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+              {pageFinderItems.length ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {pageFinderItems.map((item) => (
+                    <Link key={item.href} href={item.href} onClick={() => { setPageFinderOpen(false); setPageFinderQuery(""); setMobileMenuOpen(false); }} className="group border border-white/10 border-l-[#00ff66]/35 bg-black/50 p-4 transition hover:border-[#00ff66]/40 hover:border-l-[#00ff66] hover:bg-[#00ff66]/7">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#00ff66]/65">{item.section}</p>
+                          <h3 className="mt-1 text-sm font-bold text-white transition group-hover:text-[#00ff66]">{item.label}</h3>
+                          {item.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#789082]">{item.description}</p>}
+                        </div>
+                        <span className="text-[#00ff66]/50 transition group-hover:text-[#00ff66]">&#8594;</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : <div className="py-14 text-center text-sm text-[#789082]">No accessible pages match that search.</div>}
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* ================= MOBILE NAV ================= */}
       <div

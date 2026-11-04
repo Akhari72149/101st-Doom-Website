@@ -54,6 +54,7 @@ export const siteRouteMetadata = {
   "/legal/privacy": { title: "Privacy Notice", description: "Review how the 101st Doom Battalion website handles personnel, account, attendance, and integration data." },
   "/legal/terms": { title: "Terms of Use", description: "Review the terms governing use of the 101st Doom Battalion website and its member services." },
   "/login": { title: "Account Login", description: "Sign in to access your 101st Doom Battalion account and authorised tools." },
+  "/map-requests": { title: "Map Requests", description: "Request Steam Workshop maps and review which requested maps are available on the battalion server." },
   "/member-link": { title: "Link Personnel Profile", description: "Connect your website account to your Discord and personnel record." },
   "/model-customiser": { title: "Model Customiser", description: "Create controlled armour and vehicle customisation references with approved paint and insignia." },
   "/News": { title: "Battalion News", description: "Read the latest updates and announcements from the 101st Doom Battalion." },

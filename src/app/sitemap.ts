@@ -22,6 +22,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/Tags",
     "/servers",
     "/operation-counts",
+    "/map-requests",
     "/hammer-ridealongs",
     "/hammer-ridealongs/archive",
     "/hammer-ridealongs/responses",

@@ -3,7 +3,7 @@ import { existsSync, openSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 const configPath = path.resolve(process.argv[2] || "scripts/server-agent/config.json");
 const config = JSON.parse(await readFile(configPath, "utf8"));
 const token = String(process.env[config.tokenEnvironmentVariable || "SERVER_AGENT_TOKEN"] || "").trim();
@@ -92,7 +92,7 @@ async function modLaunchArgument(server) {
 async function findServerPids(server) {
   const processName = path.basename(String(server.executable || ""));
   if (!/^[a-z0-9_.-]+$/i.test(processName)) throw new Error("The configured Arma process name is invalid.");
-  const script = `$port=${server.port}; @(Get-CimInstance Win32_Process -Filter "Name = '${processName}'" | Where-Object { $_.CommandLine -match ('(?:^|\\s)-port=' + $port + '(?:\\s|$)') } | Select-Object -ExpandProperty ProcessId) -join ','`;
+  const script = `$port=${server.port}; $configured='${processName}'; @(Get-CimInstance Win32_Process | Where-Object { ($_.Name -ieq $configured -or $_.Name -match '^arma3server.*\\.exe$') -and $_.CommandLine -match ('(?:^|\\s)-port(?:=|\\s+)"?' + $port + '"?(?:\\s|$)') } | Select-Object -ExpandProperty ProcessId) -join ','`;
   const result = await runProcess("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script]);
   return String(result.output).trim().split(",").map(Number).filter((pid) => Number.isInteger(pid) && pid > 0);
 }
@@ -122,10 +122,13 @@ async function startServer(job, server) {
 
 async function stopServer(job, server) {
   const pids = await findServerPids(server);
-  if (!pids.length) return { alreadyStopped: true };
+  if (!pids.length) {
+    await log(job, `No local Arma process was running on Server ${job.server_id} port ${server.port}.`);
+    return { alreadyStopped: true };
+  }
   for (const pid of pids) {
-    await log(job, `Stopping Server ${job.server_id} process ${pid}.`);
-    await runProcess("taskkill.exe", ["/PID", String(pid), "/T"]);
+    await log(job, `Force stopping Server ${job.server_id} process tree ${pid}.`);
+    await runProcess("taskkill.exe", ["/PID", String(pid), "/T", "/F"]);
   }
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (!(await findServerPids(server)).length) return { stoppedPids: pids };

@@ -42,6 +42,9 @@ yarn-error.log*
 # Arma XP bridge runtime state
 tools/arma-xp-bridge/bridge-state.json
 
+# Arma server agent machine configuration
+scripts/server-agent/config.json
+
 # vercel
 .vercel
 

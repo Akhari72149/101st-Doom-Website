@@ -20,7 +20,7 @@ async function requireAnnouncementAdmin(request: Request) {
 
 export async function PATCH(
   request: Request,
-  context: { params: { id: string } | Promise<{ id: string }> },
+  context: { params: Promise<{ id: string }> },
 ) {
   if (!requestHasSameOrigin(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   if (!(await requireAnnouncementAdmin(request))) {
@@ -56,7 +56,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } | Promise<{ id: string }> },
+  context: { params: Promise<{ id: string }> },
 ) {
   if (!requestHasSameOrigin(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   if (!(await requireAnnouncementAdmin(request))) {

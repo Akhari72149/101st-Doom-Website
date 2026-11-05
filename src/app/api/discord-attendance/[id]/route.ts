@@ -94,7 +94,7 @@ async function deleteDiscordAttendanceMessage(channelId: string | null, messageI
 
 export async function POST(
   request: Request,
-  context: { params: { id: string } | Promise<{ id: string }> },
+  context: { params: Promise<{ id: string }> },
 ) {
   if (!requestHasSameOrigin(request)) return jsonError("Invalid request origin", 403);
   const attendanceAccess = await requirePageAccess(request, "admin.discord-attendance", "edit");
@@ -140,7 +140,7 @@ export async function POST(
 
 export async function PATCH(
   request: Request,
-  context: { params: { id: string } | Promise<{ id: string }> },
+  context: { params: Promise<{ id: string }> },
 ) {
   if (!requestHasSameOrigin(request)) return jsonError("Invalid request origin", 403);
   const attendanceAccess = await requirePageAccess(request, "admin.discord-attendance", "edit");
@@ -346,7 +346,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } | Promise<{ id: string }> },
+  context: { params: Promise<{ id: string }> },
 ) {
   if (!requestHasSameOrigin(request)) return jsonError("Invalid request origin", 403);
   const attendanceAccess = await requirePageAccess(request, "admin.discord-attendance", "edit");

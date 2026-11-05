@@ -7,9 +7,11 @@ import {
   Activity,
   CalendarClock,
   ChevronRight,
+  RefreshCw,
   Server,
   ShieldAlert,
   Sparkles,
+  Terminal,
   Users,
 } from "lucide-react";
 import { battalionServers } from "@/data/servers";
@@ -23,22 +25,52 @@ type ServerType = {
   missionFile?: string;
 };
 
+type ControlJob = {
+  id: string;
+  server_id: number | null;
+  action: string;
+  status: "pending" | "processing" | "succeeded" | "failed" | "cancelled";
+  requested_by_name: string;
+  attempts: number;
+  error_message: string | null;
+  requested_at: string;
+  updated_at: string;
+  logs: Array<{ id: number; level: string; message: string; createdAt: string }>;
+};
+
+type ControlActivity = {
+  mode: "legacy" | "agent";
+  agent: null | {
+    id: string;
+    display_name: string;
+    version: string | null;
+    status: string;
+    last_seen_at: string | null;
+    online: boolean;
+  };
+  jobs: ControlJob[];
+};
+
 export default function ServerControl() {
   const router = useRouter();
 
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [canEdit, setCanEdit] = useState(false);
+  const [canFull, setCanFull] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const [serverStatus, setServerStatus] = useState<ServerType[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [startingServerId, setStartingServerId] = useState<number | null>(null);
 
   const [actionLoading, setActionLoading] = useState<{
-    [key: number]: "start" | "stop" | null;
+    [key: number]: "start" | "stop" | "restart" | "update" | "mods" | "keys" | null;
   }>({});
 
   const [pollingPaused, setPollingPaused] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [controlActivity, setControlActivity] = useState<ControlActivity>({ mode: "legacy", agent: null, jobs: [] });
+  const [controlError, setControlError] = useState<string | null>(null);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
   const watchIntervalRef = useRef<number | null>(null);
 
@@ -76,6 +108,7 @@ export default function ServerControl() {
         return;
       }
       setCanEdit(hasAppPermission(session, "admin.server-control", "edit"));
+      setCanFull(hasAppPermission(session, "admin.server-control", "full"));
 
       setRoles(roleList);
       setLoadingAuth(false);
@@ -83,6 +116,23 @@ export default function ServerControl() {
 
     checkAccess();
   }, [router]);
+
+  const fetchControlActivity = async () => {
+    try {
+      const response = await fetch("/api/server-control", { headers: await getAppAuthHeaders(), cache: "no-store" });
+      if (!response.ok) throw new Error("Unable to load remote agent activity.");
+      setControlActivity(await response.json());
+    } catch (error) {
+      setControlError(error instanceof Error ? error.message : "Unable to load remote agent activity.");
+    }
+  };
+
+  useEffect(() => {
+    if (loadingAuth) return;
+    fetchControlActivity();
+    const interval = window.setInterval(fetchControlActivity, 5000);
+    return () => window.clearInterval(interval);
+  }, [loadingAuth]);
 
   const clearWatchInterval = () => {
     if (watchIntervalRef.current) {
@@ -179,7 +229,7 @@ export default function ServerControl() {
   const sendCommand = async (
     command: string,
     serverId: number,
-    action: "start" | "stop"
+    action: "start" | "stop" | "restart" | "update" | "mods" | "keys"
   ) => {
     if (!canEdit) return;
     try {
@@ -194,20 +244,25 @@ export default function ServerControl() {
         body: JSON.stringify({ command }),
       });
 
-      if (!res.ok) {
-        console.error("Server command failed:", await res.text());
-      }
+      const response = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(response.error || "Server command failed.");
+
+      setControlError(null);
+      await fetchControlActivity();
+
+      if (controlActivity.mode === "agent") return;
 
       setPollingPaused(true);
       setStartingServerId(serverId);
 
-      if (action === "start") {
+      if (action === "start" || action === "restart") {
         watchServerUntilOnline(serverId);
-      } else {
+      } else if (action === "stop") {
         watchServerUntilOffline(serverId);
       }
     } catch (err) {
       console.error("Command request error:", err);
+      setControlError(err instanceof Error ? err.message : "Server command failed.");
       setPollingPaused(false);
       setStartingServerId(null);
     } finally {
@@ -287,6 +342,38 @@ export default function ServerControl() {
           />
         </div>
 
+        {controlError && (
+          <div className="mb-6 border border-red-500/45 bg-red-950/35 px-4 py-3 text-sm text-red-200">
+            {controlError}
+          </div>
+        )}
+
+        <div className="mb-8 grid gap-px border border-[#00ff66]/20 bg-[#00ff66]/20 md:grid-cols-[1fr_auto_auto]">
+          <div className="bg-black/80 px-5 py-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#7f9f8f]">
+              <Terminal className="h-4 w-4" /> Remote control link
+            </div>
+            <div className="mt-2 text-lg font-semibold text-white">
+              {controlActivity.mode === "agent"
+                ? controlActivity.agent?.display_name || "Primary Arma Server"
+                : "Legacy server listener"}
+            </div>
+          </div>
+          <div className="min-w-44 bg-black/80 px-5 py-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7f9f8f]">Connection</div>
+            <div className={`mt-2 font-semibold ${controlActivity.agent?.online ? "text-[#00ff66]" : controlActivity.mode === "legacy" ? "text-yellow-300" : "text-red-300"}`}>
+              {controlActivity.agent?.online ? "Agent online" : controlActivity.mode === "legacy" ? "Transition mode" : "Agent offline"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={fetchControlActivity}
+            className="inline-flex min-h-20 items-center justify-center gap-2 bg-black/80 px-5 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-950/30"
+          >
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+        </div>
+
         <div className="mb-8 rounded-3xl border border-[#00ff66]/20 bg-black/55 p-5 backdrop-blur-xl shadow-[0_0_35px_rgba(0,255,100,0.08)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -328,6 +415,7 @@ export default function ServerControl() {
                   const status = getServerStatus(server.id);
                   const isBusy = startingServerId === server.id;
                   const loadingAction = actionLoading[server.id];
+                  const queuedJob = controlActivity.jobs.find((job) => job.server_id === server.id && ["pending", "processing"].includes(job.status));
 
                   return (
                     <div
@@ -409,47 +497,69 @@ export default function ServerControl() {
                         </div>
                       )}
 
-                      <div className="mt-5 flex justify-end">
+                      {queuedJob && (
+                        <div className="mt-4 border border-cyan-400/30 bg-cyan-950/20 px-3 py-2 text-xs uppercase tracking-[0.14em] text-cyan-200">
+                          {queuedJob.status === "processing" ? "Agent processing" : "Queued"}: {queuedJob.action.replaceAll(".", " ")}
+                        </div>
+                      )}
+
+                      <div className="mt-5 flex flex-wrap justify-end gap-2">
+                        {controlActivity.mode === "agent" && canFull && (
+                          <button
+                            onClick={() => sendCommand(`copy keys server ${server.id}`, server.id, "keys")}
+                            disabled={!!loadingAction || !!queuedJob || !controlActivity.agent?.online}
+                            className="border border-violet-500 px-3 py-2 text-sm font-semibold text-violet-300 transition hover:bg-violet-950/50 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {loadingAction === "keys" ? "Queueing..." : "Copy Keys"}
+                          </button>
+                        )}
                         {!status?.online ? (
-                          <button
-                            onClick={() =>
-                              sendCommand(`start server ${server.id}`, server.id, "start")
-                            }
-                            disabled={!canEdit || !!loadingAction}
-                            className="inline-flex items-center gap-2 rounded-xl border border-green-500 px-4 py-3 font-semibold text-green-400 transition hover:bg-green-600 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {loadingAction === "start" ? (
+                          <>
+                            {controlActivity.mode === "agent" && canFull && (
                               <>
-                                <Spinner />
-                                Starting
-                              </>
-                            ) : (
-                              <>
-                                Start
-                                <ChevronRight className="h-4 w-4" />
+                                <button
+                                  onClick={() => sendCommand(`update mods server ${server.id}`, server.id, "mods")}
+                                  disabled={!!loadingAction || !!queuedJob || !controlActivity.agent?.online}
+                                  className="border border-cyan-500 px-3 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-950/50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  Update Mods
+                                </button>
+                                <button
+                                  onClick={() => sendCommand(`update server ${server.id}`, server.id, "update")}
+                                  disabled={!!loadingAction || !!queuedJob || !controlActivity.agent?.online}
+                                  className="border border-cyan-500 px-3 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-950/50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  Update Arma
+                                </button>
                               </>
                             )}
-                          </button>
+                            <button
+                              onClick={() => sendCommand(`start server ${server.id}`, server.id, "start")}
+                              disabled={!canEdit || !!loadingAction || !!queuedJob || (controlActivity.mode === "agent" && !controlActivity.agent?.online)}
+                              className="inline-flex items-center gap-2 border border-green-500 px-4 py-3 font-semibold text-green-400 transition hover:bg-green-600 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {loadingAction === "start" ? <><Spinner />Starting</> : <>Start<ChevronRight className="h-4 w-4" /></>}
+                            </button>
+                          </>
                         ) : (
-                          <button
-                            onClick={() =>
-                              sendCommand(`stop server ${server.id}`, server.id, "stop")
-                            }
-                            disabled={!canEdit || !!loadingAction}
-                            className="inline-flex items-center gap-2 rounded-xl border border-red-500 px-4 py-3 font-semibold text-red-400 transition hover:bg-red-600 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {loadingAction === "stop" ? (
-                              <>
-                                <Spinner />
-                                Stopping
-                              </>
-                            ) : (
-                              <>
-                                Stop
-                                <ChevronRight className="h-4 w-4" />
-                              </>
+                          <>
+                            {controlActivity.mode === "agent" && (
+                              <button
+                                onClick={() => sendCommand(`restart server ${server.id}`, server.id, "restart")}
+                                disabled={!canEdit || !!loadingAction || !!queuedJob || !controlActivity.agent?.online}
+                                className="inline-flex items-center gap-2 border border-yellow-500 px-4 py-3 font-semibold text-yellow-300 transition hover:bg-yellow-950/50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {loadingAction === "restart" ? <><Spinner />Queueing</> : <><RefreshCw className="h-4 w-4" />Restart</>}
+                              </button>
                             )}
-                          </button>
+                            <button
+                              onClick={() => sendCommand(`stop server ${server.id}`, server.id, "stop")}
+                              disabled={!canEdit || !!loadingAction || !!queuedJob || (controlActivity.mode === "agent" && !controlActivity.agent?.online)}
+                              className="inline-flex items-center gap-2 border border-red-500 px-4 py-3 font-semibold text-red-400 transition hover:bg-red-600 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {loadingAction === "stop" ? <><Spinner />Stopping</> : <>Stop<ChevronRight className="h-4 w-4" /></>}
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -459,7 +569,48 @@ export default function ServerControl() {
             </div>
           </section>
 
-          <aside className="min-w-0 2xl:sticky 2xl:top-4 2xl:self-start">
+          <aside className="min-w-0 space-y-4 2xl:sticky 2xl:top-4 2xl:self-start">
+            {controlActivity.mode === "agent" && (
+              <div className="border border-[#00ff66]/25 bg-black/70 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.22em] text-[#7f9f8f]">Agent activity</div>
+                    <h2 className="mt-1 text-xl font-bold text-white">Recent operations</h2>
+                  </div>
+                  <span className="text-xs text-gray-500">{controlActivity.jobs.length}</span>
+                </div>
+                <div className="mt-4 max-h-[440px] space-y-2 overflow-y-auto pr-1">
+                  {controlActivity.jobs.length === 0 ? (
+                    <div className="border border-white/10 px-3 py-4 text-sm text-gray-500">No agent operations recorded.</div>
+                  ) : controlActivity.jobs.map((job) => (
+                    <button
+                      key={job.id}
+                      type="button"
+                      onClick={() => setExpandedJobId((current) => current === job.id ? null : job.id)}
+                      className="w-full border border-white/10 bg-black/60 p-3 text-left transition hover:border-[#00ff66]/35"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-white">Server {job.server_id} · {job.action.replaceAll(".", " ")}</div>
+                          <div className="mt-1 text-xs text-gray-500">{job.requested_by_name} · {new Date(job.requested_at).toLocaleString()}</div>
+                        </div>
+                        <span className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${job.status === "succeeded" ? "text-[#00ff66]" : job.status === "failed" ? "text-red-300" : "text-yellow-300"}`}>
+                          {job.status}
+                        </span>
+                      </div>
+                      {expandedJobId === job.id && (
+                        <div className="mt-3 border-t border-white/10 pt-3">
+                          {job.error_message && <div className="mb-2 text-xs text-red-300">{job.error_message}</div>}
+                          <div className="max-h-44 space-y-1 overflow-y-auto bg-black px-3 py-2 font-mono text-[11px] leading-5 text-gray-300">
+                            {job.logs.length ? job.logs.map((entry) => <div key={entry.id} className={entry.level === "error" ? "text-red-300" : entry.level === "warning" ? "text-yellow-300" : ""}>{entry.message}</div>) : <div className="text-gray-600">Waiting for agent output...</div>}
+                          </div>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="rounded-3xl border border-[#00ff66]/25 bg-black/55 p-6 backdrop-blur-xl shadow-[0_0_35px_rgba(0,255,100,0.08)]">
               <div className="mb-5">
                 <div className="text-xs uppercase tracking-[0.25em] text-[#7f9f8f]">
@@ -481,7 +632,7 @@ export default function ServerControl() {
                 />
                 <NoteCard
                   title="Access"
-                  text="This panel is limited to ServerMaintenance and Akhari roles."
+                  text="Read, edit, and full permission levels control monitoring, process actions, and SteamCMD updates separately."
                 />
               </div>
 

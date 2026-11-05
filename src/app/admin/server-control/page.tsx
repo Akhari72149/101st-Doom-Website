@@ -7,12 +7,17 @@ import {
   Activity,
   CalendarClock,
   ChevronRight,
+  Download,
+  PackagePlus,
   RefreshCw,
   Server,
+  Settings2,
   ShieldAlert,
   Sparkles,
   Terminal,
+  Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { battalionServers } from "@/data/servers";
 
@@ -49,6 +54,15 @@ type ControlActivity = {
     online: boolean;
   };
   jobs: ControlJob[];
+  presets?: ModPreset[];
+};
+
+type ModPreset = {
+  key: "main" | "fun";
+  displayName: string;
+  modIds: string[];
+  updatedBy: string | null;
+  updatedAt: string;
 };
 
 export default function ServerControl() {
@@ -71,6 +85,11 @@ export default function ServerControl() {
   const [controlActivity, setControlActivity] = useState<ControlActivity>({ mode: "legacy", agent: null, jobs: [] });
   const [controlError, setControlError] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [globalAction, setGlobalAction] = useState<"arma" | "mods" | null>(null);
+  const [modManagerOpen, setModManagerOpen] = useState(false);
+  const [presetDrafts, setPresetDrafts] = useState<Record<"main" | "fun", string[]>>({ main: [], fun: [] });
+  const [newModId, setNewModId] = useState<Record<"main" | "fun", string>>({ main: "", fun: "" });
+  const [savingPreset, setSavingPreset] = useState<"main" | "fun" | null>(null);
 
   const watchIntervalRef = useRef<number | null>(null);
 
@@ -94,6 +113,13 @@ export default function ServerControl() {
       maxPlayers,
     };
   }, [serverStatus, servers]);
+
+  const allServersOffline = !initialLoading && servers.every((server) => {
+    const status = getServerStatus(server.id);
+    return status && !status.online;
+  });
+
+  const globalJob = controlActivity.jobs.find((job) => job.server_id === null && ["pending", "processing"].includes(job.status));
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -273,6 +299,70 @@ export default function ServerControl() {
     }
   };
 
+  const sendGlobalCommand = async (command: string, action: "arma" | "mods") => {
+    if (!canFull || !allServersOffline || globalJob) return;
+    try {
+      setGlobalAction(action);
+      const res = await fetch("/api/server-control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+        body: JSON.stringify({ command }),
+      });
+      const response = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(response.error || "Maintenance operation could not be queued.");
+      setControlError(null);
+      await fetchControlActivity();
+    } catch (error) {
+      setControlError(error instanceof Error ? error.message : "Maintenance operation could not be queued.");
+    } finally {
+      setGlobalAction(null);
+    }
+  };
+
+  const openModManager = () => {
+    const presets = controlActivity.presets || [];
+    setPresetDrafts({
+      main: [...(presets.find((preset) => preset.key === "main")?.modIds || [])],
+      fun: [...(presets.find((preset) => preset.key === "fun")?.modIds || [])],
+    });
+    setNewModId({ main: "", fun: "" });
+    setModManagerOpen(true);
+  };
+
+  const addMod = (preset: "main" | "fun") => {
+    const raw = newModId[preset].trim();
+    const id = raw.match(/(?:id=)?(\d{6,12})/)?.[1];
+    if (!id) {
+      setControlError("Enter a numeric Steam Workshop ID or Workshop link.");
+      return;
+    }
+    setPresetDrafts((current) => ({
+      ...current,
+      [preset]: current[preset].includes(id) ? current[preset] : [...current[preset], id],
+    }));
+    setNewModId((current) => ({ ...current, [preset]: "" }));
+    setControlError(null);
+  };
+
+  const savePreset = async (preset: "main" | "fun") => {
+    try {
+      setSavingPreset(preset);
+      const res = await fetch("/api/server-control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await getAppAuthHeaders()) },
+        body: JSON.stringify({ action: "save-mod-preset", preset, modIds: presetDrafts[preset] }),
+      });
+      const response = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(response.error || "The mod preset could not be saved.");
+      setControlActivity((current) => ({ ...current, presets: response.presets }));
+      setControlError(null);
+    } catch (error) {
+      setControlError(error instanceof Error ? error.message : "The mod preset could not be saved.");
+    } finally {
+      setSavingPreset(null);
+    }
+  };
+
   if (loadingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#001f11_0%,#000000_100%)] text-[#00ff66]">
@@ -391,6 +481,55 @@ export default function ServerControl() {
             </div>
           </div>
         </div>
+
+        {controlActivity.mode === "agent" && canFull && (
+          <section className="mb-8 border border-cyan-400/30 bg-black/70">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-cyan-400/20 px-5 py-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.24em] text-cyan-300">Installation maintenance</div>
+                <h2 className="mt-1 text-xl font-bold text-white">Shared Arma and Workshop controls</h2>
+                <p className="mt-2 text-sm text-gray-400">
+                  These operations affect the shared installation and unlock only when Servers 1, 2 and 3 are offline.
+                </p>
+              </div>
+              <div className={`border px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${allServersOffline ? "border-green-400/40 text-green-300" : "border-yellow-400/40 text-yellow-200"}`}>
+                {allServersOffline ? "All servers offline" : `${stats.online} server${stats.online === 1 ? "" : "s"} still online`}
+              </div>
+            </div>
+            <div className="grid gap-px bg-cyan-400/15 md:grid-cols-[1fr_1fr_auto]">
+              <button
+                type="button"
+                onClick={() => sendGlobalCommand("update arma all", "arma")}
+                disabled={!allServersOffline || !controlActivity.agent?.online || Boolean(globalJob) || globalAction !== null}
+                className="inline-flex min-h-20 items-center justify-center gap-3 bg-black/90 px-5 font-semibold text-cyan-200 transition hover:bg-cyan-950/35 disabled:cursor-not-allowed disabled:text-gray-600"
+              >
+                <Download className="h-5 w-5" />
+                {globalAction === "arma" ? "Queueing Arma update..." : "Update Arma installation"}
+              </button>
+              <button
+                type="button"
+                onClick={() => sendGlobalCommand("update mods all", "mods")}
+                disabled={!allServersOffline || !controlActivity.agent?.online || Boolean(globalJob) || globalAction !== null}
+                className="inline-flex min-h-20 items-center justify-center gap-3 bg-black/90 px-5 font-semibold text-cyan-200 transition hover:bg-cyan-950/35 disabled:cursor-not-allowed disabled:text-gray-600"
+              >
+                <RefreshCw className="h-5 w-5" />
+                {globalAction === "mods" ? "Queueing mod update..." : "Update all configured mods"}
+              </button>
+              <button
+                type="button"
+                onClick={openModManager}
+                className="inline-flex min-h-20 items-center justify-center gap-3 bg-black/90 px-6 font-semibold text-violet-300 transition hover:bg-violet-950/35"
+              >
+                <Settings2 className="h-5 w-5" /> Manage mods
+              </button>
+            </div>
+            {globalJob && (
+              <div className="border-t border-cyan-400/20 px-5 py-3 text-sm text-cyan-200">
+                {globalJob.status === "processing" ? "Agent processing" : "Queued"}: {globalJob.action.replaceAll(".", " ")}
+              </div>
+            )}
+          </section>
+        )}
 
         <div className="grid grid-cols-1 gap-8 2xl:grid-cols-[minmax(0,1fr)_380px]">
           <section className="min-w-0">
@@ -514,33 +653,13 @@ export default function ServerControl() {
                           </button>
                         )}
                         {!status?.online ? (
-                          <>
-                            {controlActivity.mode === "agent" && canFull && (
-                              <>
-                                <button
-                                  onClick={() => sendCommand(`update mods server ${server.id}`, server.id, "mods")}
-                                  disabled={!!loadingAction || !!queuedJob || !controlActivity.agent?.online}
-                                  className="border border-cyan-500 px-3 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-950/50 disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                  Update Mods
-                                </button>
-                                <button
-                                  onClick={() => sendCommand(`update server ${server.id}`, server.id, "update")}
-                                  disabled={!!loadingAction || !!queuedJob || !controlActivity.agent?.online}
-                                  className="border border-cyan-500 px-3 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-950/50 disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                  Update Arma
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => sendCommand(`start server ${server.id}`, server.id, "start")}
-                              disabled={!canEdit || !!loadingAction || !!queuedJob || (controlActivity.mode === "agent" && !controlActivity.agent?.online)}
-                              className="inline-flex items-center gap-2 border border-green-500 px-4 py-3 font-semibold text-green-400 transition hover:bg-green-600 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {loadingAction === "start" ? <><Spinner />Starting</> : <>Start<ChevronRight className="h-4 w-4" /></>}
-                            </button>
-                          </>
+                          <button
+                            onClick={() => sendCommand(`start server ${server.id}`, server.id, "start")}
+                            disabled={!canEdit || !!loadingAction || !!queuedJob || Boolean(globalJob) || (controlActivity.mode === "agent" && !controlActivity.agent?.online)}
+                            className="inline-flex items-center gap-2 border border-green-500 px-4 py-3 font-semibold text-green-400 transition hover:bg-green-600 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {loadingAction === "start" ? <><Spinner />Starting</> : <>Start<ChevronRight className="h-4 w-4" /></>}
+                          </button>
                         ) : (
                           <>
                             {controlActivity.mode === "agent" && (
@@ -591,7 +710,7 @@ export default function ServerControl() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="text-sm font-semibold text-white">Server {job.server_id} · {job.action.replaceAll(".", " ")}</div>
+                          <div className="text-sm font-semibold text-white">{job.server_id ? `Server ${job.server_id}` : "All servers"} · {job.action.replaceAll(".", " ")}</div>
                           <div className="mt-1 text-xs text-gray-500">{job.requested_by_name} · {new Date(job.requested_at).toLocaleString()}</div>
                         </div>
                         <span className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${job.status === "succeeded" ? "text-[#00ff66]" : job.status === "failed" ? "text-red-300" : "text-yellow-300"}`}>
@@ -658,6 +777,75 @@ export default function ServerControl() {
           </aside>
         </div>
       </div>
+
+      {modManagerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label="Manage server mod presets">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col border border-violet-400/40 bg-[#001009] shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-violet-400/25 px-5 py-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.22em] text-violet-300">Workshop configuration</div>
+                <h2 className="mt-1 text-2xl font-bold text-white">Server mod presets</h2>
+                <p className="mt-2 text-sm text-gray-400">Servers 1 and 3 always use the same preset. Server 2 remains independent.</p>
+              </div>
+              <button type="button" onClick={() => setModManagerOpen(false)} className="border border-white/15 p-3 text-gray-300 hover:border-white/40 hover:text-white" aria-label="Close mod manager">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 gap-px overflow-hidden bg-violet-400/20 lg:grid-cols-2">
+              {(["main", "fun"] as const).map((preset) => (
+                <section key={preset} className="flex min-h-0 flex-col bg-[#000b06] p-5">
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-bold text-white">{preset === "main" ? "Servers 1 & 3" : "Server 2"}</div>
+                      <div className="mt-1 text-xs uppercase tracking-[0.16em] text-gray-500">{presetDrafts[preset].length} Workshop items</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => savePreset(preset)}
+                      disabled={savingPreset !== null || presetDrafts[preset].length === 0}
+                      className="border border-[#00ff66]/60 px-4 py-2 text-sm font-semibold text-[#00ff66] hover:bg-[#00ff66]/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {savingPreset === preset ? "Saving..." : "Save preset"}
+                    </button>
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <input
+                      value={newModId[preset]}
+                      onChange={(event) => setNewModId((current) => ({ ...current, [preset]: event.target.value }))}
+                      onKeyDown={(event) => { if (event.key === "Enter") addMod(preset); }}
+                      placeholder="Workshop ID or Steam Workshop link"
+                      className="min-w-0 flex-1 border border-white/15 bg-black px-3 py-3 text-sm text-white outline-none focus:border-violet-400"
+                    />
+                    <button type="button" onClick={() => addMod(preset)} className="inline-flex items-center gap-2 border border-violet-400/60 px-4 text-sm font-semibold text-violet-200 hover:bg-violet-950/40">
+                      <PackagePlus className="h-4 w-4" /> Add
+                    </button>
+                  </div>
+
+                  <div className="mt-4 min-h-0 flex-1 overflow-y-auto border border-white/10">
+                    {presetDrafts[preset].map((id) => (
+                      <div key={id} className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 last:border-b-0">
+                        <a href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`} target="_blank" rel="noreferrer" className="min-w-0 font-mono text-sm text-cyan-200 hover:underline">
+                          {id}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setPresetDrafts((current) => ({ ...current, [preset]: current[preset].filter((entry) => entry !== id) }))}
+                          className="p-2 text-red-300 hover:bg-red-950/40"
+                          aria-label={`Remove Workshop item ${id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

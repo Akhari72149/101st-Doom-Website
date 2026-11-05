@@ -3,7 +3,7 @@ import { existsSync, openSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
-const VERSION = "0.1.1";
+const VERSION = "0.2.0";
 const configPath = path.resolve(process.argv[2] || "scripts/server-agent/config.json");
 const config = JSON.parse(await readFile(configPath, "utf8"));
 const token = String(process.env[config.tokenEnvironmentVariable || "SERVER_AGENT_TOKEN"] || "").trim();
@@ -46,6 +46,19 @@ function serverConfig(serverId) {
   const port = Number(server.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Server ${serverId} has an invalid port.`);
   return { ...server, port };
+}
+
+function configuredServers() {
+  return Object.entries(config.servers || {}).map(([id, server]) => serverConfig(Number(id)));
+}
+
+function workshopModIds(job, fallback = []) {
+  const supplied = Array.isArray(job.payload?.workshopModIds) ? job.payload.workshopModIds : fallback;
+  const ids = [...new Set(supplied.map(String).map((id) => id.trim()))];
+  if (!ids.length || ids.some((id) => !/^\d+$/.test(id))) {
+    throw new Error("No valid Workshop mod IDs were supplied for this operation.");
+  }
+  return ids;
 }
 
 function runProcess(executable, args, options = {}) {
@@ -206,7 +219,7 @@ async function copyModKeys(job, server) {
   const keysDirectory = String(config.steamcmd?.serverKeysDirectory || path.join(server.workingDirectory, "keys"));
   if (!stagingRoot) throw new Error("The mod staging directory is not configured.");
   await mkdir(keysDirectory, { recursive: true });
-  const modIds = [...new Set((server.workshopModIds || []).map(String))];
+  const modIds = workshopModIds(job, server.workshopModIds || []);
   let copied = 0;
   for (const id of modIds) {
     const modDirectory = path.join(stagingRoot, id);
@@ -221,14 +234,52 @@ async function copyModKeys(job, server) {
   return { copiedKeys: copied, destination: keysDirectory };
 }
 
+async function assertAllServersStopped() {
+  const running = [];
+  for (const [id, server] of Object.entries(config.servers || {})) {
+    const pids = await findServerPids(serverConfig(Number(id)));
+    if (pids.length) running.push(`Server ${id} (${pids.join(", ")})`);
+  }
+  if (running.length) throw new Error(`All servers must be offline before maintenance. Still running: ${running.join("; ")}.`);
+}
+
+async function updateArmaInstallation(job) {
+  await assertAllServersStopped();
+  const firstServer = configuredServers()[0];
+  if (!firstServer) throw new Error("No Arma servers are configured.");
+  const installDirectory = String(config.steamcmd?.serverInstallDirectory || firstServer.workingDirectory);
+  const appId = String(config.steamcmd?.serverAppId || "233780");
+  if (!/^\d+$/.test(appId)) throw new Error("Invalid SteamCMD server app ID.");
+  const branch = String(config.steamcmd?.serverBranch || "").trim();
+  const branchPassword = String(process.env[config.steamcmd?.serverBranchPasswordEnvironmentVariable || "ARMA_SERVER_BRANCH_PASSWORD"] || "").trim();
+  let updateCommand = `app_update ${appId}`;
+  if (branch) updateCommand += ` -beta ${steamValue(branch)}`;
+  if (branchPassword) updateCommand += ` -betapassword ${steamValue(branchPassword)}`;
+  updateCommand += " validate";
+  await log(job, "All servers are offline. Updating the shared Arma installation.");
+  return runSteamCmd(job, [`force_install_dir ${steamValue(installDirectory)}`, updateCommand]);
+}
+
+async function updateAllMods(job) {
+  await assertAllServersStopped();
+  const modIds = workshopModIds(job);
+  const workshopAppId = String(config.steamcmd?.workshopAppId || "107410");
+  await log(job, `All servers are offline. Updating ${modIds.length} unique Workshop items across both presets.`);
+  const result = await runSteamCmd(job, modIds.map((id) => `workshop_download_item ${workshopAppId} ${id} validate`));
+  await mirrorWorkshopMods(job, modIds);
+  return { ...result, updatedMods: modIds.length };
+}
+
 async function execute(job) {
+  if (job.action === "steamcmd.server.update_all") return updateArmaInstallation(job);
+  if (job.action === "steamcmd.mods.update_all") return updateAllMods(job);
   const server = serverConfig(job.server_id);
-  if (job.action === "server.start") return startServer(job, server);
+  if (job.action === "server.start") return startServer(job, { ...server, workshopModIds: workshopModIds(job, server.workshopModIds || []) });
   if (job.action === "server.stop") return stopServer(job, server);
   if (job.action === "server.restart") {
     await stopServer(job, server);
     await delay(Math.max(2_000, Number(server.restartDelayMs) || 5_000));
-    return startServer(job, server);
+    return startServer(job, { ...server, workshopModIds: workshopModIds(job, server.workshopModIds || []) });
   }
   if (job.action === "steamcmd.server.update") {
     if ((await findServerPids(server)).length) throw new Error("Stop the server before applying an Arma server update.");
@@ -276,7 +327,9 @@ async function loop() {
       }
       activeJob = job;
       try {
-        await log(job, `Agent accepted ${job.action} for Server ${job.server_id}.`);
+        await log(job, job.server_id
+          ? `Agent accepted ${job.action} for Server ${job.server_id}.`
+          : `Agent accepted global ${job.action}.`);
         const result = await execute(job);
         await request({ action: "complete", jobId: job.id, claimToken: job.claim_token, result });
       } catch (error) {

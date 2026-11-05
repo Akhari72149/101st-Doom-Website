@@ -37,6 +37,7 @@ type PersonnelRow = {
   tig_days: number;
   service_days: number;
   days_from_ct: number | null;
+  ct_effective_at: string | null;
   attended: number;
   missed: number;
   main_ops_attended: number;
@@ -205,7 +206,8 @@ export async function GET(request: Request) {
                  personnel.created_at at time zone 'UTC'
                ))) / 86400))::integer tig_days,
                greatest(0, floor(extract(epoch from (now() - personnel.created_at at time zone 'UTC')) / 86400))::integer service_days,
-               case when ct_dates.ct_effective_at is null then null else
+                ct_dates.ct_effective_at,
+                case when ct_dates.ct_effective_at is null then null else
                  greatest(0, floor(extract(epoch from (now() - ct_dates.ct_effective_at)) / 86400))::integer
                end days_from_ct,
                case when upper(coalesce(ranks.name,'')) in ('CR','CR-C')
@@ -521,7 +523,7 @@ export async function GET(request: Request) {
           ...item,
           canConfirm: canPromote && item.manual === true && item.state === "review",
           canRevoke: canPromote && item.manual === true && item.state === "met" && Boolean(item.confirmation),
-          canSetHistoricalDate: canCorrectHistory && item.key === "ct-service" && item.state === "unavailable",
+          canSetHistoricalDate: canCorrectHistory && item.key === "ct-service",
         })),
         canApprove: person.approvalPermission === "company"
           && canCompanyApprove
@@ -628,36 +630,52 @@ export async function POST(request: Request) {
           "select id from public.ranks where upper(btrim(name))='CT' and is_active=true order by rank_level limit 1",
         );
         if (!ctRank.rows[0]) throw new Error("CT_RANK_MISSING");
-        const existing = await client.query<{ id: string }>(
-          "select id from public.rank_history where personnel_id=$1 and new_rank_id=$2 limit 1",
+        const existing = await client.query<{ id: string; changed_at: Date }>(
+          `select id,changed_at from public.rank_history
+            where personnel_id=$1 and new_rank_id=$2
+            order by changed_at asc nulls last limit 1 for update`,
           [personnelId, ctRank.rows[0].id],
         );
-        if (existing.rows[0]) throw new Error("CT_HISTORY_EXISTS");
-        await client.query(
-          `insert into public.rank_history
-             (personnel_id,discord_id,old_rank_id,new_rank_id,changed_at,correction_reason,evidence_url,
-              recorded_by_user_id,recorded_by_name,recorded_at)
-           values($1,$2,$3,$3,$4,$5,$6,$7,$8,now())`,
-          [personnelId, person.rows[0].discord_id || "", ctRank.rows[0].id, effectiveAt, reason,
-            evidenceUrl || null, fullAuth.userId, actor.displayName],
-        );
+        if (existing.rows[0]) {
+          await client.query(
+            `update public.rank_history
+                set changed_at=$2,correction_reason=$3,evidence_url=$4,recorded_by_user_id=$5,
+                    recorded_by_name=$6,recorded_at=now()
+              where id=$1`,
+            [existing.rows[0].id, effectiveAt, reason, evidenceUrl || null, fullAuth.userId, actor.displayName],
+          );
+        } else {
+          await client.query(
+            `insert into public.rank_history
+               (personnel_id,discord_id,old_rank_id,new_rank_id,changed_at,correction_reason,evidence_url,
+                recorded_by_user_id,recorded_by_name,recorded_at)
+             values($1,$2,$3,$3,$4,$5,$6,$7,$8,now())`,
+            [personnelId, person.rows[0].discord_id || "", ctRank.rows[0].id, effectiveAt, reason,
+              evidenceUrl || null, fullAuth.userId, actor.displayName],
+          );
+        }
         const evidenceDetail = evidenceUrl ? ` Evidence: ${evidenceUrl}` : "";
+        const previousDate = existing.rows[0]?.changed_at
+          ? new Date(existing.rows[0].changed_at).toISOString().slice(0, 10)
+          : null;
+        const changeDetail = previousDate
+          ? `Historical CT date changed from ${previousDate} to ${effectiveDate}`
+          : `Historical CT date recorded as ${effectiveDate}`;
         await client.query(
           `insert into public.audit_logs
              (user_id,target_personnel_id,action,target_rank_id,details,processed_by)
            values($1,$2,'RANK_HISTORY_CORRECTED',$3,$4,$5)`,
           [fullAuth.userId, personnelId, ctRank.rows[0].id,
-            `Historical CT date recorded as ${effectiveDate} by ${actor.displayName}. Reason: ${reason}.${evidenceDetail}`,
+            `${changeDetail} by ${actor.displayName}. Reason: ${reason}.${evidenceDetail}`,
             actor.personnelId],
         );
-        return { personnelName: person.rows[0].name, processedBy: actor.displayName };
+        return { personnelName: person.rows[0].name, processedBy: actor.displayName, updated: Boolean(existing.rows[0]) };
       });
       return NextResponse.json({ ok: true, ...result });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message === "NOT_FOUND") return NextResponse.json({ error: "Personnel record was not found" }, { status: 404 });
       if (message === "CT_RANK_MISSING") return NextResponse.json({ error: "The active CT rank could not be found" }, { status: 409 });
-      if (message === "CT_HISTORY_EXISTS") return NextResponse.json({ error: "A CT history entry already exists for this person" }, { status: 409 });
       console.error("[promotion-readiness] Historical CT correction failed", error);
       return NextResponse.json({ error: "Failed to record the historical CT date" }, { status: 500 });
     }
@@ -710,7 +728,8 @@ export async function POST(request: Request) {
                personnel.slotted_position,ranks.name current_rank,
                greatest(0,floor(extract(epoch from (now()-coalesce(personnel.rank_effective_at,personnel.created_at at time zone 'UTC')))/86400))::integer tig_days,
                greatest(0,floor(extract(epoch from (now()-personnel.created_at at time zone 'UTC'))/86400))::integer service_days,
-               case when ct_dates.ct_effective_at is null then null else greatest(0,floor(extract(epoch from (now()-ct_dates.ct_effective_at))/86400))::integer end days_from_ct,
+                ct_dates.ct_effective_at,
+                case when ct_dates.ct_effective_at is null then null else greatest(0,floor(extract(epoch from (now()-ct_dates.ct_effective_at))/86400))::integer end days_from_ct,
                case when upper(coalesce(ranks.name,'')) in ('CR','CR-C') then coalesce(operation_counts.main_ops,0)+coalesce(operation_counts.non_main_credits,0) else coalesce(attendance.attended,0) end::integer attended,
                coalesce(attendance.missed,0)::integer missed,
                case when upper(coalesce(ranks.name,'')) in ('CR','CR-C') then coalesce(operation_counts.main_ops,0) else coalesce(attendance.main_ops_attended,0) end::integer main_ops_attended,

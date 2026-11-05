@@ -60,6 +60,7 @@ type Person = {
   current_rank: string | null;
   tig_days: number;
   service_days: number;
+  ct_effective_at: string | null;
   attended: number;
   missed: number;
   attendancePercentage: number | null;
@@ -345,9 +346,9 @@ export default function PromotionReadinessPage() {
           evidenceUrl: historyEvidence,
         }),
       });
-      const body = await response.json() as { error?: string };
+      const body = await response.json() as { error?: string; updated?: boolean };
       if (!response.ok) throw new Error(body.error || "Failed to record the CT date");
-      setNotice(`${historyTarget.name}'s historical CT date was recorded.`);
+      setNotice(`${historyTarget.name}'s historical CT date was ${body.updated ? "updated" : "recorded"}.`);
       setHistoryTarget(null);
       setHistoryDate("");
       setHistoryReason("");
@@ -359,6 +360,13 @@ export default function PromotionReadinessPage() {
       setWorkflowSaving(false);
     }
   }, [historyDate, historyEvidence, historyReason, historyTarget, load]);
+
+  const openHistoryEditor = useCallback((person: Person) => {
+    setHistoryTarget(person);
+    setHistoryDate(person.ct_effective_at ? person.ct_effective_at.slice(0, 10) : "");
+    setHistoryReason("");
+    setHistoryEvidence("");
+  }, []);
 
   useEffect(() => {
     void load();
@@ -482,7 +490,7 @@ export default function PromotionReadinessPage() {
                   <div className="min-w-0"><p className="truncate font-black">{person.name}</p><p className="mt-1 text-xs text-white/50">{person.current_rank} to {person.targetRank}</p></div>
                   <button
                     type="button"
-                    onClick={() => { setHistoryTarget(person); setHistoryDate(""); setHistoryReason(""); setHistoryEvidence(""); }}
+                    onClick={() => openHistoryEditor(person)}
                     className="inline-flex min-h-10 shrink-0 items-center gap-2 border border-amber-300/35 px-3 text-xs font-black uppercase tracking-[0.1em] text-amber-200 hover:bg-amber-300/10"
                   >
                     <CalendarPlus size={15} /> Set CT Date
@@ -714,10 +722,10 @@ export default function PromotionReadinessPage() {
                             {item.canSetHistoricalDate && (
                               <button
                                 type="button"
-                                onClick={() => { setHistoryTarget(person); setHistoryDate(""); setHistoryReason(""); setHistoryEvidence(""); }}
+                                onClick={() => openHistoryEditor(person)}
                                 className="mt-3 inline-flex min-h-9 items-center gap-2 border border-current/35 px-3 text-[10px] font-black uppercase tracking-[0.12em] hover:bg-white/[0.05]"
                               >
-                                <CalendarPlus size={14} /> Set CT Date
+                                <CalendarPlus size={14} /> {person.ct_effective_at ? "Edit CT Date" : "Set CT Date"}
                               </button>
                             )}
                           </div>
@@ -797,7 +805,7 @@ export default function PromotionReadinessPage() {
             <header className="flex items-start justify-between gap-4 border-b border-amber-300/20 p-5">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-200">Historical Rank Correction</p>
-                <h2 id="ct-history-title" className="mt-1 text-xl font-black">Set CT date for {historyTarget.name}</h2>
+                <h2 id="ct-history-title" className="mt-1 text-xl font-black">{historyTarget.ct_effective_at ? "Edit" : "Set"} CT date for {historyTarget.name}</h2>
                 <p className="mt-1 text-sm text-white/55">Current rank: {historyTarget.current_rank || "Unranked"}</p>
               </div>
               <button onClick={() => setHistoryTarget(null)} className="grid h-10 w-10 place-items-center border border-white/15" aria-label="Close"><X size={18} /></button>
@@ -811,7 +819,7 @@ export default function PromotionReadinessPage() {
             </div>
             <footer className="flex justify-end gap-3 border-t border-amber-300/20 p-5">
               <button onClick={() => setHistoryTarget(null)} className="min-h-11 border border-white/15 px-5">Cancel</button>
-              <button onClick={() => void saveCtHistory()} disabled={workflowSaving || !historyDate || historyReason.trim().length < 5} className="inline-flex min-h-11 items-center gap-2 bg-amber-200 px-5 font-black uppercase text-black disabled:opacity-40">{workflowSaving ? <RefreshCw size={16} className="animate-spin" /> : <CalendarPlus size={16} />} {workflowSaving ? "Saving" : "Record CT Date"}</button>
+              <button onClick={() => void saveCtHistory()} disabled={workflowSaving || !historyDate || historyReason.trim().length < 5} className="inline-flex min-h-11 items-center gap-2 bg-amber-200 px-5 font-black uppercase text-black disabled:opacity-40">{workflowSaving ? <RefreshCw size={16} className="animate-spin" /> : <CalendarPlus size={16} />} {workflowSaving ? "Saving" : historyTarget.ct_effective_at ? "Update CT Date" : "Record CT Date"}</button>
             </footer>
           </section>
         </div>

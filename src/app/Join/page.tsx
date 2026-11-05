@@ -343,7 +343,6 @@ export default function HowToJoinPage() {
                 <ul className="mt-4 list-disc space-y-2 pl-5 text-gray-300">
                   <li>Own a legal copy of Arma 3</li>
                   <li>Minimum age of 15</li>
-                  <li>Not be part of another Arma 3 starsim unit</li>
                 </ul>
               </div>
             </div>

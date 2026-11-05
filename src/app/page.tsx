@@ -795,6 +795,13 @@ export default function HomePage() {
                       >
                         Link Steam
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/Join")}
+                        className="border border-white/15 bg-black/40 px-4 py-2 text-sm text-white transition hover:border-[#00ff66]/40 hover:text-[#00ff66]"
+                      >
+                        How to Join
+                      </button>
                     </div>
                   </div>
                 </div>

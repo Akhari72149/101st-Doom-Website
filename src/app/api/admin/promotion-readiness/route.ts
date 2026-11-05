@@ -451,9 +451,10 @@ export async function GET(request: Request) {
       right.affected - left.affected || left.label.localeCompare(right.label)
     );
 
-    const [canPromote, canCompanyApprove] = await Promise.all([
+    const [canPromote, canCompanyApprove, canCorrectHistory] = await Promise.all([
       requirePageAccess(request, "admin.promotion-readiness", "edit").then(Boolean).catch(() => false),
       requirePageAccess(request, "admin.promotion-readiness-company-approval", "edit").then(Boolean).catch(() => false),
+      requirePageAccess(request, "admin.promotion-readiness", "full").then(Boolean).catch(() => false),
     ]);
     const readyPeople = people.filter((person) =>
       (person.status === "ready" || (person.status === "review" && person.approvalPermission === "company"))
@@ -520,6 +521,7 @@ export async function GET(request: Request) {
           ...item,
           canConfirm: canPromote && item.manual === true && item.state === "review",
           canRevoke: canPromote && item.manual === true && item.state === "met" && Boolean(item.confirmation),
+          canSetHistoricalDate: canCorrectHistory && item.key === "ct-service" && item.state === "unavailable",
         })),
         canApprove: person.approvalPermission === "company"
           && canCompanyApprove
@@ -534,6 +536,7 @@ export async function GET(request: Request) {
       setupIssues,
       canPromote,
       canCompanyApprove,
+      canCorrectHistory,
       announcementControl: {
         enabled: announcementResult.rows[0]?.announcements_enabled ?? false,
         pending: announcementResult.rows[0]?.pending_announcements ?? 0,
@@ -555,9 +558,10 @@ export async function POST(request: Request) {
   if (!requestHasSameOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
-  const [standardAuth, companyAuth] = await Promise.all([
+  const [standardAuth, companyAuth, fullAuth] = await Promise.all([
     requirePageAccess(request, "admin.promotion-readiness", "edit").catch(() => null),
     requirePageAccess(request, "admin.promotion-readiness-company-approval", "edit").catch(() => null),
+    requirePageAccess(request, "admin.promotion-readiness", "full").catch(() => null),
   ]);
   const body = await request.json().catch(() => null) as {
     personnelId?: string;
@@ -567,6 +571,7 @@ export async function POST(request: Request) {
     notes?: string;
     evidenceUrl?: string;
     reason?: string;
+    effectiveDate?: string;
   } | null;
   if (body?.action === "set-announcements") {
     if (!standardAuth) {
@@ -590,6 +595,71 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error("[promotion-readiness] Announcement control failed", error);
       return NextResponse.json({ error: "Failed to update promotion announcements" }, { status: 500 });
+    }
+  }
+  if (body?.action === "set-ct-history") {
+    if (!fullAuth) {
+      return NextResponse.json({ error: "Full promotion readiness permission is required" }, { status: 403 });
+    }
+    const personnelId = String(body.personnelId || "");
+    const reason = String(body.reason || "").trim();
+    const evidenceUrl = String(body.evidenceUrl || "").trim();
+    const effectiveDate = String(body.effectiveDate || "");
+    if (!UUID.test(personnelId)) return NextResponse.json({ error: "Invalid personnel record" }, { status: 400 });
+    if (reason.length < 5) return NextResponse.json({ error: "Enter a correction reason" }, { status: 400 });
+    if (evidenceUrl && !/^https?:\/\//i.test(evidenceUrl)) {
+      return NextResponse.json({ error: "Evidence must be a valid http or https link" }, { status: 400 });
+    }
+    const effectiveAt = /^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)
+      ? new Date(`${effectiveDate}T12:00:00.000Z`)
+      : new Date(Number.NaN);
+    if (Number.isNaN(effectiveAt.getTime()) || effectiveAt > new Date() || effectiveAt < new Date("2010-01-01T00:00:00.000Z")) {
+      return NextResponse.json({ error: "Select a valid historical CT date" }, { status: 400 });
+    }
+    try {
+      const actor = await resolveAdminActor(fullAuth);
+      const result = await withPostgresTransaction(async (client) => {
+        const person = await client.query<{ name: string; discord_id: string | null }>(
+          "select name,discord_id from public.personnel where id=$1 for update",
+          [personnelId],
+        );
+        if (!person.rows[0]) throw new Error("NOT_FOUND");
+        const ctRank = await client.query<{ id: string }>(
+          "select id from public.ranks where upper(btrim(name))='CT' and is_active=true order by rank_level limit 1",
+        );
+        if (!ctRank.rows[0]) throw new Error("CT_RANK_MISSING");
+        const existing = await client.query<{ id: string }>(
+          "select id from public.rank_history where personnel_id=$1 and new_rank_id=$2 limit 1",
+          [personnelId, ctRank.rows[0].id],
+        );
+        if (existing.rows[0]) throw new Error("CT_HISTORY_EXISTS");
+        await client.query(
+          `insert into public.rank_history
+             (personnel_id,discord_id,old_rank_id,new_rank_id,changed_at,correction_reason,evidence_url,
+              recorded_by_user_id,recorded_by_name,recorded_at)
+           values($1,$2,$3,$3,$4,$5,$6,$7,$8,now())`,
+          [personnelId, person.rows[0].discord_id || "", ctRank.rows[0].id, effectiveAt, reason,
+            evidenceUrl || null, fullAuth.userId, actor.displayName],
+        );
+        const evidenceDetail = evidenceUrl ? ` Evidence: ${evidenceUrl}` : "";
+        await client.query(
+          `insert into public.audit_logs
+             (user_id,target_personnel_id,action,target_rank_id,details,processed_by)
+           values($1,$2,'RANK_HISTORY_CORRECTED',$3,$4,$5)`,
+          [fullAuth.userId, personnelId, ctRank.rows[0].id,
+            `Historical CT date recorded as ${effectiveDate} by ${actor.displayName}. Reason: ${reason}.${evidenceDetail}`,
+            actor.personnelId],
+        );
+        return { personnelName: person.rows[0].name, processedBy: actor.displayName };
+      });
+      return NextResponse.json({ ok: true, ...result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "NOT_FOUND") return NextResponse.json({ error: "Personnel record was not found" }, { status: 404 });
+      if (message === "CT_RANK_MISSING") return NextResponse.json({ error: "The active CT rank could not be found" }, { status: 409 });
+      if (message === "CT_HISTORY_EXISTS") return NextResponse.json({ error: "A CT history entry already exists for this person" }, { status: 409 });
+      console.error("[promotion-readiness] Historical CT correction failed", error);
+      return NextResponse.json({ error: "Failed to record the historical CT date" }, { status: 500 });
     }
   }
   const action = body?.action || "promote";

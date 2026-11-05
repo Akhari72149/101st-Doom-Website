@@ -6,6 +6,7 @@ import {
   Bell,
   BellOff,
   CalendarClock,
+  CalendarPlus,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
@@ -35,6 +36,7 @@ type Criterion = {
   projectedAt?: string;
   canConfirm?: boolean;
   canRevoke?: boolean;
+  canSetHistoricalDate?: boolean;
   confirmation?: {
     confirmed_by_name: string;
     confirmed_at: string;
@@ -110,6 +112,7 @@ type ResponseBody = {
   setupIssues: Array<SetupIssue & { affected: number }>;
   canPromote: boolean;
   canCompanyApprove: boolean;
+  canCorrectHistory: boolean;
   announcementControl: { enabled: boolean; pending: number };
   announcementIssues: AnnouncementIssue[];
   attendanceWindow: { first_record: string | null; last_record: string | null; periods: number; startsAt: string };
@@ -185,6 +188,10 @@ export default function PromotionReadinessPage() {
   const [approvalRevokeTarget, setApprovalRevokeTarget] = useState<Person | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
   const [workflowSaving, setWorkflowSaving] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<Person | null>(null);
+  const [historyDate, setHistoryDate] = useState("");
+  const [historyReason, setHistoryReason] = useState("");
+  const [historyEvidence, setHistoryEvidence] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -321,6 +328,38 @@ export default function PromotionReadinessPage() {
     }
   }, [data, load]);
 
+  const saveCtHistory = useCallback(async () => {
+    if (!historyTarget) return;
+    setWorkflowSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/promotion-readiness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set-ct-history",
+          personnelId: historyTarget.id,
+          effectiveDate: historyDate,
+          reason: historyReason,
+          evidenceUrl: historyEvidence,
+        }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Failed to record the CT date");
+      setNotice(`${historyTarget.name}'s historical CT date was recorded.`);
+      setHistoryTarget(null);
+      setHistoryDate("");
+      setHistoryReason("");
+      setHistoryEvidence("");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to record the CT date");
+    } finally {
+      setWorkflowSaving(false);
+    }
+  }, [historyDate, historyEvidence, historyReason, historyTarget, load]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -353,6 +392,9 @@ export default function PromotionReadinessPage() {
         || left.name.localeCompare(right.name);
     });
   }, [data, formation, rank, search, sort, status, unit, view]);
+  const missingCtHistory = useMemo(() => (data?.people || []).filter((person) =>
+    person.criteria.some((item) => item.key === "ct-service" && item.state === "unavailable"),
+  ), [data]);
 
   const summaries = [
     { status: "ready" as const, label: "Ready", value: data?.summary.ready || 0, icon: CheckCircle2, color: "text-[#00ff66]" },
@@ -423,6 +465,33 @@ export default function PromotionReadinessPage() {
             </div>
           )}
         </div>
+
+        {data?.canCorrectHistory && missingCtHistory.length > 0 && (
+          <section className="border-b border-amber-300/20 bg-amber-300/[0.035] px-5 py-5 sm:px-7">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-200">Missing Rank History</p>
+                <h2 className="mt-1 text-lg font-black">CT milestone dates require correction</h2>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-[#9cab9f]">These records cannot calculate time since CT. Adding a historical date does not change the current rank, TIG, Discord roles, or announcements.</p>
+              </div>
+              <span className="border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-sm font-black text-amber-200">{missingCtHistory.length} missing</span>
+            </div>
+            <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {missingCtHistory.map((person) => (
+                <div key={person.id} className="flex items-center justify-between gap-3 border border-amber-300/20 bg-black/30 p-3">
+                  <div className="min-w-0"><p className="truncate font-black">{person.name}</p><p className="mt-1 text-xs text-white/50">{person.current_rank} to {person.targetRank}</p></div>
+                  <button
+                    type="button"
+                    onClick={() => { setHistoryTarget(person); setHistoryDate(""); setHistoryReason(""); setHistoryEvidence(""); }}
+                    className="inline-flex min-h-10 shrink-0 items-center gap-2 border border-amber-300/35 px-3 text-xs font-black uppercase tracking-[0.1em] text-amber-200 hover:bg-amber-300/10"
+                  >
+                    <CalendarPlus size={15} /> Set CT Date
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="grid grid-cols-3 border-b border-[#00ff66]/20">
           <button onClick={() => { setView("ready"); setStatus("all"); }} className={`min-h-14 border-r border-[#00ff66]/20 px-4 text-sm font-black uppercase tracking-[0.12em] ${view === "ready" ? "bg-[#00ff66]/10 text-[#00ff66]" : "text-[#81958a] hover:bg-white/[0.03]"}`}>
@@ -642,6 +711,15 @@ export default function PromotionReadinessPage() {
                                 {item.canConfirm ? "Confirm Requirement" : "Revoke Confirmation"}
                               </button>
                             )}
+                            {item.canSetHistoricalDate && (
+                              <button
+                                type="button"
+                                onClick={() => { setHistoryTarget(person); setHistoryDate(""); setHistoryReason(""); setHistoryEvidence(""); }}
+                                className="mt-3 inline-flex min-h-9 items-center gap-2 border border-current/35 px-3 text-[10px] font-black uppercase tracking-[0.12em] hover:bg-white/[0.05]"
+                              >
+                                <CalendarPlus size={14} /> Set CT Date
+                              </button>
+                            )}
                           </div>
                         </div>
                       )) : person.status === "terminal" ? (
@@ -709,6 +787,32 @@ export default function PromotionReadinessPage() {
               {requirementTarget.mode === "confirm" && <label className="block"><span className="text-xs font-bold uppercase tracking-[0.12em] text-[#8da095]">Evidence link (optional)</span><input value={requirementEvidence} onChange={(event) => setRequirementEvidence(event.target.value)} placeholder="https://..." className="mt-2 min-h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-cyan-300/50" /></label>}
             </div>
             <footer className="flex justify-end gap-3 border-t border-cyan-300/20 p-5"><button onClick={() => setRequirementTarget(null)} className="min-h-11 border border-white/15 px-5">Cancel</button><button onClick={() => void updateRequirement()} disabled={workflowSaving || (requirementTarget.mode === "revoke" && !requirementNotes.trim())} className="min-h-11 bg-cyan-300 px-5 font-black uppercase text-black disabled:opacity-40">{workflowSaving ? "Saving" : requirementTarget.mode === "confirm" ? "Confirm" : "Revoke"}</button></footer>
+          </section>
+        </div>
+      )}
+
+      {historyTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="ct-history-title">
+          <section className="w-full max-w-xl border border-amber-300/30 bg-[#020806] shadow-[0_0_60px_rgba(253,224,71,0.08)]">
+            <header className="flex items-start justify-between gap-4 border-b border-amber-300/20 p-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-200">Historical Rank Correction</p>
+                <h2 id="ct-history-title" className="mt-1 text-xl font-black">Set CT date for {historyTarget.name}</h2>
+                <p className="mt-1 text-sm text-white/55">Current rank: {historyTarget.current_rank || "Unranked"}</p>
+              </div>
+              <button onClick={() => setHistoryTarget(null)} className="grid h-10 w-10 place-items-center border border-white/15" aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="space-y-4 p-5">
+              <div className="border border-cyan-300/20 bg-cyan-300/[0.05] p-4 text-sm leading-6 text-cyan-100">This records when the member originally reached CT. It will not change their current rank, current TIG, Discord roles, or send an announcement.</div>
+              <label className="block"><span className="text-xs font-bold uppercase tracking-[0.12em] text-[#9ca99f]">CT effective date</span><input type="date" value={historyDate} max={new Date().toISOString().slice(0, 10)} onChange={(event) => setHistoryDate(event.target.value)} className="mt-2 min-h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-amber-300/50" /></label>
+              <label className="block"><span className="text-xs font-bold uppercase tracking-[0.12em] text-[#9ca99f]">Correction reason</span><textarea value={historyReason} onChange={(event) => setHistoryReason(event.target.value)} rows={3} maxLength={1000} placeholder="Why this historical date is being added" className="mt-2 w-full border border-white/15 bg-black p-3 outline-none focus:border-amber-300/50" /></label>
+              <label className="block"><span className="text-xs font-bold uppercase tracking-[0.12em] text-[#9ca99f]">Evidence link (optional)</span><input value={historyEvidence} onChange={(event) => setHistoryEvidence(event.target.value)} placeholder="https://..." className="mt-2 min-h-11 w-full border border-white/15 bg-black px-3 outline-none focus:border-amber-300/50" /></label>
+              <p className="text-xs leading-5 text-white/45">The date, reason, evidence, and logged-in administrator will be retained in rank history and the public audit log.</p>
+            </div>
+            <footer className="flex justify-end gap-3 border-t border-amber-300/20 p-5">
+              <button onClick={() => setHistoryTarget(null)} className="min-h-11 border border-white/15 px-5">Cancel</button>
+              <button onClick={() => void saveCtHistory()} disabled={workflowSaving || !historyDate || historyReason.trim().length < 5} className="inline-flex min-h-11 items-center gap-2 bg-amber-200 px-5 font-black uppercase text-black disabled:opacity-40">{workflowSaving ? <RefreshCw size={16} className="animate-spin" /> : <CalendarPlus size={16} />} {workflowSaving ? "Saving" : "Record CT Date"}</button>
+            </footer>
           </section>
         </div>
       )}

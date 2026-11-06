@@ -160,6 +160,15 @@ const panels: PanelDefinition[] = [
     icon: ClipboardList,
   },
   {
+    id: "recruitment",
+    title: "Recruitment",
+    description: "Review applications, track contact progress, and maintain the public recruitment form.",
+    permission: "admin.recruitment",
+    route: "/admin/recruitment",
+    group: "Records & Progression",
+    icon: UserPlus,
+  },
+  {
     id: "join-links",
     title: "Join Page Content",
     description: "Publish MainOp and FunOp files and maintain the unit whitelist.",

@@ -156,6 +156,12 @@ export default function NavbarClient() {
           description: "Recruitment steps and entry guidance",
         },
         {
+          href: "/recruitment",
+          label: "Recruitment Application",
+          description: "Complete the public recruitment prescreening form",
+          menuVisible: false,
+        },
+        {
           href: "/documents",
           label: "Documents & Forms",
           description: "Important files, policies and paperwork",
@@ -451,6 +457,14 @@ export default function NavbarClient() {
           description: "Issue and review disciplinary records",
           allowedRoles: [],
           category: "Records",
+        },
+        {
+          href: "/admin/recruitment",
+          label: "Recruitment Responses",
+          description: "Review applications and maintain the recruitment form",
+          allowedRoles: [],
+          category: "Records",
+          menuVisible: false,
         },
         {
           href: "/GC-Asset-Log",

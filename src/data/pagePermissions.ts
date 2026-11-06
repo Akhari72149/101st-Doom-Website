@@ -162,6 +162,14 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     legacyRoles: [],
   },
   {
+    key: "admin.recruitment",
+    pagePath: "/admin/recruitment",
+    label: "Recruitment",
+    category: "Records",
+    description: "Review recruitment applications and maintain the public recruitment form.",
+    legacyRoles: [],
+  },
+  {
     key: "admin.discipline-approval",
     pagePath: "/admin/discipline/approval",
     label: "DA Approval",

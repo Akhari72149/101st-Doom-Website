@@ -29,6 +29,47 @@ function normalizeModIds(value: unknown) {
   return [...new Set(value.map((entry) => String(entry).trim()).filter((entry) => /^\d{6,12}$/.test(entry)))].slice(0, 400);
 }
 
+async function resolveWorkshopNames(ids: string[]) {
+  if (!ids.length) return {} as Record<string, string>;
+  const pool = getPostgresPool();
+  const cached = await pool.query<{ workshop_id: string; display_name: string }>(
+    `select workshop_id,display_name from public.server_control_workshop_items
+      where workshop_id=any($1::text[])`,
+    [ids],
+  );
+  const names = Object.fromEntries(cached.rows.map((row) => [row.workshop_id, row.display_name])) as Record<string, string>;
+  const missing = ids.filter((id) => !names[id]).slice(0, 100);
+  if (!missing.length) return names;
+
+  try {
+    const params = new URLSearchParams({ itemcount: String(missing.length) });
+    missing.forEach((id, index) => params.set(`publishedfileids[${index}]`, id));
+    const response = await fetch("https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params,
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error(`Steam returned ${response.status}`);
+    const body = await response.json() as { response?: { publishedfiledetails?: Array<{ publishedfileid?: string; title?: string; result?: number }> } };
+    for (const item of body.response?.publishedfiledetails || []) {
+      const id = String(item.publishedfileid || "");
+      const title = String(item.title || "").trim().slice(0, 300);
+      if (!ids.includes(id) || !title || item.result !== 1) continue;
+      names[id] = title;
+      await pool.query(
+        `insert into public.server_control_workshop_items(workshop_id,display_name,resolved_at,updated_at)
+         values($1,$2,now(),now()) on conflict(workshop_id) do update
+         set display_name=excluded.display_name,resolved_at=now(),updated_at=now()`,
+        [id, title],
+      );
+    }
+  } catch (error) {
+    console.warn("[server-control] Steam Workshop title lookup failed", error);
+  }
+  return names;
+}
+
 async function ensureModPresets() {
   const pool = getPostgresPool();
   await Promise.all([
@@ -57,10 +98,13 @@ async function readModPresets() {
     `select preset_key,display_name,workshop_mod_ids,updated_by_name,updated_at
        from public.server_control_mod_presets order by preset_key`,
   );
-  return result.rows.map((row) => ({
+  const rows = result.rows.map((row) => ({ ...row, modIds: normalizeModIds(row.workshop_mod_ids) }));
+  const names = await resolveWorkshopNames([...new Set(rows.flatMap((row) => row.modIds))]);
+  return rows.map((row) => ({
     key: row.preset_key,
     displayName: row.display_name,
-    modIds: normalizeModIds(row.workshop_mod_ids),
+    modIds: row.modIds,
+    modNames: Object.fromEntries(row.modIds.map((id) => [id, names[id] || `Workshop item ${id}`])),
     updatedBy: row.updated_by_name,
     updatedAt: row.updated_at,
   }));

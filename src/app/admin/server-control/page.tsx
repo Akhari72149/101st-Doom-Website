@@ -61,6 +61,7 @@ type ModPreset = {
   key: "main" | "fun";
   displayName: string;
   modIds: string[];
+  modNames: Record<string, string>;
   updatedBy: string | null;
   updatedAt: string;
 };
@@ -824,10 +825,14 @@ export default function ServerControl() {
                   </div>
 
                   <div className="mt-4 min-h-0 flex-1 overflow-y-auto border border-white/10">
-                    {presetDrafts[preset].map((id) => (
+                    {presetDrafts[preset].map((id) => {
+                      const savedPreset = controlActivity.presets?.find((entry) => entry.key === preset);
+                      const displayName = savedPreset?.modNames?.[id] || `Workshop item ${id}`;
+                      return (
                       <div key={id} className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 last:border-b-0">
-                        <a href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`} target="_blank" rel="noreferrer" className="min-w-0 font-mono text-sm text-cyan-200 hover:underline">
-                          {id}
+                        <a href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`} target="_blank" rel="noreferrer" className="min-w-0 hover:underline">
+                          <span className="block truncate text-sm font-semibold text-cyan-100">{displayName}</span>
+                          <span className="mt-0.5 block font-mono text-[11px] text-gray-600">Workshop {id}</span>
                         </a>
                         <button
                           type="button"
@@ -838,7 +843,7 @@ export default function ServerControl() {
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 </section>
               ))}

@@ -240,7 +240,7 @@ export default function HowToJoinPage() {
   const joinLinks = [
     {
       label: "Fill Out Recruitment Form",
-      href: "https://docs.google.com/forms/d/e/1FAIpQLSeQVc_mA5TAiMdcpBJxiCXdd2jc0Nh1GahJmF2-eoUQf-Q4VQ/viewform",
+      href: "/recruitment",
     },
     {
       label: "Join Our Discord",

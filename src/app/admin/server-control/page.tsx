@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import {
   Activity,
   CalendarClock,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Download,
   PackagePlus,
   RefreshCw,
@@ -91,6 +93,7 @@ export default function ServerControl() {
   const [presetDrafts, setPresetDrafts] = useState<Record<"main" | "fun", string[]>>({ main: [], fun: [] });
   const [newModId, setNewModId] = useState<Record<"main" | "fun", string>>({ main: "", fun: "" });
   const [savingPreset, setSavingPreset] = useState<"main" | "fun" | null>(null);
+  const [expandedPlayers, setExpandedPlayers] = useState<number | null>(null);
 
   const watchIntervalRef = useRef<number | null>(null);
 
@@ -630,6 +633,29 @@ export default function ServerControl() {
                                 : "Server currently offline."}
                             </div>
                           </div>
+                          {status.online && status.players > 0 && (
+                            <div className="mt-3 border border-white/10 bg-black/45">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedPlayers((current) => current === server.id ? null : server.id)}
+                                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-semibold text-cyan-100 hover:bg-cyan-950/20"
+                                aria-expanded={expandedPlayers === server.id}
+                              >
+                                <span className="flex items-center gap-2"><Users className="h-4 w-4 text-cyan-300" />Who is online ({status.players})</span>
+                                {expandedPlayers === server.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              </button>
+                              {expandedPlayers === server.id && (
+                                <div className="border-t border-white/10 px-4 py-3">
+                                  {status.playerList?.length ? (
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      {status.playerList.map((player, index) => <div key={`${player}-${index}`} className="flex min-w-0 items-center gap-2 border border-white/10 bg-black/50 px-3 py-2 text-sm text-white"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#00ff66]"/><span className="truncate">{player}</span></div>)}
+                                    </div>
+                                  ) : <p className="text-sm text-[#80958a]">The server reports {status.players} connected player{status.players === 1 ? "" : "s"}, but did not provide player names.</p>}
+                                  {(status.playerList?.length || 0) < status.players && Boolean(status.playerList?.length) && <p className="mt-3 text-xs text-[#667b70]">{status.players - (status.playerList?.length || 0)} additional player name{status.players - (status.playerList?.length || 0) === 1 ? " is" : "s are"} hidden or unavailable.</p>}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </>
                       ) : (
                         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-400">

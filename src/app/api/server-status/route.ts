@@ -8,7 +8,44 @@ const SERVERS = [
 ];
 
 
-function queryServer(host: string, port: number): Promise<any> {
+function queryPlayers(host: string, port: number): Promise<string[]> {
+  return new Promise((resolve) => {
+    const socket = dgram.createSocket("udp4");
+    let closed = false;
+    const close = () => { if (!closed) { closed = true; try { socket.close(); } catch {} } };
+    const finish = (players: string[]) => { clearTimeout(timeout); close(); resolve(players); };
+    const request = (challenge = Buffer.from([0xff, 0xff, 0xff, 0xff])) => {
+      socket.send(Buffer.concat([Buffer.from([0xff, 0xff, 0xff, 0xff, 0x55]), challenge]), port, host);
+    };
+    const timeout = setTimeout(() => finish([]), 3500);
+
+    socket.on("message", (message) => {
+      const type = message[4];
+      if (type === 0x41 && message.length >= 9) {
+        request(message.subarray(5, 9));
+        return;
+      }
+      if (type !== 0x44 || message.length < 6) return;
+
+      const names: string[] = [];
+      const count = message.readUInt8(5);
+      let offset = 6;
+      for (let index = 0; index < count && offset < message.length; index += 1) {
+        offset += 1;
+        const end = message.indexOf(0x00, offset);
+        if (end < 0) break;
+        const name = message.toString("utf8", offset, end).trim();
+        offset = end + 1 + 8;
+        if (name) names.push(name.slice(0, 120));
+      }
+      finish(names);
+    });
+    socket.on("error", () => finish([]));
+    request();
+  });
+}
+
+function queryServer(host: string, port: number): Promise<null | { online: boolean; players: number; maxPlayers: number; missionFile: string; playerList: string[] }> {
   return new Promise((resolve) => {
     const socket = dgram.createSocket("udp4");
 
@@ -67,10 +104,10 @@ function queryServer(host: string, port: number): Promise<any> {
           return str;
         };
 
-        const serverName = readString();
+        readString();
         const mapName = readString();
-        const folder = readString();
-        const game = readString();
+        readString();
+        readString();
 
         offset += 2;
 
@@ -82,43 +119,14 @@ function queryServer(host: string, port: number): Promise<any> {
 
         const missionFile = mapName;
 
-        const playerRequest = Buffer.from([
-          0xff, 0xff, 0xff, 0xff,
-          0x55,
-          ...(challengeToken ?? []),
-        ]);
-
-        socket.send(playerRequest, port, host);
-
-        // Wait for player packet
-        socket.once("message", (playerMsg) => {
-          const type = playerMsg[4];
-
-          if (type !== 0x44) {
-            safeClose();
-            resolve({
-              online: true,
-              players,
-              maxPlayers,
-              missionFile: "",
-              playerList: [],
-            });
-            return;
-          }
-
-          const playerCount = playerMsg.readUInt8(5);
-
-          safeClose();
-
-          
-          resolve({
-            online: true,
-            players: playerCount,
-            maxPlayers,
-            missionFile,
-            playerList: [],
-          });
-        });
+        safeClose();
+        void queryPlayers(host, port).then((playerList) => resolve({
+          online: true,
+          players,
+          maxPlayers,
+          missionFile,
+          playerList,
+        }));
 
         return;
       }

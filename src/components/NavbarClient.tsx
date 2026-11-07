@@ -167,6 +167,12 @@ export default function NavbarClient() {
           description: "Important files, policies and paperwork",
         },
         {
+          href: "/rules-and-regulations",
+          label: "Rules & Regulations",
+          description: "Review official battalion conduct and operational standards",
+          menuVisible: false,
+        },
+        {
           href: "/recognition",
           label: "Recognition",
           description: "Celebrate promotions, qualifications and medals",
@@ -188,6 +194,12 @@ export default function NavbarClient() {
           href: "/personnel-profile",
           label: "Personnel Profile",
           description: "View your personnel record and details",
+        },
+        {
+          href: "/member-link",
+          label: "Link Personnel Profile",
+          description: "Connect your Steam, Discord and personnel records",
+          menuVisible: false,
         },
         {
           href: "/armour-points",
@@ -340,6 +352,12 @@ export default function NavbarClient() {
           href: "/Workbench",
           label: "Animation Workbench",
           description: "Workbench and development utility page",
+        },
+        {
+          href: "/Task-Viewer",
+          label: "Task Viewer",
+          description: "Review published website tasks and development progress",
+          menuVisible: false,
         },
         {
           href: "/admin/Taskboard",
@@ -555,6 +573,7 @@ export default function NavbarClient() {
     }
     const canSeeItem = (item: NavItem) => {
       if (item.href === "/hammer-ridealongs" && !item.category) return true;
+      if (item.href === "/Randomiser" && !item.category) return true;
       if (item.href === "/admin/promotion-readiness") return true;
       if (item.href === "/map-requests") return true;
       if (item.href === "/admin/discipline") {
@@ -582,6 +601,8 @@ export default function NavbarClient() {
       permissionsByPath.set(definition.pagePath, [...(permissionsByPath.get(definition.pagePath) || []), definition.key]);
     }
     const canSee = (item: NavItem) => {
+      if (item.href === "/hammer-ridealongs" && !item.category) return true;
+      if (item.href === "/Randomiser" && !item.category) return true;
       if (item.href === "/admin/promotion-readiness") return true;
       if (item.href === "/map-requests") return true;
       if (item.href === "/admin/discipline") return Boolean(permissions["admin.discipline"] || permissions["admin.discipline-approval"]);

@@ -30,7 +30,7 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     pagePath: "/admin/Mod-Taskboard",
     label: "Mod Pipeline",
     category: "Systems",
-    description: "Access the Mod Pipeline; create, edit, move, comment on, complete, review, approve, archive, and restore task work.",
+    description: "Access the Mod Pipeline; create, assign, edit, move, comment on, complete, review, approve, archive, and restore task work.",
     legacyRoles: ["akhari"],
   },
   {
@@ -38,7 +38,7 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     pagePath: "/admin/Mod-Taskboard/administration",
     label: "Mod Pipeline Administration",
     category: "Systems",
-    description: "Manage task owners, contributors, dependencies, releases, repositories, and permanently delete archived records.",
+    description: "Manage pipeline people, dependencies, releases, repositories, and permanently delete archived records.",
     legacyRoles: ["akhari"],
   },
   {

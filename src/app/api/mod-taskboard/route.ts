@@ -127,7 +127,7 @@ export async function POST(request:Request) {
   if(!actorId)return NextResponse.json({error:"Forbidden"},{status:403});
   const body=await request.json().catch(()=>null) as Row|null,kind=cleanText(body?.kind||"task",40);
   try {
-    if(["contributor","dependency","release","repository"].includes(kind)&&!adminAuth)return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});
+    if(["dependency","release","repository"].includes(kind)&&!adminAuth)return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});
     const result=await withPostgresTransaction(async client=>{
       if(kind==="task") {
         const parsed=parseTask(body);if(!parsed||(parsed.blocked&&!parsed.blocker_reason))throw new Error("INVALID_TASK");
@@ -137,7 +137,7 @@ export async function POST(request:Request) {
           ? body.template_checklist.map(item=>cleanText(item,500)).filter(Boolean)
           : [];
         if(templateChecklist.length>20)throw new Error("INVALID_TEMPLATE");
-        const input={...parsed,assigned_to:adminAuth?parsed.assigned_to:null,release_id:adminAuth?parsed.release_id:null};
+        const input={...parsed,release_id:adminAuth?parsed.release_id:null};
         const inserted=await client.query(`insert into public.mod_pipeline_tasks
           (title,description,acceptance_criteria,status,priority,task_type,task_types,workstream,tags,mod_targets,assigned_to,created_by,due_date,position,blocked,blocker_reason,release_id,stage_entered_at)
           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,now()) returning *`,
@@ -259,7 +259,7 @@ export async function PATCH(request:Request) {
       const parsed=parseTask(body);if(!parsed||(parsed.blocked&&!parsed.blocker_reason))throw new Error("INVALID_TASK");
       const addsMusicalArchives=parsed.mod_targets.includes("musical_archives")&&!(Array.isArray(old.mod_targets)&&old.mod_targets.includes("musical_archives"));
       if(addsMusicalArchives&&!(await isAkhariAccount(actorId)))throw new Error("PROTECTED_MOD_TARGET");
-      const input={...parsed,assigned_to:adminAuth?parsed.assigned_to:old.assigned_to as string|null,release_id:adminAuth?parsed.release_id:old.release_id as string|null};
+      const input={...parsed,release_id:adminAuth?parsed.release_id:old.release_id as string|null};
       if(input.status==="testing"&&old.status!=="testing"){const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='review' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("REVIEW_APPROVAL_REQUIRED");}
       if(input.status==="ready_for_release"&&old.status!=="ready_for_release"){const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='testing' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("TEST_APPROVAL_REQUIRED");}
       if(input.status==="released"){if(!input.release_id)throw new Error("RELEASE_REQUIRED");const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='release' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("APPROVAL_REQUIRED");}

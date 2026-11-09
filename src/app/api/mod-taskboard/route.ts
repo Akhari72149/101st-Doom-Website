@@ -96,6 +96,25 @@ async function notifyTaskParticipants(client:PoolClient,taskId:string,actorId:st
     where recipients.user_id is not null and recipients.user_id<>$2`,[taskId,actorId,eventType,title,message]);
 }
 
+async function notifyTaskParticipantsBestEffort(client:PoolClient,taskId:string,actorId:string,eventType:string,title:string,message:string) {
+  await client.query("savepoint mod_pipeline_notification");
+  try {
+    await notifyTaskParticipants(client,taskId,actorId,eventType,title,message);
+    await client.query("release savepoint mod_pipeline_notification");
+  } catch(error) {
+    await client.query("rollback to savepoint mod_pipeline_notification");
+    await client.query("release savepoint mod_pipeline_notification");
+    console.error("[mod-taskboard] Release scope notification failed",{taskId,eventType,error});
+  }
+}
+
+function databaseErrorReference(error:unknown) {
+  if(!error||typeof error!=="object")return null;
+  const row=error as {code?:unknown;constraint?:unknown};
+  const code=cleanText(row.code,20),constraint=cleanText(row.constraint,100);
+  return code?`${code}${constraint?` / ${constraint}`:""}`:null;
+}
+
 async function readPostgres(includeArchive:boolean,userId:string) {
   const pool=getPostgresPool(),taskWhere=includeArchive?"":"where t.archived_at is null";
   await pool.query(`insert into public.mod_pipeline_assignees(id,name,active)
@@ -230,7 +249,7 @@ export async function PATCH(request:Request) {
         const scopeProvided=Array.isArray(body?.task_ids);
         const requestedTaskIds=scopeProvided?(body?.task_ids as unknown[]).map(item=>cleanText(item,50)):[];
         if(scopeProvided&&(requestedTaskIds.length>500||new Set(requestedTaskIds).size!==requestedTaskIds.length||requestedTaskIds.some(taskId=>!UUID.test(taskId))))throw new Error("INVALID_RELEASE_SCOPE");
-        let scopeSummary:{added:number;removed:number}|null=null;
+        let scopeSummary:{added:Row[];removed:Row[]}|null=null;
         if(scopeProvided){
           const currentScope=await client.query("select id,reference_number,title,status from public.mod_pipeline_tasks where release_id=$1 and archived_at is null for update",[id]);
           const requestedScope=await client.query("select id,reference_number,title,status,release_id,archived_at from public.mod_pipeline_tasks where id=any($1::uuid[]) for update",[requestedTaskIds]);
@@ -244,14 +263,17 @@ export async function PATCH(request:Request) {
           if(removed.length){
             const removedIds=removed.map(task=>task.id);
             await client.query("update public.mod_pipeline_tasks set release_id=null,version=version+1,updated_at=now() where id=any($1::uuid[])",[removedIds]);
-            for(const task of removed){await event(client,actorId,{taskId:task.id,releaseId:id,type:"release_scope_removed",summary:`Removed from release ${name}`,oldValues:{release_id:id},newValues:{release_id:null}});await notifyTaskParticipants(client,task.id,actorId,"release_scope_removed","Removed from release",`${task.reference_number?`MOD-${String(task.reference_number).padStart(4,"0")} `:""}${task.title} was removed from ${name}.`);}
+            for(const task of removed){await event(client,actorId,{taskId:task.id,type:"release_scope_removed",summary:`Removed from release ${name}`,oldValues:{release_id:id},newValues:{release_id:null}});await notifyTaskParticipantsBestEffort(client,task.id,actorId,"release_scope_removed","Removed from release",`${task.reference_number?`MOD-${String(task.reference_number).padStart(4,"0")} `:""}${task.title} was removed from ${name}.`);}
           }
           if(added.length){
             const addedIds=added.map(task=>task.id);
             await client.query("update public.mod_pipeline_tasks set release_id=$2,version=version+1,updated_at=now() where id=any($1::uuid[])",[addedIds,id]);
-            for(const task of added){await event(client,actorId,{taskId:task.id,releaseId:id,type:"release_scope_added",summary:`Added to release ${name}`,oldValues:{release_id:null},newValues:{release_id:id}});await notifyTaskParticipants(client,task.id,actorId,"release_scope_added","Added to release",`${task.reference_number?`MOD-${String(task.reference_number).padStart(4,"0")} `:""}${task.title} was added to ${name}.`);}
+            for(const task of added){await event(client,actorId,{taskId:task.id,type:"release_scope_added",summary:`Added to release ${name}`,oldValues:{release_id:null},newValues:{release_id:id}});await notifyTaskParticipantsBestEffort(client,task.id,actorId,"release_scope_added","Added to release",`${task.reference_number?`MOD-${String(task.reference_number).padStart(4,"0")} `:""}${task.title} was added to ${name}.`);}
           }
-          scopeSummary={added:added.length,removed:removed.length};
+          scopeSummary={
+            added:added.map(task=>({id:task.id,reference_number:task.reference_number,title:task.title})),
+            removed:removed.map(task=>({id:task.id,reference_number:task.reference_number,title:task.title})),
+          };
         }
         let releaseNotes:string|null=null,affectedMods:string[]=[],taskSnapshot:Row[]=[];
         if(status==="released"){
@@ -276,7 +298,7 @@ export async function PATCH(request:Request) {
           [id,name,version,description,status,targetDate,actorId,releaseNotes,affectedMods,JSON.stringify(taskSnapshot)]);
         const diff=changedValues(old.rows[0],changed.rows[0]);
         await event(client,actorId,{releaseId:id,type:status==="released"?"release_completed":"release_updated",summary:status==="released"?`Released ${name}`:`Updated release ${name}`,...diff,reason:releaseNotes});
-        if(scopeSummary&&(scopeSummary.added||scopeSummary.removed))await event(client,actorId,{releaseId:id,type:"release_scope_updated",summary:`Updated ${name} scope: ${scopeSummary.added} added, ${scopeSummary.removed} removed`,oldValues:{task_count:scopeSummary.removed},newValues:{task_count:scopeSummary.added}});
+        if(scopeSummary&&(scopeSummary.added.length||scopeSummary.removed.length))await event(client,actorId,{releaseId:id,type:"release_scope_updated",summary:`Updated ${name} scope: ${scopeSummary.added.length} added, ${scopeSummary.removed.length} removed`,oldValues:{removed_tasks:scopeSummary.removed},newValues:{added_tasks:scopeSummary.added}});
         return changed.rows[0];
       }
       if(kind==="archive_release_tasks"){
@@ -340,7 +362,7 @@ export async function PATCH(request:Request) {
       const changed=await client.query(`update public.mod_pipeline_tasks set title=$2,description=$3,acceptance_criteria=$4,status=$5,priority=$6,task_type=$7,task_types=$8,workstream=$9,tags=$10,mod_targets=$11,assigned_to=$12,due_date=$13,position=$14,blocked=$15,blocker_reason=$16,release_id=$17,parent_task_id=$18,stage_entered_at=$19,started_at=$20,completed_at=$21,released_at=$22,version=version+1,updated_at=now() where id=$1 returning *`,[id,next.title,next.description,next.acceptance_criteria,next.status,next.priority,next.task_type,next.task_types,next.workstream,next.tags,next.mod_targets,next.assigned_to,next.due_date,next.position,next.blocked,next.blocker_reason,next.release_id,next.parent_task_id,next.stage_entered_at,next.started_at,next.completed_at,next.released_at]);
       const diff=changedValues(old,next),statusChanged=old.status!==next.status;await event(client,actorId,{taskId:id,type:statusChanged?"status_changed":"task_updated",summary:statusChanged?`Moved from ${old.status} to ${next.status}`:"Updated task details",...diff,reason:cleanText(body?.reason,1000)||null});await notifyTaskParticipants(client,id,actorId,statusChanged?"status_changed":"task_updated",statusChanged?"Pipeline stage changed":"Task updated",statusChanged?`Moved from ${labelForMessage(String(old.status))} to ${labelForMessage(next.status)}.`:"Task details were updated.");return changed.rows[0];
     });return NextResponse.json({ok:true,result});
-  } catch(error){const message=error instanceof Error?error.message:"";if(message==="ADMIN_REQUIRED")return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="NOT_FOUND")return NextResponse.json({error:"Record not found"},{status:404});if(message==="VERSION_CONFLICT")return NextResponse.json({error:"This task changed while you were editing it. Refresh and try again."},{status:409});if(message==="REASON_REQUIRED")return NextResponse.json({error:"Give a reason when moving work backwards or cancelling it."},{status:400});if(message==="INVALID_PARENT")return NextResponse.json({error:"Choose an active parent that does not create a circular task hierarchy."},{status:400});if(message==="REVIEW_APPROVAL_REQUIRED")return NextResponse.json({error:"Internal review approval is required before testing."},{status:400});if(message==="TEST_APPROVAL_REQUIRED")return NextResponse.json({error:"Testing approval is required before release readiness."},{status:400});if(message==="RELEASE_REQUIRED")return NextResponse.json({error:"Select a release before marking this task released."},{status:400});if(message==="APPROVAL_REQUIRED")return NextResponse.json({error:"Release approval is required before this task can be released."},{status:400});if(message==="RELEASE_EMPTY")return NextResponse.json({error:"Add at least one task to this release before completing it."},{status:400});if(message==="RELEASE_SCOPE_NOT_READY")return NextResponse.json({error:"Every scoped task must be unblocked, Ready for Release, and have its latest release decision approved."},{status:409});if(message==="RELEASE_SCOPE_CLOSED_TASK")return NextResponse.json({error:"Released, cancelled, or archived tasks cannot be added to or removed from an active release."},{status:409});if(message==="TASK_ALREADY_SCOPED")return NextResponse.json({error:"One or more selected tasks already belong to another release."},{status:409});if(message==="RELEASE_LOCKED")return NextResponse.json({error:"Released releases are read-only."},{status:409});if(message==="RELEASE_NOT_COMPLETE")return NextResponse.json({error:"Only completed releases can have their tasks archived."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:"Invalid pipeline data"},{status:400});console.error("[mod-taskboard] Update failed",error);return NextResponse.json({error:"Failed to update pipeline"},{status:500});}
+  } catch(error){const message=error instanceof Error?error.message:"";if(message==="ADMIN_REQUIRED")return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="NOT_FOUND")return NextResponse.json({error:"Record not found"},{status:404});if(message==="VERSION_CONFLICT")return NextResponse.json({error:"This task changed while you were editing it. Refresh and try again."},{status:409});if(message==="REASON_REQUIRED")return NextResponse.json({error:"Give a reason when moving work backwards or cancelling it."},{status:400});if(message==="INVALID_PARENT")return NextResponse.json({error:"Choose an active parent that does not create a circular task hierarchy."},{status:400});if(message==="REVIEW_APPROVAL_REQUIRED")return NextResponse.json({error:"Internal review approval is required before testing."},{status:400});if(message==="TEST_APPROVAL_REQUIRED")return NextResponse.json({error:"Testing approval is required before release readiness."},{status:400});if(message==="RELEASE_REQUIRED")return NextResponse.json({error:"Select a release before marking this task released."},{status:400});if(message==="APPROVAL_REQUIRED")return NextResponse.json({error:"Release approval is required before this task can be released."},{status:400});if(message==="RELEASE_EMPTY")return NextResponse.json({error:"Add at least one task to this release before completing it."},{status:400});if(message==="RELEASE_SCOPE_NOT_READY")return NextResponse.json({error:"Every scoped task must be unblocked, Ready for Release, and have its latest release decision approved."},{status:409});if(message==="RELEASE_SCOPE_CLOSED_TASK")return NextResponse.json({error:"Released, cancelled, or archived tasks cannot be added to or removed from an active release."},{status:409});if(message==="TASK_ALREADY_SCOPED")return NextResponse.json({error:"One or more selected tasks already belong to another release."},{status:409});if(message==="RELEASE_LOCKED")return NextResponse.json({error:"Released releases are read-only."},{status:409});if(message==="RELEASE_NOT_COMPLETE")return NextResponse.json({error:"Only completed releases can have their tasks archived."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:"Invalid pipeline data"},{status:400});const reference=databaseErrorReference(error);console.error("[mod-taskboard] Update failed",error);return NextResponse.json({error:`Failed to update pipeline${reference?` (${reference})`:""}`},{status:500});}
 }
 
 export async function DELETE(request:Request) {

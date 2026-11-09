@@ -365,6 +365,11 @@ export default function NavbarClient() {
           description: "Track tasks, work items and progress",
           allowedRoles: ["admin", "Akhari"],
         },
+        {
+          href: "/admin/Mod-Taskboard",
+          label: "Mod Pipeline",
+          description: "Manage mod-development tasks, reviews and releases",
+        },
       ],
     },
     {
@@ -398,13 +403,6 @@ export default function NavbarClient() {
           allowedRoles: ["admin", "Akhari"],
           category: "Systems",
           menuVisible: false,
-        },
-        {
-          href: "/admin/Mod-Taskboard",
-          label: "Mod Taskboard",
-          description: "Manage the mod development pipeline",
-          allowedRoles: ["Akhari"],
-          category: "Systems",
         },
         {
           href: "/admin/positions",

@@ -85,26 +85,22 @@ async function validateParent(client:PoolClient,taskId:string|null,parentTaskId:
 }
 
 async function notifyTaskParticipants(client:PoolClient,taskId:string,actorId:string,eventType:string,title:string,message:string) {
-  await client.query(`insert into public.mod_pipeline_notifications(recipient_id,task_id,actor_id,event_type,title,message)
-    select distinct recipients.user_id,$1,$2,$3,$4,$5 from (
-      select assigned_to user_id from public.mod_pipeline_tasks where id=$1
-      union select assignee_id from public.mod_pipeline_contributors where task_id=$1
-      union select user_id from public.mod_pipeline_watchers where task_id=$1
-      union select parent.assigned_to from public.mod_pipeline_tasks child join public.mod_pipeline_tasks parent on parent.id=child.parent_task_id where child.id=$1
-      union select parent_watchers.user_id from public.mod_pipeline_tasks child join public.mod_pipeline_watchers parent_watchers on parent_watchers.task_id=child.parent_task_id where child.id=$1
-    ) recipients join public.app_auth_users users on users.id=recipients.user_id and users.disabled=false
-    where recipients.user_id is not null and recipients.user_id<>$2`,[taskId,actorId,eventType,title,message]);
-}
-
-async function notifyTaskParticipantsBestEffort(client:PoolClient,taskId:string,actorId:string,eventType:string,title:string,message:string) {
   await client.query("savepoint mod_pipeline_notification");
   try {
-    await notifyTaskParticipants(client,taskId,actorId,eventType,title,message);
+    await client.query(`insert into public.mod_pipeline_notifications(recipient_id,task_id,actor_id,event_type,title,message)
+      select distinct recipients.user_id,$1,$2,$3,$4,$5 from (
+        select assigned_to user_id from public.mod_pipeline_tasks where id=$1
+        union select assignee_id from public.mod_pipeline_contributors where task_id=$1
+        union select user_id from public.mod_pipeline_watchers where task_id=$1
+        union select parent.assigned_to from public.mod_pipeline_tasks child join public.mod_pipeline_tasks parent on parent.id=child.parent_task_id where child.id=$1
+        union select parent_watchers.user_id from public.mod_pipeline_tasks child join public.mod_pipeline_watchers parent_watchers on parent_watchers.task_id=child.parent_task_id where child.id=$1
+      ) recipients join public.app_auth_users users on users.id=recipients.user_id and users.disabled=false
+      where recipients.user_id is not null and recipients.user_id<>$2`,[taskId,actorId,eventType,title,message]);
     await client.query("release savepoint mod_pipeline_notification");
   } catch(error) {
     await client.query("rollback to savepoint mod_pipeline_notification");
     await client.query("release savepoint mod_pipeline_notification");
-    console.error("[mod-taskboard] Release scope notification failed",{taskId,eventType,error});
+    console.error("[mod-taskboard] Task notification failed",{taskId,eventType,error});
   }
 }
 
@@ -222,7 +218,7 @@ export async function POST(request:Request) {
       if(kind==="repository") {const name=cleanText(body?.name,120),webUrl=cleanText(body?.webUrl,500).replace(/\/$/,""),defaultBranch=cleanText(body?.defaultBranch,200)||"main";let parsed:URL;try{parsed=new URL(webUrl);}catch{throw new Error("INVALID_REPOSITORY");}if(!name||!["http:","https:"].includes(parsed.protocol))throw new Error("INVALID_REPOSITORY");const count=await client.query<{count:number}>("select count(*)::int count from public.mod_pipeline_repositories",[]);if(count.rows[0].count>=5)throw new Error("REPOSITORY_LIMIT");const inserted=await client.query("insert into public.mod_pipeline_repositories(name,web_url,default_branch,sort_order,created_by) values($1,$2,$3,$4,$5) returning *",[name,webUrl,defaultBranch,count.rows[0].count,actorId]);await client.query("insert into public.audit_logs(user_id,action,details) values($1,'MOD_PIPELINE_REPOSITORY_CREATED',$2)",[actorId,`Added pipeline repository ${name} (${webUrl})`]);return inserted.rows[0];}
       throw new Error("INVALID_ACTION");
     });return NextResponse.json({ok:true,result},{status:201});
-  } catch(error){const message=error instanceof Error?error.message:"";if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="REPOSITORY_LIMIT")return NextResponse.json({error:"The pipeline supports up to five repositories."},{status:409});if((error as {code?:string})?.code==="23505")return NextResponse.json({error:"That repository or task reference is already linked."},{status:409});if((error as {code?:string,constraint?:string})?.code==="23514"&&(error as {constraint?:string})?.constraint==="mod_pipeline_tasks_mod_targets_check")return NextResponse.json({error:"The selected affected mod is not yet enabled in the database. Apply the latest website migration, then try again."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:message.slice(8).toLowerCase().replaceAll("_"," ")},{status:400});console.error("[mod-taskboard] Create failed",error);return NextResponse.json({error:"Failed to save pipeline item"},{status:500});}
+  } catch(error){const message=error instanceof Error?error.message:"";if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="REPOSITORY_LIMIT")return NextResponse.json({error:"The pipeline supports up to five repositories."},{status:409});if((error as {code?:string})?.code==="23505")return NextResponse.json({error:"That repository or task reference is already linked."},{status:409});if((error as {code?:string,constraint?:string})?.code==="23514"&&(error as {constraint?:string})?.constraint==="mod_pipeline_tasks_mod_targets_check")return NextResponse.json({error:"The selected affected mod is not yet enabled in the database. Apply the latest website migration, then try again."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:message.slice(8).toLowerCase().replaceAll("_"," ")},{status:400});const reference=databaseErrorReference(error);console.error("[mod-taskboard] Create failed",error);return NextResponse.json({error:`Failed to save pipeline item${reference?` (${reference})`:""}`},{status:500});}
 }
 
 export async function PATCH(request:Request) {
@@ -263,12 +259,12 @@ export async function PATCH(request:Request) {
           if(removed.length){
             const removedIds=removed.map(task=>task.id);
             await client.query("update public.mod_pipeline_tasks set release_id=null,version=version+1,updated_at=now() where id=any($1::uuid[])",[removedIds]);
-            for(const task of removed){await event(client,actorId,{taskId:task.id,type:"release_scope_removed",summary:`Removed from release ${name}`,oldValues:{release_id:id},newValues:{release_id:null}});await notifyTaskParticipantsBestEffort(client,task.id,actorId,"release_scope_removed","Removed from release",`${task.reference_number?`MOD-${String(task.reference_number).padStart(4,"0")} `:""}${task.title} was removed from ${name}.`);}
+            for(const task of removed){await event(client,actorId,{taskId:task.id,type:"release_scope_removed",summary:`Removed from release ${name}`,oldValues:{release_id:id},newValues:{release_id:null}});await notifyTaskParticipants(client,task.id,actorId,"release_scope_removed","Removed from release",`${task.reference_number?`MOD-${String(task.reference_number).padStart(4,"0")} `:""}${task.title} was removed from ${name}.`);}
           }
           if(added.length){
             const addedIds=added.map(task=>task.id);
             await client.query("update public.mod_pipeline_tasks set release_id=$2,version=version+1,updated_at=now() where id=any($1::uuid[])",[addedIds,id]);
-            for(const task of added){await event(client,actorId,{taskId:task.id,type:"release_scope_added",summary:`Added to release ${name}`,oldValues:{release_id:null},newValues:{release_id:id}});await notifyTaskParticipantsBestEffort(client,task.id,actorId,"release_scope_added","Added to release",`${task.reference_number?`MOD-${String(task.reference_number).padStart(4,"0")} `:""}${task.title} was added to ${name}.`);}
+            for(const task of added){await event(client,actorId,{taskId:task.id,type:"release_scope_added",summary:`Added to release ${name}`,oldValues:{release_id:null},newValues:{release_id:id}});await notifyTaskParticipants(client,task.id,actorId,"release_scope_added","Added to release",`${task.reference_number?`MOD-${String(task.reference_number).padStart(4,"0")} `:""}${task.title} was added to ${name}.`);}
           }
           scopeSummary={
             added:added.map(task=>({id:task.id,reference_number:task.reference_number,title:task.title})),

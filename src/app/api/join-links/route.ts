@@ -147,7 +147,7 @@ export async function POST(request: Request) {
   const form = await request.formData().catch(() => null);
   const key = String(form?.get("key") || "");
   const file = form?.get("file");
-  if (!isJoinModlistKey(key) || !(file instanceof File)) return error("Select a valid MainOp or FunOp HTML modlist", 400);
+  if (!isJoinModlistKey(key) || !(file instanceof File)) return error("Select a valid MainOp, FunOp, or FOTM HTML modlist", 400);
 
   let saved: Awaited<ReturnType<typeof saveJoinModlist>> | null = null;
   let metadataCommitted = false;

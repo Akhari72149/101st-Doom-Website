@@ -14,6 +14,13 @@ export const joinPageLinkDefinitions = [
     defaultUrl: "https://cdn.discordapp.com/attachments/1284402204748546114/1471514051036188756/Funop_Modlist_V5.html?ex=69a44dc1&is=69a2a4da&hm=00bd71791d9fe0b992652f1059345ec4e48c00210af1a93a972ad094bedd3b5f&",
   },
   {
+    key: "fotm",
+    label: "FOTM Modlist",
+    description: "Published mod preset for the current Flavour of the Month rotation.",
+    uploadEnabled: true,
+    defaultUrl: "https://cdn.discordapp.com/attachments/983174143400869898/1464716029312630987/101st_FOTM_40k_Rubicon.html?ex=69a3f65a&is=69a2a4da&hm=afb618de63df40618b068742e8af922f4d356dc14ec4a91018104ce5c9d9aae3&",
+  },
+  {
     key: "unit-whitelist",
     label: "Official Unit Whitelist",
     description: "Approved optional client-side mods for battalion servers.",
@@ -23,7 +30,7 @@ export const joinPageLinkDefinitions = [
 ] as const;
 
 export type JoinPageLinkKey = (typeof joinPageLinkDefinitions)[number]["key"];
-export type JoinModlistKey = Extract<JoinPageLinkKey, "main-operations" | "fun-operations">;
+export type JoinModlistKey = Extract<JoinPageLinkKey, "main-operations" | "fun-operations" | "fotm">;
 
 export const defaultJoinPageLinks = Object.fromEntries(
   joinPageLinkDefinitions.map((definition) => [definition.key, definition.defaultUrl]),
@@ -34,5 +41,5 @@ export function isJoinPageLinkKey(value: string): value is JoinPageLinkKey {
 }
 
 export function isJoinModlistKey(value: string): value is JoinModlistKey {
-  return value === "main-operations" || value === "fun-operations";
+  return value === "main-operations" || value === "fun-operations" || value === "fotm";
 }

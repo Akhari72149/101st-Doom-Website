@@ -13,7 +13,7 @@ export const siteRouteMetadata = {
   "/admin/discipline": { title: "Discipline Management", description: "Issue, review, approve, and appeal official warnings and disciplinary actions." },
   "/admin/discord-announcemets": { title: "Discord Announcements", description: "Create and schedule official Discord announcements and unit pings." },
   "/admin/discord-attendance": { title: "Discord Attendance", description: "Schedule and resend reaction-based Discord attendance messages." },
-  "/admin/join-links": { title: "Join Page Content", description: "Publish the MainOp and FunOp modlists and maintain the unit whitelist link displayed on the public Join page." },
+  "/admin/join-links": { title: "Join Page Content", description: "Publish the MainOp, FunOp, and FOTM modlists and maintain the unit whitelist link displayed on the public Join page." },
   "/admin/uniform-guide": { title: "Uniform Guide Editor", description: "Maintain the published battalion uniform, loadout, and restricted-item guide." },
   "/admin/documents": { title: "Document Library", description: "Maintain official website documents, publishing status, and rich-text content." },
   "/admin/medals": { title: "Medal Management", description: "Award and manage medals recorded on personnel profiles." },

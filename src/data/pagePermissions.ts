@@ -238,7 +238,7 @@ export const pagePermissionDefinitions: PagePermissionDefinition[] = [
     pagePath: "/admin/join-links",
     label: "Join Page Content",
     category: "Systems",
-    description: "Upload the public MainOp and FunOp modlists and maintain the unit whitelist link.",
+    description: "Upload the public MainOp, FunOp, and FOTM modlists and maintain the unit whitelist link.",
     legacyRoles: [],
   },
   {

@@ -450,6 +450,15 @@ export default function HowToJoinPage() {
                         >
                           Download Fun Operation Modlist (Server 2)
                         </a>
+
+                        <a
+                          href={modLinks.fotm}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[#00ff66] underline transition hover:border-[#00ff66]/40 hover:text-white"
+                        >
+                          Download FOTM Modlist
+                        </a>
                       </div>
 
                       <p>

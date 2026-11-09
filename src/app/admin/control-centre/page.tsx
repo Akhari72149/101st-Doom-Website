@@ -171,7 +171,7 @@ const panels: PanelDefinition[] = [
   {
     id: "join-links",
     title: "Join Page Content",
-    description: "Publish MainOp and FunOp files and maintain the unit whitelist.",
+    description: "Publish MainOp, FunOp, and FOTM files and maintain the unit whitelist.",
     permission: "admin.join-links",
     route: "/admin/join-links",
     group: "Content & Configuration",

@@ -7,7 +7,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function safeDownloadName(value: string | null, key: string) {
-  const fallback = key === "main-operations" ? "101st-MainOp-Modlist.html" : "101st-FunOp-Modlist.html";
+  const fallback = key === "main-operations"
+    ? "101st-MainOp-Modlist.html"
+    : key === "fun-operations"
+      ? "101st-FunOp-Modlist.html"
+      : "101st-FOTM-Modlist.html";
   const cleaned = String(value || fallback).replace(/[^a-zA-Z0-9._ -]/g, "_").slice(0, 180);
   return /\.html?$/i.test(cleaned) ? cleaned : fallback;
 }

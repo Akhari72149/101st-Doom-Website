@@ -160,7 +160,7 @@ export default function JoinPageLinksAdmin() {
               <p className="text-xs font-black uppercase tracking-[0.2em] text-[#00ff66]">Public Content</p>
               <h1 className="mt-1 text-3xl font-black uppercase">Join Page Content</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#8ba395]">
-                Publish the MainOp and FunOp HTML modlists or update the unit whitelist link without rebuilding the website.
+                Publish the MainOp, FunOp, and FOTM HTML modlists or update the unit whitelist link without rebuilding the website.
               </p>
             </div>
           </div>

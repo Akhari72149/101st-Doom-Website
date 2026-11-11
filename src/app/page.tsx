@@ -1030,6 +1030,39 @@ export default function HomePage() {
                                       style={{ width: `${population}%` }}
                                     />
                                   </div>
+
+                                  {server.players > 0 && (
+                                    <div className="mt-4 border-t border-[#00ff66]/10 pt-4">
+                                      <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#00ff66]/75">
+                                        <Users className="h-4 w-4" />
+                                        Connected players
+                                      </div>
+
+                                      {server.playerList?.length ? (
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                          {server.playerList.map((player, index) => (
+                                            <div
+                                              key={`${server.id}-${player}-${index}`}
+                                              className="flex min-w-0 items-center gap-2 border border-white/10 bg-black/50 px-3 py-2 text-sm text-white"
+                                            >
+                                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#00ff66]" />
+                                              <span className="truncate">{player}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm leading-6 text-[#80958a]">
+                                          The server reports {server.players} connected player{server.players === 1 ? "" : "s"}, but did not provide player names.
+                                        </p>
+                                      )}
+
+                                      {(server.playerList?.length || 0) < server.players && Boolean(server.playerList?.length) && (
+                                        <p className="mt-3 text-xs leading-5 text-[#667b70]">
+                                          {server.players - (server.playerList?.length || 0)} additional player name{server.players - (server.playerList?.length || 0) === 1 ? " is" : "s are"} hidden or unavailable.
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>

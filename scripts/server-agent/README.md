@@ -17,3 +17,5 @@ The website requires `SERVER_CONTROL_AGENT_ENABLED=true`, `SERVER_AGENT_ID=arma-
 
 Workshop updates are first downloaded into SteamCMD's cache and then mirrored into the existing numeric staging folders. The existing `D:\Arma\@mod` symbolic links remain unchanged. Server keys are copied only when an authorised operator uses the separate **Copy Keys** action.
 
+When a server has an existing `-mod=` launch argument and no Workshop IDs configured, the agent preserves that launch list. Once a complete website preset is saved, its Workshop IDs become the source of truth and replace the configured `-mod=` argument at launch.
+

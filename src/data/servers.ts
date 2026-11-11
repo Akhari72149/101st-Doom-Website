@@ -2,6 +2,7 @@ export const battalionServers = [
   { id: 1, name: "Server 1", purpose: "MainOp & Training" },
   { id: 2, name: "Server 2", purpose: "FunOp" },
   { id: 3, name: "Server 3", purpose: "Misc" },
+  { id: 4, name: "Server 4", purpose: "FOTM / Antistasi" },
 ] as const;
 
 export const battalionServerIds = battalionServers.map((server) => server.id);

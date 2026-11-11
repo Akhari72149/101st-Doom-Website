@@ -3,7 +3,7 @@ import { existsSync, openSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 const configPath = path.resolve(process.argv[2] || "scripts/server-agent/config.json");
 const config = JSON.parse(await readFile(configPath, "utf8"));
 const token = String(process.env[config.tokenEnvironmentVariable || "SERVER_AGENT_TOKEN"] || "").trim();
@@ -52,10 +52,10 @@ function configuredServers() {
   return Object.entries(config.servers || {}).map(([id, server]) => serverConfig(Number(id)));
 }
 
-function workshopModIds(job, fallback = []) {
+function workshopModIds(job, fallback = [], allowEmpty = false) {
   const supplied = Array.isArray(job.payload?.workshopModIds) ? job.payload.workshopModIds : fallback;
   const ids = [...new Set(supplied.map(String).map((id) => id.trim()))];
-  if (!ids.length || ids.some((id) => !/^\d+$/.test(id))) {
+  if ((!allowEmpty && !ids.length) || ids.some((id) => !/^\d+$/.test(id))) {
     throw new Error("No valid Workshop mod IDs were supplied for this operation.");
   }
   return ids;
@@ -114,9 +114,12 @@ async function startServer(job, server) {
   const existing = await findServerPids(server);
   if (existing.length) return { alreadyRunning: true, pids: existing };
   if (!existsSync(server.executable)) throw new Error(`Arma executable was not found: ${server.executable}`);
-  const args = Array.isArray(server.arguments) ? server.arguments.map(String) : [];
+  let args = Array.isArray(server.arguments) ? server.arguments.map(String) : [];
   const modArgument = await modLaunchArgument(server);
-  if (modArgument) args.push(modArgument);
+  if (modArgument) {
+    args = args.filter((argument) => !argument.toLowerCase().startsWith("-mod="));
+    args.push(modArgument);
+  }
   const output = openSync(server.consoleLog || path.join(server.workingDirectory, `server-${server.port}.log`), "a");
   const child = spawn(server.executable, args, {
     cwd: server.workingDirectory,
@@ -264,7 +267,7 @@ async function updateAllMods(job) {
   await assertAllServersStopped();
   const modIds = workshopModIds(job);
   const workshopAppId = String(config.steamcmd?.workshopAppId || "107410");
-  await log(job, `All servers are offline. Updating ${modIds.length} unique Workshop items across both presets.`);
+  await log(job, `All servers are offline. Updating ${modIds.length} unique Workshop items across all presets.`);
   const result = await runSteamCmd(job, modIds.map((id) => `workshop_download_item ${workshopAppId} ${id} validate`));
   await mirrorWorkshopMods(job, modIds);
   return { ...result, updatedMods: modIds.length };
@@ -274,12 +277,12 @@ async function execute(job) {
   if (job.action === "steamcmd.server.update_all") return updateArmaInstallation(job);
   if (job.action === "steamcmd.mods.update_all") return updateAllMods(job);
   const server = serverConfig(job.server_id);
-  if (job.action === "server.start") return startServer(job, { ...server, workshopModIds: workshopModIds(job, server.workshopModIds || []) });
+  if (job.action === "server.start") return startServer(job, { ...server, workshopModIds: workshopModIds(job, server.workshopModIds || [], true) });
   if (job.action === "server.stop") return stopServer(job, server);
   if (job.action === "server.restart") {
     await stopServer(job, server);
     await delay(Math.max(2_000, Number(server.restartDelayMs) || 5_000));
-    return startServer(job, { ...server, workshopModIds: workshopModIds(job, server.workshopModIds || []) });
+    return startServer(job, { ...server, workshopModIds: workshopModIds(job, server.workshopModIds || [], true) });
   }
   if (job.action === "steamcmd.server.update") {
     if ((await findServerPids(server)).length) throw new Error("Stop the server before applying an Arma server update.");

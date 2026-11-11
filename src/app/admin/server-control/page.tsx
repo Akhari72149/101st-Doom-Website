@@ -59,8 +59,10 @@ type ControlActivity = {
   presets?: ModPreset[];
 };
 
+type ModPresetKey = "main" | "fun" | "fotm";
+
 type ModPreset = {
-  key: "main" | "fun";
+  key: ModPresetKey;
   displayName: string;
   modIds: string[];
   modNames: Record<string, string>;
@@ -90,9 +92,9 @@ export default function ServerControl() {
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [globalAction, setGlobalAction] = useState<"arma" | "mods" | null>(null);
   const [modManagerOpen, setModManagerOpen] = useState(false);
-  const [presetDrafts, setPresetDrafts] = useState<Record<"main" | "fun", string[]>>({ main: [], fun: [] });
-  const [newModId, setNewModId] = useState<Record<"main" | "fun", string>>({ main: "", fun: "" });
-  const [savingPreset, setSavingPreset] = useState<"main" | "fun" | null>(null);
+  const [presetDrafts, setPresetDrafts] = useState<Record<ModPresetKey, string[]>>({ main: [], fun: [], fotm: [] });
+  const [newModId, setNewModId] = useState<Record<ModPresetKey, string>>({ main: "", fun: "", fotm: "" });
+  const [savingPreset, setSavingPreset] = useState<ModPresetKey | null>(null);
   const [expandedPlayers, setExpandedPlayers] = useState<number | null>(null);
 
   const watchIntervalRef = useRef<number | null>(null);
@@ -328,12 +330,13 @@ export default function ServerControl() {
     setPresetDrafts({
       main: [...(presets.find((preset) => preset.key === "main")?.modIds || [])],
       fun: [...(presets.find((preset) => preset.key === "fun")?.modIds || [])],
+      fotm: [...(presets.find((preset) => preset.key === "fotm")?.modIds || [])],
     });
-    setNewModId({ main: "", fun: "" });
+    setNewModId({ main: "", fun: "", fotm: "" });
     setModManagerOpen(true);
   };
 
-  const addMod = (preset: "main" | "fun") => {
+  const addMod = (preset: ModPresetKey) => {
     const raw = newModId[preset].trim();
     const id = raw.match(/(?:id=)?(\d{6,12})/)?.[1];
     if (!id) {
@@ -348,7 +351,7 @@ export default function ServerControl() {
     setControlError(null);
   };
 
-  const savePreset = async (preset: "main" | "fun") => {
+  const savePreset = async (preset: ModPresetKey) => {
     try {
       setSavingPreset(preset);
       const res = await fetch("/api/server-control", {
@@ -493,7 +496,7 @@ export default function ServerControl() {
                 <div className="text-xs uppercase tracking-[0.24em] text-cyan-300">Installation maintenance</div>
                 <h2 className="mt-1 text-xl font-bold text-white">Shared Arma and Workshop controls</h2>
                 <p className="mt-2 text-sm text-gray-400">
-                  These operations affect the shared installation and unlock only when Servers 1, 2 and 3 are offline.
+                  These operations affect the shared installation and unlock only when all four servers are offline.
                 </p>
               </div>
               <div className={`border px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${allServersOffline ? "border-green-400/40 text-green-300" : "border-yellow-400/40 text-yellow-200"}`}>
@@ -812,20 +815,25 @@ export default function ServerControl() {
               <div>
                 <div className="text-xs uppercase tracking-[0.22em] text-violet-300">Workshop configuration</div>
                 <h2 className="mt-1 text-2xl font-bold text-white">Server mod presets</h2>
-                <p className="mt-2 text-sm text-gray-400">Servers 1 and 3 always use the same preset. Server 2 remains independent.</p>
+                <p className="mt-2 text-sm text-gray-400">Servers 1 and 3 share a preset. Servers 2 and 4 each remain independent.</p>
               </div>
               <button type="button" onClick={() => setModManagerOpen(false)} className="border border-white/15 p-3 text-gray-300 hover:border-white/40 hover:text-white" aria-label="Close mod manager">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="grid min-h-0 flex-1 gap-px overflow-hidden bg-violet-400/20 lg:grid-cols-2">
-              {(["main", "fun"] as const).map((preset) => (
+            <div className="grid min-h-0 flex-1 gap-px overflow-hidden bg-violet-400/20 xl:grid-cols-3">
+              {(["main", "fun", "fotm"] as const).map((preset) => (
                 <section key={preset} className="flex min-h-0 flex-col bg-[#000b06] p-5">
                   <div className="flex items-end justify-between gap-3">
                     <div>
-                      <div className="text-lg font-bold text-white">{preset === "main" ? "Servers 1 & 3" : "Server 2"}</div>
+                      <div className="text-lg font-bold text-white">{preset === "main" ? "Servers 1 & 3" : preset === "fun" ? "Server 2" : "Server 4"}</div>
                       <div className="mt-1 text-xs uppercase tracking-[0.16em] text-gray-500">{presetDrafts[preset].length} Workshop items</div>
+                      {preset === "fotm" && presetDrafts.fotm.length === 0 && (
+                        <p className="mt-2 max-w-sm text-xs leading-5 text-amber-200">
+                          The agent will use Server 4&apos;s configured FOTM launch list until a complete Workshop ID preset is saved here.
+                        </p>
+                      )}
                     </div>
                     <button
                       type="button"

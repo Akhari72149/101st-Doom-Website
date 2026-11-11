@@ -7,8 +7,8 @@ import agentDefaults from "../../../../scripts/server-agent/config.example.json"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const LEGACY_COMMAND = /^(start|stop) server ([1-3])$/;
-const SERVER_COMMAND = /^(start|stop|restart|copy keys) server ([1-3])$/;
+const LEGACY_COMMAND = /^(start|stop) server ([1-4])$/;
+const SERVER_COMMAND = /^(start|stop|restart|copy keys) server ([1-4])$/;
 const GLOBAL_COMMAND = /^(update arma|update mods) all$/;
 const ACTIONS: Record<string, string> = {
   start: "server.start",
@@ -22,7 +22,16 @@ const ACTIONS: Record<string, string> = {
 const DEFAULT_PRESETS = {
   main: agentDefaults.servers["1"].workshopModIds,
   fun: agentDefaults.servers["2"].workshopModIds,
+  fotm: agentDefaults.servers["4"].workshopModIds,
 } as const;
+
+type ModPresetKey = keyof typeof DEFAULT_PRESETS;
+
+function presetDisplayName(preset: ModPresetKey) {
+  if (preset === "main") return "Servers 1 & 3";
+  if (preset === "fun") return "Server 2";
+  return "Server 4";
+}
 
 function normalizeModIds(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -83,13 +92,18 @@ async function ensureModPresets() {
        values('fun','Server 2',$1::jsonb) on conflict(preset_key) do nothing`,
       [JSON.stringify(DEFAULT_PRESETS.fun)],
     ),
+    pool.query(
+      `insert into public.server_control_mod_presets(preset_key,display_name,workshop_mod_ids)
+       values('fotm','Server 4',$1::jsonb) on conflict(preset_key) do nothing`,
+      [JSON.stringify(DEFAULT_PRESETS.fotm)],
+    ),
   ]);
 }
 
 async function readModPresets() {
   await ensureModPresets();
   const result = await getPostgresPool().query<{
-    preset_key: "main" | "fun";
+    preset_key: ModPresetKey;
     display_name: string;
     workshop_mod_ids: unknown;
     updated_by_name: string | null;
@@ -172,7 +186,7 @@ export async function POST(request: Request) {
   if (body?.action === "save-mod-preset") {
     const auth = await requirePageAccess(request, "admin.server-control", "full").catch(() => null);
     if (!auth?.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const preset = body.preset === "main" || body.preset === "fun" ? body.preset : null;
+    const preset = body.preset === "main" || body.preset === "fun" || body.preset === "fotm" ? body.preset : null;
     const modIds = normalizeModIds(body.modIds);
     if (!preset) return NextResponse.json({ error: "Invalid mod preset" }, { status: 400 });
     if (!modIds.length) return NextResponse.json({ error: "A preset must contain at least one Workshop mod" }, { status: 400 });
@@ -192,7 +206,7 @@ export async function POST(request: Request) {
         await client.query(
           `insert into public.audit_logs(user_id,action,details)
            values($1,'SERVER_MOD_PRESET_UPDATED',$2)`,
-          [auth.userId, `${requestedBy} updated the ${preset === "main" ? "Servers 1 & 3" : "Server 2"} mod preset to ${modIds.length} Workshop items.`],
+          [auth.userId, `${requestedBy} updated the ${presetDisplayName(preset)} mod preset to ${modIds.length} Workshop items.`],
         );
       });
       return NextResponse.json({ saved: true, presets: await readModPresets() });
@@ -220,10 +234,12 @@ export async function POST(request: Request) {
       const presets = await readModPresets();
       const mainMods = presets.find((preset) => preset.key === "main")?.modIds || [];
       const funMods = presets.find((preset) => preset.key === "fun")?.modIds || [];
+      const fotmMods = presets.find((preset) => preset.key === "fotm")?.modIds || [];
+      const selectedMods = serverId === 2 ? funMods : serverId === 4 ? fotmMods : mainMods;
       const payload = action === "steamcmd.mods.update_all"
-        ? { workshopModIds: [...new Set([...mainMods, ...funMods])] }
+        ? { workshopModIds: [...new Set([...mainMods, ...funMods, ...fotmMods])] }
         : action === "server.start" || action === "server.restart" || action === "mods.keys.copy"
-          ? { workshopModIds: serverId === 2 ? funMods : mainMods }
+          ? selectedMods.length ? { workshopModIds: selectedMods } : {}
           : {};
       const job = await withPostgresTransaction(async (client) => {
         await client.query(

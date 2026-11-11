@@ -248,6 +248,25 @@
         "2789152015",
         "1779063631"
       ]
+    },
+    "4": {
+      "port": 2400,
+      "executable": "D:\\Arma\\arma3serverprofiling_x64.exe",
+      "workingDirectory": "D:\\Arma",
+      "consoleLog": "D:\\Arma\\logs\\server-4-console.log",
+      "arguments": [
+        "-port=2400",
+        "-config=D:\\Arma\\Servers\\_826826240abc4c60adc1e4b5c7042f7a\\server_config.cfg",
+        "-cfg=D:\\Arma\\Servers\\_826826240abc4c60adc1e4b5c7042f7a\\server_basic.cfg",
+        "-profiles=D:\\Arma\\Servers\\_826826240abc4c60adc1e4b5c7042f7a",
+        "-name=_826826240abc4c60adc1e4b5c7042f7a",
+        "-mod=@3den_Enhanced;@ace;@ACE_Grenades_in_hatches__Tweaked;@ACE3_Arsenal_Extended__Core;@Alternative_Running;@BackpackOnChest;@Better_Inventory;@Burn_Em_Redux;@CBA_A3;@CH_View_Distance;@cTab;@CUP_Terrains__Core;@CUP_Terrains__CWA;@CUP_Terrains__Maps;@DBA_Core;@DUI__Squad_Radar;@Enhanced_Movement;@Faces_of_War;@FIR_AWS_AirWeaponSystem_;@Flying_Legends;@IFA3_AIO;@Improved_Melee_System;@KAT__Advanced_Medical;@Naval_Legends;@Nightfall_Protocol;@Remove_stamina;@Remove_stamina__ACE_3;@Root_s_Effects__Zeus_and_3DEN;@Sci_Fi_Death_Reactions;@Secret_Weapons_Reloaded;@Task_Force_Arrowhead_Radio_BETA__;@The_Empires_of_Old;@War_of_Wizards;@WebKnight_s_Zombies_and_Creatures;@WMO__Walkable_Moving_Objects;@WW2_Armored_Cars_IFA3_;@WW2_Radios__IFA__FOW;@WW2_Tanks_IFA3_;@Zeus_Additions;@Zeus_Framerate_Monitor_Rework;@Zeus_Enhanced;",
+        "-enableHT",
+        "-malloc=mimalloc_v241_20260716",
+        "-limitfps=80",
+        "-hugePages"
+      ],
+      "workshopModIds": []
     }
   }
 }

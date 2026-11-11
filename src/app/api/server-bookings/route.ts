@@ -43,6 +43,10 @@ type RecurringRow = {
 
 type PersonnelRow = { id: string; name: string };
 
+function bookingServerIds(serverId: number) {
+  return serverId === 1 || serverId === 4 ? [1, 4] : [serverId];
+}
+
 function jsonError(error: string, status: number) {
   return NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -153,13 +157,14 @@ function parseWindow(request: Request) {
   return { serverId, start, end };
 }
 
-function serializeBooking(row: BookingRow) {
+function serializeBooking(row: BookingRow, requestedServerId: number) {
+  const linked = row.server_id !== requestedServerId;
   return {
-    id: row.id,
+    id: linked ? `recurring-linked-${row.id}` : row.id,
     server_id: row.server_id,
     start_time: new Date(row.start_time).toISOString(),
     end_time: new Date(row.end_time).toISOString(),
-    title: row.title || "Server Booking",
+    title: linked ? `Server ${row.server_id} booking - ${row.title || "Server Booking"}` : row.title || "Server Booking",
     booked_for: row.booked_for || "",
     personnel: { name: row.personnel_name || "Unknown" },
   };
@@ -180,15 +185,16 @@ function serializeRecurring(row: RecurringRow) {
 
 async function readFromPostgres(serverId: number, start: Date, end: Date, includePersonnel: boolean) {
   const lookupEnd = new Date(end.getTime() + 4 * 60 * 60 * 1000);
+  const linkedServerIds = bookingServerIds(serverId);
   const [bookings, recurring, counts, personnel] = await Promise.all([
     getPostgresPool().query<BookingRow>(
       `select b.id, b.server_id, b.start_time, b.end_time, b.title, b.booked_for,
               p.name as personnel_name
          from public.server_bookings b
          left join public.personnel p on p.id = b.booked_for
-        where b.server_id = $1 and b.start_time < $2 and b.end_time > $3
+        where b.server_id = any($1::integer[]) and b.start_time < $2 and b.end_time > $3
         order by b.start_time`,
-      [serverId, lookupEnd, start],
+      [linkedServerIds, lookupEnd, start],
     ),
     getPostgresPool().query<RecurringRow>(
       `select id, server_id, start_at, end_at, title
@@ -220,7 +226,7 @@ async function readFromPostgres(serverId: number, start: Date, end: Date, includ
       : Promise.resolve({ rows: [] as PersonnelRow[] }),
   ]);
   return {
-    bookings: [...bookings.rows.map(serializeBooking), ...recurring.rows.map(serializeRecurring).filter(Boolean)],
+    bookings: [...bookings.rows.map((row) => serializeBooking(row, serverId)), ...recurring.rows.map(serializeRecurring).filter(Boolean)],
     counts: Object.fromEntries(counts.rows.map((row) => [row.server_id, row.count])),
     personnel: personnel.rows,
   };
@@ -230,11 +236,12 @@ async function readFromSupabase(serverId: number, start: Date, end: Date, includ
   const lookupEnd = new Date(end.getTime() + 4 * 60 * 60 * 1000).toISOString();
   const startIso = start.toISOString();
   const endIso = end.toISOString();
+  const linkedServerIds = bookingServerIds(serverId);
   const [bookingsResult, recurringResult, countBookings, countRecurring, personnelResult] = await Promise.all([
     supabaseAdmin
       .from("server_bookings")
       .select("id,server_id,start_time,end_time,title,booked_for,personnel:booked_for(name)")
-      .eq("server_id", serverId)
+      .in("server_id", linkedServerIds)
       .lt("start_time", lookupEnd)
       .gt("end_time", startIso)
       .order("start_time"),
@@ -263,12 +270,10 @@ async function readFromSupabase(serverId: number, start: Date, end: Date, includ
   for (const row of [...(countBookings.data || []), ...(countRecurring.data || [])]) {
     counts[row.server_id] = (counts[row.server_id] || 0) + 1;
   }
-  const bookings = (bookingsResult.data || []).map((row) => ({
+  const bookings = (bookingsResult.data || []).map((row) => serializeBooking({
     ...row,
-    title: row.title || "Server Booking",
-    booked_for: row.booked_for || "",
-    personnel: Array.isArray(row.personnel) ? row.personnel[0] : row.personnel,
-  }));
+    personnel_name: (Array.isArray(row.personnel) ? row.personnel[0] : row.personnel)?.name || "Unknown",
+  } as BookingRow, serverId));
   const recurring = (recurringResult.data || [])
     .map((row) => serializeRecurring(row as RecurringRow))
     .filter(Boolean);
@@ -332,7 +337,10 @@ async function createInPostgres(
   userId: string | null,
 ) {
   return withPostgresTransaction(async (client) => {
-    await client.query("select pg_advisory_xact_lock($1)", [72150000 + input.serverId]);
+    const linkedServerIds = bookingServerIds(input.serverId);
+    for (const serverId of linkedServerIds) {
+      await client.query("select pg_advisory_xact_lock($1)", [72150000 + serverId]);
+    }
     const eligible = await client.query(
       `select 1 from public.personnel_certifications
         where personnel_id = $1 and certification_id = any($2::uuid[]) limit 1`,
@@ -348,14 +356,14 @@ async function createInPostgres(
          from (
            select bookings.title,start_time as starts_at,end_time as ends_at,'booking' kind,personnel.name personnel_name
              from public.server_bookings bookings left join public.personnel personnel on personnel.id=bookings.booked_for
-             where bookings.server_id = $1
+             where bookings.server_id = any($1::integer[])
            union all
            select title,start_at,end_at,'system block' kind,'System' personnel_name
-             from public.recurring_server_blocks where server_id = $1
+             from public.recurring_server_blocks where server_id = any($1::integer[])
          ) occupied
         where $2 < ends_at and $3 > starts_at
         limit 1`,
-      [input.serverId, startsAt, endsAt]);
+      [linkedServerIds, startsAt, endsAt]);
       if (conflict.rowCount) throw new Error(`BOOKING_CONFLICT:${JSON.stringify(conflict.rows[0])}`);
       const created = await client.query<BookingRow>(
       `insert into public.server_bookings
@@ -371,6 +379,7 @@ async function createInPostgres(
 }
 
 async function createInSupabase(input: NonNullable<ReturnType<typeof parseCreateBody>>, userId: string | null) {
+  const linkedServerIds = bookingServerIds(input.serverId);
   const [eligible, bookingConflict, recurringConflict] = await Promise.all([
     supabaseAdmin
       .from("personnel_certifications")
@@ -381,14 +390,14 @@ async function createInSupabase(input: NonNullable<ReturnType<typeof parseCreate
     supabaseAdmin
       .from("server_bookings")
       .select("id")
-      .eq("server_id", input.serverId)
+      .in("server_id", linkedServerIds)
       .lt("start_time", input.end.toISOString())
       .gt("end_time", input.start.toISOString())
       .limit(1),
     supabaseAdmin
       .from("recurring_server_blocks")
       .select("id")
-      .eq("server_id", input.serverId)
+      .in("server_id", linkedServerIds)
       .lt("start_at", input.end.toISOString())
       .gt("end_at", input.start.toISOString())
       .limit(1),

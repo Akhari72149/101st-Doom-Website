@@ -48,6 +48,7 @@ export default function ServersPage() {
     1: 0,
     2: 0,
     3: 0,
+    4: 0,
   });
 
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
@@ -132,7 +133,7 @@ export default function ServersPage() {
         throw new Error(data?.error || "Failed to load server bookings");
       }
       if (fetchToken !== fetchTokenRef.current) return;
-      const counts: ServerDayCounts = { 1: 0, 2: 0, 3: 0 };
+      const counts: ServerDayCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
       for (const [serverId, count] of Object.entries(data.counts || {})) {
         counts[Number(serverId)] = Number(count) || 0;
       }
@@ -500,7 +501,7 @@ export default function ServersPage() {
               <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-[#7fa08e]">
                 Server Selection
               </label>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4 sm:gap-3">
                 {battalionServers.map((server) => {
                   const count = serverCounts[server.id] || 0;
                   const hasBookings = count > 0;

@@ -5,6 +5,7 @@ const SERVERS = [
   { id: 1, host: "77.68.28.88", basePort: 2100 },
   { id: 2, host: "77.68.28.88", basePort: 2200 },
   { id: 3, host: "77.68.28.88", basePort: 2300 },
+  { id: 4, host: "77.68.28.88", basePort: 2400 },
 ];
 
 

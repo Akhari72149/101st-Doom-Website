@@ -94,8 +94,9 @@ async function notifyTaskParticipants(client:PoolClient,taskId:string,actorId:st
         union select user_id from public.mod_pipeline_watchers where task_id=$1
         union select parent.assigned_to from public.mod_pipeline_tasks child join public.mod_pipeline_tasks parent on parent.id=child.parent_task_id where child.id=$1
         union select parent_watchers.user_id from public.mod_pipeline_tasks child join public.mod_pipeline_watchers parent_watchers on parent_watchers.task_id=child.parent_task_id where child.id=$1
+        union select $2::uuid
       ) recipients join public.app_auth_users users on users.id=recipients.user_id and users.disabled=false
-      where recipients.user_id is not null and recipients.user_id<>$2`,[taskId,actorId,eventType,title,message]);
+      where recipients.user_id is not null`,[taskId,actorId,eventType,title,message]);
     await client.query("release savepoint mod_pipeline_notification");
   } catch(error) {
     await client.query("rollback to savepoint mod_pipeline_notification");
@@ -109,6 +110,17 @@ function databaseErrorReference(error:unknown) {
   const row=error as {code?:unknown;constraint?:unknown};
   const code=cleanText(row.code,20),constraint=cleanText(row.constraint,100);
   return code?`${code}${constraint?` / ${constraint}`:""}`:null;
+}
+
+async function readNotifications(userId:string) {
+  const result=await getPostgresPool().query(`select notifications.*,
+    coalesce(nullif(btrim(actor."displayUsername"),''),nullif(btrim(actor.name),''),nullif(btrim(actor.username),''),'System') actor_name,
+    tasks.reference_number task_reference,tasks.title task_title
+    from public.mod_pipeline_notifications notifications
+    left join public.app_auth_users actor on actor.id=notifications.actor_id
+    left join public.mod_pipeline_tasks tasks on tasks.id=notifications.task_id
+    where notifications.recipient_id=$1 order by notifications.created_at desc limit 200`,[userId]);
+  return result.rows;
 }
 
 async function readPostgres(includeArchive:boolean,userId:string) {
@@ -149,25 +161,21 @@ async function readPostgres(includeArchive:boolean,userId:string) {
     pool.query(`select id,task_id,file_name,mime_type,byte_size,caption,uploaded_at
       from public.mod_pipeline_assets order by uploaded_at`),
     pool.query(`select task_id,user_id from public.mod_pipeline_watchers where user_id=$1 order by added_at desc`,[userId]),
-    pool.query(`select notifications.*,
-      coalesce(nullif(btrim(actor."displayUsername"),''),nullif(btrim(actor.name),''),nullif(btrim(actor.username),''),'System') actor_name,
-      tasks.reference_number task_reference,tasks.title task_title
-      from public.mod_pipeline_notifications notifications
-      left join public.app_auth_users actor on actor.id=notifications.actor_id
-      left join public.mod_pipeline_tasks tasks on tasks.id=notifications.task_id
-      where notifications.recipient_id=$1 order by notifications.created_at desc limit 200`,[userId]),
+    readNotifications(userId),
   ]);
   return {assignees:assignees.rows,pipelinePeople:pipelinePeople.rows,profiles:profiles.rows,tasks:tasks.rows,
     comments:comments.rows.map(row=>({...row,profiles:row.display_name?{display_name:row.display_name}:null})),releases:releases.rows,events:events.rows,
     contributors:contributors.rows,checklist:checklist.rows,dependencies:dependencies.rows,links:links.rows,approvals:approvals.rows,
-    repositories:repositories.rows,repositoryLinks:repositoryLinks.rows,assets:assets.rows,watchers:watchers.rows,notifications:notifications.rows};
+    repositories:repositories.rows,repositoryLinks:repositoryLinks.rows,assets:assets.rows,watchers:watchers.rows,notifications};
 }
 
 export async function GET(request:Request) {
   const auth=await requirePipelineAccess(request);if(!auth?.userId)return NextResponse.json({error:"Forbidden"},{status:403});
   try {
     if((process.env.MOD_TASKBOARD_DATABASE_BACKEND||"postgres")!=="postgres") return NextResponse.json({error:"The upgraded Mod Pipeline requires the PostgreSQL backend."},{status:503});
-    return NextResponse.json(await readPostgres(new URL(request.url).searchParams.get("archive")==="1",auth.userId),{headers:{"Cache-Control":"no-store"}});
+    const params=new URL(request.url).searchParams;
+    if(params.get("notifications")==="1")return NextResponse.json({notifications:await readNotifications(auth.userId)},{headers:{"Cache-Control":"no-store"}});
+    return NextResponse.json(await readPostgres(params.get("archive")==="1",auth.userId),{headers:{"Cache-Control":"no-store"}});
   } catch(error){console.error("[mod-taskboard] Read failed",error);return NextResponse.json({error:"Failed to load mod pipeline"},{status:500});}
 }
 

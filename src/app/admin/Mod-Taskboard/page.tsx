@@ -100,7 +100,24 @@ export default function ModTaskboardPage(){
     setLoading(false);
   },[]);
 
+  const refreshNotifications=useCallback(async()=>{
+    if(!userId)return;
+    const response=await fetch("/api/mod-taskboard?notifications=1",{cache:"no-store",headers:await getAppAuthHeaders()});
+    if(!response.ok)return;
+    const body=await response.json().catch(()=>({})) as {notifications?:PipelineNotification[]};
+    if(body.notifications)setData(current=>({...current,notifications:body.notifications||[]}));
+  },[userId]);
+
   useEffect(()=>{void(async()=>{const session=await getAppSession();if(!session){router.replace("/Task-Viewer");return;}const pipelineAccess=hasAppPermission(session,"admin.mod-taskboard","read"),pipelineAdmin=hasAppPermission(session,"admin.mod-taskboard-admin","read");if(!pipelineAccess){router.replace("/");return;}setCanEdit(true);setCanAdmin(pipelineAdmin);setCanSelectMusicalArchives(session.user.username.trim().toLowerCase()==="akhari");setUserId(session.user.id);await load(false);})();},[router,load]);
+
+  useEffect(()=>{
+    if(!userId)return;
+    const refresh=()=>{if(document.visibilityState==="visible")void refreshNotifications();};
+    const interval=window.setInterval(refresh,10000);
+    window.addEventListener("focus",refresh);
+    document.addEventListener("visibilitychange",refresh);
+    return ()=>{window.clearInterval(interval);window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};
+  },[userId,refreshNotifications]);
 
   const request=async(method:"POST"|"PATCH"|"DELETE",payload?:Record<string,unknown>,query="")=>{
     setSaving(true);setNotice(null);
@@ -196,7 +213,8 @@ export default function ModTaskboardPage(){
   const uploadAsset=async(taskId:string,file:File,caption:string)=>{setSaving(true);setNotice(null);const formData=new FormData();formData.set("taskId",taskId);formData.set("file",file);formData.set("caption",caption);const response=await fetch("/api/mod-taskboard/assets",{method:"POST",credentials:"same-origin",headers:await getAppAuthHeaders(),body:formData});const body=await response.json().catch(()=>({})) as {error?:string};setSaving(false);if(!response.ok){setNotice({tone:"error",text:body.error||"The image could not be uploaded."});return false;}await load(view==="archive");setNotice({tone:"ok",text:"Image added to the task and recorded in its history."});return true;};
   const removeAsset=async(id:string)=>{setSaving(true);setNotice(null);const response=await fetch(`/api/mod-taskboard/assets?id=${encodeURIComponent(id)}`,{method:"DELETE",credentials:"same-origin",headers:await getAppAuthHeaders()});const body=await response.json().catch(()=>({})) as {error?:string};setSaving(false);if(!response.ok){setNotice({tone:"error",text:body.error||"The image could not be removed."});return false;}await load(view==="archive");setNotice({tone:"ok",text:"Image removed and recorded in the task history."});return true;};
 
-  const allNav:[View,string,React.ReactNode][]=[["attention","Attention",<AlertTriangle key="q" size={16}/>],["pipeline","Pipeline",<Blocks key="p" size={16}/>],["mine","My Work",<Users key="m" size={16}/>],["watching","Watch List",<Eye key="v" size={16}/>],["workload","Workload",<BarChart3 key="w" size={16}/>],["inbox",unreadNotifications?`Notifications (${unreadNotifications})`:"Notifications",<Bell key="i" size={16}/>],["releases","Releases",<Rocket key="r" size={16}/>],["people","People",<Users key="u" size={16}/>],["repositories","Repositories",<GitBranch key="g" size={16}/>],["activity","Activity",<Activity key="a" size={16}/>],["archive","Archive",<Archive key="x" size={16}/>]];
+  const notificationIcon=<span className="relative" key="i"><Bell size={16}/>{unreadNotifications>0&&<span aria-label="Unread notifications" className="absolute -right-1 -top-1 size-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]"/>}</span>;
+  const allNav:[View,string,React.ReactNode][]=[["attention","Attention",<AlertTriangle key="q" size={16}/>],["pipeline","Pipeline",<Blocks key="p" size={16}/>],["mine","My Work",<Users key="m" size={16}/>],["watching","Watch List",<Eye key="v" size={16}/>],["workload","Workload",<BarChart3 key="w" size={16}/>],["inbox",unreadNotifications?`Notifications (${unreadNotifications})`:"Notifications",notificationIcon],["releases","Releases",<Rocket key="r" size={16}/>],["people","People",<Users key="u" size={16}/>],["repositories","Repositories",<GitBranch key="g" size={16}/>],["activity","Activity",<Activity key="a" size={16}/>],["archive","Archive",<Archive key="x" size={16}/>]];
   const nav=allNav.filter(([key])=>!["people","repositories"].includes(key)||canAdmin);
 
   return <main className="min-h-screen bg-[#010805] text-white">

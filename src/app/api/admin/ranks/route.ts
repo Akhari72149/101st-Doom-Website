@@ -139,6 +139,7 @@ export async function DELETE(request: Request) {
   } catch (caught) {
     if ((caught as Error).message === "RANK_ASSIGNED") return error("This rank is still assigned to personnel. Reassign them before deleting it.", 409);
     if ((caught as { code?: string }).code === "23503") return error("This rank is retained in personnel history, promotion approvals, or another system record. Retire it instead of deleting it.", 409);
+    if ((caught as { code?: string }).code === "42501") return error("The database has not yet applied the rank deletion permission update.", 503);
     console.error("[ranks] Delete failed", caught);
     return error("Failed to delete rank", 500);
   }

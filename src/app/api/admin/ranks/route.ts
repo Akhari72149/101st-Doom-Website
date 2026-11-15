@@ -113,3 +113,33 @@ export async function PUT(request: Request) {
     return error("Failed to reorder ranks", 500);
   }
 }
+
+export async function DELETE(request: Request) {
+  if (!requestHasSameOrigin(request)) return error("Invalid request origin", 403);
+  const auth = await requirePageAccess(request, "admin.ranks", "full").catch(() => null);
+  if (!auth) return error("Full Rank Management access is required", 403);
+  const id = new URL(request.url).searchParams.get("id") || "";
+  if (!UUID.test(id)) return error("Invalid rank", 400);
+  try {
+    const deleted = await withPostgresTransaction(async (client) => {
+      const rank = await client.query<{ name: string; personnel_count: number }>(`
+        select ranks.name,
+               (select count(*)::integer from public.personnel personnel where personnel.rank_id=ranks.id) personnel_count
+          from public.ranks ranks
+         where ranks.id=$1
+         for update`, [id]);
+      if (!rank.rowCount) return null;
+      if (rank.rows[0].personnel_count > 0) throw new Error("RANK_ASSIGNED");
+      await client.query("delete from public.ranks where id=$1", [id]);
+      await client.query(`insert into public.audit_logs(user_id,action,details)
+        values($1,'RANK_DEFINITION_DELETED',$2)`, [auth.userId, `Deleted unused rank ${rank.rows[0].name}`]);
+      return rank.rows[0];
+    });
+    return deleted ? NextResponse.json({ success: true, rank: deleted }) : error("Rank not found", 404);
+  } catch (caught) {
+    if ((caught as Error).message === "RANK_ASSIGNED") return error("This rank is still assigned to personnel. Reassign them before deleting it.", 409);
+    if ((caught as { code?: string }).code === "23503") return error("This rank is retained in personnel history, promotion approvals, or another system record. Retire it instead of deleting it.", 409);
+    console.error("[ranks] Delete failed", caught);
+    return error("Failed to delete rank", 500);
+  }
+}

@@ -15,6 +15,8 @@ type PersonnelRow = {
   mos: string | null;
   created_at: string | null;
   rank_effective_at: string | null;
+  tig_days?: number;
+  active_loa?: boolean;
 };
 
 type RankRow = {
@@ -47,8 +49,11 @@ async function readFromPostgres() {
   const pool = getPostgresPool();
   const [ranks, personnel, rankHistory] = await Promise.all([
     pool.query<RankRow>("select id, name from public.ranks order by name"),
-    pool.query<PersonnelRow>(`select id, rank_id, birth_number, name, slotted_position, mos, created_at, rank_effective_at
-      from public.personnel order by rank_id, name`),
+    pool.query<PersonnelRow>(`select personnel.id, personnel.rank_id, personnel.birth_number, personnel.name,
+        personnel.slotted_position, personnel.mos, personnel.created_at, personnel.rank_effective_at,
+        public.personnel_tig_days(personnel.id) tig_days,
+        exists (select 1 from public.personnel_loa_periods periods where periods.personnel_id=personnel.id and periods.ended_at is null) active_loa
+      from public.personnel personnel order by personnel.rank_id, personnel.name`),
     pool.query<RankHistoryRow>(`select personnel_id, new_rank_id, changed_at
       from public.rank_history order by changed_at desc nulls last`),
   ]);

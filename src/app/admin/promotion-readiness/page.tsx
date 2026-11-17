@@ -59,6 +59,7 @@ type Person = {
   slotted_position: string | null;
   current_rank: string | null;
   tig_days: number;
+  active_loa: boolean;
   service_days: number;
   ct_effective_at: string | null;
   attended: number;
@@ -634,6 +635,11 @@ export default function PromotionReadinessPage() {
                   <span className={`inline-flex items-center gap-2 border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] ${detail.className}`}>
                     <detail.icon size={15} />{detail.label}
                   </span>
+                  {person.active_loa && (
+                    <span className="inline-flex items-center gap-2 border border-cyan-300/35 bg-cyan-300/[0.06] px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-200">
+                      <CalendarClock size={15} /> LOA · TIG paused
+                    </span>
+                  )}
                   <div className="flex min-w-0 flex-1 flex-wrap gap-2 text-xs">
                     {person.nextBlocker && (
                       <span className="border border-amber-300/25 bg-amber-300/[0.05] px-3 py-2 text-amber-100">

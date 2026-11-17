@@ -12,6 +12,7 @@ const requiredPrivileges = [
   ['public.app_page_permissions', 'SELECT'],
   ['public.profiles', 'SELECT'],
   ['public.personnel', 'SELECT'],
+  ['public.personnel_loa_periods', 'SELECT,INSERT,UPDATE'],
   ['public.personnel_certifications', 'SELECT,INSERT,DELETE'],
   ['public.recurring_server_blocks', 'SELECT'],
   ['public.ranks', 'SELECT'],
@@ -72,6 +73,7 @@ const protectedFunctions = [
   'enqueue_slot_role_sync',
   'enqueue_rank_role_sync',
   'enqueue_personnel_discord_import',
+  'personnel_tig_days',
 ];
 const trustedTriggerFunctions = [
   'notify_cert_change',

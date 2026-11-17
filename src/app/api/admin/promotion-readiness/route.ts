@@ -35,6 +35,7 @@ type PersonnelRow = {
   current_rank: string | null;
   current_rank_role_id: string | null;
   tig_days: number;
+  active_loa: boolean;
   service_days: number;
   days_from_ct: number | null;
   ct_effective_at: string | null;
@@ -201,10 +202,11 @@ export async function GET(request: Request) {
         select personnel.id, personnel.name, personnel.birth_number, personnel.rank_id,
                personnel.discord_id, personnel.slotted_position,
                ranks.name current_rank, ranks.discord_role_id current_rank_role_id,
-               greatest(0, floor(extract(epoch from (now() - coalesce(
-                 personnel.rank_effective_at,
-                 personnel.created_at at time zone 'UTC'
-               ))) / 86400))::integer tig_days,
+               public.personnel_tig_days(personnel.id) tig_days,
+               exists (
+                 select 1 from public.personnel_loa_periods periods
+                  where periods.personnel_id = personnel.id and periods.ended_at is null
+               ) active_loa,
                greatest(0, floor(extract(epoch from (now() - personnel.created_at at time zone 'UTC')) / 86400))::integer service_days,
                 ct_dates.ct_effective_at,
                 case when ct_dates.ct_effective_at is null then null else
@@ -329,7 +331,12 @@ export async function GET(request: Request) {
       const criteria: ReadinessCriterion[] = [];
       if (rule.minimumTigDays !== undefined) {
         const remaining = Math.max(0, rule.minimumTigDays - person.tig_days);
-        criteria.push(criterion("tig", "Time in grade", `${person.tig_days} days`, `${rule.minimumTigDays} days`, remaining === 0 ? "met" : "not-met", remaining ? { remaining: `${remaining} TIG day${remaining === 1 ? "" : "s"} remaining`, projectedAt: futureDate(remaining) } : {}));
+        criteria.push(criterion("tig", "Time in grade", `${person.tig_days} days`, `${rule.minimumTigDays} days`, remaining === 0 ? "met" : "not-met", remaining ? {
+          remaining: person.active_loa
+            ? `${remaining} TIG day${remaining === 1 ? "" : "s"} remaining; paused while on LOA`
+            : `${remaining} TIG day${remaining === 1 ? "" : "s"} remaining`,
+          ...(person.active_loa ? {} : { projectedAt: futureDate(remaining) }),
+        } : {}));
       }
       if (rule.minimumAttendance !== undefined) {
         const state = attendancePercentage === null ? "unavailable" : attendancePercentage >= rule.minimumAttendance ? "met" : "not-met";
@@ -726,7 +733,8 @@ export async function POST(request: Request) {
         )
         select personnel.id,personnel.name,personnel.birth_number,personnel.rank_id,personnel.discord_id,
                personnel.slotted_position,ranks.name current_rank,
-               greatest(0,floor(extract(epoch from (now()-coalesce(personnel.rank_effective_at,personnel.created_at at time zone 'UTC')))/86400))::integer tig_days,
+               public.personnel_tig_days(personnel.id) tig_days,
+               exists (select 1 from public.personnel_loa_periods periods where periods.personnel_id=personnel.id and periods.ended_at is null) active_loa,
                greatest(0,floor(extract(epoch from (now()-personnel.created_at at time zone 'UTC'))/86400))::integer service_days,
                 ct_dates.ct_effective_at,
                 case when ct_dates.ct_effective_at is null then null else greatest(0,floor(extract(epoch from (now()-ct_dates.ct_effective_at))/86400))::integer end days_from_ct,

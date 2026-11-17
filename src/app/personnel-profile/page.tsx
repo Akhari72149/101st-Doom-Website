@@ -40,6 +40,8 @@ type Person = {
   slotted_position: string | null;
   created_at: string | null;
   rank_effective_at?: string | null;
+  tig_days?: number;
+  active_loa?: boolean;
   ts_id?: string | null;
   status?: string | null;
   mos?: string | null;
@@ -620,6 +622,10 @@ export default function PersonnelProfile() {
   const calculateTimeInGrade = () => {
     if (!selectedPerson) return 0;
 
+    if (typeof selectedPerson.tig_days === "number") {
+      return Math.max(0, selectedPerson.tig_days);
+    }
+
     if (selectedPerson.rank_effective_at) {
       const effective = new Date(selectedPerson.rank_effective_at);
       if (!Number.isNaN(effective.getTime())) return Math.max(0, Math.floor((Date.now() - effective.getTime()) / 86_400_000));
@@ -770,7 +776,11 @@ export default function PersonnelProfile() {
         {renderStatCard("Base Rank", getRankName(selectedPerson.rank_id))}
         {renderStatCard("MOS", selectedPerson.mos?.trim() || "None", true)}
         {renderStatCard("Join Date", formatDate(selectedPerson.created_at))}
-        {renderStatCard("Time in Grade", `${calculateTimeInGrade()} Days`, true)}
+        {renderStatCard(
+          "Time in Grade",
+          `${calculateTimeInGrade()} Days${selectedPerson.active_loa ? " · Paused on LOA" : ""}`,
+          true,
+        )}
         {renderStatCard(
           "Current Billet",
           getBilletFromSlot(selectedPerson.slotted_position),

@@ -13,6 +13,8 @@ type Personnel = {
   mos?: string | null;
   created_at?: string | null;
   rank_effective_at?: string | null;
+  tig_days?: number;
+  active_loa?: boolean;
 };
 
 type Rank = {
@@ -134,6 +136,8 @@ export default function Roster() {
 
   const calculateTimeInGradeDays = (person: Personnel | null | undefined) => {
     if (!person?.rank_id) return 0;
+
+    if (typeof person.tig_days === "number") return Math.max(0, person.tig_days);
 
     const history = rankHistoryByPersonnel.get(person.id) || [];
 
@@ -408,7 +412,7 @@ export default function Roster() {
                         {slot.slotId}
                       </div>
                       <div className="mt-2 text-[11px] uppercase tracking-[0.2em] text-[#7fa08e]">
-                        TIG: {calculateTimeInGradeDays(person)} Days
+                        TIG: {calculateTimeInGradeDays(person)} Days{person?.active_loa ? " · Paused on LOA" : ""}
                       </div>
                     </>
                   ) : (

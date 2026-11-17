@@ -43,8 +43,11 @@ async function readDirectoryFromPostgres() {
   const pool = getPostgresPool();
   const [ranks, personnel] = await Promise.all([
     pool.query("select id, name, rank_level from public.ranks order by rank_level, name"),
-    pool.query(`select id, rank_id, name, slotted_position, created_at, rank_effective_at, ts_id, status, mos
-      from public.personnel order by name`),
+    pool.query(`select personnel.id, personnel.rank_id, personnel.name, personnel.slotted_position,
+        personnel.created_at, personnel.rank_effective_at, personnel.ts_id, personnel.status, personnel.mos,
+        public.personnel_tig_days(personnel.id) tig_days,
+        exists (select 1 from public.personnel_loa_periods periods where periods.personnel_id=personnel.id and periods.ended_at is null) active_loa
+      from public.personnel personnel order by personnel.name`),
   ]);
   return { ranks: ranks.rows, personnel: personnel.rows };
 }

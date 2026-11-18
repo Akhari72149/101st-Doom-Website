@@ -411,7 +411,7 @@ export default function Roster() {
                       <div className="mt-1 text-xs tracking-wide text-[#8ea595]">
                         {slot.slotId}
                       </div>
-                      <div className="mt-2 text-[11px] uppercase tracking-[0.2em] text-[#7fa08e]">
+                      <div className={`mt-2 text-[11px] font-bold uppercase tracking-[0.2em] ${person.active_loa ? "text-red-300" : "text-[#7fa08e]"}`}>
                         TIG: {calculateTimeInGradeDays(person)} Days{person?.active_loa ? " · Paused on LOA" : ""}
                       </div>
                     </>

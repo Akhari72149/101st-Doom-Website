@@ -752,15 +752,15 @@ export default function PersonnelProfile() {
     }
   };
 
-  const renderStatCard = (label: string, value: string, accent?: boolean) => (
+  const renderStatCard = (label: string, value: string, accent?: boolean, danger?: boolean) => (
     <div
-      className={`rounded-2xl border ${theme.secondaryBorder} ${theme.cardBg} p-4`}
+      className={`rounded-2xl border ${danger ? "border-red-400/45 bg-red-950/20" : `${theme.secondaryBorder} ${theme.cardBg}`} p-4`}
     >
       <p className="text-[11px] uppercase tracking-[0.22em] text-gray-400">
         {label}
       </p>
       <p
-        className={`mt-2 text-sm sm:text-base ${accent ? theme.accentText : "text-[#eafff2]"}`}
+        className={`mt-2 text-sm sm:text-base ${danger ? "font-bold text-red-300" : accent ? theme.accentText : "text-[#eafff2]"}`}
       >
         {value}
       </p>
@@ -779,7 +779,8 @@ export default function PersonnelProfile() {
         {renderStatCard(
           "Time in Grade",
           `${calculateTimeInGrade()} Days${selectedPerson.active_loa ? " · Paused on LOA" : ""}`,
-          true,
+          !selectedPerson.active_loa,
+          selectedPerson.active_loa,
         )}
         {renderStatCard(
           "Current Billet",

@@ -625,7 +625,7 @@ export default function PromotionReadinessPage() {
                   </div>
 
                   <div className="grid grid-cols-3 gap-px bg-white/10">
-                    <div className="bg-[#020806] p-3"><p className="text-[10px] uppercase tracking-[0.14em] text-[#657b6f]">TIG</p><p className="mt-1 font-bold">{person.tig_days}d</p></div>
+                    <div className={`p-3 ${person.active_loa ? "bg-red-950/20" : "bg-[#020806]"}`}><p className={`text-[10px] uppercase tracking-[0.14em] ${person.active_loa ? "text-red-300" : "text-[#657b6f]"}`}>TIG</p><p className={`mt-1 font-bold ${person.active_loa ? "text-red-300" : ""}`}>{person.tig_days}d</p></div>
                     <div className="bg-[#020806] p-3"><p className="text-[10px] uppercase tracking-[0.14em] text-[#657b6f]">{usesOperationCounts ? "Op credits" : "Attendance"}</p><p className="mt-1 font-bold">{usesOperationCounts ? `${person.attended}/4` : person.attendancePercentage === null ? "N/A" : `${person.attendancePercentage}%`}</p></div>
                     <div className="bg-[#020806] p-3"><p className="text-[10px] uppercase tracking-[0.14em] text-[#657b6f]">Service</p><p className="mt-1 font-bold">{person.service_days}d</p></div>
                   </div>
@@ -636,7 +636,7 @@ export default function PromotionReadinessPage() {
                     <detail.icon size={15} />{detail.label}
                   </span>
                   {person.active_loa && (
-                    <span className="inline-flex items-center gap-2 border border-cyan-300/35 bg-cyan-300/[0.06] px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-200">
+                    <span className="inline-flex items-center gap-2 border border-red-400/45 bg-red-950/25 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-red-300">
                       <CalendarClock size={15} /> LOA · TIG paused
                     </span>
                   )}

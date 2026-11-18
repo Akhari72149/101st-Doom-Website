@@ -28,7 +28,12 @@ function parseDate(value: unknown) { if(!value) return null; const date=new Date
 function labelForMessage(value:string){return value.replaceAll("_"," ").replace(/\b\w/g,char=>char.toUpperCase());}
 
 async function requirePipelineAccess(request:Request,adminOnly=false) {
-  return requirePageAccess(request,adminOnly?ADMIN_KEY:KEY,"read").catch(()=>null);
+  if(adminOnly)return requirePageAccess(request,ADMIN_KEY,"read").catch(()=>null);
+  return requirePageAccess(request,KEY,"read").catch(()=>null);
+}
+
+async function requirePipelineFullAccess(request:Request) {
+  return requirePageAccess(request,KEY,"full").catch(()=>null);
 }
 
 async function isAkhariAccount(userId:string) {
@@ -183,14 +188,17 @@ export async function POST(request:Request) {
   if(!requestHasSameOrigin(request)) return NextResponse.json({error:"Invalid request origin"},{status:403});
   const auth=await requirePipelineAccess(request);if(!auth)return NextResponse.json({error:"Forbidden"},{status:403});
   const adminAuth=await requirePipelineAccess(request,true);
+  const fullAuth=await requirePipelineFullAccess(request);
   const actorId=auth.userId;
   if(!actorId)return NextResponse.json({error:"Forbidden"},{status:403});
   const body=await request.json().catch(()=>null) as Row|null,kind=cleanText(body?.kind||"task",40);
   try {
-    if(["dependency","release","repository"].includes(kind)&&!adminAuth)return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});
+    if(["dependency","repository"].includes(kind)&&!adminAuth)return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});
+    if(kind==="release"&&!fullAuth)return NextResponse.json({error:"Full Mod Pipeline permission is required to manage releases."},{status:403});
     const result=await withPostgresTransaction(async client=>{
       if(kind==="task") {
         const parsed=parseTask(body);if(!parsed||(parsed.blocked&&!parsed.blocker_reason))throw new Error("INVALID_TASK");
+        if(parsed.status==="released")throw new Error("RELEASE_PROCESS_REQUIRED");
         if(parsed.mod_targets.includes("musical_archives")&&!(await isAkhariAccount(actorId)))throw new Error("PROTECTED_MOD_TARGET");
         await validateParent(client,null,parsed.parent_task_id);
         const templateName=cleanText(body?.template_name,120)||null;
@@ -198,7 +206,7 @@ export async function POST(request:Request) {
           ? body.template_checklist.map(item=>cleanText(item,500)).filter(Boolean)
           : [];
         if(templateChecklist.length>20)throw new Error("INVALID_TEMPLATE");
-        const input={...parsed,release_id:adminAuth?parsed.release_id:null};
+        const input={...parsed,release_id:fullAuth?parsed.release_id:null};
         const inserted=await client.query(`insert into public.mod_pipeline_tasks
           (title,description,acceptance_criteria,status,priority,task_type,task_types,workstream,tags,mod_targets,assigned_to,created_by,due_date,position,blocked,blocker_reason,release_id,parent_task_id,stage_entered_at)
           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,now()) returning *`,
@@ -224,13 +232,14 @@ export async function POST(request:Request) {
       if(kind==="repository") {const name=cleanText(body?.name,120),webUrl=cleanText(body?.webUrl,500).replace(/\/$/,""),defaultBranch=cleanText(body?.defaultBranch,200)||"main";let parsed:URL;try{parsed=new URL(webUrl);}catch{throw new Error("INVALID_REPOSITORY");}if(!name||!["http:","https:"].includes(parsed.protocol))throw new Error("INVALID_REPOSITORY");const count=await client.query<{count:number}>("select count(*)::int count from public.mod_pipeline_repositories",[]);if(count.rows[0].count>=5)throw new Error("REPOSITORY_LIMIT");const inserted=await client.query("insert into public.mod_pipeline_repositories(name,web_url,default_branch,sort_order,created_by) values($1,$2,$3,$4,$5) returning *",[name,webUrl,defaultBranch,count.rows[0].count,actorId]);await client.query("insert into public.audit_logs(user_id,action,details) values($1,'MOD_PIPELINE_REPOSITORY_CREATED',$2)",[actorId,`Added pipeline repository ${name} (${webUrl})`]);return inserted.rows[0];}
       throw new Error("INVALID_ACTION");
     });return NextResponse.json({ok:true,result},{status:201});
-  } catch(error){const message=error instanceof Error?error.message:"";if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="REPOSITORY_LIMIT")return NextResponse.json({error:"The pipeline supports up to five repositories."},{status:409});if((error as {code?:string})?.code==="23505")return NextResponse.json({error:"That repository or task reference is already linked."},{status:409});if((error as {code?:string,constraint?:string})?.code==="23514"&&(error as {constraint?:string})?.constraint==="mod_pipeline_tasks_mod_targets_check")return NextResponse.json({error:"The selected affected mod is not yet enabled in the database. Apply the latest website migration, then try again."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:message.slice(8).toLowerCase().replaceAll("_"," ")},{status:400});const reference=databaseErrorReference(error);console.error("[mod-taskboard] Create failed",error);return NextResponse.json({error:`Failed to save pipeline item${reference?` (${reference})`:""}`},{status:500});}
+  } catch(error){const message=error instanceof Error?error.message:"";if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="RELEASE_PROCESS_REQUIRED")return NextResponse.json({error:"Create the task before completing it through the release workflow."},{status:400});if(message==="REPOSITORY_LIMIT")return NextResponse.json({error:"The pipeline supports up to five repositories."},{status:409});if((error as {code?:string})?.code==="23505")return NextResponse.json({error:"That repository or task reference is already linked."},{status:409});if((error as {code?:string,constraint?:string})?.code==="23514"&&(error as {constraint?:string})?.constraint==="mod_pipeline_tasks_mod_targets_check")return NextResponse.json({error:"The selected affected mod is not yet enabled in the database. Apply the latest website migration, then try again."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:message.slice(8).toLowerCase().replaceAll("_"," ")},{status:400});const reference=databaseErrorReference(error);console.error("[mod-taskboard] Create failed",error);return NextResponse.json({error:`Failed to save pipeline item${reference?` (${reference})`:""}`},{status:500});}
 }
 
 export async function PATCH(request:Request) {
   if(!requestHasSameOrigin(request))return NextResponse.json({error:"Invalid request origin"},{status:403});
   const auth=await requirePipelineAccess(request);if(!auth)return NextResponse.json({error:"Forbidden"},{status:403});
   const adminAuth=await requirePipelineAccess(request,true);
+  const fullAuth=await requirePipelineFullAccess(request);
   const actorId=auth.userId;
   if(!actorId)return NextResponse.json({error:"Forbidden"},{status:403});
   const body=await request.json().catch(()=>null) as Row|null,kind=cleanText(body?.kind||"task",40),id=cleanText(body?.id,50);if(!UUID.test(id))return NextResponse.json({error:"Invalid record"},{status:400});
@@ -240,7 +249,7 @@ export async function PATCH(request:Request) {
       if(kind==="notifications_read_all"){const changed=await client.query("update public.mod_pipeline_notifications set read_at=coalesce(read_at,now()) where recipient_id=$1 and read_at is null",[actorId]);return {updated:changed.rowCount};}
       if(kind==="checklist"){const row=await client.query("select * from public.mod_pipeline_checklist_items where id=$1 for update",[id]);if(!row.rowCount)throw new Error("NOT_FOUND");const completed=body?.completed===true;const changed=await client.query("update public.mod_pipeline_checklist_items set completed=$2,completed_by=case when $2 then $3::uuid else null end,completed_at=case when $2 then now() else null end where id=$1 returning *",[id,completed,actorId]);await event(client,actorId,{taskId:String(row.rows[0].task_id),type:"checklist_updated",summary:`Marked checklist item ${completed?"complete":"incomplete"}`,oldValues:{completed:row.rows[0].completed},newValues:{completed}});await notifyTaskParticipants(client,String(row.rows[0].task_id),actorId,"checklist_updated","Task checklist updated",`${cleanText(row.rows[0].content,200)} was marked ${completed?"complete":"incomplete"}.`);return changed.rows[0];}
       if(kind==="release"){
-        if(!adminAuth)throw new Error("ADMIN_REQUIRED");
+        if(!fullAuth)throw new Error("FULL_REQUIRED");
         const old=await client.query("select * from public.mod_pipeline_releases where id=$1 for update",[id]);
         if(!old.rowCount)throw new Error("NOT_FOUND");
         if(old.rows[0].status==="released")throw new Error("RELEASE_LOCKED");
@@ -304,7 +313,7 @@ export async function PATCH(request:Request) {
         return changed.rows[0];
       }
       if(kind==="archive_release_tasks"){
-        if(!adminAuth)throw new Error("ADMIN_REQUIRED");
+        if(!fullAuth)throw new Error("FULL_REQUIRED");
         const release=await client.query("select * from public.mod_pipeline_releases where id=$1 for update",[id]);
         if(!release.rowCount)throw new Error("NOT_FOUND");
         if(release.rows[0].status!=="released")throw new Error("RELEASE_NOT_COMPLETE");
@@ -333,6 +342,7 @@ export async function PATCH(request:Request) {
           if(!approval.rowCount)throw new Error("TEST_APPROVAL_REQUIRED");
         }
         if(status==="released"){
+          if(!fullAuth)throw new Error("FULL_REQUIRED");
           if(!old.release_id)throw new Error("RELEASE_REQUIRED");
           const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='release' and decision='approved' order by decided_at desc limit 1",[id]);
           if(!approval.rowCount)throw new Error("APPROVAL_REQUIRED");
@@ -356,15 +366,15 @@ export async function PATCH(request:Request) {
       const addsMusicalArchives=parsed.mod_targets.includes("musical_archives")&&!(Array.isArray(old.mod_targets)&&old.mod_targets.includes("musical_archives"));
       if(addsMusicalArchives&&!(await isAkhariAccount(actorId)))throw new Error("PROTECTED_MOD_TARGET");
       await validateParent(client,id,parsed.parent_task_id);
-      const input={...parsed,release_id:adminAuth?parsed.release_id:old.release_id as string|null};
+      const input={...parsed,release_id:fullAuth?parsed.release_id:old.release_id as string|null};
       if(input.status==="testing"&&old.status!=="testing"){const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='review' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("REVIEW_APPROVAL_REQUIRED");}
       if(input.status==="ready_for_release"&&old.status!=="ready_for_release"){const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='testing' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("TEST_APPROVAL_REQUIRED");}
-      if(input.status==="released"){if(!input.release_id)throw new Error("RELEASE_REQUIRED");const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='release' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("APPROVAL_REQUIRED");}
+      if(input.status==="released"){if(!fullAuth)throw new Error("FULL_REQUIRED");if(!input.release_id)throw new Error("RELEASE_REQUIRED");const approval=await client.query("select 1 from public.mod_pipeline_approvals where task_id=$1 and gate='release' and decision='approved' order by decided_at desc limit 1",[id]);if(!approval.rowCount)throw new Error("APPROVAL_REQUIRED");}
       const now=new Date().toISOString(),next={...input,stage_entered_at:input.status!==old.status?now:old.stage_entered_at,started_at:!old.started_at&&!["intake","approved"].includes(input.status)?now:old.started_at,completed_at:input.status==="ready_for_release"&&!old.completed_at?now:old.completed_at,released_at:input.status==="released"&&!old.released_at?now:old.released_at};
       const changed=await client.query(`update public.mod_pipeline_tasks set title=$2,description=$3,acceptance_criteria=$4,status=$5,priority=$6,task_type=$7,task_types=$8,workstream=$9,tags=$10,mod_targets=$11,assigned_to=$12,due_date=$13,position=$14,blocked=$15,blocker_reason=$16,release_id=$17,parent_task_id=$18,stage_entered_at=$19,started_at=$20,completed_at=$21,released_at=$22,version=version+1,updated_at=now() where id=$1 returning *`,[id,next.title,next.description,next.acceptance_criteria,next.status,next.priority,next.task_type,next.task_types,next.workstream,next.tags,next.mod_targets,next.assigned_to,next.due_date,next.position,next.blocked,next.blocker_reason,next.release_id,next.parent_task_id,next.stage_entered_at,next.started_at,next.completed_at,next.released_at]);
       const diff=changedValues(old,next),statusChanged=old.status!==next.status;await event(client,actorId,{taskId:id,type:statusChanged?"status_changed":"task_updated",summary:statusChanged?`Moved from ${old.status} to ${next.status}`:"Updated task details",...diff,reason:cleanText(body?.reason,1000)||null});await notifyTaskParticipants(client,id,actorId,statusChanged?"status_changed":"task_updated",statusChanged?"Pipeline stage changed":"Task updated",statusChanged?`Moved from ${labelForMessage(String(old.status))} to ${labelForMessage(next.status)}.`:"Task details were updated.");return changed.rows[0];
     });return NextResponse.json({ok:true,result});
-  } catch(error){const message=error instanceof Error?error.message:"";if(message==="ADMIN_REQUIRED")return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="NOT_FOUND")return NextResponse.json({error:"Record not found"},{status:404});if(message==="VERSION_CONFLICT")return NextResponse.json({error:"This task changed while you were editing it. Refresh and try again."},{status:409});if(message==="REASON_REQUIRED")return NextResponse.json({error:"Give a reason when moving work backwards or cancelling it."},{status:400});if(message==="INVALID_PARENT")return NextResponse.json({error:"Choose an active parent that does not create a circular task hierarchy."},{status:400});if(message==="REVIEW_APPROVAL_REQUIRED")return NextResponse.json({error:"Internal review approval is required before testing."},{status:400});if(message==="TEST_APPROVAL_REQUIRED")return NextResponse.json({error:"Testing approval is required before release readiness."},{status:400});if(message==="RELEASE_REQUIRED")return NextResponse.json({error:"Select a release before marking this task released."},{status:400});if(message==="APPROVAL_REQUIRED")return NextResponse.json({error:"Release approval is required before this task can be released."},{status:400});if(message==="RELEASE_EMPTY")return NextResponse.json({error:"Add at least one task to this release before completing it."},{status:400});if(message==="RELEASE_SCOPE_NOT_READY")return NextResponse.json({error:"Every scoped task must be unblocked, Ready for Release, and have its latest release decision approved."},{status:409});if(message==="RELEASE_SCOPE_CLOSED_TASK")return NextResponse.json({error:"Released, cancelled, or archived tasks cannot be added to or removed from an active release."},{status:409});if(message==="TASK_ALREADY_SCOPED")return NextResponse.json({error:"One or more selected tasks already belong to another release."},{status:409});if(message==="RELEASE_LOCKED")return NextResponse.json({error:"Released releases are read-only."},{status:409});if(message==="RELEASE_NOT_COMPLETE")return NextResponse.json({error:"Only completed releases can have their tasks archived."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:"Invalid pipeline data"},{status:400});const reference=databaseErrorReference(error);console.error("[mod-taskboard] Update failed",error);return NextResponse.json({error:`Failed to update pipeline${reference?` (${reference})`:""}`},{status:500});}
+  } catch(error){const message=error instanceof Error?error.message:"";if(message==="ADMIN_REQUIRED")return NextResponse.json({error:"Pipeline administration permission is required."},{status:403});if(message==="FULL_REQUIRED")return NextResponse.json({error:"Full Mod Pipeline permission is required to manage releases."},{status:403});if(message==="PROTECTED_MOD_TARGET")return NextResponse.json({error:"Only Akhari can assign Musical Archives."},{status:403});if(message==="NOT_FOUND")return NextResponse.json({error:"Record not found"},{status:404});if(message==="VERSION_CONFLICT")return NextResponse.json({error:"This task changed while you were editing it. Refresh and try again."},{status:409});if(message==="REASON_REQUIRED")return NextResponse.json({error:"Give a reason when moving work backwards or cancelling it."},{status:400});if(message==="INVALID_PARENT")return NextResponse.json({error:"Choose an active parent that does not create a circular task hierarchy."},{status:400});if(message==="REVIEW_APPROVAL_REQUIRED")return NextResponse.json({error:"Internal review approval is required before testing."},{status:400});if(message==="TEST_APPROVAL_REQUIRED")return NextResponse.json({error:"Testing approval is required before release readiness."},{status:400});if(message==="RELEASE_REQUIRED")return NextResponse.json({error:"Select a release before marking this task released."},{status:400});if(message==="APPROVAL_REQUIRED")return NextResponse.json({error:"Release approval is required before this task can be released."},{status:400});if(message==="RELEASE_EMPTY")return NextResponse.json({error:"Add at least one task to this release before completing it."},{status:400});if(message==="RELEASE_SCOPE_NOT_READY")return NextResponse.json({error:"Every scoped task must be unblocked, Ready for Release, and have its latest release decision approved."},{status:409});if(message==="RELEASE_SCOPE_CLOSED_TASK")return NextResponse.json({error:"Released, cancelled, or archived tasks cannot be added to or removed from an active release."},{status:409});if(message==="TASK_ALREADY_SCOPED")return NextResponse.json({error:"One or more selected tasks already belong to another release."},{status:409});if(message==="RELEASE_LOCKED")return NextResponse.json({error:"Released releases are read-only."},{status:409});if(message==="RELEASE_NOT_COMPLETE")return NextResponse.json({error:"Only completed releases can have their tasks archived."},{status:409});if(message.startsWith("INVALID_"))return NextResponse.json({error:"Invalid pipeline data"},{status:400});const reference=databaseErrorReference(error);console.error("[mod-taskboard] Update failed",error);return NextResponse.json({error:`Failed to update pipeline${reference?` (${reference})`:""}`},{status:500});}
 }
 
 export async function DELETE(request:Request) {

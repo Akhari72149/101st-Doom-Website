@@ -42,7 +42,7 @@ const contracts = [
   ["src/app/api/discord-attendance/[id]/route.ts", 'requirePageAccess(request,"admin.discord-attendance","edit")'],
   ["src/app/api/discord-attendance/emojis/route.ts", 'requirePageAccess(request,"admin.discord-attendance","read")'],
   ["src/app/api/gc-logistics/route.ts", 'requirePageAccess(request,log?"gc.asset-log":"gc.logistics","read")', 'requirePageAccess(request,"gc.logistics","edit")'],
-  ["src/app/api/mod-taskboard/route.ts", 'requirePageAccess(request,KEY,"read")', 'requirePageAccess(request,KEY,"edit")', 'requirePageAccess(request,KEY,"full")'],
+  ["src/app/api/mod-taskboard/route.ts", 'requirePageAccess(request,KEY,"read")', 'requirePageAccess(request,KEY,"full")'],
   ["src/app/api/planops/route.ts", 'requirePageAccess(request,KEY,"read")', 'requirePageAccess(request,KEY,"edit")'],
   ["src/app/api/randomiser/route.ts", 'requirePageAccess(request,KEY,"edit")'],
   ["src/app/api/rank-update/route.ts", 'requirePageAccess(req,"admin.positions","edit")'],

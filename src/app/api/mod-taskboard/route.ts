@@ -89,7 +89,7 @@ async function validateParent(client:PoolClient,taskId:string|null,parentTaskId:
   }
 }
 
-async function notifyTaskParticipants(client:PoolClient,taskId:string,actorId:string,eventType:string,title:string,message:string) {
+async function notifyTaskParticipants(client:PoolClient,taskId:string,actorId:string,eventType:string,title:string,message:string,extraRecipientIds:string[]=[]) {
   await client.query("savepoint mod_pipeline_notification");
   try {
     await client.query(`insert into public.mod_pipeline_notifications(recipient_id,task_id,actor_id,event_type,title,message)
@@ -100,8 +100,9 @@ async function notifyTaskParticipants(client:PoolClient,taskId:string,actorId:st
         union select parent.assigned_to from public.mod_pipeline_tasks child join public.mod_pipeline_tasks parent on parent.id=child.parent_task_id where child.id=$1
         union select parent_watchers.user_id from public.mod_pipeline_tasks child join public.mod_pipeline_watchers parent_watchers on parent_watchers.task_id=child.parent_task_id where child.id=$1
         union select $2::uuid
+        union select unnest($6::uuid[])
       ) recipients join public.app_auth_users users on users.id=recipients.user_id and users.disabled=false
-      where recipients.user_id is not null`,[taskId,actorId,eventType,title,message]);
+      where recipients.user_id is not null`,[taskId,actorId,eventType,title,message,extraRecipientIds]);
     await client.query("release savepoint mod_pipeline_notification");
   } catch(error) {
     await client.query("rollback to savepoint mod_pipeline_notification");
@@ -327,6 +328,18 @@ export async function PATCH(request:Request) {
       if(kind==="assignee"){if(!adminAuth)throw new Error("ADMIN_REQUIRED");const active=body?.active===true;const specialties=Array.isArray(body?.specialties)?body.specialties.map(String):null;if(specialties&&(specialties.length>6||new Set(specialties).size!==specialties.length||specialties.some(item=>!PIPELINE_SPECIALTIES.has(item))))throw new Error("INVALID_SPECIALTIES");const previous=await client.query<{name:string;active:boolean;specialties:string[]}>("select name,active,specialties from public.mod_pipeline_assignees where id=$1 for update",[id]);if(!previous.rowCount)throw new Error("NOT_FOUND");const changed=await client.query("update public.mod_pipeline_assignees set active=$2,specialties=coalesce($3::text[],specialties),updated_at=now() where id=$1 returning *",[id,active,specialties]);const before=previous.rows[0],after=changed.rows[0];await client.query("insert into public.audit_logs(user_id,action,details) values($1,'MOD_PIPELINE_PERSON_UPDATED',$2)",[actorId,`Updated ${after.name}: active ${before.active} -> ${after.active}; specialties ${(before.specialties||[]).join(", ")||"none"} -> ${(after.specialties||[]).join(", ")||"none"}`]);return after;}
       const selected=await client.query("select * from public.mod_pipeline_tasks where id=$1 for update",[id]);if(!selected.rowCount)throw new Error("NOT_FOUND");const old=selected.rows[0] as Row;
       if(Number(body?.version)!==Number(old.version))throw new Error("VERSION_CONFLICT");
+      if(kind==="assignment") {
+        const assignedText=cleanText(body?.assignedTo,50);
+        if(assignedText&&!UUID.test(assignedText))throw new Error("INVALID_ASSIGNEE");
+        const assignedTo=assignedText||null;
+        let assignedName="Unassigned";
+        if(assignedTo){const assignee=await client.query<{name:string}>("select name from public.mod_pipeline_assignees where id=$1 and active=true",[assignedTo]);if(!assignee.rowCount)throw new Error("INVALID_ASSIGNEE");assignedName=assignee.rows[0].name;}
+        if((old.assigned_to||null)===assignedTo)return old;
+        const changed=await client.query("update public.mod_pipeline_tasks set assigned_to=$2,version=version+1,updated_at=now() where id=$1 returning *",[id,assignedTo]);
+        await event(client,actorId,{taskId:id,type:"assignment_changed",summary:`Changed owner to ${assignedName}`,oldValues:{assigned_to:old.assigned_to||null},newValues:{assigned_to:assignedTo}});
+        await notifyTaskParticipants(client,id,actorId,"assignment_changed","Task owner changed",`Owner changed to ${assignedName}.`,old.assigned_to?[String(old.assigned_to)]:[]);
+        return changed.rows[0];
+      }
       if(kind==="move") {
         const status=cleanText(body?.status,40),beforeId=nullableUuid(body?.beforeId);
         if(!STATUS_SET.has(status))throw new Error("INVALID_STATUS");

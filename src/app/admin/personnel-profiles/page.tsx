@@ -9,6 +9,7 @@ import {
   Clock3,
   Gamepad2,
   History,
+  Link2,
   Link2Off,
   Loader2,
   Monitor,
@@ -50,7 +51,7 @@ type Personnel = {
   name: string;
   birth_number: string | null;
   rank_id: string | null;
-  discord_id: string;
+  discord_id: string | null;
   ts_id: string | null;
   status: string | null;
   slotted_position: string | null;
@@ -84,6 +85,20 @@ function actionLabel(action: string) {
   return action.toLowerCase().replace(/^personnel_/, "").replaceAll("_", " ");
 }
 
+function normalizeDiscordId(value: string) {
+  const trimmed = value.trim();
+  const direct = trimmed.match(/^(?:<@!?(\d{17,20})>|(\d{17,20}))$/);
+  if (direct) return direct[1] || direct[2];
+  try {
+    const url = new URL(trimmed);
+    if (!["discord.com", "www.discord.com", "discordapp.com", "www.discordapp.com"].includes(url.hostname.toLowerCase())) return "";
+    const match = url.pathname.match(/^\/users\/(\d{17,20})\/?$/);
+    return match?.[1] || "";
+  } catch {
+    return "";
+  }
+}
+
 function roleRepairLabel(repair: RoleRepairStatus) {
   if (repair.dead > 0) return { label: "Delivery failed", tone: "border-red-300/30 bg-red-300/[0.06] text-red-200" };
   if (repair.total > 0 && repair.succeeded === repair.total) return { label: "Delivery complete", tone: "border-[#00ff66]/30 bg-[#00ff66]/[0.06] text-[#00ff66]" };
@@ -105,7 +120,8 @@ export default function PersonnelProfilesAdminPage() {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [joinDate, setJoinDate] = useState("");
+  const [joinDateDraft, setJoinDateDraft] = useState<{ personnelId: string; value: string } | null>(null);
+  const [discordIdDraft, setDiscordIdDraft] = useState<{ personnelId: string; value: string } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [reactivating, setReactivating] = useState<Personnel | null>(null);
   const [retainedCertifications, setRetainedCertifications] = useState<string[]>([]);
@@ -116,6 +132,8 @@ export default function PersonnelProfilesAdminPage() {
     () => personnel.find((person) => person.id === selectedId) || null,
     [personnel, selectedId],
   );
+  const joinDate = selected ? joinDateDraft?.personnelId === selected.id ? joinDateDraft.value : selected.join_date : "";
+  const discordId = selected ? discordIdDraft?.personnelId === selected.id ? discordIdDraft.value : selected.discord_id || "" : "";
 
   const completeness = useMemo(() => {
     if (!selected) return { complete: 0, total: 7, missing: [] as string[] };
@@ -199,6 +217,7 @@ export default function PersonnelProfilesAdminPage() {
   async function saveJoinDate() {
     if (!selected || !canEdit || !joinDate) return;
     if (await runAction({ action: "update-join-date", personnelId: selected.id, joinDate })) {
+      setJoinDateDraft(null);
       await loadPersonnel(view, query);
       setStatus(`Join date updated for ${selected.name}.`);
     }
@@ -208,8 +227,21 @@ export default function PersonnelProfilesAdminPage() {
     if (!selected || !canEdit || !selected.discord_id) return;
     if (!window.confirm(`Unlink the Discord account from ${selected.name}?`)) return;
     if (await runAction({ action: "unlink-discord", personnelId: selected.id })) {
+      setDiscordIdDraft(null);
       await loadPersonnel(view, query);
       setStatus(`Discord account unlinked from ${selected.name}.`);
+    }
+  }
+
+  async function saveDiscordLink() {
+    if (!selected || !canEdit) return;
+    const normalized = normalizeDiscordId(discordId);
+    if (!normalized || normalized === selected.discord_id) return;
+    if (selected.discord_id && !window.confirm(`Change the Discord account linked to ${selected.name}?`)) return;
+    if (await runAction({ action: "update-discord", personnelId: selected.id, discordId: normalized })) {
+      setDiscordIdDraft(null);
+      await loadPersonnel(view, query);
+      setStatus(`Discord account ${selected.discord_id ? "changed" : "linked"} for ${selected.name}.`);
     }
   }
 
@@ -299,7 +331,7 @@ export default function PersonnelProfilesAdminPage() {
               ) : personnel.length === 0 ? (
                 <div className="min-h-40 p-6 text-center text-sm text-[#7f9a8b]">No matching profiles found.</div>
               ) : personnel.map((person) => (
-                <button key={person.id} type="button" onClick={() => { setSelectedId(person.id); setJoinDate(person.join_date); }}
+                <button key={person.id} type="button" onClick={() => setSelectedId(person.id)}
                   className={`grid w-full grid-cols-[1fr_auto] items-center gap-4 border-b border-[#00ff66]/10 p-4 text-left transition last:border-b-0 ${selectedId === person.id ? "bg-[#00ff66]/12" : "hover:bg-[#00ff66]/[0.05]"}`}>
                   <span className="min-w-0">
                     <span className="block truncate font-bold">{person.name}</span>
@@ -377,7 +409,7 @@ export default function PersonnelProfilesAdminPage() {
                 <div className="grid gap-5 p-6 sm:grid-cols-2 xl:grid-cols-3">
                   <div className="border border-[#00ff66]/15 bg-[#001009]/55 p-5">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#00ff66]/70"><CalendarDays className="h-4 w-4" /> Join Date</div>
-                    <input type="date" value={joinDate} onChange={(event) => setJoinDate(event.target.value)} disabled={!canEdit || saving}
+                    <input type="date" value={joinDate} onChange={(event) => setJoinDateDraft({ personnelId: selected.id, value: event.target.value })} disabled={!canEdit || saving}
                       className="mt-4 min-h-12 w-full border border-[#00ff66]/25 bg-black px-4 text-white outline-none focus:border-[#00ff66]/60 disabled:cursor-not-allowed disabled:opacity-55" />
                     <button type="button" onClick={saveJoinDate} disabled={!canEdit || saving || !joinDate || joinDate === selected.join_date}
                       className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/10 px-4 text-xs font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-not-allowed disabled:opacity-40">
@@ -387,11 +419,20 @@ export default function PersonnelProfilesAdminPage() {
 
                   <div className="border border-[#00ff66]/15 bg-[#001009]/55 p-5">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#00ff66]/70"><ShieldCheck className="h-4 w-4" /> Discord Link</div>
-                    <p className="mt-4 break-all font-mono text-sm text-[#b7cec0]">{selected.discord_id || "Not linked"}</p>
-                    <button type="button" onClick={unlinkDiscord} disabled={!canEdit || saving || !selected.discord_id}
-                      className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-red-500/35 bg-red-500/10 px-4 text-xs font-bold uppercase tracking-[0.14em] text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40">
-                      <Link2Off className="h-4 w-4" /> Unlink Discord
-                    </button>
+                    <input type="text" autoComplete="off" spellCheck={false} maxLength={100} value={discordId} onChange={(event) => setDiscordIdDraft({ personnelId: selected.id, value: event.target.value })} disabled={!canEdit || saving}
+                      placeholder="Discord user ID, mention, or profile URL" aria-invalid={Boolean(discordId.trim()) && !normalizeDiscordId(discordId)}
+                      className="mt-4 min-h-12 w-full border border-[#00ff66]/25 bg-black px-4 font-mono text-sm text-white outline-none focus:border-[#00ff66]/60 disabled:cursor-not-allowed disabled:opacity-55" />
+                    <p className={`mt-2 text-xs ${discordId.trim()&&!normalizeDiscordId(discordId)?"text-red-300":"text-[#71877a]"}`}>{discordId.trim()&&!normalizeDiscordId(discordId)?"Enter a valid 17 to 20 digit Discord user ID.":"Accepts a user ID, @mention, or discord.com/users link."}</p>
+                    <div className={`mt-3 grid gap-2 ${selected.discord_id?"grid-cols-2":""}`}>
+                      <button type="button" onClick={saveDiscordLink} disabled={!canEdit || saving || !normalizeDiscordId(discordId) || normalizeDiscordId(discordId) === selected.discord_id}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/10 px-3 text-xs font-bold uppercase tracking-[0.12em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-not-allowed disabled:opacity-40">
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} {selected.discord_id ? "Change Link" : "Link Discord"}
+                      </button>
+                      {selected.discord_id && <button type="button" onClick={unlinkDiscord} disabled={!canEdit || saving}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 border border-red-500/35 bg-red-500/10 px-3 text-xs font-bold uppercase tracking-[0.12em] text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40">
+                        <Link2Off className="h-4 w-4" /> Unlink
+                      </button>}
+                    </div>
                   </div>
 
                   <div className="border border-[#00ff66]/15 bg-[#001009]/55 p-5 sm:col-span-2 xl:col-span-1">

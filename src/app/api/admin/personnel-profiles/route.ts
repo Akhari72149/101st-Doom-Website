@@ -9,9 +9,23 @@ export const dynamic = "force-dynamic";
 const PERMISSION = "admin.personnel-profiles";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const DISCORD_ID = /^\d{17,20}$/;
 const INACTIVE_STATUSES = ["removed", "retired", "transferred"];
 
-type PersonnelAction = "update-join-date" | "unlink-discord" | "reactivate" | "set-reservist" | "reassign-discord-roles";
+type PersonnelAction = "update-join-date" | "update-discord" | "unlink-discord" | "reactivate" | "set-reservist" | "reassign-discord-roles";
+
+function normalizeDiscordId(value: unknown) {
+  const trimmed = String(value || "").trim();
+  const direct = trimmed.match(/^(?:<@!?(\d{17,20})>|(\d{17,20}))$/);
+  if (direct) return direct[1] || direct[2];
+  try {
+    const url = new URL(trimmed);
+    if (!["discord.com", "www.discord.com", "discordapp.com", "www.discordapp.com"].includes(url.hostname.toLowerCase())) return "";
+    return url.pathname.match(/^\/users\/(\d{17,20})\/?$/)?.[1] || "";
+  } catch {
+    return "";
+  }
+}
 
 function slotRoleIds(slotId: string | null) {
   if (!slotId) return [];
@@ -106,7 +120,7 @@ export async function GET(request: Request) {
                    left join public.personnel processor on processor.id = audit.processed_by
                    where audit.target_personnel_id = personnel.id
                      and audit.action = any(array[
-                       'JOIN_DATE_UPDATED','DISCORD_UNLINKED','PERSONNEL_REMOVED',
+                       'JOIN_DATE_UPDATED','DISCORD_LINKED','DISCORD_LINK_CHANGED','DISCORD_UNLINKED','PERSONNEL_REMOVED',
                        'PERSONNEL_RETIRED','PERSONNEL_TRANSFERRED','PERSONNEL_REACTIVATED',
                        'PERSONNEL_RESERVIST_STARTED','PERSONNEL_RESERVIST_ENDED','RANK_CHANGED',
                        'DISCORD_ROLES_REASSIGNED'
@@ -189,6 +203,7 @@ export async function POST(request: Request) {
     action?: PersonnelAction;
     personnelId?: string;
     joinDate?: string;
+    discordId?: string;
     keepCertificationIds?: string[];
     reason?: string;
     rankId?: string;
@@ -196,7 +211,7 @@ export async function POST(request: Request) {
   } | null;
   const action = body?.action;
   const personnelId = String(body?.personnelId || "");
-  const validActions: PersonnelAction[] = ["update-join-date", "unlink-discord", "reactivate", "set-reservist", "reassign-discord-roles"];
+  const validActions: PersonnelAction[] = ["update-join-date", "update-discord", "unlink-discord", "reactivate", "set-reservist", "reassign-discord-roles"];
 
   if (!action || !validActions.includes(action)) {
     return NextResponse.json({ error: "Invalid personnel action" }, { status: 400 });
@@ -215,7 +230,7 @@ export async function POST(request: Request) {
       const person = await client.query<{
         id: string;
         name: string;
-        discord_id: string;
+        discord_id: string | null;
         status: string | null;
         join_date: string;
         rank_id: string | null;
@@ -242,9 +257,35 @@ export async function POST(request: Request) {
         return { joinDate };
       }
 
+      if (action === "update-discord") {
+        const discordId = normalizeDiscordId(body.discordId);
+        if (!DISCORD_ID.test(discordId)) throw new Error("INVALID_DISCORD");
+        if (discordId === (current.discord_id || "").trim()) throw new Error("DISCORD_NO_CHANGE");
+        const existing = await client.query<{ name: string }>(
+          "select name from public.personnel where discord_id=$1 and id<>$2 limit 1",
+          [discordId, personnelId],
+        );
+        if (existing.rowCount) throw new Error("DISCORD_IN_USE");
+        await client.query("update public.personnel set discord_id=$2 where id=$1", [personnelId, discordId]);
+        const previous = (current.discord_id || "").trim();
+        await client.query(
+          `insert into public.audit_logs(user_id,target_personnel_id,action,details)
+           values($1,$2,$3,$4)`,
+          [
+            auth.userId,
+            personnelId,
+            previous ? "DISCORD_LINK_CHANGED" : "DISCORD_LINKED",
+            previous
+              ? `Discord account changed from ending ${previous.slice(-4)} to ending ${discordId.slice(-4)}`
+              : `Discord account linked ending ${discordId.slice(-4)}`,
+          ],
+        );
+        return { discordId };
+      }
+
       if (action === "unlink-discord") {
-        if (!current.discord_id.trim()) throw new Error("NOT_LINKED");
-        await client.query("update public.personnel set discord_id='' where id=$1", [personnelId]);
+        if (!(current.discord_id || "").trim()) throw new Error("NOT_LINKED");
+        await client.query("update public.personnel set discord_id=null where id=$1", [personnelId]);
         await client.query(
           `insert into public.audit_logs(user_id,target_personnel_id,action,details)
            values($1,$2,'DISCORD_UNLINKED','Discord account unlinked from personnel profile')`,
@@ -280,7 +321,7 @@ export async function POST(request: Request) {
 
       if (action === "reassign-discord-roles") {
         if (INACTIVE_STATUSES.includes((current.status || "").toLowerCase())) throw new Error("INACTIVE_PROFILE");
-        if (!current.discord_id.trim()) throw new Error("NOT_LINKED");
+        if (!(current.discord_id || "").trim()) throw new Error("NOT_LINKED");
 
         const baseRoles = await client.query<{ queued_count: number }>(
           "select public.enqueue_personnel_reactivation($1) as queued_count",
@@ -366,6 +407,9 @@ export async function POST(request: Request) {
     const known: Record<string, [string, number]> = {
       NOT_FOUND: ["Personnel profile not found", 404],
       INVALID_DATE: ["Enter a valid join date", 400],
+      INVALID_DISCORD: ["Enter a valid Discord user ID", 400],
+      DISCORD_IN_USE: ["That Discord account is already linked to another personnel profile", 409],
+      DISCORD_NO_CHANGE: ["That Discord account is already linked to this profile", 409],
       NOT_LINKED: ["This profile does not have a Discord account linked", 409],
       ALREADY_ACTIVE: ["This personnel profile is already active", 409],
       INACTIVE_PROFILE: ["Inactive profiles cannot be placed in reserves", 409],
@@ -375,6 +419,9 @@ export async function POST(request: Request) {
       INVALID_CERTIFICATIONS: ["Invalid certification selection", 400],
     };
     if (known[code]) return NextResponse.json({ error: known[code][0] }, { status: known[code][1] });
+    if (error && typeof error === "object" && "code" in error && String(error.code) === "23505") {
+      return NextResponse.json({ error: "That Discord account is already linked to another personnel profile" }, { status: 409 });
+    }
     console.error("[personnel-profiles] Update failed", error);
     return NextResponse.json({ error: "Failed to update personnel profile" }, { status: 500 });
   }

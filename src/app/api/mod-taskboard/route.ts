@@ -139,7 +139,7 @@ async function readPostgres(includeArchive:boolean,userId:string) {
     pool.query("select a.id,a.name,a.active,a.specialties from public.mod_pipeline_assignees a join public.app_auth_users u on u.id=a.id and u.disabled=false where a.active=true order by a.name"),
     pool.query("select a.id,a.name,a.active,a.specialties from public.mod_pipeline_assignees a join public.app_auth_users u on u.id=a.id and u.disabled=false order by a.name"),
     pool.query(`select id,coalesce(nullif(btrim("displayUsername"),''),nullif(btrim(name),''),nullif(btrim(username),''),'Unknown account') display_name
-      from public.app_auth_users where disabled=false order by display_name`),
+      from public.app_auth_users order by display_name`),
     pool.query(`select t.*,r.name release_name,r.version release_version from public.mod_pipeline_tasks t left join public.mod_pipeline_releases r on r.id=t.release_id ${taskWhere} order by t.status,t.position,t.created_at`),
     pool.query(`select c.id,c.task_id,c.user_id,c.content,c.created_at,
       coalesce(nullif(btrim(p."displayUsername"),''),nullif(btrim(p.name),''),nullif(btrim(p.username),'')) display_name

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPostgresPool, withPostgresTransaction } from "@/lib/postgres/pool";
 import { requestHasSameOrigin, requirePageAccess } from "@/lib/route-permissions";
 import { structure } from "@/data/structure";
+import { serviceNumberError } from "@/lib/recruitment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DISCORD_ID = /^\d{17,20}$/;
 const INACTIVE_STATUSES = ["removed", "retired", "transferred"];
 
-type PersonnelAction = "update-join-date" | "update-discord" | "unlink-discord" | "reactivate" | "set-reservist" | "reassign-discord-roles";
+type PersonnelAction = "update-join-date" | "update-number-designation" | "update-discord" | "unlink-discord" | "reactivate" | "set-reservist" | "reassign-discord-roles";
 
 function normalizeDiscordId(value: unknown) {
   const trimmed = String(value || "").trim();
@@ -120,7 +121,7 @@ export async function GET(request: Request) {
                    left join public.personnel processor on processor.id = audit.processed_by
                    where audit.target_personnel_id = personnel.id
                      and audit.action = any(array[
-                       'JOIN_DATE_UPDATED','DISCORD_LINKED','DISCORD_LINK_CHANGED','DISCORD_UNLINKED','PERSONNEL_REMOVED',
+                       'JOIN_DATE_UPDATED','NUMBER_DESIGNATION_UPDATED','DISCORD_LINKED','DISCORD_LINK_CHANGED','DISCORD_UNLINKED','PERSONNEL_REMOVED',
                        'PERSONNEL_RETIRED','PERSONNEL_TRANSFERRED','PERSONNEL_REACTIVATED',
                        'PERSONNEL_RESERVIST_STARTED','PERSONNEL_RESERVIST_ENDED','RANK_CHANGED',
                        'DISCORD_ROLES_REASSIGNED'
@@ -203,6 +204,7 @@ export async function POST(request: Request) {
     action?: PersonnelAction;
     personnelId?: string;
     joinDate?: string;
+    numberDesignation?: string;
     discordId?: string;
     keepCertificationIds?: string[];
     reason?: string;
@@ -211,7 +213,7 @@ export async function POST(request: Request) {
   } | null;
   const action = body?.action;
   const personnelId = String(body?.personnelId || "");
-  const validActions: PersonnelAction[] = ["update-join-date", "update-discord", "unlink-discord", "reactivate", "set-reservist", "reassign-discord-roles"];
+  const validActions: PersonnelAction[] = ["update-join-date", "update-number-designation", "update-discord", "unlink-discord", "reactivate", "set-reservist", "reassign-discord-roles"];
 
   if (!action || !validActions.includes(action)) {
     return NextResponse.json({ error: "Invalid personnel action" }, { status: 400 });
@@ -230,6 +232,7 @@ export async function POST(request: Request) {
       const person = await client.query<{
         id: string;
         name: string;
+        birth_number: string | null;
         discord_id: string | null;
         status: string | null;
         join_date: string;
@@ -237,7 +240,7 @@ export async function POST(request: Request) {
         slotted_position: string | null;
         reservist_since: string | null;
       }>(
-        `select id, name, discord_id, status, rank_id, slotted_position, reservist_since,
+        `select id, name, birth_number, discord_id, status, rank_id, slotted_position, reservist_since,
                 to_char(created_at, 'YYYY-MM-DD') as join_date
          from public.personnel where id=$1 for update`,
         [personnelId],
@@ -255,6 +258,28 @@ export async function POST(request: Request) {
           [auth.userId, personnelId, `Join date changed from ${current.join_date} to ${joinDate}`],
         );
         return { joinDate };
+      }
+
+      if (action === "update-number-designation") {
+        const numberDesignation = String(body.numberDesignation || "").trim();
+        if (serviceNumberError(numberDesignation)) throw new Error("INVALID_NUMBER_DESIGNATION");
+        if (numberDesignation === (current.birth_number || "").trim()) throw new Error("NUMBER_DESIGNATION_NO_CHANGE");
+        const existing = await client.query<{ name: string }>(
+          `select name from public.personnel
+           where birth_number=$1 and id<>$2
+             and lower(coalesce(status,''))<>all($3::text[])
+           limit 1`,
+          [numberDesignation, personnelId, ["removed", "retired"]],
+        );
+        if (existing.rowCount) throw new Error("NUMBER_DESIGNATION_IN_USE");
+        const previous = (current.birth_number || "").trim();
+        await client.query("update public.personnel set birth_number=$2 where id=$1", [personnelId, numberDesignation]);
+        await client.query(
+          `insert into public.audit_logs(user_id,target_personnel_id,action,details)
+           values($1,$2,'NUMBER_DESIGNATION_UPDATED',$3)`,
+          [auth.userId, personnelId, previous ? `Number designation changed from ${previous} to ${numberDesignation}` : `Number designation set to ${numberDesignation}`],
+        );
+        return { numberDesignation };
       }
 
       if (action === "update-discord") {
@@ -407,6 +432,9 @@ export async function POST(request: Request) {
     const known: Record<string, [string, number]> = {
       NOT_FOUND: ["Personnel profile not found", 404],
       INVALID_DATE: ["Enter a valid join date", 400],
+      INVALID_NUMBER_DESIGNATION: ["Enter exactly five digits; the number cannot begin with 0 or use a blocked value", 400],
+      NUMBER_DESIGNATION_IN_USE: ["An active personnel profile already uses that number designation", 409],
+      NUMBER_DESIGNATION_NO_CHANGE: ["That number designation is already assigned to this profile", 409],
       INVALID_DISCORD: ["Enter a valid Discord user ID", 400],
       DISCORD_IN_USE: ["That Discord account is already linked to another personnel profile", 409],
       DISCORD_NO_CHANGE: ["That Discord account is already linked to this profile", 409],
@@ -420,7 +448,10 @@ export async function POST(request: Request) {
     };
     if (known[code]) return NextResponse.json({ error: known[code][0] }, { status: known[code][1] });
     if (error && typeof error === "object" && "code" in error && String(error.code) === "23505") {
-      return NextResponse.json({ error: "That Discord account is already linked to another personnel profile" }, { status: 409 });
+      const message = action === "update-number-designation"
+        ? "An active personnel profile already uses that number designation"
+        : "That Discord account is already linked to another personnel profile";
+      return NextResponse.json({ error: message }, { status: 409 });
     }
     console.error("[personnel-profiles] Update failed", error);
     return NextResponse.json({ error: "Failed to update personnel profile" }, { status: 500 });

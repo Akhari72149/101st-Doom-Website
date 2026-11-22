@@ -8,6 +8,7 @@ import {
   Check,
   Clock3,
   Gamepad2,
+  Hash,
   History,
   Link2,
   Link2Off,
@@ -23,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { getAppAuthHeaders, getAppSession, hasAppPermission } from "@/lib/client-auth";
+import { serviceNumberError } from "@/lib/recruitment";
 
 type Certification = {
   id: string;
@@ -120,6 +122,7 @@ export default function PersonnelProfilesAdminPage() {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [numberDesignationDraft, setNumberDesignationDraft] = useState<{ personnelId: string; value: string } | null>(null);
   const [joinDateDraft, setJoinDateDraft] = useState<{ personnelId: string; value: string } | null>(null);
   const [discordIdDraft, setDiscordIdDraft] = useState<{ personnelId: string; value: string } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -132,6 +135,8 @@ export default function PersonnelProfilesAdminPage() {
     () => personnel.find((person) => person.id === selectedId) || null,
     [personnel, selectedId],
   );
+  const numberDesignation = selected ? numberDesignationDraft?.personnelId === selected.id ? numberDesignationDraft.value : selected.birth_number || "" : "";
+  const numberDesignationError = numberDesignation ? serviceNumberError(numberDesignation) : "Enter exactly five digits";
   const joinDate = selected ? joinDateDraft?.personnelId === selected.id ? joinDateDraft.value : selected.join_date : "";
   const discordId = selected ? discordIdDraft?.personnelId === selected.id ? discordIdDraft.value : selected.discord_id || "" : "";
 
@@ -220,6 +225,16 @@ export default function PersonnelProfilesAdminPage() {
       setJoinDateDraft(null);
       await loadPersonnel(view, query);
       setStatus(`Join date updated for ${selected.name}.`);
+    }
+  }
+
+  async function saveNumberDesignation() {
+    if (!selected || !canEdit || numberDesignationError || numberDesignation === selected.birth_number) return;
+    if (selected.birth_number && !window.confirm(`Change ${selected.name}'s number designation from ${selected.birth_number} to ${numberDesignation}?`)) return;
+    if (await runAction({ action: "update-number-designation", personnelId: selected.id, numberDesignation })) {
+      setNumberDesignationDraft(null);
+      await loadPersonnel(view, query);
+      setStatus(`Number designation updated for ${selected.name}.`);
     }
   }
 
@@ -406,7 +421,20 @@ export default function PersonnelProfilesAdminPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-5 p-6 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-5 p-6 md:grid-cols-2">
+                  <div className="border border-[#00ff66]/15 bg-[#001009]/55 p-5">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#00ff66]/70"><Hash className="h-4 w-4" /> Number Designation</div>
+                    <input type="text" inputMode="numeric" autoComplete="off" maxLength={5} value={numberDesignation}
+                      onChange={(event) => setNumberDesignationDraft({ personnelId: selected.id, value: event.target.value.replace(/\D/g, "").slice(0, 5) })}
+                      disabled={!canEdit || saving} placeholder="72149" aria-invalid={Boolean(numberDesignationError)}
+                      className="mt-4 min-h-12 w-full border border-[#00ff66]/25 bg-black px-4 font-mono text-sm text-white outline-none focus:border-[#00ff66]/60 disabled:cursor-not-allowed disabled:opacity-55" />
+                    <p className={`mt-2 text-xs ${numberDesignationError ? "text-red-300" : "text-[#71877a]"}`}>{numberDesignationError || "Five-digit number is valid; active duplicates are not allowed."}</p>
+                    <button type="button" onClick={saveNumberDesignation} disabled={!canEdit || saving || Boolean(numberDesignationError) || numberDesignation === selected.birth_number}
+                      className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#00ff66]/35 bg-[#00ff66]/10 px-4 text-xs font-bold uppercase tracking-[0.14em] text-[#00ff66] transition hover:bg-[#00ff66]/20 disabled:cursor-not-allowed disabled:opacity-40">
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save Number
+                    </button>
+                  </div>
+
                   <div className="border border-[#00ff66]/15 bg-[#001009]/55 p-5">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#00ff66]/70"><CalendarDays className="h-4 w-4" /> Join Date</div>
                     <input type="date" value={joinDate} onChange={(event) => setJoinDateDraft({ personnelId: selected.id, value: event.target.value })} disabled={!canEdit || saving}
@@ -435,7 +463,7 @@ export default function PersonnelProfilesAdminPage() {
                     </div>
                   </div>
 
-                  <div className="border border-[#00ff66]/15 bg-[#001009]/55 p-5 sm:col-span-2 xl:col-span-1">
+                  <div className="border border-[#00ff66]/15 bg-[#001009]/55 p-5">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#00ff66]/70"><Clock3 className="h-4 w-4" /> Reservist Status</div>
                     <p className="mt-4 text-sm text-[#b7cec0]">{selected.reservist_since ? `Reservist since ${formatDateTime(selected.reservist_since)}` : "Active service"}</p>
                     <button type="button" onClick={() => setReservist(!selected.reservist_since)} disabled={!canEdit || saving || view === "inactive"}

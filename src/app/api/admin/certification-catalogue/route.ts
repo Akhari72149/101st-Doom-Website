@@ -17,7 +17,7 @@ function readDefinition(body: Record<string, unknown> | null) {
   const name = text(body?.name, 160);
   const discordRoleId = text(body?.discordRoleId, 22);
   if (!name || !DISCORD_ROLE.test(discordRoleId)) return null;
-  return { name, discordRoleId };
+  return { name, discordRoleId, isTrainerCert: body?.isTrainerCert === true };
 }
 
 export async function GET(request: Request) {
@@ -56,12 +56,12 @@ export async function POST(request: Request) {
       if (duplicate.rowCount) throw new Error("DUPLICATE");
       const inserted = await client.query(
         `insert into public.certifications(name,cert_id,is_trainer_cert,is_active)
-         values($1,$2,false,true) returning id,name,cert_id discord_role_id,is_active,is_trainer_cert`,
-        [definition.name, definition.discordRoleId],
+          values($1,$2,$3,true) returning id,name,cert_id discord_role_id,is_active,is_trainer_cert`,
+         [definition.name, definition.discordRoleId, definition.isTrainerCert],
       );
       await client.query(
         "insert into public.audit_logs(user_id,action,details) values($1,'CERTIFICATION_DEFINITION_CREATED',$2)",
-        [auth.userId, `Created certification ${definition.name} with Discord role ${definition.discordRoleId}.`],
+        [auth.userId, `Created ${definition.isTrainerCert ? "trainer" : "qualification"} certification ${definition.name} with Discord role ${definition.discordRoleId}.`],
       );
       return inserted.rows[0];
     });
@@ -86,8 +86,8 @@ export async function PATCH(request: Request) {
   if (!UUID.test(id) || !definition) return NextResponse.json({ error: "Review the certification fields" }, { status: 400 });
   try {
     const result = await withPostgresTransaction(async (client) => {
-      const existing = await client.query<{ name: string; cert_id: string; is_active: boolean }>(
-        "select name,cert_id,is_active from public.certifications where id=$1 for update",
+      const existing = await client.query<{ name: string; cert_id: string; is_active: boolean; is_trainer_cert: boolean }>(
+        "select name,cert_id,is_active,is_trainer_cert from public.certifications where id=$1 for update",
         [id],
       );
       if (!existing.rowCount) throw new Error("NOT_FOUND");
@@ -97,14 +97,14 @@ export async function PATCH(request: Request) {
       );
       if (duplicate.rowCount) throw new Error("DUPLICATE");
       const updated = await client.query(
-        `update public.certifications set name=$2,cert_id=$3,is_active=$4
+        `update public.certifications set name=$2,cert_id=$3,is_active=$4,is_trainer_cert=$5
          where id=$1 returning id,name,cert_id discord_role_id,is_active,is_trainer_cert`,
-        [id, definition.name, definition.discordRoleId, isActive],
+        [id, definition.name, definition.discordRoleId, isActive, definition.isTrainerCert],
       );
       const before = existing.rows[0];
       await client.query(
         "insert into public.audit_logs(user_id,action,details) values($1,'CERTIFICATION_DEFINITION_UPDATED',$2)",
-        [auth.userId, `Updated certification ${before.name}: name ${before.name} -> ${definition.name}; Discord role ${before.cert_id} -> ${definition.discordRoleId}; active ${before.is_active} -> ${isActive}.`],
+        [auth.userId, `Updated certification ${before.name}: name ${before.name} -> ${definition.name}; Discord role ${before.cert_id} -> ${definition.discordRoleId}; type ${before.is_trainer_cert ? "trainer" : "qualification"} -> ${definition.isTrainerCert ? "trainer" : "qualification"}; active ${before.is_active} -> ${isActive}.`],
       );
       return updated.rows[0];
     });

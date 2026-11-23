@@ -53,6 +53,7 @@ type CertificationRow = {
     lead_personnel_id?: string | null;
     lead_name?: string | null;
     is_lead?: boolean;
+    is_trainer_cert?: boolean;
   } | null;
 };
 
@@ -686,17 +687,13 @@ export default function PersonnelProfile() {
 
   const trainerCerts = useMemo(
     () =>
-      certifications.filter((c) =>
-        c.certification?.name?.toLowerCase().includes("trainer"),
-      ),
+      certifications.filter((c) => c.certification?.is_trainer_cert === true),
     [certifications],
   );
 
   const normalCerts = useMemo(
     () =>
-      certifications.filter(
-        (c) => !c.certification?.name?.toLowerCase().includes("trainer"),
-      ),
+      certifications.filter((c) => c.certification?.is_trainer_cert !== true),
     [certifications],
   );
 

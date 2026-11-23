@@ -26,6 +26,7 @@ type CertificationRow = {
     lead_personnel_id?: string | null;
     lead_name?: string | null;
     is_lead?: boolean;
+     is_trainer_cert?: boolean;
   } | null;
 };
 
@@ -121,15 +122,11 @@ export default function CertificationByPerson() {
   }, [personnel, normalizedSearch, getRankName]);
 
   const trainerCerts = useMemo(() => {
-    return certifications.filter((c) =>
-      c.certification?.name?.toLowerCase().includes("trainer")
-    );
+    return certifications.filter((c) => c.certification?.is_trainer_cert === true);
   }, [certifications]);
 
   const normalCerts = useMemo(() => {
-    return certifications.filter(
-      (c) => !c.certification?.name?.toLowerCase().includes("trainer")
-    );
+    return certifications.filter((c) => c.certification?.is_trainer_cert !== true);
   }, [certifications]);
 
   const visibleCerts = activeTab === "trainer" ? trainerCerts : normalCerts;

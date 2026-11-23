@@ -74,7 +74,8 @@ async function readDossierFromPostgres(personnelId: string) {
           'name', c.name,
           'lead_personnel_id', c.lead_personnel_id,
           'lead_name', lead.name,
-          'is_lead', c.lead_personnel_id = $1
+           'is_lead', c.lead_personnel_id = $1,
+           'is_trainer_cert', c.is_trainer_cert
         ) as certification
       from public.personnel_certifications pc
       join public.certifications c on c.id = pc.certification_id
@@ -131,7 +132,7 @@ async function readDossierFromSupabase(personnelId: string) {
   const [certifications, rankHistory, statusAudit, awards, linkedSteam] = await Promise.all([
     supabaseAdmin
       .from("personnel_certifications")
-      .select("id,awarded_at,certification:certification_id(id,name)")
+      .select("id,awarded_at,certification:certification_id(id,name,is_trainer_cert)")
       .eq("personnel_id", personnelId),
     supabaseAdmin
       .from("rank_history")

@@ -17,7 +17,7 @@ const requiredPrivileges = [
   ['public.recurring_server_blocks', 'SELECT'],
   ['public.ranks', 'SELECT'],
   ['public.rank_history', 'SELECT'],
-  ['public.certifications', 'SELECT'],
+  ['public.certifications', 'SELECT,INSERT'],
   ['public.audit_logs', 'SELECT'],
   ['public.attendance_records', 'SELECT,UPDATE'],
   ['public.taskboard_tasks', 'SELECT,INSERT,UPDATE,DELETE'],
@@ -64,6 +64,13 @@ const requiredPrivileges = [
   ['public.cis_commander_assets', 'SELECT,INSERT,UPDATE,DELETE'],
   ['public.cis_transactions', 'SELECT,INSERT,UPDATE,DELETE'],
 ];
+const requiredColumnPrivileges = [
+  ['public.certifications', 'name', 'UPDATE'],
+  ['public.certifications', 'cert_id', 'UPDATE'],
+  ['public.certifications', 'is_active', 'UPDATE'],
+  ['public.certifications', 'is_trainer_cert', 'UPDATE'],
+  ['public.certifications', 'lead_personnel_id', 'UPDATE'],
+];
 const forbiddenTables = ['auth.users'];
 const protectedFunctions = [
   'record_arma_xp_event',
@@ -103,6 +110,14 @@ try {
       [table, privileges],
     );
     assert.equal(result.rows[0].allowed, true, `Missing ${privileges} on ${table}`);
+  }
+
+  for (const [table, column, privilege] of requiredColumnPrivileges) {
+    const result = await pool.query(
+      'select has_column_privilege(current_user, $1, $2, $3) as allowed',
+      [table, column, privilege],
+    );
+    assert.equal(result.rows[0].allowed, true, `Missing ${privilege} on ${table}.${column}`);
   }
 
   for (const table of forbiddenTables) {

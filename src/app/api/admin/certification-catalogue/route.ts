@@ -112,6 +112,9 @@ export async function PATCH(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message === "NOT_FOUND") return NextResponse.json({ error: "Certification not found" }, { status: 404 });
     if (error instanceof Error && error.message === "DUPLICATE") return NextResponse.json({ error: "That certification name or Discord role is already in use" }, { status: 409 });
+    if (error && typeof error === "object" && "code" in error && String(error.code) === "42501") {
+      return NextResponse.json({ error: "Certification catalogue database permissions are out of date. Install the latest website update and try again." }, { status: 503 });
+    }
     console.error("[certification-catalogue] Update failed", error);
     return NextResponse.json({ error: "Failed to update certification" }, { status: 500 });
   }
